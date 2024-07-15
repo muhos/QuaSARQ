@@ -1,0 +1,139 @@
+
+#include "options.hpp"
+#include "input.hpp"
+#include "macros.cuh"
+
+namespace QuaSARQ {
+
+    BOOL_OPT opt_quiet_en("q", "be quiet", false);
+    BOOL_OPT opt_report_en("report", "report statistics", true);
+    BOOL_OPT opt_equivalence_en("equivalence", "do equivalence checking", false);
+    BOOL_OPT opt_checkparallelgates_en("check-parallel-gates", "check parallel gates independency", false);
+    BOOL_OPT opt_checkintegrity_en("check-integrity", "check circuit integrity for possible logical errors", false);
+    BOOL_OPT opt_tuneidentity_en("tune-identity", "tune identity kernel", false);
+    BOOL_OPT opt_tunestep_en("tune-step", "tune tree-based step kernel", false);
+    BOOL_OPT opt_print_tableau_step("print-step-tableau", "print tableau after every simulation step on screen in binary format", false);
+    BOOL_OPT opt_print_tableau_final("print-final-tableau", "print final tableau after simulation ends on screen in binary format", false);
+    BOOL_OPT opt_print_tableau_initial("print-initial-tableau", "print initial tableau before simulation on screen in binary format", false);
+    BOOL_OPT opt_print_stab("print-stab", "print stabilizers as Pauli strings (qubits <= 64 ? stdout : stab.out)", false);
+    BOOL_OPT opt_print_gates("print-gates", "print gates in every step on screen", false);
+    BOOL_OPT opt_write_rc("write-rc", "write random circuit to file (format: q<qubits>_d<depth>.stim)", false);
+    BOOL_OPT opt_sync("sync", "synchronize all kernels and data transfers", false);
+    BOOL_OPT opt_overlap("overlap", "overlap step kernel with data transfer", false);
+
+    INT_OPT opt_initialstate("initial", "set initial quantum state (0: 0 state, 1: + state, 2: i state)", 0, INT32R(0, 2));
+    INT_OPT opt_streams("streams", "number of GPU streams to create", 3, INT32R(2, 32));
+    INT_OPT opt_verbose("verbose", "set verbosity level", 1, INT32R(0, 3));
+
+    INT64_OPT opt_tuneinitial_qubits("tune-initial-qubits", "set the initial number of qubits to start with in the tuner", 1, INT64R(1, UINT32_MAX));
+    INT64_OPT opt_tunestep_qubits("tune-step-qubits", "set the increase of qubits", 1, INT64R(1, UINT32_MAX));
+    INT64_OPT opt_num_qubits("qubits", "set number of qubits for random generation (if no input file given)", 1, INT64R(1, UINT32_MAX));
+    INT64_OPT opt_depth("depth", "set circuit depth for random generation (if no input file given)", 1, INT64R(1, UINT32_MAX));
+
+    STRING_OPT opt_configpath("config-path", "Set the path of the kernel configuration file", "kernel.config");
+
+    Options::Options() {
+        RESETSTRUCT(this);
+        configpath = calloc<char>(256);
+    }
+
+    Options::~Options() {
+		if (configpath != nullptr) {
+			std::free(configpath);
+            configpath = nullptr;
+		}
+    }
+
+    void Options::initialize() {
+        quiet_en = opt_quiet_en;
+        report_en = opt_report_en;
+        verbose = opt_verbose;
+        if (options.quiet_en) options.verbose = 0;
+        else if (!options.verbose) options.quiet_en = true;
+
+        equivalence_en = opt_equivalence_en;
+
+        check_parallel_gates = opt_checkparallelgates_en;
+        check_integrity = opt_checkintegrity_en;
+        checker_en = check_parallel_gates || check_integrity;
+
+        overlap = opt_overlap;
+        sync = opt_sync;
+
+        tune_identity = opt_tuneidentity_en;
+        tune_step = opt_tunestep_en;
+        tuner_en = tune_identity || tune_step;
+        tuner_initial_qubits = opt_tuneinitial_qubits;
+        tuner_step_qubits = opt_tunestep_qubits;
+
+        print_stab = opt_print_stab;
+        print_gates = opt_print_gates;
+        print_tableau_step = opt_print_tableau_step;
+        print_tableau_final = opt_print_tableau_final;
+        print_tableau_initial = opt_print_tableau_initial;
+        write_rc = opt_write_rc;
+
+        initialstate = InitialState(int(opt_initialstate));
+        num_qubits = opt_num_qubits;
+        depth = opt_depth;
+        streams = opt_streams;
+
+        std::memcpy(configpath, opt_configpath, opt_configpath.length());
+    }
+
+    void Options::check(const char* inpath, const char* other_inpath) {
+        // mixing options handling
+        if (other_inpath != nullptr) {
+            if (!equivalence_en) {
+                LOG2(1, "%s  Turning on equivalence checking of other circuit.%s", CARGDEFAULT, CNORMAL);
+                equivalence_en = 1;
+            }
+        }
+        if (equivalence_en) {
+            tuner_en = false;
+            checker_en = false;
+        }
+        if (tuner_en && depth > 1) {
+            LOG2(1, "%s  Depth is set to %s1%s in tuning mode.%s", CARGDEFAULT, CARGVALUE, CARGDEFAULT, CNORMAL);
+            depth = 1;
+        }
+        if (tuner_step_qubits > num_qubits) {
+            LOG2(1, "%s  Stepwise qubits %s%zd%s is downsized to %s%zd%s maximum.%s", CARGDEFAULT, CARGVALUE, tuner_step_qubits, CARGDEFAULT, CARGVALUE, num_qubits, CARGDEFAULT, CNORMAL);
+            depth = 1;
+        }
+        if (inpath != nullptr && num_qubits > 1) {
+            LOGWARNING("entered number of qubits will be overridden by the circuit file.");
+        }
+        if (inpath != nullptr && depth > 1) {
+            LOGWARNING("entered depth will be overridden by the circuit file.");
+        }
+        if (inpath != nullptr && !hasstr(inpath, ".stim") && !hasstr(inpath, ".qasm")) {
+            LOGERROR("file \"%s\" has unsupported file format.", inpath);
+        }
+        if (other_inpath != nullptr && !hasstr(other_inpath, ".stim") && !hasstr(other_inpath, ".qasm")) {
+            LOGERROR("file \"%s\" has unsupported file format.", other_inpath);
+        }
+        if (equivalence_en && inpath != nullptr && other_inpath == nullptr) {
+            LOGERROR("missing other citcuit to check.");
+        }
+        if (check_integrity && overlap) {
+            LOGWARNING("turning off overlapping during integrity checking.");
+            overlap = false;
+        }
+        if (tuner_en && overlap) {
+            LOGWARNING("turning off overlapping during kernel tuning.");
+            overlap = false;
+        }
+        if (sync && overlap) {
+            LOGWARNING("turning off overlapping during synchronization.");
+            overlap = false;
+        }
+        if (equivalence_en && overlap) {
+            LOGWARNING("turning off overlapping during equivalence checking.");
+            overlap = false;
+        }
+    }
+
+    Options options;
+
+}

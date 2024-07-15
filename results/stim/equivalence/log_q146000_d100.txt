@@ -1,0 +1,9 @@
+Random line: 5498623
+Random gate: CZ
+Original gate: CY
+Run 0: 247.4105160869658
+Run 1: 246.8194115749793
+247.11 seconds
+20881.21 joules
+NOT EQUIVALENT
+0

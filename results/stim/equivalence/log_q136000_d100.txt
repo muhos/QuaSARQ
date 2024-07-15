@@ -1,0 +1,9 @@
+Random line: 4889204
+Random gate: SWAP
+Original gate: CZ
+Run 0: 215.22087332303636
+Run 1: 214.69233113597147
+214.96 seconds
+18163.83 joules
+NOT EQUIVALENT
+0

@@ -1,0 +1,25 @@
+Tableau interleaving is enabled.
+Tableau word size is 8 bits.
+Read best identity configuration with %100.0 accuracy: grid(784), block(256)
+Read best step configuration with %100.0 accuracy: grid(103, 52), block(2, 128)
+ Initial time                   : 0.029         msec
+ Schedule time                  : 869.474       msec
+ Simulation time                : 51.176        msec
+ Power consumption              : 51.036        watt
+ Energy consumption             : 2.612         joules
+ Tableau partitions             : 1           
+ Tableau memory                 : 8697.771      MB
+ Tableau step speed             : 169958.007    MB/sec
+ Circuit depth                  : 1           
+ Circuit qubits                 : 191000      
+ Circuit memory                 : 1.758         MB
+ Maximum of parallel gates      : 134912      
+ Average of parallel gates      : 134912.000  
+ Clifford gates                 : 134912      
+ --------------------------------
+  X        11087  (%8  ) CX        11187  (%8  )
+  Y        11336  (%8  ) CZ        11255  (%8  )
+  Z        11230  (%8  ) CY        11324  (%8  )
+  H        11188  (%8  ) Swap      11146  (%8  )
+  S        11304  (%8  ) iSwap     11176  (%8  )
+  Sdg      11301  (%8  ) 

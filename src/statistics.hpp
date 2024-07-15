@@ -1,0 +1,91 @@
+
+#ifndef __STATISTICS_H
+#define __STATISTICS_H
+
+#include "malloc.hpp"
+#include "gate.cuh"
+
+namespace QuaSARQ {
+
+    struct Gate_stats {
+
+        size_t* types;
+
+        Gate_stats() : types(nullptr) { }
+
+        void alloc() {
+            if (types == nullptr)
+                types = calloc<size_t>(NR_GATETYPES);
+        }
+
+        void operator=(const Gate_stats& other) {
+            for (uint32 i = 0; i < NR_GATETYPES; i++)
+                types[i] = other.types[i];
+        }
+
+        void destroy() {
+            if (types != nullptr) {
+                std::free(types);
+                types = nullptr;
+            }
+        }
+
+        size_t all() {
+            assert(types != nullptr);
+            size_t all = 0;
+            for (uint32 i = 0; i < NR_GATETYPES; i++)
+                all += types[i];
+            return all;
+        }
+    };
+
+    struct Statistics {
+        struct {
+            Gate_stats gate_stats;
+            size_t max_gates;
+            size_t max_parallel_gates_buckets;
+            size_t max_parallel_gates;
+            size_t max_window_bytes;
+            size_t bytes;
+            double average_parallel_gates;
+        } circuit;
+
+        struct {
+            double gigabytes;
+            double seconds;
+            double speed;
+            size_t count;
+            size_t istates;
+
+            void calc_speed() {
+                if (seconds <= 0)
+                    speed = 0;
+                speed = (istates * count * gigabytes) / seconds;
+            }
+        } tableau;
+
+        struct {
+            double initial;
+            double schedule;
+            double transfer;
+            double simulation;
+        } time;
+
+        struct {
+            double wattage;
+            double joules;
+        } power;
+
+        Statistics() {
+            RESETSTRUCT(this);
+            circuit.gate_stats.alloc();
+        }
+
+        ~Statistics() {
+            circuit.gate_stats.destroy();
+        }
+    };
+
+}
+
+#endif

@@ -1,0 +1,13 @@
+*.aux
+*.bbl
+*.blb
+*.blg
+*.gz
+*.log
+*.out
+parallel-quantum.pdf
+*-eps-converted-to.pdf
+*.zip
+*.dtmp
+.DS_Store
+*drawio.bkp

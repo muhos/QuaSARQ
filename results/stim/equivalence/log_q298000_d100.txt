@@ -1,0 +1,4 @@
+Random line: 5291257
+Random gate: S_DAG
+Original gate: X
+Run 0: 1034.9315416179597

@@ -1,0 +1,9 @@
+Random line: 4000685
+Random gate: Y
+Original gate: H
+Run 0: 519.5407721269876
+Run 1: 519.119248906849
+519.33 seconds
+43883.39 joules
+NOT EQUIVALENT
+0

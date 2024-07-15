@@ -1,0 +1,22 @@
+Read best identity configuration with %98.3 accuracy: grid(3080), block(8)
+Read best step configuration with %98.3 accuracy: grid(103, 55), block(2, 128)
+ Initial time                   : 579.881     msec
+ Schedule time                  : 330.810     msec
+ Transfer time                  : 19.556      msec
+ Simulation time                : 13499.951   msec
+ Tableau partitions             : 1         
+ Tableau memory                 : 20748.412   MB
+ Tableau step speed             : 153692.499  MB/sec
+ Circuit depth                  : 100       
+ Circuit qubits                 : 295000    
+ Circuit memory                 : 267.247     MB
+ Maximum of parallel gates      : 203128    
+ Average of parallel gates      : 202785.750
+ Clifford gates                 : 20278575  
+ --------------------------------
+  X  1843941  ( %9.1  )  CX  1843870  ( %9.1  )
+  Y  1842773  ( %9.1  )  CZ  1844687  ( %9.1  )
+  Z  1844566  ( %9.1  )  CY  1841524  ( %9.1  )
+  H  1840772  ( %9.1  )  Swap1845789  ( %9.1  )
+  S  1842584  ( %9.1  )  iSwap1845555  ( %9.1  )
+  Sdg1842514  ( %9.1  ) 

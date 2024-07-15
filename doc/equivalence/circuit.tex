@@ -1,0 +1,84 @@
+\resizebox{1.1\textwidth}{!}{ 
+	\begin{quantikz}
+		\lstick{$\ket{q_0}$} & \gate{H}    & \gate{S}  &       & \qw          & \qw              & \ctrl{2}     & \qw   & \qw    & \qw           & \qw                   & \qw       &\qw            & \qw   & \qw  & \qw &\qw  &\qw \\
+		\lstick{$\ket{q_1}$} & \qw    & \qw                            & \qw              & \qw                 &\gate{H}         & \qw    & \qw           & \qw     & \qw           & \qw            & \qw &\gate{H}   & \qw & \targ{3}    & \gate{S} & \qw   &\qw   \\
+		\lstick{$\ket{q_2}$} & \qw    & \qw        & \gate{S}    & \qw     & \qw              &\targ{0}     & \qw      & \qw    & \qw                & \gate{H}               &\gate{H}    & \qw            & \qw     & \qw    & \qw  &\qw &\qw \\
+		\lstick{$\ket{q_3}$} & \qw  & \qw         & \qw                     &  \gate{H} & \qw   & \qw                       &  \gate{S}        & \ctrl{1}    & \gate{S}                & \qw    & \qw & \qw  &\gate{S}                   & \ctrl{-2} &\qw  & \gate{S}  & \qw       \\
+		\lstick{$\ket{q_4}$} & \qw & \qw  & \qw   & \qw           & \qw                                & \qw              & \qw              &  \targ{3}         & \qw                   & \qw                  & \qw    & \qw       & \qw    & \qw   & \qw  &\qw  &\qw \\
+	\end{quantikz}
+}\\\\
+
+
+%% It's very conusing to introduce time windows concept on the initial circuit. Windows should appear on the resulting circuit.
+
+%\begin{tikzpicture}[overlay]
+%	\draw[ purple,line width=1.5pt, opacity=0.5] (0.95,4.2) -- (0.95,0.4); %the first vertical line
+%	\draw[ purple,line width=1.5pt, opacity=0.5] (1.65,4.2) -- (1.65,0.4); %the second vertical
+%	\draw[ purple,line width=1.5pt, opacity=0.5] (0.95,4.2) -- (1.65,4.2); %upper sealing
+%	\draw[ purple,line width=1.5pt, opacity=0.5] (0.95,0.4) -- (1.65,0.4); %lower sealing
+%	\node[anchor=north, text=purple, opacity=1] at (1.4,0.3) {$\circuitWindow_1$};
+%	
+%	
+%	\draw[ purple,line width=1.5pt, opacity=0.5] (1.8,4.2) -- (1.8,0.4); %the first vertical line
+%	\draw[ purple,line width=1.5pt, opacity=0.5] (2.5,4.2) -- (2.5,0.4); %the second vertical
+%	\draw[ purple,line width=1.5pt, opacity=0.5] (1.8,4.2) -- (2.5,4.2); %upper sealing
+%	\draw[ purple,line width=1.5pt, opacity=0.5] (1.8,0.4) -- (2.5,0.4); %lower sealing
+%	\node[anchor=north, text=purple, opacity=1] at (2.2,0.3) {$\circuitWindow_2$};
+%	
+%	\node[anchor=north, text=purple, opacity=1] at (3,0.3) {$\cdots$};
+%\end{tikzpicture}
+
+{\centering
+	\resizebox{0.575\textwidth}{!}{ 
+		\begin{quantikz}
+			\lstick{$\ket{q_0}$} & \gate{H}       & \gate{S}                        & \ctrl{2}     & \qw              & \qw               & \qw & \qw       &\qw       & \qw            \\
+			\lstick{$\ket{q_1}$} & \gate{H}     
+			& \gate{H}                          &  \qw        &\qw         & \qw             & \targ{3}      &\gate{S}  & \qw         & \qw      \\
+			\lstick{$\ket{q_2}$} & \gate{S}      & \qw              &\targ{0}       & \gate{H}   & \gate{H}    &\qw   & \qw & \qw           & \qw  \\
+			\lstick{$\ket{q_3}$} & \gate{H}           &  \gate{S}               & \ctrl{1}    & \gate{S}        & \gate{S}               &\ctrl{-2}      &\gate{S} & \qw    & \qw    \\
+			\lstick{$\ket{q_4}$} & \qw   & \qw                                                      &  \targ{3}            & \qw   &\qw                 & \qw  & \qw          & \qw            & \qw  \\
+		\end{quantikz}
+	}\par
+}
+
+% Use if not centered
+%\newcommand{\xCordLeft}{1}
+%\newcommand{\xCordRight}{1.7}
+\newcommand{\xCordLeft}{3.56}
+\newcommand{\xCordRight}{4.25}
+\newcommand{\yCordLow}{0.4}
+\newcommand{\yCordHigh}{4.2}
+\newcommand{\lineWidth}{1.5pt}
+\newcommand{\lineOpac}{0.5}
+\begin{tikzpicture}[overlay]
+	\draw[ purple,line width=\lineWidth, opacity=\lineOpac] (\xCordLeft ,   \yCordHigh) -- (\xCordLeft,    \yCordLow); %the first vertical line
+	\draw[ purple,line width=\lineWidth, opacity=\lineOpac] (\xCordRight,  \yCordHigh) -- (\xCordRight,  \yCordLow); %the second vertical
+	\draw[ purple,line width=\lineWidth, opacity=\lineOpac] (\xCordLeft ,   \yCordHigh) -- (\xCordRight,  \yCordHigh); %upper sealing
+	\draw[ purple,line width=\lineWidth, opacity=\lineOpac] (\xCordLeft ,   \yCordLow) -- (\xCordRight,   \yCordLow); %lower sealing
+	\node[anchor=north, text=purple, opacity=1] at (3.9,0.3) {$\circuitWindow_1$};
+	
+%	\renewcommand{\xCordLeft}{1.85}
+%	\renewcommand{\xCordRight}{2.55}
+	\renewcommand{\xCordLeft}{4.4}
+	\renewcommand{\xCordRight}{5.1}
+	
+	\draw[ purple,line width=\lineWidth, opacity=\lineOpac] (\xCordLeft ,   \yCordHigh) -- (\xCordLeft,    \yCordLow); %the first vertical line
+	\draw[ purple,line width=\lineWidth, opacity=\lineOpac] (\xCordRight,  \yCordHigh) -- (\xCordRight,  \yCordLow); %the second vertical
+	\draw[ purple,line width=\lineWidth, opacity=\lineOpac] (\xCordLeft ,   \yCordHigh) -- (\xCordRight,  \yCordHigh); %upper sealing
+	\draw[ purple,line width=\lineWidth, opacity=\lineOpac] (\xCordLeft ,   \yCordLow) -- (\xCordRight,   \yCordLow); %lower sealing
+	\node[anchor=north, text=purple, opacity=1] at (4.8,0.3) {$\circuitWindow_2$};
+
+%	\renewcommand{\xCordLeft}{2.7}
+%	\renewcommand{\xCordRight}{3.3}
+
+	\renewcommand{\xCordLeft}{5.24}
+	\renewcommand{\xCordRight}{5.9}
+	
+	\draw[ purple,line width=\lineWidth, opacity=\lineOpac] (\xCordLeft ,   \yCordHigh) -- (\xCordLeft,    \yCordLow); %the first vertical line
+	\draw[ purple,line width=\lineWidth, opacity=\lineOpac] (\xCordRight,  \yCordHigh) -- (\xCordRight,  \yCordLow); %the second vertical
+	\draw[ purple,line width=\lineWidth, opacity=\lineOpac] (\xCordLeft ,   \yCordHigh) -- (\xCordRight,  \yCordHigh); %upper sealing
+	\draw[ purple,line width=\lineWidth, opacity=\lineOpac] (\xCordLeft ,   \yCordLow) -- (\xCordRight,   \yCordLow); %lower sealing
+	\node[anchor=north, text=purple, opacity=1] at (5.6,0.3) {$\circuitWindow_3$};
+	
+	\node[anchor=north, text=purple, opacity=1] at (6.5,0.3) {$\cdots$};
+\end{tikzpicture}

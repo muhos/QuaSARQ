@@ -1,0 +1,40 @@
+Random line: 17287711
+Random gate: CX
+Original gate: ISWAP
+ Initial time                   : 1606.210      msec
+ Schedule time                  : 998.010       msec
+ Simulation time                : 4165.546      msec
+ Power consumption              : 226.233       watt
+ Energy consumption             : 942.384       joules
+ Tableau interleaving           : disabled    
+ Tableau word size              : 64 bits     
+ Tableau partitions             : 5           
+ Tableau memory                 : 16.043        GB
+ Tableau step speed             : 1925.656      GB/sec
+ Tableau initial states         : 1           
+ Circuit depth                  : 100         
+ Circuit qubits                 : 415000      
+ Circuit memory                 : 375.987       MB
+ Maximum parallel gates         : 285696      
+ Average parallel gates         : 285313.750  
+ Clifford gates                 : 28531375    
+  X      2591159  (%9  ) CX      2593866  (%9  )
+  Y      2595037  (%9  ) CZ      2594380  (%9  )
+  Z      2595076  (%9  ) CY      2593217  (%9  )
+  H      2594675  (%9  ) Swap    2593284  (%9  )
+  S      2592040  (%9  ) iSwap   2593878  (%9  )
+  Sdg    2594763  (%9  ) 
+ Other circuit depth            : 100         
+ Other circuit qubits           : 415000      
+ Other circuit memory           : 375.987       MB
+ Other maximum parallel gates   : 285696      
+ Other average parallel gates   : 285313.750  
+ Other Clifford gates           : 28531375    
+  X      2591159  (%9  ) CX      2593867  (%9  )
+  Y      2595037  (%9  ) CZ      2594380  (%9  )
+  Z      2595076  (%9  ) CY      2593217  (%9  )
+  H      2594675  (%9  ) Swap    2593284  (%9  )
+  S      2592040  (%9  ) iSwap   2593877  (%9  )
+  Sdg    2594763  (%9  ) 
+ Circuits check                 : NOT EQUIVALENT
+ Failed state                   : 0

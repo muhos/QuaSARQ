@@ -1,0 +1,9 @@
+Random line: 1238329
+Random gate: CX
+Original gate: ISWAP
+Run 0: 17.704764414113015
+Run 1: 17.687393723987043
+17.70 seconds
+1495.32 joules
+NOT EQUIVALENT
+0

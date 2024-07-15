@@ -1,0 +1,70 @@
+
+% format pseudcode
+\newcommand{\code}[1]{{{\texttt{#1}}}}
+\newcommand{\var}[1]{\texttt{#1}}
+\newcommand{\routine}[1]{{\relsize{0.5}{\textsc{#1}}}}
+\newcommand{\tool}[1]{{\relsize{-0.4}{\textsc{#1}}}}
+\newcommand{\return}{\textbf{return}\xspace}
+\newcommand{\Break}{\textbf{break}\xspace}
+\newcommand{\true}{\textbf{true}\xspace}
+\newcommand{\false}{\textbf{false}\xspace}
+\newcommand{\fast}[1]{\textcolor{Green}{\ensuremath{\blacktriangle}} #1}
+\newcommand{\slow}[1]{\textcolor{Red}{\ensuremath{\blacktriangledown}} #1}
+\newcommand{\td}[1]{\textbf{\var{#1}}\xspace}
+\newcommand{\li}[1]{l.\ref{#1}}
+\newcommand{\lis}[2]{l.\ref{#1}-\ref{#2}}
+\colorlet{gpu}{violet}
+
+% Notations
+\newcommand{\numQubits}{\ensuremath{n}\xspace}
+\newcommand{\depth}{\ensuremath{d}\xspace}
+\newcommand{\clifford}{\ensuremath{\mathcal{C}}\xspace}
+\newcommand{\cliffordGroup}{\ensuremath{\mathcal{G}}\xspace}
+\newcommand{\tableau}{\ensuremath{\mathcal{T}}\xspace}
+\newcommand{\partition}{\ensuremath{p}\xspace}
+\newcommand{\tableauPartition}{\tableau\xspace}
+\newcommand{\tableauWidth}{\numQubits\xspace}
+\newcommand{\tableauHeight}{\ensuremath{k}\xspace}
+\newcommand{\dep}{\ensuremath{\mathcal{D}}\xspace}
+\newcommand{\newGate}{\ensuremath{g}\xspace}
+\newcommand{\circuitQueue}{\clifford\xspace}
+\newcommand{\circuitWindow}{\ensuremath{\mathcal{W}}\xspace}
+\newcommand{\circuitScheduled}{\ensuremath{\mathcal{P}}\xspace}
+\newcommand{\lockedSet}{\ensuremath{L}\xspace}
+\newcommand{\wires}{\ensuremath{\mathcal{Q}}\xspace}
+\newcommand{\qubit}{\ensuremath{q}\xspace}
+\newcommand{\tx}{\ensuremath{\var{t}_{\td{x}}}\xspace}
+\newcommand{\ty}{\ensuremath{\var{t}_{\td{y}}}\xspace}
+\newcommand{\blockDim}{\var{xBlockSize}\xspace}
+\newcommand{\stride}{\var{stride}\xspace}
+\newcommand{\tid}{\var{tid}\xspace}
+\newcommand{\tidy}{\ensuremath{\tid_{\td{y}}}\xspace}
+\newcommand{\tidx}{\ensuremath{\tid_{\td{x}}}\xspace}
+
+% Algorithmic notations
+\newcommand{\pickFront}{\routine{pickFrontGate}\xspace}
+\newcommand{\initTableau}{\routine{createInitialState}\xspace}
+\newcommand{\simulateWindow}{\routine{simulateWindow}\xspace}
+\newcommand{\copyToDevice}{\routine{copyToDeviceAsync}\xspace}
+\newcommand{\sync}{\routine{synchronizeDevice}\xspace}
+\newcommand{\allocate}{\routine{allocateTableau}\xspace}
+\newcommand{\Swap}{\routine{swap}\xspace}
+\newcommand{\syncThreads}{\routine{synchronizeThreads}\xspace}
+\newcommand{\atomicXOR}{\routine{atomicXOR}\xspace}
+\newcommand{\collapseSigns}{\routine{collapseSigns}\xspace}
+\newcommand{\numPartitions}{\var{numPartitions}\xspace}
+\newcommand{\partitionSize}{\var{tableauSize}\xspace}
+\newcommand{\partitionOffset}{\var{tableauOffset}\xspace}
+\newcommand{\copyStream}{\var{copyStream}\xspace}
+\newcommand{\kernelStream}{\var{kernelStream}\xspace}
+\newcommand{\generator}{\var{generator}\xspace}
+\newcommand{\gateWires}{\var{gateWires}\xspace}
+\newcommand{\parGate}{\var{parallelGate}\xspace}
+\newcommand{\sign}{\var{s}\xspace}
+\newcommand{\shared}{\var{shared}\xspace}
+\newcommand{\maxThreads}{\ensuremath{T}\xspace}
+
+% tools
+\newcommand{\stim}{\tool{Stim}\xspace}
+\newcommand{\qiskit}{\tool{Qiskit}\xspace}
+\newcommand{\quasarq}{\tool{QuaSARQ}\xspace}

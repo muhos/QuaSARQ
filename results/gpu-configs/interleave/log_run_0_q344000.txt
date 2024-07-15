@@ -1,0 +1,23 @@
+Read best identity configuration with %98.8 accuracy: grid(3080), block(8)
+Read best step configuration with %98.8 accuracy: grid(103, 55), block(2, 128)
+ Initial time                   : 0.083         msec
+ Schedule time                  : 2901.653      msec
+ Simulation time                : 116.209       msec
+ Power consumption              : 53.467        watt
+ Energy consumption             : 6.213         joules
+ Tableau partitions             : 2           
+ Tableau memory                 : 18807.278     MB
+ Tableau step speed             : 323680.237    MB/sec
+ Circuit depth                  : 1           
+ Circuit qubits                 : 344000      
+ Circuit memory                 : 3.164         MB
+ Maximum of parallel gates      : 242673      
+ Average of parallel gates      : 242673.000  
+ Clifford gates                 : 242673      
+ --------------------------------
+  X        20248  (%8  ) CX        20396  (%8  )
+  Y        20241  (%8  ) CZ        20198  (%8  )
+  Z        20271  (%8  ) CY        20078  (%8  )
+  H        20154  (%8  ) Swap      20348  (%8  )
+  S        20240  (%8  ) iSwap     20307  (%8  )
+  Sdg      20102  (%8  ) 

@@ -1,0 +1,4 @@
+Random line: 16112956
+Random gate: Z
+Original gate: H
+Run 0: 1069.364449561108

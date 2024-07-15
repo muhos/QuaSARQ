@@ -1,0 +1,3 @@
+Random line: 2228024
+Random gate: X
+Original gate: Z

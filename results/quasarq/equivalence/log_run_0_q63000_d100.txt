@@ -1,0 +1,40 @@
+Random line: 2008181
+Random gate: Y
+Original gate: S_DAG
+ Initial time                   : 225.484       msec
+ Schedule time                  : 151.862       msec
+ Simulation time                : 475.418       msec
+ Power consumption              : 103.681       watt
+ Energy consumption             : 49.292        joules
+ Tableau interleaving           : disabled    
+ Tableau word size              : 64 bits     
+ Tableau partitions             : 1           
+ Tableau memory                 : 1.851         GB
+ Tableau step speed             : 389.252       GB/sec
+ Tableau initial states         : 1           
+ Circuit depth                  : 100         
+ Circuit qubits                 : 63000       
+ Circuit memory                 : 57.083        MB
+ Maximum parallel gates         : 43599       
+ Average parallel gates         : 43319.820   
+ Clifford gates                 : 4331982     
+  X       392490  (%9  ) CX       393098  (%9  )
+  Y       394134  (%9  ) CZ       394696  (%9  )
+  Z       395160  (%9  ) CY       392239  (%9  )
+  H       394467  (%9  ) Swap     394004  (%9  )
+  S       394018  (%9  ) iSwap    393981  (%9  )
+  Sdg     393695  (%9  ) 
+ Other circuit depth            : 100         
+ Other circuit qubits           : 63000       
+ Other circuit memory           : 57.083        MB
+ Other maximum parallel gates   : 43599       
+ Other average parallel gates   : 43319.820   
+ Other Clifford gates           : 4331982     
+  X       392490  (%9  ) CX       393098  (%9  )
+  Y       394135  (%9  ) CZ       394696  (%9  )
+  Z       395160  (%9  ) CY       392239  (%9  )
+  H       394467  (%9  ) Swap     394004  (%9  )
+  S       394018  (%9  ) iSwap    393981  (%9  )
+  Sdg     393694  (%9  ) 
+ Circuits check                 : NOT EQUIVALENT
+ Failed state                   : 0

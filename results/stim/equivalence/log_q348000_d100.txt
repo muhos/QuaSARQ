@@ -1,0 +1,3 @@
+Random line: 7301959
+Random gate: CX
+Original gate: CZ

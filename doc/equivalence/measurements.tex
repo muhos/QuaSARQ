@@ -1,0 +1,140 @@
+\section{Measurements in the case of the destabilizer tableau}\todo{Dim: I will make this description much more detailed by defining defining measurements for the standard stabilizers, define rowsum, provide examples }	
+
+
+The tableau extended by the ``destabilizers'' is very similar to the original formulation of the tableau. In the extended version, the number of rows are double because we include two versions of the $X$-matrix and the $Z$-matrix together with their phase factors. In the extended tableau, $X_S$ and $Z_S$ correspond to the usual $X$ and $Z$ matrices,i.e., the stabilizers. The $X_D$ and $Z_D$ which are concatenated at the top of the stabilizers are the de-stabilizers. If the initial state is the $\ket{0}^{\otimes n}$ state, the $X_D$-matrix is initialized with the same values as $Z_S$-matrix. Similarly, the $Z_D$-matrix is initialized with the same values as the $X_S$-matrix.
+
+\begin{equation} 
+	\begin{bmatrix}
+		X_D & \vert & Z_D & \vert & r_D \\
+		\hline
+		X_S & \vert & Z_S & \vert & r_S \\
+	\end{bmatrix}
+\end{equation}
+
+The symplectic inner product of the $i$-th row of the destabilizers and any row $j$ of the stabilizers is equal to 0 unless $i=j+n$. This means that any row will commute with any other row, but it will anti-commute with the row that appears on $n$ rows away. This property remains invariant under the update by Clifford gates (..... to cite Aaronson improved simulation Prop 3.....).
+
+
+In the original formulation of the tableau, i.e. without the destabilizers, the algorithm for deciding the measurement outcome involves Gaussian elimination which has an overhead of $O(n^3)$. In the case of the tableaus with the destabilizers this is replaced by an operation known as rowsum which reduces this overhead to $O(n^2)$.   
+
+We describe the algorithm for deciding the measurement outcome for a tableau that includes the destabilizers. We assume that the $a$th qubit is the measured qubit. There are two possibilities, either the outcome will be deterministic or it will be probabilistic and the process will involve some coin-flipping. So the first step is to decide whether the outcome is deterministic. We check the stabilizer part of the tableau. If we can find any 1s in the X-matrix, the outcome will be probabilistic. In the case where we can find multiple 1s we pick the one with the smallest index. Say $p$ is the row that corresponds to the measured qubit. Then we update the state as follows:
+\begin{enumerate}
+	\item call rowsum(i,p) $\forall i\neq p$ such that $x_{ia}=1$
+	\item make a coin-flip, suppose it's outcome is $k$, where $k\in\{ -1,1 \}$
+	\item set the $(p-n)^{th}$ row to $p$
+	\item set the $p^{th}$ row to $z_a$, where $z_a$ is a row with a 1 in it's $a^{th}$ entry 
+\end{enumerate} 
+The measurement outcome is $r_p=k$\\\\
+
+For the deterministic case:
+
+\begin{enumerate}
+	\item Check that the measurement is deterministic, there should be no $p\in \{ n+1 , \cdots , 2n \}$ s.t. $x_{pa}=1$
+	\item introduce an additional row to the tableau, the $(2n+1)^{th}$ row, with all it's bits set to 0. When $x_{ia}=1$, perform $\text{rowsum}(2n+1,i+n)$ for all $i\in \{ 1, \cdots , n \}$ 
+\end{enumerate}
+Then $r_{2n+1}$ will be the outcome of the measurement.\\ 
+
+The rowsum$(h,i)$ is an efficient way to simulation operations between Pauli strings. It is an operation that accepts 4 bits from the tableau, here rowsum$(h,i)$ accepts two entries of the rows $i$ and $h$ respectively. It works as follows, for the inputs $x_t z_t, x_q z_q $ of the rows $i$ and $h$ we get the output $g(x_t z_t, x_q z_q)$, where the function $g$ is defined below.
+
+\begin{equation}
+	g(x_t, z_t, x_q, z_q) =
+	\begin{cases}
+		0 & \text{if } x_t = 0 \text{ and } z_t = 0 \\
+		z_q - x_q & \text{if } x_t = 1 \text{ and } z_t = 1 \\
+		z_q(2x_q - 1) & \text{if } x_t = 1 \text{ and } z_t = 0 \\
+		x_q(2z_q - 1) & \text{if } x_t = 0 \text{ and } z_t = 1 \\
+	\end{cases}
+\end{equation}
+
+In order to calculate the signs, we use the rowsum operation as a routine and calculate as follows:
+
+\begin{equation}
+	r_h=
+	\begin{cases}
+		0 \text{ if } 2r_h + 2r_i + \sum_{j=1}^{n} g(x_{ij} z_{ij}, x_{hj} z_{hj})= 0 \text{mod}4\\
+		1 \text{ if } 2r_h + 2r_i + \sum_{j=1}^{n} g(x_{ij} z_{ij}, x_{hj} z_{hj})= 2 \text{mod}4\\
+	\end{cases}
+\end{equation}
+
+Note that 0 and 2 are the only possibilities here.	
+
+%To give example here
+
+
+\begin{example}
+	Consider the following tableau,
+	
+	\begin{equation}
+		\begin{bmatrix}
+			\hspace{2mm} 1 & \hspace{2mm} 0 \hspace{2mm} & \vline & \hspace{2mm}  1 \hspace{2mm} & \hspace{2mm} 0 \hspace{2mm} & \vline & \hspace{2mm} 0 \hspace{4mm} \\
+			\hspace{2mm} 0 & \hspace{2mm} 1 \hspace{2mm} & \vline & \hspace{2mm} 0 \hspace{2mm} & \hspace{2mm} 0 \hspace{2mm} & \vline & \hspace{2mm} 0 \hspace{4mm} \\
+			\hline
+			\hspace{2mm} 0 & \hspace{2mm} 0 \hspace{2mm} & \vline & \hspace{2mm} 1 \hspace{2mm} & \hspace{2mm} 0 \hspace{2mm} & \vline & \hspace{2mm} 0 \hspace{4mm} \\
+			\hspace{2mm} 0 & \hspace{2mm} 0 \hspace{2mm} & \vline & \hspace{2mm} 0 \hspace{2mm} & \hspace{2mm} 1 \hspace{2mm} & \vline & \hspace{2mm} 0 \hspace{4mm} \\
+			\hline
+			\hspace{2mm} 0 & \hspace{2mm} 0 \hspace{2mm} & \vline & \hspace{2mm} 0 \hspace{2mm} & \hspace{2mm} 0 \hspace{2mm} & \vline & \hspace{2mm} 0 \hspace{4mm} \\
+		\end{bmatrix}
+	\end{equation}
+	
+	Here the fifth row, is an extra row which is useful to introduce when performing measurements that fall into the deterministic case. We will perform measurement on the 1st qubit. 
+	
+	\begin{itemize}
+		\item Observe that the rows from $n+1$ to $2n$ contain no $1$'s in the $X$ matrix. %I must be clarify that we still call just the \(X\) matrix the left half of the tableau.
+		\item We introduce the $2n+1$ row (with all zeroes), and perform the rowsum operation.
+		\begin{itemize}
+			\item Calculate $g(x_{51}z_{51},x_{31}z_{31}) = g(0 1 , 0 0 ) = 0$. So, $x_{51}$ must be updated to 0, which is the value that this entry had already. Therefore, it remains unchanged.
+		\end{itemize}
+		\item Calculating the sign according to the sign formula returns $r_{5} = 0$.
+	\end{itemize}
+	
+	Therefore the outcome of the measurement is 0.
+	
+\end{example}
+
+
+
+
+\begin{example}
+	Consider the following tableau,
+	
+	\begin{equation}
+		\begin{bmatrix}
+			\hspace{2mm} 1 & \hspace{2mm} 0 \hspace{2mm} & \vline & \hspace{2mm}  1 \hspace{2mm} & \hspace{2mm} 0 \hspace{2mm} & \vline & \hspace{2mm} 0 \hspace{4mm} \\
+			\hspace{2mm} 0 & \hspace{2mm} 1 \hspace{2mm} & \vline & \hspace{2mm} 0 \hspace{2mm} & \hspace{2mm} 0 \hspace{2mm} & \vline & \hspace{2mm} 0 \hspace{4mm} \\
+			\hline
+			\hspace{2mm} 1 & \hspace{2mm} 0 \hspace{2mm} & \vline & \hspace{2mm} 0 \hspace{2mm} & \hspace{2mm} 0 \hspace{2mm} & \vline & \hspace{2mm} 0 \hspace{4mm} \\
+			\hspace{2mm} 0 & \hspace{2mm} 0 \hspace{2mm} & \vline & \hspace{2mm} 0 \hspace{2mm} & \hspace{2mm} 1 \hspace{2mm} & \vline & \hspace{2mm} 0 \hspace{4mm} \\
+			
+		\end{bmatrix}
+	\end{equation}
+	
+	The measurement will be performed on the 2nd qubit.
+	
+	
+	
+	
+	
+	
+	\begin{itemize}
+		\item Observe that $x_{31}=1$. Therefore, this example falls into the probabilistic case and the state must be updated.
+		\item Only a single 1 appears on the 2nd column, i.e.,  $x_{22}=1$. We calculate $g(x_{22}z_{22},x_{32}z_{32})= g(1 0,0 0 )=0 $.
+		\item Make a coin-flipping, suppose it's outcome is $1$.
+		\item Set the $1$st row equal to the $3$rd row.
+		\item Set the $3$rd row equal to $0$ except for the entry $z_{32}$. 
+		
+	\end{itemize}
+	
+	The outcome of the measurement is $r_3=1$, as it was determined by the coin-flipping. The state is updated as:
+	
+	\begin{equation}
+		\begin{bmatrix}
+			\hspace{2mm} 1 & \hspace{2mm} 0 \hspace{2mm} & \vline & \hspace{2mm} 0 \hspace{2mm} & \hspace{2mm} 0 \hspace{2mm} & \vline & \hspace{2mm} 0 \hspace{4mm} \\
+			\hspace{2mm} 0 & \hspace{2mm} 1 \hspace{2mm} & \vline & \hspace{2mm} 0 \hspace{2mm} & \hspace{2mm} 0 \hspace{2mm} & \vline & \hspace{2mm} 0 \hspace{4mm} \\
+			\hline
+			\hspace{2mm} 0 & \hspace{2mm} 0 \hspace{2mm} & \vline & \hspace{2mm} 0 \hspace{2mm} & \hspace{2mm} 1 \hspace{2mm} & \vline & \hspace{2mm} 1 \hspace{4mm} \\
+			\hspace{2mm} 0 & \hspace{2mm} 0 \hspace{2mm} & \vline & \hspace{2mm} 0 \hspace{2mm} & \hspace{2mm} 1 \hspace{2mm} & \vline & \hspace{2mm} 0 \hspace{4mm} \\
+			
+		\end{bmatrix}
+	\end{equation}
+	
+	
+\end{example}

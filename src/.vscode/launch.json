@@ -1,0 +1,23 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "CUDA C++: Launch",
+            "type": "cuda-gdb",
+            "request": "launch",
+            "program": "${workspaceFolder}/quasarq",
+            //"args": "--qubits=10 --verbose=1 --config-path=\"$HOME/parallel-quantum/code/kernel.config\" -print-step-tableau -print-initial-tableau"
+            //"args": "--qubits=30 -print-final-tableau -print-gates -print-initial-tableau --depth=5"
+            //"args": "--qubits=350000 --depth=1 --verbose=1"
+            "args": "${workspaceFolder}/q1000_d100.stim ${workspaceFolder}/q1000_d100.stim"
+        },
+        {
+            "name": "CUDA C++: Attach",
+            "type": "cuda-gdb",
+            "request": "attach"
+        }
+    ]
+}

@@ -1,0 +1,9 @@
+Random line: 910004
+Random gate: CX
+Original gate: SWAP
+Run 0: 7.9269508679863065
+Run 1: 7.944766052998602
+7.94 seconds
+670.58 joules
+NOT EQUIVALENT
+0

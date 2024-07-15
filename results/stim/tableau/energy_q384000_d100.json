@@ -1,0 +1,35 @@
+{
+    "results": {
+        "name": "CPU Energy Test Report",
+        "description": "",
+        "version": 1,
+        "software_version": "v0.1BETA",
+        "commit": "Unknown",
+        "date": "2024-05-08T21:44:40",
+        "model": "EnergyModel",
+        "hardware": {
+            "PC_name": "node110",
+            "CPU_name": "Unknown CPU",
+            "CPU_temp": -1,
+            "CPU_freq": 2800.0
+        },
+        "cases": [
+            {
+                "name": "measure_power",
+                "result": "pass",
+                "reason": "",
+                "N": 1,
+                "avg_cpu_util": 2.0799,
+                "execution_time": [
+                    1565016
+                ],
+                "energy": [
+                    132226.0705
+                ],
+                "power": [
+                    84.4998
+                ]
+            }
+        ]
+    }
+}

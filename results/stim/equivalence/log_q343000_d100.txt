@@ -1,0 +1,3 @@
+Random line: 8469730
+Random gate: CX
+Original gate: CX

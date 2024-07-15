@@ -1,0 +1,3 @@
+Random line: 8926576
+Random gate: SWAP
+Original gate: CZ
