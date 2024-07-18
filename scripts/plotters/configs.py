@@ -4,8 +4,6 @@ import matplotlib.pyplot as plt
 import argparse
 
 parser = argparse.ArgumentParser("graph")
-parser.add_argument('-interleave5', '--interleave5', help="Path to read csv.", default='')
-parser.add_argument('-interleave4', '--interleave4', help="Path to read csv.", default='')
 parser.add_argument('-interleave3', '--interleave3', help="Path to read csv.", default='')
 parser.add_argument('-interleave2', '--interleave2', help="Path to read csv.", default='')
 parser.add_argument('-interleave', '--interleave', help="Path to read csv.", default='')
@@ -19,8 +17,6 @@ args = parser.parse_args()
 CONFIGS1 = { 'interleave': args.interleave, 
 			'interleave2': args.interleave2, 
 			'interleave3': args.interleave3, 
-			'interleave4': args.interleave4, 
-			'interleave5': args.interleave5,
 			'nointerleave': args.nointerleave }
 CONFIGS2 = {} # 'word8': args.word8, 'word32': args.word32, 'word64': args.word64 }
 
@@ -56,17 +52,12 @@ def plot():
 	fig = plt.figure(figsize=(25,13))
 	plt.rcParams["font.family"] = "Times New Roman"
 	mS=20; mW=4; lW=3
-	x = 400
-	x_part = 312
 	fontSize=50
 	fontWeight='bold'
-	AnnofontSize=30
 	time_label = 'Run time (milliseconds)'
 	circuits_label = 'Qubits in thousands'
 	xLab = circuits_label
 	yLab = time_label
-	plt.plot(time_x['interleave5'],  data['interleave5'], linestyle='--', color='tab:red', linewidth=lW)
-	plt.plot(time_x['interleave4'],  data['interleave4'], linestyle='--', color='tab:blue', linewidth=lW)
 	plt.plot(time_x['interleave3'],  data['interleave3'], linestyle='--', color='tab:purple', linewidth=lW)
 	plt.plot(time_x['interleave2'],  data['interleave2'], linestyle='--', color='tab:brown', linewidth=lW)
 	plt.plot(time_x['interleave'],  data['interleave'], linestyle='--', color='tab:orange', linewidth=lW)
@@ -76,14 +67,6 @@ def plot():
 	plt.yticks(fontsize=fontSize, fontweight=fontWeight)
 	plt.xticks(fontsize=fontSize, fontweight=fontWeight)
 	ax = plt.gca()
-	# plt.axvline(x_part, ymin=0, ymax=0.21, color='grey', linestyle='--', linewidth=2,zorder=1)
-	# p1 = matplotlib.patches.FancyArrowPatch((x_part + 2, 35), (330, 150), arrowstyle='<-', mutation_scale=40, linewidth=4, color='purple')
-	# p2 = matplotlib.patches.FancyArrowPatch((x, 45), (x, 840), arrowstyle='<->', mutation_scale=40, linewidth=4, color='purple')
-	# ax.add_patch(p1)
-	# ax.add_patch(p2)
-	# ax.annotate(str(x_part) + ',000 qubits', xy=(x_part - 20, 220), fontsize=AnnofontSize, color='black', weight="bold")
-	# ax.annotate('#Partitions > 1', xy=(x_part + 5, 160), fontsize=AnnofontSize, color='purple', weight="bold")
-	# ax.annotate('30x Average Speedup', xy=(x + 5, x), fontsize=AnnofontSize, color='purple', weight="bold")
 	ax.xaxis.get_major_ticks()[0].set_visible(False)
 	ax.get_yaxis().set_major_formatter(matplotlib.ticker.FuncFormatter(lambda y, p: format(int(y), ',')))
 	ax.tick_params(axis="y",direction="in", length=8, right=True)
@@ -105,11 +88,8 @@ def plot():
 	fig = plt.figure(figsize=(25,13))
 	plt.rcParams["font.family"] = "Times New Roman"
 	mS=15; mW=2.5; lW=2.5
-	x = 400
-	x_part = 312
 	fontSize=50
 	fontWeight='bold'
-	AnnofontSize=30
 	time_label = 'Run time (milliseconds)'
 	circuits_label = 'Qubits in thousands'
 	xLab = circuits_label
@@ -122,14 +102,6 @@ def plot():
 	plt.yticks(fontsize=fontSize, fontweight=fontWeight)
 	plt.xticks(fontsize=fontSize, fontweight=fontWeight)
 	ax = plt.gca()
-	# plt.axvline(x_part, ymin=0, ymax=0.21, color='grey', linestyle='--', linewidth=2,zorder=1)
-	# p1 = matplotlib.patches.FancyArrowPatch((x_part + 2, 35), (330, 150), arrowstyle='<-', mutation_scale=40, linewidth=4, color='purple')
-	# p2 = matplotlib.patches.FancyArrowPatch((x, 45), (x, 840), arrowstyle='<->', mutation_scale=40, linewidth=4, color='purple')
-	# ax.add_patch(p1)
-	# ax.add_patch(p2)
-	# ax.annotate(str(x_part) + ',000 qubits', xy=(x_part - 20, 220), fontsize=AnnofontSize, color='black', weight="bold")
-	# ax.annotate('#Partitions > 1', xy=(x_part + 5, 160), fontsize=AnnofontSize, color='purple', weight="bold")
-	# ax.annotate('30x Average Speedup', xy=(x + 5, x), fontsize=AnnofontSize, color='purple', weight="bold")
 	ax.xaxis.get_major_ticks()[0].set_visible(False)
 	ax.get_yaxis().set_major_formatter(matplotlib.ticker.FuncFormatter(lambda y, p: format(int(y), ',')))
 	ax.tick_params(axis="y",direction="in", length=8, right=True)

@@ -94,7 +94,7 @@ def plot():
 	print('Energy efficiency: %.0f' % avgEfficiency)
 	fig = plt.figure(figsize=(25,13))
 	plt.rcParams["font.family"] = "Times New Roman"
-	mS=20; mW=4; lW=2.5
+	mS=20; mW=4; lW=3
 	x = 295
 	x_part = 212
 	fontSize=50
@@ -136,7 +136,7 @@ def plot():
 	# Energy plot
 	fig = plt.figure(figsize=(25,13))
 	plt.rcParams["font.family"] = "Times New Roman"
-	mS=20; mW=4; lW=2.5
+	mS=20; mW=4; lW=3
 	CACTUS = True
 	x=295
 	stim_data[1].sort()
