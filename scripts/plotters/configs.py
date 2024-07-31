@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import argparse
 
 parser = argparse.ArgumentParser("graph")
+parser.add_argument('-interleave5', '--interleave5', help="Path to read csv.", default='')
+parser.add_argument('-interleave4', '--interleave4', help="Path to read csv.", default='')
 parser.add_argument('-interleave3', '--interleave3', help="Path to read csv.", default='')
 parser.add_argument('-interleave2', '--interleave2', help="Path to read csv.", default='')
 parser.add_argument('-interleave', '--interleave', help="Path to read csv.", default='')
@@ -17,8 +19,10 @@ args = parser.parse_args()
 CONFIGS1 = { 'interleave': args.interleave, 
 			'interleave2': args.interleave2, 
 			'interleave3': args.interleave3, 
+			'interleave4': args.interleave4, 
+			'interleave5': args.interleave5,
 			'nointerleave': args.nointerleave }
-CONFIGS2 = {} # 'word8': args.word8, 'word32': args.word32, 'word64': args.word64 }
+CONFIGS2 = {'word8': args.word8, 'word32': args.word32, 'word64': args.word64 }
 
 def collect(configs):
 	table = dict()
@@ -51,18 +55,25 @@ def plot():
 		data[config] = data[config][start-start:end-start]
 	fig = plt.figure(figsize=(25,13))
 	plt.rcParams["font.family"] = "Times New Roman"
-	mS=20; mW=4; lW=3
-	fontSize=50
+	mS=30; mW=4; lW=6
+	x = 400
+	x_part = 312
+	fontSize=70
 	fontWeight='bold'
+	AnnofontSize=30
 	time_label = 'Run time (milliseconds)'
 	circuits_label = 'Qubits in thousands'
 	xLab = circuits_label
 	yLab = time_label
+	#plt.plot(time_x['interleave5'],  data['interleave5'], linestyle='--', color='tab:red', linewidth=lW)
+	#plt.plot(time_x['interleave4'],  data['interleave4'], linestyle='--', color='tab:blue', linewidth=lW)
 	plt.plot(time_x['interleave3'],  data['interleave3'], linestyle='--', color='tab:purple', linewidth=lW)
 	plt.plot(time_x['interleave2'],  data['interleave2'], linestyle='--', color='tab:brown', linewidth=lW)
 	plt.plot(time_x['interleave'],  data['interleave'], linestyle='--', color='tab:orange', linewidth=lW)
 	plt.plot(time_x['nointerleave'],  data['nointerleave'], linestyle='-', color='tab:green', linewidth=lW)
-	leg = plt.legend(['interleave 5 cols', 'interleave 4 cols', 'interleave 3 cols', 'interleave 2 cols', 'interleave 1 col', 'no-interleave'], fontsize=fontSize)
+	legentFont = matplotlib.font_manager.FontProperties(weight='bold', size=fontSize)
+	leg = plt.legend(['interleave 3 cols', 'interleave 2 cols', 'interleave 1 col', 'no-interleave'], prop=legentFont)
+	#leg = plt.legend(['words interleave', 'no-interleave'], prop=legentFont)
 	leg.get_frame().set_linewidth(4.0)
 	plt.yticks(fontsize=fontSize, fontweight=fontWeight)
 	plt.xticks(fontsize=fontSize, fontweight=fontWeight)
@@ -87,9 +98,10 @@ def plot():
 		data[config] = data[config][start-start:end-start]
 	fig = plt.figure(figsize=(25,13))
 	plt.rcParams["font.family"] = "Times New Roman"
-	mS=15; mW=2.5; lW=2.5
-	fontSize=50
+	x = 400
+	x_part = 312
 	fontWeight='bold'
+	AnnofontSize=30
 	time_label = 'Run time (milliseconds)'
 	circuits_label = 'Qubits in thousands'
 	xLab = circuits_label
@@ -97,7 +109,7 @@ def plot():
 	plt.plot(time_x['word8'],  data['word8'], linestyle='-', color='tab:red', marker='+', markeredgewidth=mW, markersize=mS, fillstyle='full', linewidth=lW)
 	plt.plot(time_x['word32'],  data['word32'], linestyle='-', color='tab:blue', marker='.', markeredgewidth=mW, markersize=mS, fillstyle='full', linewidth=lW)
 	plt.plot(time_x['word64'],  data['word64'], linestyle='-', color='tab:green', marker='*', markeredgewidth=mW, markersize=mS, fillstyle='full', linewidth=lW)
-	leg = plt.legend(['8-bit word', '32-bit word', '64-bit word'], fontsize=fontSize)
+	leg = plt.legend(['8-bit word', '32-bit word', '64-bit word'], prop=legentFont)
 	leg.get_frame().set_linewidth(4.0)
 	plt.yticks(fontsize=fontSize, fontweight=fontWeight)
 	plt.xticks(fontsize=fontSize, fontweight=fontWeight)

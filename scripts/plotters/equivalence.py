@@ -94,13 +94,13 @@ def plot():
 	print('Energy efficiency: %.0f' % avgEfficiency)
 	fig = plt.figure(figsize=(25,13))
 	plt.rcParams["font.family"] = "Times New Roman"
-	mS=20; mW=4; lW=3
+	mS=30; mW=4; lW=6
 	x = 295
 	x_part = 212
-	fontSize=50
+	fontSize=60
 	fontWeight='bold'
 	AnnofontSize=50
-	circuits_label = 'Qubits in thousands'
+	circuits_label = 'Number of circuits'
 	xLab = circuits_label
 	yLab = 'Run Time (seconds)'
 	stim_data[0].sort()
@@ -116,7 +116,8 @@ def plot():
 	ystim = stim_data[0][x] - mS*5 - mW - lW 
 	yquasar = quasarq_data[0][x] + mS*2 + mW + lW
 	p2 = matplotlib.patches.FancyArrowPatch((x, yquasar), (x, ystim), arrowstyle='<->', mutation_scale=40, linewidth=4, color='purple')
-	leg = plt.legend(['CCEC (based on Stim)', 'QuaSARQ'], fontsize=fontSize)
+	legentFont = matplotlib.font_manager.FontProperties(weight='bold', size=fontSize)
+	leg = plt.legend(['CCEC (based on Stim)', 'QuaSARQ'], prop=legentFont)
 	leg.get_frame().set_linewidth(4.0)
 	plt.yticks(fontsize=fontSize, fontweight=fontWeight)
 	plt.xticks(fontsize=fontSize, fontweight=fontWeight)
@@ -136,7 +137,6 @@ def plot():
 	# Energy plot
 	fig = plt.figure(figsize=(25,13))
 	plt.rcParams["font.family"] = "Times New Roman"
-	mS=20; mW=4; lW=3
 	CACTUS = True
 	x=295
 	stim_data[1].sort()
@@ -160,7 +160,7 @@ def plot():
 		ystim = data['stim'][x][1][1] - mS*50 - mW - lW
 		yquasar = data['quasarq'][x][1][1] + mS*50 + mW + lW
 		p2 = matplotlib.patches.FancyArrowPatch((ystim, x), (yquasar, x), arrowstyle='<->', mutation_scale=40, linewidth=4, color='purple')
-	leg = plt.legend(['CCEC (based on Stim)', 'QuaSARQ'], fontsize=fontSize)
+	leg = plt.legend(['CCEC (based on Stim)', 'QuaSARQ'], prop=legentFont)
 	leg.get_frame().set_linewidth(4.0)
 	plt.yticks(fontsize=fontSize, fontweight=fontWeight)
 	plt.xticks(fontsize=fontSize, fontweight=fontWeight)
