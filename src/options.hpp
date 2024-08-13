@@ -34,10 +34,15 @@ namespace QuaSARQ {
         bool print_tableau_initial;
         bool print_stab;
 
+        bool profile_equivalence;
+        bool disable_concurrency;
+
         size_t tuner_initial_qubits;
         size_t tuner_step_qubits;
         size_t num_qubits;
         size_t depth;
+
+        double H_p, S_p, CX_p;
 
         InitialState initialstate;
 

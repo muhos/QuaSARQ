@@ -108,9 +108,9 @@ inline void host_Z(const qubit_t& q, Table& xs, Signs& ss) {
     word_t* x_words = xs.words(q);
     sign_t* signs = ss.data(q);
 
-    const size_t num_words_major = xs.num_words_major();
+    const size_t num_words_per_column = xs.num_words_per_column();
 
-    for (size_t w = 0; w < num_words_major; w++) {
+    for (size_t w = 0; w < num_words_per_column; w++) {
 
         sign_update_X_or_Z(signs, x_words);   
 
@@ -121,9 +121,9 @@ inline void host_X(const qubit_t& q, Table& zs, Signs& ss) {
     word_t* z_words = zs.words(q);
     sign_t* signs = ss.data(q);
 
-    const size_t num_words_major = zs.num_words_major();
+    const size_t num_words_per_column = zs.num_words_per_column();
 
-    for (size_t w = 0; w < num_words_major; w++) {
+    for (size_t w = 0; w < num_words_per_column; w++) {
 
         sign_update_X_or_Z(signs, z_words);
         
@@ -135,11 +135,11 @@ inline void host_Y(const qubit_t& q, Table& xs, Table& zs, Signs& ss) {
     word_t* z_words = zs.words(q);
     sign_t* signs = ss.data(q);
 
-    const size_t num_words_major = xs.num_words_major();
+    const size_t num_words_per_column = xs.num_words_per_column();
 
-    assert(num_words_major == zs.num_words_major());
+    assert(num_words_per_column == zs.num_words_per_column());
     
-    for (size_t w = 0; w < num_words_major; w++) {
+    for (size_t w = 0; w < num_words_per_column; w++) {
 
         sign_update_Y(signs, x_words, z_words);
 
@@ -152,11 +152,11 @@ inline void host_Hadamard(const qubit_t& q, Table& xs, Table& zs, Signs& ss) {
     word_t* z_words = zs.words(q);
     sign_t* signs = ss.data(q);
 
-    const size_t num_words_major = zs.num_words_major();
+    const size_t num_words_per_column = zs.num_words_per_column();
 
-    assert(num_words_major == xs.num_words_major());
+    assert(num_words_per_column == xs.num_words_per_column());
 
-    for (size_t w = 0; w < num_words_major; w++) {
+    for (size_t w = 0; w < num_words_per_column; w++) {
 
         do_H(signs, words);
 
@@ -169,11 +169,11 @@ inline void host_Phase(const qubit_t& q, Table& xs, Table& zs, Signs& ss) {
     word_t* z_words = zs.words(q);
     sign_t* signs = ss.data(q);
 
-    const size_t num_words_major = zs.num_words_major();
+    const size_t num_words_per_column = zs.num_words_per_column();
 
-    assert(num_words_major == xs.num_words_major());
+    assert(num_words_per_column == xs.num_words_per_column());
 
-    for (size_t w = 0; w < num_words_major; w++) {
+    for (size_t w = 0; w < num_words_per_column; w++) {
 
         do_S(signs, words);
 
@@ -186,11 +186,11 @@ inline void host_PhaseAdj(const qubit_t& q, Table& xs, Table& zs, Signs& ss) {
     word_t* z_words = zs.words(q);
     sign_t* signs = ss.data(q);
 
-    const size_t num_words_major = zs.num_words_major();
+    const size_t num_words_per_column = zs.num_words_per_column();
 
-    assert(num_words_major == xs.num_words_major());
+    assert(num_words_per_column == xs.num_words_per_column());
 
-    for (size_t w = 0; w < num_words_major; w++) {
+    for (size_t w = 0; w < num_words_per_column; w++) {
 
         do_Sdg(signs, words);
 
@@ -204,11 +204,11 @@ inline void host_CX(const qubit_t& c, const qubit_t& t, Table& xs, Table& zs, Si
     word_t* z_words_t = zs.words(t);
     sign_t* signs = ss.data(t);
 
-    const size_t num_words_major = zs.num_words_major();
+    const size_t num_words_per_column = zs.num_words_per_column();
 
-    assert(num_words_major == xs.num_words_major());
+    assert(num_words_per_column == xs.num_words_per_column());
 
-    for (size_t w = 0; w < num_words_major; w++) {
+    for (size_t w = 0; w < num_words_per_column; w++) {
 
         do_CX(signs, c, t);
                     
@@ -223,11 +223,11 @@ inline void host_CZ(const qubit_t& c, const qubit_t& t, Table& xs, Table& zs, Si
     word_t* z_words_t = zs.words(t);
     sign_t* signs = ss.data(t);
 
-    const size_t num_words_major = zs.num_words_major();
+    const size_t num_words_per_column = zs.num_words_per_column();
 
-    assert(num_words_major == xs.num_words_major());
+    assert(num_words_per_column == xs.num_words_per_column());
 
-    for (size_t w = 0; w < num_words_major; w++) {
+    for (size_t w = 0; w < num_words_per_column; w++) {
 
         do_CZ(signs, c, t);
                     
@@ -242,11 +242,11 @@ inline void host_CY(const qubit_t& c, const qubit_t& t, Table& xs, Table& zs, Si
     word_t* z_words_t = zs.words(t);
     sign_t* signs = ss.data(t);
 
-    const size_t num_words_major = zs.num_words_major();
+    const size_t num_words_per_column = zs.num_words_per_column();
 
-    assert(num_words_major == xs.num_words_major());
+    assert(num_words_per_column == xs.num_words_per_column());
 
-    for (size_t w = 0; w < num_words_major; w++) {
+    for (size_t w = 0; w < num_words_per_column; w++) {
 
         do_CY(signs, c, t);
                     
@@ -260,11 +260,11 @@ inline void host_Swap(const qubit_t& q1, const qubit_t& q2, Table& xs, Table& zs
     word_t* z_words_q1 = zs.words(q1);
     word_t* z_words_q2 = zs.words(q2);
 
-    const size_t num_words_major = zs.num_words_major();
+    const size_t num_words_per_column = zs.num_words_per_column();
 
-    assert(num_words_major == xs.num_words_major());
+    assert(num_words_per_column == xs.num_words_per_column());
 
-    for (size_t w = 0; w < num_words_major; w++) {
+    for (size_t w = 0; w < num_words_per_column; w++) {
         do_SWAP(x_words_q1[w], x_words_q2[w]);
         do_SWAP(z_words_q1[w], z_words_q2[w]);
     }
@@ -278,11 +278,11 @@ inline void host_iSwap(const qubit_t& q1, const qubit_t& q2, Table& xs, Table& z
     sign_t* signs_q1 = ss.data(q1);
     sign_t* signs_q2 = ss.data(q2);
 
-    const size_t num_words_major = zs.num_words_major();
+    const size_t num_words_per_column = zs.num_words_per_column();
 
-    assert(num_words_major == xs.num_words_major());
+    assert(num_words_per_column == xs.num_words_per_column());
 
-    for (size_t w = 0; w < num_words_major; w++) {
+    for (size_t w = 0; w < num_words_per_column; w++) {
 
         // Swap(q1, q2)
         do_SWAP(x_words_q1[w], x_words_q2[w]);
@@ -348,10 +348,10 @@ void Simulator::step_cpu_version(const depth_t& depth_level) {
     // Benchmark a CPU version of step_2D.
     size_t num_qubits_padded = get_num_padded_bits(num_qubits);
     size_t num_words = get_num_words(num_qubits_padded * num_qubits_padded);
-    size_t num_words_major = get_num_words(num_qubits);
-    host_xs.alloc_host(num_words, num_words_major);
-    host_zs.alloc_host(num_words, num_words_major);
-    host_ss.alloc_host(num_words_major);
+    size_t num_words_per_column = get_num_words(num_qubits);
+    host_xs.alloc_host(num_words, num_words_per_column);
+    host_zs.alloc_host(num_words, num_words_per_column);
+    host_ss.alloc_host(num_words_per_column);
     timer.start();
     for(qubit_t q = 0; q < num_qubits; q++) {
 		host_zs.set_word_to_identity(q);

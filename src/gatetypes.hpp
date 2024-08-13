@@ -27,19 +27,22 @@ namespace QuaSARQ {
     // Combine 1-input gates then 2-input gates in order.
     constexpr Gatetypes gatetypes[NR_GATETYPES] =  
     {   
-        H,
+        I,
+        Z,
+        X,
+        Y, 
         H,
         S,
         Sdg,
-        Z,
-        X,
-        Y,
         CX,
-        CZ,
         CY,
+        CZ,
         Swap,
-        iSwap  
+        iSwap
     };
+
+    // Gate probabilities.
+    extern double probabilities[NR_GATETYPES];
 
     // 2-input gates.
     constexpr Gatetypes gatetypes_2[NR_GATETYPES - NR_GATETYPES_1] = { CX, CY, CZ, Swap, iSwap };

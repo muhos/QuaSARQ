@@ -13,8 +13,8 @@ namespace QuaSARQ {
     INLINE_ALL void print_table(const T& t) {
         const word_t* data = t.data();
         const size_t size = t.size();
-        const size_t major_end = t.num_words_major();
-        const size_t minor_end = t.num_words_major() * WORD_BITS;
+        const size_t major_end = t.num_words_per_column();
+        const size_t minor_end = t.num_words_per_column() * WORD_BITS;
         size_t j = 0;
         for (size_t i = 0; i < size; i++) {
             if (i > 0 && i % major_end == 0)

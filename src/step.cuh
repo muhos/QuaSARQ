@@ -13,7 +13,7 @@
 namespace QuaSARQ {
 
     // Simulate a single window per circuit.
-    __global__ void step_2D(const gate_ref_t* refs, const bucket_t* gates, const size_t num_gates, const size_t num_words_major, 
+    __global__ void step_2D(const gate_ref_t* refs, const bucket_t* gates, const size_t num_gates, const size_t num_words_per_column, 
     #ifdef INTERLEAVE_XZ
     Table* ps, 
     #else
@@ -21,7 +21,7 @@ namespace QuaSARQ {
     #endif
     Signs* ss);
 
-    __global__ void step_2D_warped(const gate_ref_t* refs, const bucket_t* gates, const size_t num_gates, const size_t num_words_major, 
+    __global__ void step_2D_warped(const gate_ref_t* refs, const bucket_t* gates, const size_t num_gates, const size_t num_words_per_column, 
     #ifdef INTERLEAVE_XZ
     Table* ps, 
     #else

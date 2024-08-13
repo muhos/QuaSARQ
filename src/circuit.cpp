@@ -2,8 +2,26 @@
 #include "simulator.hpp"
 #include <queue>
 
-using namespace QuaSARQ;
+namespace QuaSARQ {
+    // Initialize gate probabilities.
+    double probabilities[NR_GATETYPES] = 
+    {
+        0,
+        0.075,
+        0.075,
+        0.075, 
+        0.125,
+        0.125,
+        0.075,  
+        0.075,
+        0.075,
+        0.075,
+        0.075,
+        0.075 
+    };
+}
 
+using namespace QuaSARQ;
 
 // Inside-out variant of Fisher-Yates algorithm.
 void Simulator::shuffle_qubits() {
@@ -37,6 +55,15 @@ void Simulator::generate() {
     timer.start();
     circuit.init_depth(depth);
     locked.resize(num_qubits, 0);
+    // Set the custom probabilities:
+    probabilities[H] = options.H_p;
+    probabilities[S] = options.S_p;
+    probabilities[CX] = options.CX_p;
+    double sum_probs = 0;
+    for (byte_t i = 0; i < NR_GATETYPES; i++)
+        sum_probs += probabilities[i];
+    for (byte_t i = 0; i < NR_GATETYPES; i++)
+        probabilities[i] /= sum_probs;
     for (depth_t d = 0; d < depth; d++) {
         // Shuffle qubits used for multi-input gates.
         shuffle_qubits();
@@ -50,9 +77,17 @@ void Simulator::generate() {
             // a target qubit of 2-input gate.
             if (!locked[q]) {
                 // Get a random gate type. 
-                byte_t rand_gate_idx = random.irand() % NR_GATETYPES;
-                assert(rand_gate_idx < NR_GATETYPES);
-                Gatetypes type = gatetypes[rand_gate_idx];
+                double p = random.drand();
+                sum_probs = 0;
+                Gatetypes type = I;
+                for (byte_t i = 0; i < NR_GATETYPES; i++) {
+                    sum_probs += probabilities[i];
+                    if (p <= sum_probs) {
+                        type = gatetypes[i];
+                        break;
+                    }
+                }
+                assert(type < NR_GATETYPES);
                 assert(type < 256);
                 // Count for statistics.
                 stats.circuit.gate_stats.types[type]++;

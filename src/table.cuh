@@ -29,7 +29,7 @@ namespace QuaSARQ {
     * following algorithm:
     * 
     * forall w: 0 to n do (in parallel): 
-    *    OPERATION(generators[q * num_words_major + w])
+    *    OPERATION(generators[q * num_words_per_column + w])
     * 
     * To access words per column (for all paulis), for instance
     * to calculate the signs:
@@ -77,7 +77,7 @@ namespace QuaSARQ {
 
         word_t* _data;
         size_t _num_words;
-        size_t _num_words_major;
+        size_t _num_words_per_column;
         byte_t  _is_identity;
         Context _context;
 
@@ -86,7 +86,7 @@ namespace QuaSARQ {
         Table() :
             _data(nullptr)
             , _num_words(0)
-            , _num_words_major(0)
+            , _num_words_per_column(0)
             , _is_identity(1)
             , _context(UNKNOWN)
         { }
@@ -101,72 +101,72 @@ namespace QuaSARQ {
                     std::free(_data);
             }
             _num_words = 0;
-            _num_words_major = 0;
+            _num_words_per_column = 0;
             _data = nullptr;
         }
 
-        void alloc(const size_t& num_words, const size_t& num_words_major, word_t* data_ptr) {
+        void alloc(const size_t& num_words, const size_t& num_words_per_column, word_t* data_ptr) {
             if (_context == CPU) {
                 LOGGPUERROR("cannot assign GPU pointer to a pre-allocated CPU pointer.");
                 return;
             }
             assert(num_words);
-            assert(num_words_major);
+            assert(num_words_per_column);
             assert(data_ptr != nullptr);
             _num_words = num_words;
-            _num_words_major = num_words_major;
+            _num_words_per_column = num_words_per_column;
             _data = data_ptr;
             assert(_is_identity == 1);
             _context = GPU;
         }
 
-        void alloc_host(const size_t& num_words, const size_t& num_words_major) {
+        void alloc_host(const size_t& num_words, const size_t& num_words_per_column) {
             if (_context == GPU) {
                 LOGERRORN("cannot allocate CPU pointer to a pre-allocated GPU pointer.");
                 return;
             }
             assert(num_words);
-            assert(num_words_major);
+            assert(num_words_per_column);
             _num_words = num_words;
-            _num_words_major = num_words_major;
+            _num_words_per_column = num_words_per_column;
             _data = calloc<word_t>(_num_words);
             _context = CPU;
         }
 
         INLINE_ALL size_t size() const { return _num_words; }
 
-        INLINE_ALL size_t num_words_major() const { return _num_words_major; }
+        INLINE_ALL size_t num_words_per_column() const { return _num_words_per_column; }
 
         INLINE_ALL word_t* data() { return _data; }
 
         INLINE_ALL const word_t* data() const { return _data; }
 
         INLINE_ALL void set_x_word_to_identity(const qubit_t& q, const qubit_t& offset = 0) {
-            const size_t idx = (X_OFFSET(q) + offset) * _num_words_major + X_WORD_OFFSET(WORD_OFFSET(q));
+            const size_t idx = (X_OFFSET(q) + offset) * _num_words_per_column + X_WORD_OFFSET(WORD_OFFSET(q));
             assert(idx < _num_words);
             _data[idx].identity(q);
         }
 
         INLINE_ALL void set_z_word_to_identity(const qubit_t& q, const qubit_t& offset = 0) {
-            const size_t idx = (Z_OFFSET(q) + offset) * _num_words_major + Z_WORD_OFFSET(WORD_OFFSET(q));
+            const size_t idx = (Z_OFFSET(q) + offset) * _num_words_per_column + Z_WORD_OFFSET(WORD_OFFSET(q));
             assert(idx < _num_words);
             _data[idx].identity(q);
         }
 
         INLINE_ALL void set_word_to_identity(const qubit_t& q, const qubit_t& offset = 0) {
-            const size_t idx = (q + offset) * _num_words_major + WORD_OFFSET(q);
+            const size_t idx = (q + offset) * _num_words_per_column + WORD_OFFSET(q);
             assert(idx < _num_words);
             _data[idx].identity(q);
         }
 
         INLINE_ALL word_t* words(const qubit_t& q) {          
-            const size_t idx = q * _num_words_major;
+            const size_t idx = q * _num_words_per_column;
             assert(idx < _num_words);
             return _data + idx;
         }
 
         INLINE_ALL const word_t* words(const qubit_t& q) const { 
-            const size_t idx = q * _num_words_major;
+            const size_t idx = q * _num_words_per_column;
             assert(idx < _num_words);
             return _data + idx;
         }
@@ -186,19 +186,19 @@ namespace QuaSARQ {
         }
 
         INLINE_ALL bool check_z_word_is_identity(const qubit_t& q, const qubit_t& offset) const {
-            const size_t idx = (Z_OFFSET(q) + offset) * _num_words_major + WORD_OFFSET(q);
+            const size_t idx = (Z_OFFSET(q) + offset) * _num_words_per_column + WORD_OFFSET(q);
             assert(idx < _num_words);
             return _data[idx].is_identity(q);
         }
 
         INLINE_ALL bool check_x_word_is_identity(const qubit_t& q, const qubit_t& offset) const {
-            const size_t idx = (X_OFFSET(q) + offset) * _num_words_major + WORD_OFFSET(q);
+            const size_t idx = (X_OFFSET(q) + offset) * _num_words_per_column + WORD_OFFSET(q);
             assert(idx < _num_words);
             return _data[idx].is_identity(q);
         }
 
         INLINE_ALL bool check_word_is_identity(const qubit_t& q, const qubit_t& offset) const {
-            const size_t idx = (q + offset) * _num_words_major + WORD_OFFSET(q);
+            const size_t idx = (q + offset) * _num_words_per_column + WORD_OFFSET(q);
             assert(idx < _num_words);
             return _data[idx].is_identity(q);
         }

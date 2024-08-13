@@ -65,8 +65,10 @@ void Simulator::report()
 			percent((double)stats.circuit.gate_stats.types[S], stats.circuit.max_gates),
 			CREPORT, CREPORTVAL, stats.circuit.gate_stats.types[iSwap],
 			percent((double)stats.circuit.gate_stats.types[iSwap], stats.circuit.max_gates), CNORMAL);
-		LOG1(" %s Sdg%s%11zd  (%%%-3.0f)%s ", 
+		LOG1(" %s Sdg%s%11zd  (%%%-3.0f)%s I%s%14zd  (%%%-3.0f)%s", 
 			CREPORT, CREPORTVAL, stats.circuit.gate_stats.types[Sdg], 
-			percent((double)stats.circuit.gate_stats.types[Sdg], stats.circuit.max_gates), CNORMAL);		
+			percent((double)stats.circuit.gate_stats.types[Sdg], stats.circuit.max_gates),
+			CREPORT, CREPORTVAL, stats.circuit.gate_stats.types[I],
+			percent((double)stats.circuit.gate_stats.types[I], stats.circuit.max_gates), CNORMAL);		
 	}
 }

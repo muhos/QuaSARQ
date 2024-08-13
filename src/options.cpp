@@ -20,6 +20,8 @@ namespace QuaSARQ {
     BOOL_OPT opt_write_rc("write-rc", "write random circuit to file (format: q<qubits>_d<depth>.stim)", false);
     BOOL_OPT opt_sync("sync", "synchronize all kernels and data transfers", false);
     BOOL_OPT opt_overlap("overlap", "overlap step kernel with data transfer", false);
+    BOOL_OPT opt_profile_equivalence("profile-equivalence", "profile equivalence checking", false);
+    BOOL_OPT opt_disable_concurrency("disable-concurrency", "disable concurrency in equivalence checking", false);
 
     INT_OPT opt_initialstate("initial", "set initial quantum state (0: 0 state, 1: + state, 2: i state)", 0, INT32R(0, 2));
     INT_OPT opt_streams("streams", "number of GPU streams to create", 3, INT32R(2, 32));
@@ -29,6 +31,10 @@ namespace QuaSARQ {
     INT64_OPT opt_tunestep_qubits("tune-step-qubits", "set the increase of qubits", 1, INT64R(1, UINT32_MAX));
     INT64_OPT opt_num_qubits("qubits", "set number of qubits for random generation (if no input file given)", 1, INT64R(1, UINT32_MAX));
     INT64_OPT opt_depth("depth", "set circuit depth for random generation (if no input file given)", 1, INT64R(1, UINT32_MAX));
+
+    DOUBLE_OPT opt_H_prob("H", "Frequency of H gates in a generated random circuit", 0.125, FP64R(0,1));
+    DOUBLE_OPT opt_S_prob("S", "Frequency of S gates in a generated random circuit", 0.125, FP64R(0,1));
+    DOUBLE_OPT opt_CX_prob("CX", "Frequency of CX gates in a generated random circuit", 0.075, FP64R(0,1));
 
     STRING_OPT opt_configpath("config-path", "Set the path of the kernel configuration file", "kernel.config");
 
@@ -52,6 +58,8 @@ namespace QuaSARQ {
         else if (!options.verbose) options.quiet_en = true;
 
         equivalence_en = opt_equivalence_en;
+        profile_equivalence = opt_profile_equivalence;
+        disable_concurrency = opt_disable_concurrency;
 
         check_parallel_gates = opt_checkparallelgates_en;
         check_integrity = opt_checkintegrity_en;
@@ -72,6 +80,10 @@ namespace QuaSARQ {
         print_tableau_final = opt_print_tableau_final;
         print_tableau_initial = opt_print_tableau_initial;
         write_rc = opt_write_rc;
+
+        H_p = opt_H_prob;
+        S_p = opt_S_prob;
+        CX_p = opt_CX_prob;
 
         initialstate = InitialState(int(opt_initialstate));
         num_qubits = opt_num_qubits;

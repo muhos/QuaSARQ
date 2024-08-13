@@ -3,6 +3,7 @@
 #include "collapse.cuh"
 #include "operators.cuh"
 #include "macros.cuh"
+#include <cuda_profiler_api.h>
 
 namespace QuaSARQ {
 
@@ -60,10 +61,20 @@ namespace QuaSARQ {
         cudaStream_t other_copy_stream1 = other_streams[COPY_STREAM1];
         cudaStream_t other_copy_stream2 = other_streams[COPY_STREAM2];
         cudaStream_t other_kernel_stream = other_streams[KERNEL_STREAM];
-        const size_t num_words_major = tableau.num_words_major();
-        const size_t other_num_words_major = other_tableau.num_words_major();
+        const size_t num_words_per_column = tableau.num_words_per_column();
+        const size_t other_num_words_per_column = other_tableau.num_words_per_column();
         const size_t shared_element_bytes = sizeof(word_std_t);
         const size_t max_depth = MAX(depth, other_depth);
+
+        if (options.disable_concurrency) {
+            other_copy_stream1 = copy_stream1;
+            other_copy_stream2 = copy_stream2;
+            other_kernel_stream = kernel_stream;
+            options.sync = true;
+        }
+
+        if (options.profile_equivalence)
+            cudaProfilerStart();
 
         for (depth_t d = 0; d < max_depth; d++) {
             
@@ -93,7 +104,7 @@ namespace QuaSARQ {
             if (p < num_partitions && d < depth) {
                 LOG1(" Debugging circuit-1 at depth %2d:", d);
                 OPTIMIZESHARED(reduce_smem_size, bestBlockStep.y * bestBlockStep.x, shared_element_bytes);
-                step_2D << < dim3(1, 1), dim3(1, 1), reduce_smem_size >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs());
+                step_2D << < dim3(1, 1), dim3(1, 1), reduce_smem_size >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_per_column, XZ_TABLE(tableau), tableau.signs());
                 LASTERR("failed to launch step kernel");
                 SYNCALL;
             }
@@ -101,7 +112,7 @@ namespace QuaSARQ {
             if (p < other_num_partitions && d < other_depth) {
                 LOG1(" Debugging circuit-2 at depth %2d:", d);
                 OPTIMIZESHARED(reduce_smem_size, bestBlockStep.y * bestBlockStep.x, shared_element_bytes);
-                step_2D << < dim3(1, 1), dim3(1, 1), reduce_smem_size >> > (other_gpu_circuit.references(), other_gpu_circuit.gates(), other_num_gates_per_window, other_num_words_major, XZ_TABLE(other_tableau), other_tableau.signs());
+                step_2D << < dim3(1, 1), dim3(1, 1), reduce_smem_size >> > (other_gpu_circuit.references(), other_gpu_circuit.gates(), other_num_gates_per_window, other_num_words_per_column, XZ_TABLE(other_tableau), other_tableau.signs());
                 LASTERR("failed to launch other step kernel");
                 SYNCALL;             
             }
@@ -120,18 +131,18 @@ namespace QuaSARQ {
                 SYNC(copy_stream1);
                 SYNC(copy_stream2);
                 if (bestBlockStep.x > maxWarpSize)
-                    step_2D << < bestGridStep, bestBlockStep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs());
+                    step_2D << < bestGridStep, bestBlockStep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_per_column, XZ_TABLE(tableau), tableau.signs());
                 else
-                    step_2D_warped << < bestGridStep, bestBlockStep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs());
+                    step_2D_warped << < bestGridStep, bestBlockStep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_per_column, XZ_TABLE(tableau), tableau.signs());
             }
 
             if (p < other_num_partitions && d < other_depth) {
                 SYNC(other_copy_stream1);
                 SYNC(other_copy_stream2);
                 if (bestBlockStep.x > maxWarpSize)
-                    step_2D << < bestGridStep, bestBlockStep, reduce_smem_size, other_kernel_stream >> > (other_gpu_circuit.references(), other_gpu_circuit.gates(), other_num_gates_per_window, other_num_words_major, XZ_TABLE(other_tableau), other_tableau.signs());
+                    step_2D << < bestGridStep, bestBlockStep, reduce_smem_size, other_kernel_stream >> > (other_gpu_circuit.references(), other_gpu_circuit.gates(), other_num_gates_per_window, other_num_words_per_column, XZ_TABLE(other_tableau), other_tableau.signs());
                 else
-                    step_2D_warped << < bestGridStep, bestBlockStep, reduce_smem_size, other_kernel_stream >> > (other_gpu_circuit.references(), other_gpu_circuit.gates(), other_num_gates_per_window, other_num_words_major, XZ_TABLE(other_tableau), other_tableau.signs());
+                    step_2D_warped << < bestGridStep, bestBlockStep, reduce_smem_size, other_kernel_stream >> > (other_gpu_circuit.references(), other_gpu_circuit.gates(), other_num_gates_per_window, other_num_words_per_column, XZ_TABLE(other_tableau), other_tableau.signs());
             }
 
             if (options.sync) { 
@@ -151,7 +162,7 @@ namespace QuaSARQ {
             if (p < other_num_partitions && d < other_depth)
                 print_tableau_step(other_tableau, d);
 
-        } // END if depth loop.
+        } // END of depth loop.
 
         // Check equivalence of two tableaus.
         SYNCALL;
@@ -163,6 +174,13 @@ namespace QuaSARQ {
             return 1;
         else
             return 0;
+
+        if (options.profile_equivalence)
+            cudaProfilerStop();
+
+        if (options.disable_concurrency) {
+            options.sync = false;
+        }
 
     } // End of function.
 

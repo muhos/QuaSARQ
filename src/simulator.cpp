@@ -110,7 +110,7 @@ void Simulator::simulate() {
     Power power;
     timer.start();
     num_partitions = tableau.alloc(num_qubits, options.overlap ? stats.circuit.bytes : stats.circuit.max_window_bytes);
-    const size_t num_qubits_per_partition = num_partitions > 1 ? tableau.num_words_major() * WORD_BITS : num_qubits;
+    const size_t num_qubits_per_partition = num_partitions > 1 ? tableau.num_words_per_column() * WORD_BITS : num_qubits;
     if (options.overlap)
         gpu_circuit.initiate(circuit, stats.circuit.max_parallel_gates, stats.circuit.max_parallel_gates_buckets);
     else

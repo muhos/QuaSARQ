@@ -83,7 +83,8 @@
         "filesystem": "cpp",
         "locale": "cpp",
         "*.ipp": "cpp",
-        "ios": "cpp"
+        "ios": "cpp",
+        "complex": "cpp"
     },
     "git.ignoreLimitWarning": true
 }

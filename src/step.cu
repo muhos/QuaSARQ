@@ -9,7 +9,7 @@ namespace QuaSARQ {
 
     dim3 bestBlockStep(2, 128), bestGridStep(103, 52);
 
-    __global__ void step_2D(const gate_ref_t* refs, const bucket_t* gates, const size_t num_gates, const size_t num_words_major, 
+    __global__ void step_2D(const gate_ref_t* refs, const bucket_t* gates, const size_t num_gates, const size_t num_words_per_column, 
     #ifdef INTERLEAVE_XZ
     Table* ps, 
     #else
@@ -23,9 +23,9 @@ namespace QuaSARQ {
         word_std_t* shared_signs = SharedMemory<word_std_t>();
         sign_t* signs = ss->data();
 
-        for_parallel_y(w, num_words_major) {
+        for_parallel_y(w, num_words_per_column) {
 
-            word_std_t signs_word = 0;
+            word_std_t signs_word = signs[w];
 
             #ifdef INTERLEAVE_XZ
                 #ifdef INTERLEAVE_WORDS
@@ -54,14 +54,14 @@ namespace QuaSARQ {
                 assert(q1 < MAX_QUBITS);
                 assert(q2 < MAX_QUBITS);
 
-                const size_t q1_x_word_idx = X_OFFSET(q1) * num_words_major;
-                const size_t q2_x_word_idx = X_OFFSET(q2) * num_words_major;
+                const size_t q1_x_word_idx = X_OFFSET(q1) * num_words_per_column;
+                const size_t q2_x_word_idx = X_OFFSET(q2) * num_words_per_column;
                 #ifdef INTERLEAVE_WORDS
-                const size_t q1_z_word_idx = Z_OFFSET(q1) * num_words_major + 1;
-                const size_t q2_z_word_idx = Z_OFFSET(q2) * num_words_major + 1;
+                const size_t q1_z_word_idx = Z_OFFSET(q1) * num_words_per_column + 1;
+                const size_t q2_z_word_idx = Z_OFFSET(q2) * num_words_per_column + 1;
                 #else
-                const size_t q1_z_word_idx = Z_OFFSET(q1) * num_words_major;
-                const size_t q2_z_word_idx = Z_OFFSET(q2) * num_words_major;
+                const size_t q1_z_word_idx = Z_OFFSET(q1) * num_words_per_column;
+                const size_t q2_z_word_idx = Z_OFFSET(q2) * num_words_per_column;
                 #endif
 
                 #ifdef INTERLEAVE_XZ
@@ -114,7 +114,7 @@ namespace QuaSARQ {
 
     }
 
-    __global__ void step_2D_warped(const gate_ref_t* refs, const bucket_t* gates, const size_t num_gates, const size_t num_words_major, 
+    __global__ void step_2D_warped(const gate_ref_t* refs, const bucket_t* gates, const size_t num_gates, const size_t num_words_per_column, 
     #ifdef INTERLEAVE_XZ
     Table* ps, 
     #else
@@ -127,9 +127,9 @@ namespace QuaSARQ {
         word_std_t* shared_signs = SharedMemory<word_std_t>();
         sign_t* signs = ss->data();
 
-        for_parallel_y(w, num_words_major) {
+        for_parallel_y(w, num_words_per_column) {
 
-            word_std_t signs_word = 0;
+            word_std_t signs_word = signs[w];
 
             #ifdef INTERLEAVE_XZ
                 #ifdef INTERLEAVE_WORDS
@@ -162,14 +162,14 @@ namespace QuaSARQ {
                 assert(q1 < MAX_QUBITS);
                 assert(q2 < MAX_QUBITS);
 
-                const size_t q1_x_word_idx = X_OFFSET(q1) * num_words_major;
-                const size_t q2_x_word_idx = X_OFFSET(q2) * num_words_major;
+                const size_t q1_x_word_idx = X_OFFSET(q1) * num_words_per_column;
+                const size_t q2_x_word_idx = X_OFFSET(q2) * num_words_per_column;
                 #ifdef INTERLEAVE_WORDS
-                const size_t q1_z_word_idx = Z_OFFSET(q1) * num_words_major + 1;
-                const size_t q2_z_word_idx = Z_OFFSET(q2) * num_words_major + 1;
+                const size_t q1_z_word_idx = Z_OFFSET(q1) * num_words_per_column + 1;
+                const size_t q2_z_word_idx = Z_OFFSET(q2) * num_words_per_column + 1;
                 #else
-                const size_t q1_z_word_idx = Z_OFFSET(q1) * num_words_major;
-                const size_t q2_z_word_idx = Z_OFFSET(q2) * num_words_major;
+                const size_t q1_z_word_idx = Z_OFFSET(q1) * num_words_per_column;
+                const size_t q2_z_word_idx = Z_OFFSET(q2) * num_words_per_column;
                 #endif
 
                 #ifdef INTERLEAVE_XZ
@@ -241,7 +241,7 @@ namespace QuaSARQ {
         }
 
         const size_t num_gates_per_window = circuit[depth_level].size();
-        const size_t num_words_major = tableau.num_words_major();
+        const size_t num_words_per_column = tableau.num_words_per_column();
         const size_t shared_element_bytes = sizeof(word_std_t);
 
         print_gates_step(gpu_circuit, num_gates_per_window, depth_level);
@@ -250,7 +250,7 @@ namespace QuaSARQ {
 
         LOG1(" Debugging at %sdepth %2d:", reversed ? "reversed " : "", depth_level);
         OPTIMIZESHARED(reduce_smem_size, bestBlockStep.y * bestBlockStep.x, shared_element_bytes);
-        step_2D << < dim3(1, 1), dim3(1, 1), reduce_smem_size >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, tableau.xtable(), tableau.ztable(), tableau.signs());
+        step_2D << < dim3(1, 1), dim3(1, 1), reduce_smem_size >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_per_column, tableau.xtable(), tableau.ztable(), tableau.signs());
         LASTERR("failed to launch step kernel");
         SYNCALL;
 
@@ -269,9 +269,9 @@ namespace QuaSARQ {
                 // shared memory size.
                 , shared_element_bytes, true
                 // data length.         
-                , num_gates_per_window, num_words_major
+                , num_gates_per_window, num_words_per_column
                 // kernel arguments.
-                , gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs()
+                , gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_per_column, XZ_TABLE(tableau), tableau.signs()
             );
         }
 
@@ -288,9 +288,9 @@ namespace QuaSARQ {
             SYNC(copy_stream2);
         }
         if (bestBlockStep.x > maxWarpSize)
-            step_2D << < bestGridStep, bestBlockStep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs());
+            step_2D << < bestGridStep, bestBlockStep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_per_column, XZ_TABLE(tableau), tableau.signs());
         else
-            step_2D_warped << < bestGridStep, bestBlockStep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs());
+            step_2D_warped << < bestGridStep, bestBlockStep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_per_column, XZ_TABLE(tableau), tableau.signs());
 
         if (options.sync) { 
             LASTERR("failed to launch step kernel");
