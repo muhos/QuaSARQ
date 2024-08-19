@@ -5,7 +5,7 @@ using namespace QuaSARQ;
 void Simulator::report()
 {
 	if (options.report_en) {
-		LOGHEADER(1, 5, "Statistics");
+		LOGHEADER(0, 3, "Statistics");
 		LOG1(" %sInitial time                   : %s%-12.3f  msec%s", CREPORT, CREPORTVAL, stats.time.initial, CNORMAL);
 		LOG1(" %sSchedule time                  : %s%-12.3f  msec%s", CREPORT, CREPORTVAL, stats.time.schedule, CNORMAL);
 		if (options.sync)

@@ -33,6 +33,8 @@ namespace QuaSARQ {
     constexpr qubit_t MAX_QUBITS = -1;
     constexpr size_t MAX_WORDS = size_t(MAX_QUBITS - 1) * size_t(MAX_QUBITS - 1) / 2;
 
+    #define POW2(P) (word_std_t(1) << word_std_t(P & WORD_MASK))
+
 	class word_t {
 
 		word_std_t word;
@@ -86,14 +88,12 @@ namespace QuaSARQ {
             word ^= other;
         }
 
-        INLINE_ALL void identity(const qubit_t& major_index) {
-            word_std_t bit_index = major_index & WORD_MASK;
-            word = word_std_t(1) << bit_index;
+        INLINE_ALL void identity(const qubit_t& word_idx) {
+            word = POW2(word_idx);
         }
 
-        INLINE_ALL bool is_identity(const qubit_t& major_index) {
-            word_std_t bit_index = major_index & WORD_MASK;
-            return word == (word_std_t(1) << bit_index);
+        INLINE_ALL bool is_identity(const qubit_t& word_idx) {
+            return word == POW2(word_idx);
         }
 
 	};

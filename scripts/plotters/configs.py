@@ -4,25 +4,37 @@ import matplotlib.pyplot as plt
 import argparse
 
 parser = argparse.ArgumentParser("graph")
-parser.add_argument('-interleave5', '--interleave5', help="Path to read csv.", default='')
-parser.add_argument('-interleave4', '--interleave4', help="Path to read csv.", default='')
 parser.add_argument('-interleave3', '--interleave3', help="Path to read csv.", default='')
 parser.add_argument('-interleave2', '--interleave2', help="Path to read csv.", default='')
 parser.add_argument('-interleave', '--interleave', help="Path to read csv.", default='')
 parser.add_argument('-nointerleave', '--nointerleave', help="Path to read csv.", default='')
+parser.add_argument('-interleave75', '--interleave75', help="Path to read csv.", default='')
+parser.add_argument('-interleave50', '--interleave50', help="Path to read csv.", default='')
+parser.add_argument('-interleave25', '--interleave25', help="Path to read csv.", default='')
+parser.add_argument('-nointerleave25', '--nointerleave25', help="Path to read csv.", default='')
+parser.add_argument('-nointerleave50', '--nointerleave50', help="Path to read csv.", default='')
+parser.add_argument('-nointerleave75', '--nointerleave75', help="Path to read csv.", default='')
 parser.add_argument('-word8', '--word8', help="Path to read csv.", default='')
 parser.add_argument('-word32', '--word32', help="Path to read csv.", default='')
 parser.add_argument('-word64', '--word64', help="Path to read csv.", default='')
-parser.add_argument('-output', '--output', help="Path to output directory.", default='')
+parser.add_argument('-output', '--output', help="Path to output file.", default='./output')
 args = parser.parse_args()
 
-CONFIGS1 = { 'interleave': args.interleave, 
-			'interleave2': args.interleave2, 
-			'interleave3': args.interleave3, 
-			'interleave4': args.interleave4, 
-			'interleave5': args.interleave5,
-			'nointerleave': args.nointerleave }
-CONFIGS2 = {'word8': args.word8, 'word32': args.word32, 'word64': args.word64 }
+CONFIGS1 = { 
+			# 'interleave25': args.interleave25, 
+			# 'interleave50': args.interleave50, 
+			# 'interleave75': args.interleave75,
+			'nointerleave': args.nointerleave, 
+			'interleave': args.interleave, 
+			#'interleave2': args.interleave2, 
+			#'interleave3': args.interleave3, 
+			#'interleave4': args.interleave4, 
+			#'interleave5': args.interleave5,
+			# 'nointerleave25': args.nointerleave25,
+			# 'nointerleave50': args.nointerleave50,
+			# 'nointerleave75': args.nointerleave75
+			}
+CONFIGS2 = {} #{'word8': args.word8, 'word32': args.word32, 'word64': args.word64 }
 
 def collect(configs):
 	table = dict()
@@ -59,6 +71,7 @@ def plot():
 	x = 400
 	x_part = 312
 	fontSize=70
+	legFontSize=65
 	fontWeight='bold'
 	AnnofontSize=30
 	time_label = 'Run time (milliseconds)'
@@ -67,12 +80,20 @@ def plot():
 	yLab = time_label
 	#plt.plot(time_x['interleave5'],  data['interleave5'], linestyle='--', color='tab:red', linewidth=lW)
 	#plt.plot(time_x['interleave4'],  data['interleave4'], linestyle='--', color='tab:blue', linewidth=lW)
-	plt.plot(time_x['interleave3'],  data['interleave3'], linestyle='--', color='tab:purple', linewidth=lW)
-	plt.plot(time_x['interleave2'],  data['interleave2'], linestyle='--', color='tab:brown', linewidth=lW)
+	#plt.plot(time_x['interleave3'],  data['interleave3'], linestyle='--', color='tab:purple', linewidth=lW)
+	#plt.plot(time_x['interleave2'],  data['interleave2'], linestyle='--', color='tab:brown', linewidth=lW)
 	plt.plot(time_x['interleave'],  data['interleave'], linestyle='--', color='tab:orange', linewidth=lW)
 	plt.plot(time_x['nointerleave'],  data['nointerleave'], linestyle='-', color='tab:green', linewidth=lW)
-	legentFont = matplotlib.font_manager.FontProperties(weight='bold', size=fontSize)
-	leg = plt.legend(['interleave 3 cols', 'interleave 2 cols', 'interleave 1 col', 'no-interleave'], prop=legentFont)
+	# plt.plot(time_x['interleave25'],  data['interleave25'], linestyle='--', color='tab:blue', linewidth=lW)
+	# plt.plot(time_x['nointerleave25'],  data['nointerleave25'], linestyle='-', color='tab:blue', linewidth=lW)
+	# plt.plot(time_x['interleave50'],  data['interleave50'], linestyle='--', color='tab:orange', linewidth=lW)
+	# plt.plot(time_x['nointerleave50'],  data['nointerleave50'], linestyle='-', color='tab:orange', linewidth=lW)
+	# plt.plot(time_x['interleave75'],  data['interleave75'], linestyle='--', color='tab:green', linewidth=lW)
+	# plt.plot(time_x['nointerleave75'],  data['nointerleave75'], linestyle='-', color='tab:green', linewidth=lW)
+	legentFont = matplotlib.font_manager.FontProperties(weight='bold', size=legFontSize)
+	leg = plt.legend(['XZ 1-word interleave', 'separate X and Z'], prop=legentFont)
+	#leg = plt.legend(['XZ 3-column interleave', 'XZ 2-column interleave', 'XZ 1-column interleave', 'separate X and Z'], prop=legentFont)
+	#leg = plt.legend(['interleave (H,S = %25)', 'separate (H,S = %25)', 'interleave (H,S = %50)', 'separate (H,S = %50)', 'interleave (H,S = %75)', 'separate (H,S = %75)'], prop=legentFont)
 	#leg = plt.legend(['words interleave', 'no-interleave'], prop=legentFont)
 	leg.get_frame().set_linewidth(4.0)
 	plt.yticks(fontsize=fontSize, fontweight=fontWeight)
@@ -85,7 +106,7 @@ def plot():
 	plt.xlabel(xLab, fontsize=fontSize, fontweight=fontWeight, labelpad=25)
 	plt.ylabel(yLab, fontsize=fontSize, fontweight=fontWeight, labelpad=25)
 	plt.tight_layout(pad=2)
-	plt.savefig(args.output + '/time_interleave.pdf', dpi=1000)
+	plt.savefig(args.output + '.pdf', dpi=1000)
 	plt.show()
 	# Words plot
 	if len(CONFIGS2) == 0:
@@ -121,7 +142,7 @@ def plot():
 	plt.xlabel(xLab, fontsize=fontSize, fontweight=fontWeight, labelpad=25)
 	plt.ylabel(yLab, fontsize=fontSize, fontweight=fontWeight, labelpad=25)
 	plt.tight_layout(pad=2)
-	plt.savefig(args.output + '/time_words.pdf', dpi=1000)
+	plt.savefig(args.output + '.pdf', dpi=1000)
 	plt.show()
 
 plot()

@@ -87,7 +87,7 @@ namespace QuaSARQ {
                 if (d > 0) SYNC(kernel_stream);
                 gpu_circuit.copyfrom(stats, circuit, d, false, options.sync, false, copy_stream1, copy_stream2);
                 num_gates_per_window = circuit[d].size();
-                print_gates_step(gpu_circuit, num_gates_per_window, d);
+                print_gates(gpu_circuit, num_gates_per_window, d);
             }
 
             // Window transfer of second circuit.
@@ -96,7 +96,7 @@ namespace QuaSARQ {
                 if (d > 0) SYNC(other_kernel_stream);
                 other_gpu_circuit.copyfrom(other_stats, other_circuit, d, false, options.sync, false, other_copy_stream1, other_copy_stream2);
                 other_num_gates_per_window = other_circuit[d].size();
-                print_gates_step(other_gpu_circuit, other_num_gates_per_window, d);
+                print_gates(other_gpu_circuit, other_num_gates_per_window, d);
             }
             
 #if DEBUG_STEP
@@ -157,10 +157,10 @@ namespace QuaSARQ {
 
 #endif // End of debug/release mode.
 
-            if (p < num_partitions && d < depth)
-                print_tableau_step(tableau, d);
-            if (p < other_num_partitions && d < other_depth)
-                print_tableau_step(other_tableau, d);
+            if (options.print_step_tableau && p < num_partitions && d < depth)
+                print_tableau(tableau, d, false);
+            if (options.print_step_tableau && p < other_num_partitions && d < other_depth)
+                print_tableau(other_tableau, d, false);
 
         } // END of depth loop.
 

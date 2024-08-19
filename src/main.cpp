@@ -26,24 +26,24 @@ int main(int argc, char** argv) {
         if (options.checker_en) {
             Checker* checker = has_input_file ? new Checker(string(argv[1])) : new Checker();
             checker->run();
-		    LOGHEADER(1, 3, "Exit");
+		    LOGHEADER(0, 3, "Exit");
 			delete checker;
         }
 		else if (options.equivalence_en) {
 			Equivalence* equivalence = has_input_file == 2 ? new Equivalence(string(argv[1]), string(argv[2])) : new Equivalence();
 			equivalence->check();
-			LOGHEADER(1, 3, "Exit");
+			LOGHEADER(0, 3, "Exit");
 			delete equivalence;
 		}
 		else if (options.tuner_en) {
 			Tuner tuner;
 			tuner.run();
-			LOGHEADER(1, 3, "Exit");
+			LOGHEADER(0, 3, "Exit");
 		}
         else {
 			Simulator* sim = has_input_file ? new Simulator(string(argv[1])) : new Simulator();
             sim->simulate();
-		    LOGHEADER(1, 3, "Exit");
+		    LOGHEADER(0, 3, "Exit");
 			delete sim;
         }
 

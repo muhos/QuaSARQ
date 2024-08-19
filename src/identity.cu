@@ -81,7 +81,8 @@ namespace QuaSARQ {
             LOG2(1, "done in %f ms.", itime);
         }
         else LOGDONE(1, 3);
-        print_tableau_initial(tab);
+        if (options.print_initial_tableau) 
+            print_tableau(tab, -1, false);
     }
 
 }

@@ -35,10 +35,10 @@ header = ['Circuit', 'Initial time', 'Schedule time', 'Transfer time', 'Simulati
           'Tableau partitions', 'Tableau memory', 'Tableau step speed', 
           'Circuit memory', 'Average of parallel gates', 'Clifford gates']
 
-make_opt='winterleave=1'
+make_opt='cinterleave=0'
 
-configs = ['interleave_words']
-log_dirs = ['interleave_words']
+configs = ['--H=.125 --S=.125', '--H=.25 --S=.25', '--H=.375 --S=.375']
+log_dirs = ['no-interleave_p25', 'no-interleave_p50', 'no-interleave_p75']
 
 config2dir = dict()
 config2csv = dict()
@@ -73,7 +73,7 @@ def run_config(qubits, config, log_dir):
     kernelconfig_opt = '--config-path=' + kernelconfig
     qubits_opt = '--qubits=' + str(qubits)
     binaryfile = code_dir + '/quasarq'
-    args = (binaryfile, qubits_opt, verbose_opt, kernelconfig_opt)
+    args = (binaryfile, qubits_opt, verbose_opt, kernelconfig_opt, config)
     circuit = 'q' + str(qubits)
     row = [circuit]
     avg = [0] * len(header)

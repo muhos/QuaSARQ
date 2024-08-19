@@ -240,16 +240,3 @@ namespace QuaSARQ {
 	}
 
 }
-
-//void QuaSARQ::killSolver()
-//{
-//	SYNCALL;
-//	//wrapup();
-//	LOG0("");
-//	LOGN2(1, "Cleaning up..");
-//	//this->~sim();
-//	//sim = nullptr;
-//	LOGDONE(1, 5);
-//	if (!options.quiet_en) LOGRULER('-', RULELEN);
-//	exit(EXIT_SUCCESS);
-//}

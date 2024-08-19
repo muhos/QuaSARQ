@@ -15,7 +15,8 @@ namespace QuaSARQ {
     BOOL_OPT opt_print_tableau_step("print-step-tableau", "print tableau after every simulation step on screen in binary format", false);
     BOOL_OPT opt_print_tableau_final("print-final-tableau", "print final tableau after simulation ends on screen in binary format", false);
     BOOL_OPT opt_print_tableau_initial("print-initial-tableau", "print initial tableau before simulation on screen in binary format", false);
-    BOOL_OPT opt_print_stab("print-stab", "print stabilizers as Pauli strings (qubits <= 64 ? stdout : stab.out)", false);
+    BOOL_OPT opt_print_step_state("print-step-state", "print step state in form of Pauli strings on screen", false);
+    BOOL_OPT opt_print_final_state("print-final-state", "print final state in form of Pauli strings on screen", false);
     BOOL_OPT opt_print_gates("print-gates", "print gates in every step on screen", false);
     BOOL_OPT opt_write_rc("write-rc", "write random circuit to file (format: q<qubits>_d<depth>.stim)", false);
     BOOL_OPT opt_sync("sync", "synchronize all kernels and data transfers", false);
@@ -74,11 +75,12 @@ namespace QuaSARQ {
         tuner_initial_qubits = opt_tuneinitial_qubits;
         tuner_step_qubits = opt_tunestep_qubits;
 
-        print_stab = opt_print_stab;
+        print_final_state = opt_print_final_state;
+        print_step_state = opt_print_step_state;
         print_gates = opt_print_gates;
-        print_tableau_step = opt_print_tableau_step;
-        print_tableau_final = opt_print_tableau_final;
-        print_tableau_initial = opt_print_tableau_initial;
+        print_step_tableau = opt_print_tableau_step;
+        print_final_tableau = opt_print_tableau_final;
+        print_initial_tableau = opt_print_tableau_initial;
         write_rc = opt_write_rc;
 
         H_p = opt_H_prob;

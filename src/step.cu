@@ -244,7 +244,7 @@ namespace QuaSARQ {
         const size_t num_words_per_column = tableau.num_words_per_column();
         const size_t shared_element_bytes = sizeof(word_std_t);
 
-        print_gates_step(gpu_circuit, num_gates_per_window, depth_level);
+        print_gates(gpu_circuit, num_gates_per_window, depth_level);
 
     #if DEBUG_STEP
 
@@ -305,7 +305,10 @@ namespace QuaSARQ {
 
     #endif // End of debug/release mode.
 
-        print_tableau_step(tableau, depth_level);
+        if (options.print_step_tableau)
+            print_tableau(tableau, depth_level, reversed);
+        if (options.print_step_state)
+            print_paulis(tableau, depth_level, reversed);
 
         // Overlap next copy with current kernel execution.
         if (options.overlap) {

@@ -102,7 +102,10 @@ void Simulator::simulate(const size_t& p, const bool& reversed) {
             step(p, d, custreams);
         }
     }
-    print_tableau_final(tableau, reversed);
+    if (options.print_final_tableau)
+        print_tableau(tableau, depth, reversed);
+    if (options.print_final_state)
+        print_paulis(tableau, depth, reversed);
 }
 
 void Simulator::simulate() {

@@ -29,10 +29,11 @@ namespace QuaSARQ {
 
         bool write_rc;
         bool print_gates;
-        bool print_tableau_step;
-        bool print_tableau_final;
-        bool print_tableau_initial;
-        bool print_stab;
+        bool print_step_tableau;
+        bool print_final_tableau;
+        bool print_initial_tableau;
+        bool print_step_state;
+        bool print_final_state;
 
         bool profile_equivalence;
         bool disable_concurrency;

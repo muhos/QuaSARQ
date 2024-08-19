@@ -1,0 +1,23 @@
+ Initial time                   : 0.025         msec
+ Schedule time                  : 596.105       msec
+ Simulation time                : 17.753        msec
+ Power consumption              : 52.535        watt
+ Energy consumption             : 0.933         joules
+ Tableau interleaving           : 1-way         
+ Tableau word size              : 64 bits     
+ Tableau partitions             : 1           
+ Tableau memory                 : 6.417         GB
+ Tableau step speed             : 361.468       GB/sec
+ Tableau initial states         : 1           
+ Circuit depth                  : 1           
+ Circuit qubits                 : 166000      
+ Circuit memory                 : 1.535         MB
+ Maximum parallel gates         : 118258      
+ Average parallel gates         : 118258.000  
+ Clifford gates                 : 118258      
+  X         9646  (%8  ) CX         9588  (%8  )
+  Y         9609  (%8  ) CZ         9500  (%8  )
+  Z         9612  (%8  ) CY         9577  (%8  )
+  H        15993  (%14 ) Swap       9484  (%8  )
+  S        16037  (%14 ) iSwap      9593  (%8  )
+  Sdg       9619  (%8  ) I             0  (%0  )
