@@ -6,7 +6,7 @@ import subprocess
 import csv
 import random
 
-print("\t\t Parallel Quantum Simulation on GPUs\n")
+print("\t\t Equivalence Checking with QuaSARQ\n")
 
 parser = argparse.ArgumentParser("gpu_benchmark")
 parser.add_argument('-d', '--benchdir', help="Directory to read benchmarks.", default='')
