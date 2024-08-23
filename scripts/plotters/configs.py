@@ -65,15 +65,12 @@ def plot():
 	for config in CONFIGS1.keys():
 		time_x.update({ config: list(range(start, end)) })
 		data[config] = data[config][start-start:end-start]
-	fig = plt.figure(figsize=(25,13))
+	plt.figure(figsize=(25,13))
 	plt.rcParams["font.family"] = "Times New Roman"
 	mS=30; mW=4; lW=6
-	x = 400
-	x_part = 312
 	fontSize=70
 	legFontSize=65
 	fontWeight='bold'
-	AnnofontSize=30
 	time_label = 'Run time (milliseconds)'
 	circuits_label = 'Qubits in thousands'
 	xLab = circuits_label

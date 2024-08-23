@@ -28,13 +28,42 @@ namespace QuaSARQ {
 					else if (q == 0) {
 						LOGGPU("+");
 					}
-					if ((!(x_words[q * num_words_per_column + WORD_OFFSET(w)] & pow2)) && (!(z_words[q * num_words_per_column + WORD_OFFSET(w)] & pow2)))
+					const size_t word_idx = q * num_words_per_column + WORD_OFFSET(w);
+					if ((!(x_words[word_idx] & pow2)) && (!(z_words[word_idx] & pow2)))
 						LOGGPU("I");
-					if ((x_words[q * num_words_per_column + WORD_OFFSET(w)] & pow2) && (!(z_words[q * num_words_per_column + WORD_OFFSET(w)] & pow2)))
+					if ((x_words[word_idx] & pow2) && (!(z_words[word_idx] & pow2)))
 						LOGGPU("X");
-					if ((x_words[q * num_words_per_column + WORD_OFFSET(w)] & pow2) && (z_words[q * num_words_per_column + WORD_OFFSET(w)] & pow2))
+					if ((!(x_words[word_idx] & pow2)) && (z_words[word_idx] & pow2))
+						LOGGPU("Z");
+					if ((x_words[word_idx] & pow2) && (z_words[word_idx] & pow2))
 						LOGGPU("Y");
-					if ((!(x_words[q * num_words_per_column + WORD_OFFSET(w)] & pow2)) && (z_words[q * num_words_per_column + WORD_OFFSET(w)] & pow2))
+				}
+				LOGGPU("\n");
+			}
+		}
+	}
+
+	__global__ void print_paulis_k(const Table* ps, const Signs* ss, const size_t num_words_per_column, const size_t num_qubits, const depth_t level) {
+		if (!blockIdx.x && !threadIdx.x) {
+			const word_t *words = ps->data();
+			for (size_t w = 0; w < num_qubits; w++) {
+				const word_t pow2 = POW2(w);
+				for (size_t q = 0; q < num_qubits; q++) {
+					if (q == 0 && (*ss)[WORD_OFFSET(q)] & sign_t(pow2)) {
+						LOGGPU("-");
+					}
+					else if (q == 0) {
+						LOGGPU("+");
+					}
+					const size_t x_word_idx = X_OFFSET(q) * num_words_per_column + X_WORD_OFFSET(WORD_OFFSET(w));
+					const size_t z_word_idx = Z_OFFSET(q) * num_words_per_column + Z_WORD_OFFSET(WORD_OFFSET(w));
+					if ((!(words[x_word_idx] & pow2)) && (!(words[z_word_idx] & pow2)))
+						LOGGPU("I");
+					if ((words[x_word_idx] & pow2) && (!(words[z_word_idx] & pow2)))
+						LOGGPU("X");
+					if ((words[x_word_idx] & pow2) && (words[z_word_idx] & pow2))
+						LOGGPU("Y");
+					if ((!(words[x_word_idx] & pow2)) && (words[z_word_idx] & pow2))
 						LOGGPU("Z");
 				}
 				LOGGPU("\n");

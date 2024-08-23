@@ -1,4 +1,3 @@
-from timeit import default_timer as timer
 import os, sys
 import argparse
 import lzma
@@ -9,17 +8,17 @@ import random
 print("\t\t Equivalence Checking with QuaSARQ\n")
 
 parser = argparse.ArgumentParser("gpu_benchmark")
-parser.add_argument('-d', '--benchdir', help="Directory to read benchmarks.", default='')
-parser.add_argument('-c', '--codedir', help="Directory to code.", default='../')
-parser.add_argument('-g', '--kernelconfig', help="Path of kernel configuration", default='../kernel.config')
-parser.add_argument('-r', '--resultsdir', help="Directory to store results.", default='results/quasarq')
+parser.add_argument('-circuit', '--circuit', help="Directory to read circuts.", default='')
+parser.add_argument('-src', '--src', help="Directory to source code.", default='src')
+parser.add_argument('-o', '--output', help="Directory to store results.", default='results/quasarq/configs')
+parser.add_argument('-g', '--kernelconfig', help="Path of kernel configuration", default='src/kernel.config')
 parser.add_argument('-n', '--nsamples', help="Number of samples", default=2)
 parser.add_argument('-m', '--max', help="Maximum qubits", default=0)
 args = parser.parse_args()
 
-bench_dir = args.benchdir
-code_dir = args.codedir
-main_logs_dir = args.resultsdir
+bench_dir = args.circuit
+code_dir = args.src
+main_logs_dir = args.output
 kernelconfig = args.kernelconfig
 nsamples = int(args.nsamples)
 max_qubits = int(args.max)

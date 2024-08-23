@@ -79,9 +79,11 @@ namespace QuaSARQ {
 
     // Print the tableau in binary format (generators are columns).
     __global__ void print_tableau_k(const Table* xs, const Table* zs, const Signs* ss, const depth_t level);
+    __global__ void print_tableau_k(const Table* ps, const Signs* ss, const depth_t level);
 
     // Print the tableau's Pauli strings.
     __global__ void print_paulis_k(const Table* xs, const Table* zs, const Signs* ss, const size_t num_words_per_column, const size_t num_qubits, const depth_t level);
+    __global__ void print_paulis_k(const Table* ps, const Signs* ss, const size_t num_words_per_column, const size_t num_qubits, const depth_t level);
 
     // Print gates.
     __global__ void print_gates_k(const gate_ref_t* refs, const bucket_t* gates, const gate_ref_t num_gates);
