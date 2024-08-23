@@ -27,15 +27,16 @@ parser.add_argument('--ccmix', help="Perform column-interleaving experiments usi
 parser.add_argument('--cpmix', help="Perform column-interleaving experiments using different probabilities of H and S gates", action=argparse.BooleanOptionalAction)
 parser.add_argument('--wmix', help="Perform word-interleaving experiments", action=argparse.BooleanOptionalAction)
 parser.add_argument('--wsize', help="Perform word-size experiments", action=argparse.BooleanOptionalAction)
+parser.add_argument('--plotonly', help="Plot only assuming csv files exist", action=argparse.BooleanOptionalAction)
 
 args = parser.parse_args()
 
-max_qubits = int(args.max)
-min_qubits = int(args.min)
-step_qubits = int(args.step)
 code_dir = main_dir + args.src
 main_logs_dir = main_dir + args.output
 kernelconfig = main_dir + args.kernelconfig
+max_qubits = int(args.max)
+min_qubits = int(args.min)
+step_qubits = int(args.step)
 nsamples = int(args.nsamples)
 
 qubits_range = [q for q in range(int(min_qubits), int(max_qubits) + 1, int(step_qubits))]
@@ -117,9 +118,9 @@ def add_config(config2dir, config2csv, config):
     os.makedirs(log_dir, exist_ok=True)
     config2dir.update({ config: log_dir })
     csv_path = log_dir + '/' + config + '.csv'
-    f = open(csv_path, 'w', encoding='UTF8', newline='')
+    f = open(csv_path, 'a' if args.plotonly else 'w', encoding='UTF8', newline='')
     csv_writer = csv.writer(f)
-    csv_writer.writerow(header)
+    if not args.plotonly: csv_writer.writerow(header)
     config2csv.update({ config: f })
 
 def write_csv(config2csv, config, circuit, results):
@@ -132,10 +133,11 @@ def write_csv(config2csv, config, circuit, results):
 
 def run(config2dir, config2csv, make_config, config, config_name):
     add_config(config2dir, config2csv, config_name)
-    make_clean(make_config)
-    for q in qubits_range:
-        results = run_config(q, make_config, config, config2dir[config_name])
-        write_csv(config2csv, config_name, 'q' + str(q), results)
+    if not args.plotonly:
+        make_clean(make_config)
+        for q in qubits_range:
+            results = run_config(q, make_config, config, config2dir[config_name])
+            write_csv(config2csv, config_name, 'q' + str(q), results)
     config2csv[config_name].close()
 
 def collect(data, config2csv):

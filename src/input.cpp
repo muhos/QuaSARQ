@@ -1,18 +1,21 @@
 
 #include "input.hpp"
+#include "banner.hpp"
 #include "control.hpp"
 
 namespace QuaSARQ {
 
-    void printUsage(int argc, char** argv, bool verbose)
+    void printUsage(const int& argc, char **argv, bool verbose)
     {
+        LOGHEADER(0, 3, "Banner");
+        LOGFANCYBANNER(version());
         LOGHEADER(0, 3, "Build");
         getCPUInfo();
         getBuildInfo();
         getGPUInfo();
         LOGHEADER(0, 5, "Usage");
         LOG0("");
-        LOG1(" %spulsar%s [<circuit>.<qasm or stim>][<option> ...]", CSIM, CNORMAL);
+        LOG1(" %squasarq%s [<circuit>.<qasm or stim>][<option> ...]", CSIM, CNORMAL);
         LOG0("");
         AvailOptions& avail_opts = ARG::opts();
         std::sort(avail_opts.data(), avail_opts.end(), ARG::ARG_CMP());
@@ -32,7 +35,7 @@ namespace QuaSARQ {
         exit(EXIT_SUCCESS);
     }
 
-    int parseArguments(int& argc, char** argv)
+    int parseArguments(const int& argc, char **argv)
     {
         if (argc <= 1) return false;
         int dashes = (argv[1][0] == '-') + (argv[1][1] == '-');
@@ -76,9 +79,9 @@ namespace QuaSARQ {
         return ispath;
     }
 
-    void printArguments(const int& argc) {
+    void printArguments(const bool& has_options) {
         const AvailOptions& avail_opts = ARG::opts();
-        if (argc > 1) {
+        if (has_options) {
             LOGHEADER(1, 3, "Options");
             int i = 0, j = 0;
             const int MAX_PER_LINE = 4;

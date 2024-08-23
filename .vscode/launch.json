@@ -10,7 +10,7 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "args": ["-o", "tmp", "--wmix", "--max", "100000"],
+            "args": [],
         }
     ]
 }

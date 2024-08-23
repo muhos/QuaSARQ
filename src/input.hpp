@@ -8,9 +8,9 @@
 namespace QuaSARQ {
 
 	// global
-	int parseArguments(int& argc, char** argv);
-	void printArguments(const int& argc);
-	void printUsage(int  argc, char** argv, bool verbose = false);
+	int parseArguments(const int& argc, char **argv);
+	void printArguments(const bool& has_options);
+	void printUsage(const int& argc, char **argv, bool verbose = false);
 
 	class ARG;
 	typedef Vec<ARG*, int> AvailOptions;
@@ -33,9 +33,9 @@ namespace QuaSARQ {
 	public:
 		// global
 		static AvailOptions& opts() { static AvailOptions opts; return opts; }
-		friend int  parseArguments(int& argc, char** argv);
-		friend void printArguments(const int& argc);
-		friend void printUsage(int  argc, char** argv, bool verbose);
+		friend int  parseArguments(const int& argc, char **argv);
+		friend void printArguments(const bool& has_options);
+		friend void printUsage(const int& argc, char **argv, bool verbose);
 		// derived methods
 		virtual ~ARG() {}
 		virtual bool parse(arg_t input) = 0;

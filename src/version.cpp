@@ -13,7 +13,7 @@ namespace QuaSARQ {
 	char buffer[BUFFERSIZE];
 
 	#ifndef VERSION
-		#define VERSION "3.0"
+		#define VERSION "1.0"
 	#endif
 
 	#ifndef COMPILER
@@ -44,7 +44,7 @@ namespace QuaSARQ {
 
 	const char* version() { return "v" VERSION; }
 
-	const char* signature() { return "pulsar-" VERSION; }
+	const char* signature() { return "quasarq-" VERSION; }
 
 	const char* compiler() 
 	{

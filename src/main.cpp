@@ -2,6 +2,7 @@
 #include "equivalence.hpp"
 #include "simulator.hpp"
 #include "checker.hpp"
+#include "banner.hpp"
 #include "tuner.cuh"
 #include "input.hpp"
 
@@ -17,7 +18,9 @@ int main(int argc, char** argv) {
 		int has_input_file = parseArguments(argc, argv);
         options.initialize();
 		if (!options.quiet_en && options.verbose) {
-			printArguments(argc);
+			LOGHEADER(1, 3, "Banner");
+			LOGFANCYBANNER(version());
+			printArguments(argc - 1 > has_input_file);
 		}
 		options.check(has_input_file == 1 ? argv[1] : nullptr, has_input_file == 2 ? argv[2] : nullptr);
 

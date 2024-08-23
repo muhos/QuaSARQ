@@ -1,5 +1,5 @@
-#ifndef __PULSAR_H
-#define __PULSAR_H
+#ifndef __SIMULATOR_H
+#define __SIMULATOR_H
 
 #include "vector.cuh"
 #include "tableau.cuh"
