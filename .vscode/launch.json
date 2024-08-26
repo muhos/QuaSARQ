@@ -10,7 +10,7 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "args": [],
+            "args": ["-s", "~/Downloads/ryzen-power/ryzen-power.py", "-c", "~/quantum/circuits/stim/q1000_d100.stim.xz", "-o", "./tmp" ],
         }
     ]
 }

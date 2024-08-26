@@ -14,14 +14,14 @@ parser = argparse.ArgumentParser("gpu_benchmark")
 parser.add_argument('-d', '--benchdir', help="Directory to read benchmarks.", default='')
 parser.add_argument('-c', '--codedir', help="Directory to code.", default='../')
 parser.add_argument('-g', '--kernelconfig', help="Path of kernel configuration", default='../kernel.config')
-parser.add_argument('-r', '--resultsdir', help="Directory to store results.", default='results/gpu')
+parser.add_argument('-r', '--output', help="Directory to store results.", default='results/gpu')
 parser.add_argument('-n', '--nsamples', help="Number of samples", default=2)
 parser.add_argument('-m', '--max', help="Maximum qubits", default=0)
 args = parser.parse_args()
 
 bench_dir = args.benchdir
 code_dir = args.codedir
-main_logs_dir = args.resultsdir
+main_logs_dir = args.output
 kernelconfig = args.kernelconfig
 nsamples = int(args.nsamples)
 max_qubits = int(args.max)
