@@ -5,36 +5,36 @@ import subprocess
 import csv
 import random
 
+Path = os.path
+
+parent_dir = Path.dirname(Path.abspath(__file__))
+main_dir = Path.dirname(parent_dir) + '/'
+
 print("\t\t Equivalence Checking with QuaSARQ\n")
 
 parser = argparse.ArgumentParser("gpu_benchmark")
-parser.add_argument('-circuit', '--circuit', help="Directory to read circuts.", default='')
 parser.add_argument('-src', '--src', help="Directory to source code.", default='src')
-parser.add_argument('-o', '--output', help="Directory to store results.", default='results/quasarq/configs')
+parser.add_argument('-c', '--circuit', help="Directory to read circuts.", default='test')
+parser.add_argument('-o', '--output', help="Directory to store results.", default='results/equivalence/quasarq')
 parser.add_argument('-g', '--kernelconfig', help="Path of kernel configuration", default='src/kernel.config')
 parser.add_argument('-n', '--nsamples', help="Number of samples", default=2)
 parser.add_argument('-m', '--max', help="Maximum qubits", default=0)
 args = parser.parse_args()
 
-bench_dir = args.circuit
-code_dir = args.src
-main_logs_dir = args.output
-kernelconfig = args.kernelconfig
+circuit_dir = main_dir + args.circuit
+code_dir = main_dir + args.src
+main_logs_dir = main_dir + args.output
+kernelconfig = main_dir + args.kernelconfig
 nsamples = int(args.nsamples)
 max_qubits = int(args.max)
+
+os.makedirs(main_logs_dir, exist_ok=True)
 
 verbal = ['Circuits check', 'Failed state']
 header = ['Circuit', 'Initial time', 'Schedule time', 'Simulation time', 'Energy consumption',
           'Circuits check', 'Failed state', 
           'Tableau partitions', 'Tableau memory', 'Tableau step speed', 
           'Circuit memory', 'Average parallel gates', 'Clifford gates']
-
-configs = ['-equivalence']
-log_dirs = ['equivalence']
-
-config2dir = dict()
-config2csv = dict()
-config2res = dict()
 
 random_line_idx = -1
 random_gate = ''
@@ -71,24 +71,24 @@ def average_results(sample, in_cell, in_entry, run):
                 sample[i] = float(in_entry)
             break
 
-def run_config(circuit, config, log_dir, benchpath, other_benchpath):
+def run_config(circuit, csvfile, benchpath, other_benchpath):
     verbose_opt = '--verbose=0'
     kernelconfig_opt = '--config-path=' + kernelconfig
     binaryfile = code_dir + '/quasarq'
-    args = (binaryfile, benchpath, other_benchpath, config, verbose_opt, kernelconfig_opt)
+    args = (binaryfile, benchpath, other_benchpath, '-equivalence', verbose_opt, kernelconfig_opt)
     row = [circuit]
     avg = [0] * len(header)
     for i in range(0, nsamples):
-        print("Running [%-12s] with configuration [%-11s] the %d-time... " %(circuit, config, i+1), end='\r'), sys.stdout.flush()
+        print("QuaSARQ checking equivalence of [%-12s] the %d-time... " %(circuit, i+1), end='\r'), sys.stdout.flush()
         popen = subprocess.Popen(args, stdout=subprocess.PIPE)
         popen.wait()
-        log_file = log_dir + '/' + 'log_run_' + str(i) + '_' + circuit + '.txt'
+        log_file = main_logs_dir + '/' + 'log_run_' + str(i) + '_' + circuit + '.txt'
         output = popen.stdout.read().decode('utf-8')
         write_log_file(output, log_file)
         outputlines = output.splitlines()
         for line in outputlines:
-            if line.strip()[0] == '-':
-                break
+            if 'Statistics' in line:
+                continue
             if 'Read' in line:
                 continue
             splitline = line.split(':')
@@ -109,13 +109,12 @@ def run_config(circuit, config, log_dir, benchpath, other_benchpath):
                 value = value.removesuffix('joules').strip()
             cell = splitline[0].strip()
             average_results(avg, cell, value, i)
-    csv_writer = csv.writer(config2csv[config])
+    csv_writer = csv.writer(csvfile)
     for i in range(1, len(header)):
         if not isinstance(avg[i], str):
             row.append("%.2f" % avg[i])
         else:
-            row.append(avg[i])
-        
+            row.append(avg[i])    
     csv_writer.writerow(row)
 
 gate_1 = ['H', 'S_DAG', 'S', 'X', 'Y', 'Z']
@@ -147,28 +146,20 @@ def inject(lines):
     assert(random_gate in other[random_line_idx])
     return other
 
-def benchmark():
+if __name__ == '__main__':
     print("Compiling directory %s from scratch... " %(code_dir), end=''), sys.stdout.flush()
     compile_clean()
     print("done.\n")
 
-    for dir in log_dirs:
-        new_dir = main_logs_dir + '/' +  dir
-        os.makedirs(new_dir, exist_ok=True)
+    csv_path = main_logs_dir + '/equivalence.csv'
+    csv_f = open(csv_path, 'a', encoding='UTF8', newline='')
+    csv_writer = csv.writer(csv_f)
+    csv_writer.writerow(header)
 
-    for i, config in enumerate(configs):
-        log_dir = main_logs_dir + '/'  + log_dirs[i]
-        config2dir.update({ config: log_dir })
-        csv_path = log_dir + '/' + log_dirs[i] + '.csv'
-        f = open(csv_path, 'a', encoding='UTF8', newline='')
-        csv_writer = csv.writer(f)
-        csv_writer.writerow(header)
-        config2csv.update({ config: f })
-
-    file_list = [f for f in os.listdir(bench_dir) if f.endswith(".xz")]
+    file_list = [f for f in os.listdir(circuit_dir) if f.endswith(".xz")]
     file_list.sort()
     for i,file_name in enumerate(file_list):
-        path = os.path.join(bench_dir, file_name)
+        path = os.path.join(circuit_dir, file_name)
         with lzma.open(path, mode='rt', encoding='utf-8') as f:
             stim_string_file_name = os.path.splitext(file_name)
             file_name_stim = os.path.splitext(stim_string_file_name[0])
@@ -191,14 +182,8 @@ def benchmark():
                 with open(other_written_file_path, 'w') as str_f:
                     str_f.write(''.join(other))
                 str_f.close()
-            for config in config2dir.keys():
-                run_config(file_name_stim[0], config, config2dir[config], written_file_path, other_written_file_path)
+            run_config(file_name_stim[0], csv_f, written_file_path, other_written_file_path)
             os.remove(written_file_path)
             os.remove(other_written_file_path)
-
-    for config in config2csv.keys():
-        config2csv[config].close()
-
-    print("Finished %d circuits with %d configurations for %d times.%40s\n" %(len(file_list), len(configs), nsamples, " ")), sys.stdout.flush()
-
-benchmark()
+    csv_f.close()
+    print("QuaSARQ checked equivalence of %d circuits for %d times.%40s\n" %(len(file_list), nsamples, " ")), sys.stdout.flush()

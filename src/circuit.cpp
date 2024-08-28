@@ -157,10 +157,10 @@ size_t Simulator::parse(Statistics& stats, const char* path) {
             if (sign) LOGERROR("number of qubits in header is negative.");
             LOG2(1, "Found header %s%zd%s.", CREPORTVAL, max_qubits, CNORMAL);           
         }
-        if (!max_qubits)
-            LOGERROR("number of qubits in header is zero.");
         circuit_io.read_gate(str);  
     }
+    if (!max_qubits)
+        max_qubits = circuit_io.max_qubits;
     assert(circuit_io.circuit_queue.size() == circuit_io.gate_stats.all());
     stats.circuit.max_gates = circuit_io.circuit_queue.size();
     stats.circuit.gate_stats = circuit_io.gate_stats;

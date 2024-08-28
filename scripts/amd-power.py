@@ -124,7 +124,10 @@ class RyzenPower:
         core_energy_after = {c: self._read_core_energy(c) for c in self._cores}
         package_power = {c: self._calc_power(package_energy_before[c], package_energy_after[c]) for c in self._cores}
         core_power = {c: self._calc_power(core_energy_before[c], core_energy_after[c]) for c in self._cores}
-        print(self._format_result(package_power, core_power))
+        table = self._format_result(package_power, core_power)
+        #print(table)
+        cores = sum(core_power.values())
+        return (table, cores)
 
     @staticmethod
     def _format_table(table, widths, units):
@@ -156,6 +159,7 @@ class RyzenPower:
                         core_power[core],
                         ""
                     ])
+                    #print(str(core_power[core]))
             socket_power_entry.append(socket_total_cores_power)
             socket_power_entry.append(socket_package_power)
         return self._format_table(table, (16, 16, 16), ("", "W", "W"))
@@ -165,10 +169,28 @@ parser = argparse.ArgumentParser(description='Measure power consumption for AMD 
 parser.add_argument("--debug", action='store_true', help="show debug messages")
 parser.add_argument("-d", "--duration", type=float, default=0.5,
                     help="the duration of measurement in seconds, default is 0.5 second")
+# Muhammad
+parser.add_argument("-f", "--frequency", type=float, default=2,
+                    help="the frequency of measurement in Hertz.")
+parser.add_argument("-i", "--iterations", type=int, default=1,
+                    help="the number of measurements.")
 args = parser.parse_args()
 if args.debug:
     stream_handler = logging.StreamHandler()
     logger.addHandler(stream_handler)
     logger.setLevel(logging.DEBUG)
 
-RyzenPower(args.duration).measure()
+ITERS = args.iterations
+FREQ = args.frequency
+if ((1/FREQ) != args.duration and args.duration == 0.5):
+    args.duration = 1/FREQ
+    print("Setting measurement duration to %.2f" % args.duration)
+
+p = RyzenPower(args.duration)
+power = 0.0
+for i in range(0, ITERS):
+    table, cores = p.measure()
+    power += cores
+power /= ITERS
+print("Average power consumption (w): %.2f" %power)
+

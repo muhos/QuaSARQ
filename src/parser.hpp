@@ -84,7 +84,7 @@ namespace QuaSARQ {
 
         void* buffer;
         char* eof;
-        size_t size;
+        size_t size, max_qubits;
         Gate_stats gate_stats;
         Circuit_queue circuit_queue;
 
@@ -98,6 +98,7 @@ namespace QuaSARQ {
             buffer(nullptr)
             , eof(nullptr)
             , size(0)
+            , max_qubits(0)
         { 
             init();
         }
@@ -124,6 +125,7 @@ namespace QuaSARQ {
             buffer = nullptr;
             eof = nullptr;
             size = 0;
+            max_qubits = 0;
         }
 
         void write(const Circuit& circuit, const size_t& num_qubits_in_circuit) {
@@ -221,9 +223,11 @@ namespace QuaSARQ {
                     continue;
                 }
 				const qubit_t c = toInteger(str);
+                max_qubits = MAX(max_qubits, c);
                 qubit_t t = c;
 				if (gatename_len > 1 && type != Sdg) {
                     t = toInteger(str);
+                    max_qubits = MAX(max_qubits, t);
                 }
                 circuit_queue.push(Parsed_gate(c, t, type));
                 gate_stats.types[type]++;
