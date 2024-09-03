@@ -24,20 +24,8 @@ namespace QuaSARQ {
     constexpr gate_ref_t NO_REF     = -1;
 
     // Must follow the same order of 'Gatetypes'.
-    __constant__ constexpr arg_t G2S[NR_GATETYPES] = 
-    { 
-        "I",
-        "Z",
-        "X",
-        "Y",
-        "H",
-        "S",
-        "Sdg",
-        "CX",
-        "CY",
-        "CZ",
-        "Swap",
-        "iSwap"
+    __constant__ constexpr const arg_t G2S[NR_GATETYPES] = { 
+        FOREACH_GATE(GENERATE_GATE_STRING)
     };
 
     struct Gate {

@@ -284,7 +284,7 @@ inline void host_iSwap(const qubit_t& q1, const qubit_t& q2, Table& xs, Table& z
 
     for (size_t w = 0; w < num_words_per_column; w++) {
 
-        // Swap(q1, q2)
+        // SWAP(q1, q2)
         do_SWAP(x_words_q1[w], x_words_q2[w]);
         do_SWAP(z_words_q1[w], z_words_q2[w]);
 
@@ -320,13 +320,13 @@ void Simulator::step_cpu_version(const Window& window) {
             case Y:
                 host_Y(gate->wires[0], host_xs, host_zs, host_ss);
                 break;
-            case Sdg:
+            case S_DAG:
                 host_PhaseAdj(gate->wires[0], host_xs, host_zs, host_ss);
                 break;
-            case Swap:
+            case SWAP:
                 host_Swap(gate->wires[0], gate->wires[1], host_xs, host_zs, host_ss);
                 break;
-            case iSwap:
+            case ISWAP:
                 host_iSwap(gate->wires[0], gate->wires[1], host_xs, host_zs, host_ss);
                 break;
             case CX:

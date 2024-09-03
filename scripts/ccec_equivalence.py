@@ -13,14 +13,14 @@ parent_dir = Path.dirname(Path.abspath(__file__))
 main_dir = Path.dirname(parent_dir) + '/'
 
 parser = argparse.ArgumentParser("qiskit_benchmark")
-parser.add_argument('-s', '--script', help="Script to measure power consumption (CPU-specific).", default='amd-power.py')
+parser.add_argument('-s', '--script', help="Script to measure power consumption (CPU-specific).", default='scripts/amd-power.py')
 parser.add_argument('-c', '--circuit', help="Directory to read circuits.", default='test')
-parser.add_argument('-o', '--output', help="Directory to store results.", default='results/equivalence/stim')
+parser.add_argument('-o', '--output', help="Directory to store results.", default='results/equivalence/ccec')
 parser.add_argument('-n', '--nsamples', help="Number of samples", default=2)
 
 args = parser.parse_args()
 circuit_dir = main_dir + args.circuit
-power_script = parent_dir + '/' + args.script
+power_script = main_dir + args.script
 main_logs_dir = main_dir + args.output
 nsamples = int(args.nsamples)
 
@@ -41,6 +41,8 @@ random_gate = ''
 org_gate = ''
 
 qubits = 0
+
+live_string = "CCEC checking equivalence of [%-12s] the %d-time... "
 
 def write_log_file(output, log_file, mode):
     with open(log_file, mode) as log_f:
@@ -84,7 +86,7 @@ def run_config(id, returned):
     row = [0] * len(header)
     row[0] = circuitname
     for i in range(0, nsamples):
-        print(" CCEC checking equivalence of [%-12s] the %d-time... " %(circuitname, i+1), end='\r'), sys.stdout.flush()
+        print(live_string %(circuitname, i+1), end='\r'), sys.stdout.flush()
         output = 'Run ' + str(i) + ': '
         start_time = time.monotonic()
         U = stim.TableauSimulator()
@@ -109,7 +111,7 @@ def run_config(id, returned):
             if len(stabilizers2) == 0:
                 raise Exception('stabilizers1 size is 0')
             if is_equal(stabilizers1, stabilizers2):
-                equivalence_check = 'EQUIVALENT'
+                equivalence_check =string = "CCEC checking equivalence of [%-12s] the %d-time... " 'EQUIVALENT'
             else:
                 failed_state = '+'
         else:
@@ -234,12 +236,12 @@ if __name__ == '__main__':
         if (len(splitlines) >= 2):
             power_draw = float(splitlines[1].split(':')[1])
         rounded = "%.2f" % (power_draw * elapsed)
-        print(rounded)
         row[2] = rounded
         energyline = rounded + ' joules\n'
         log_file = main_logs_dir + '/' + 'log_' + circuitname + '.txt'
         write_log_file(energyline, log_file, 'a')
         csv_writer.writerow(row)
     csv_f.close()
-        
-    print(" CCEC checked equivalence of %d circuits for %d times.%40s\n" %(len(file_list), nsamples, " ")), sys.stdout.flush()
+    end_string="%" + str(len(live_string) + 12) + "s"
+    print(end_string %(" "), end='\r'), sys.stdout.flush()
+    print("CCEC checked equivalence of %d circuits for %d times." %(len(file_list), nsamples)), sys.stdout.flush()

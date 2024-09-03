@@ -167,19 +167,19 @@ void Equivalence::report(const bool& equivalent) {
         percent((double)other_stats.circuit.gate_stats.types[Z], other_stats.circuit.max_gates),
         CREPORT, CREPORTVAL, other_stats.circuit.gate_stats.types[CY], 
         percent((double)other_stats.circuit.gate_stats.types[CY], other_stats.circuit.max_gates), CNORMAL);
-    LOG1(" %s H %s%12zd  (%%%-3.0f)%s Swap%s%11zd  (%%%-3.0f)%s",
+    LOG1(" %s H %s%12zd  (%%%-3.0f)%s SWAP%s%11zd  (%%%-3.0f)%s",
         CREPORT, CREPORTVAL, other_stats.circuit.gate_stats.types[H],
         percent((double)other_stats.circuit.gate_stats.types[H], other_stats.circuit.max_gates),
-        CREPORT, CREPORTVAL, other_stats.circuit.gate_stats.types[Swap], 
-        percent((double)other_stats.circuit.gate_stats.types[Swap], other_stats.circuit.max_gates), CNORMAL);
-    LOG1(" %s S %s%12zd  (%%%-3.0f)%s iSwap%s%10zd  (%%%-3.0f)%s",
+        CREPORT, CREPORTVAL, other_stats.circuit.gate_stats.types[SWAP], 
+        percent((double)other_stats.circuit.gate_stats.types[SWAP], other_stats.circuit.max_gates), CNORMAL);
+    LOG1(" %s S %s%12zd  (%%%-3.0f)%s ISWAP%s%10zd  (%%%-3.0f)%s",
         CREPORT, CREPORTVAL, other_stats.circuit.gate_stats.types[S],
         percent((double)other_stats.circuit.gate_stats.types[S], other_stats.circuit.max_gates),
-        CREPORT, CREPORTVAL, other_stats.circuit.gate_stats.types[iSwap],
-        percent((double)other_stats.circuit.gate_stats.types[iSwap], other_stats.circuit.max_gates), CNORMAL);
-    LOG1(" %s Sdg%s%11zd  (%%%-3.0f)%s ", 
-        CREPORT, CREPORTVAL, other_stats.circuit.gate_stats.types[Sdg], 
-        percent((double)other_stats.circuit.gate_stats.types[Sdg], other_stats.circuit.max_gates), CNORMAL);
+        CREPORT, CREPORTVAL, other_stats.circuit.gate_stats.types[ISWAP],
+        percent((double)other_stats.circuit.gate_stats.types[ISWAP], other_stats.circuit.max_gates), CNORMAL);
+    LOG1(" %s S_DAG%s%11zd  (%%%-3.0f)%s ", 
+        CREPORT, CREPORTVAL, other_stats.circuit.gate_stats.types[S_DAG], 
+        percent((double)other_stats.circuit.gate_stats.types[S_DAG], other_stats.circuit.max_gates), CNORMAL);
     if (!ogate.empty())
         LOG1(" %sInjected gates                 : %s%s -> %s%s", CREPORT, CREPORTVAL, ogate.c_str(), rgate.c_str(), CNORMAL);
     if (equivalent)

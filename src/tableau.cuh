@@ -51,7 +51,7 @@ namespace QuaSARQ {
         size_t _num_words_per_column;
 
         // Number of partitions spliting tableau generators' words.
-        size_t num_partitions;
+        size_t _num_partitions;
 
     public:
 
@@ -70,7 +70,7 @@ namespace QuaSARQ {
             if (!num_qubits)
                 LOGERROR("cannot allocate tableau for 0 qubits.");
             if (_num_qubits_padded == get_num_padded_bits(num_qubits))
-                return num_partitions; 
+                return _num_partitions; 
             if (_num_qubits_padded) {
                 // resize tableau.
                 LOGERROR("Not yet implemented to resize a tableau.");
@@ -84,18 +84,18 @@ namespace QuaSARQ {
             size_t max_padded_bits_two_tables = 2 * _num_qubits_padded;
             assert(_num_words_per_column * max_padded_bits_two_tables == 2 * _num_words);
             size_t expected_capacity_required = 2 * _num_words * sizeof(word_std_t) + max_window_bytes;
-            num_partitions = 1;
-            while ((forced_num_partitions && forced_num_partitions > num_partitions) || (expected_capacity_required >= cap_before && _num_words_per_column > 1)) {
+            _num_partitions = 1;
+            while ((forced_num_partitions && forced_num_partitions > _num_partitions) || (expected_capacity_required >= cap_before && _num_words_per_column > 1)) {
                 _num_words_per_column = (_num_words_per_column + 0.5) / 1.5;
                 expected_capacity_required = _num_words_per_column * max_padded_bits_two_tables * sizeof(word_std_t) + max_window_bytes;
-                num_partitions++;
+                _num_partitions++;
             }
-            if (forced_num_partitions && forced_num_partitions != num_partitions) {
+            if (forced_num_partitions && forced_num_partitions != _num_partitions) {
                 LOGERRORN("insufficient number of partitions");
                 throw GPU_memory_exception();
             }
             // Fix number of words for last partition.
-			size_t partition_bits = num_partitions * WORD_BITS;
+			size_t partition_bits = _num_partitions * WORD_BITS;
 			while ((partition_bits * _num_words_per_column) < _num_qubits_padded)
 				_num_words_per_column++;
             // Update number of words.
@@ -105,8 +105,8 @@ namespace QuaSARQ {
                 LOGERRORN("insufficient memory");
                 throw GPU_memory_exception();
             }
-            assert(num_partitions == 1 && _num_words_per_column == get_num_words(num_qubits)
-                || num_partitions > 1 && num_partitions * _num_words_per_column <= _num_qubits_padded);
+            assert(_num_partitions == 1 && _num_words_per_column == get_num_words(num_qubits)
+                || _num_partitions > 1 && _num_partitions * _num_words_per_column <= _num_qubits_padded);
             // Create host pinned-memory objects to hold GPU pointers.
             Table *h_ps = new (allocator.template allocate_pinned<Table>(1)) Table();
             assert(h_ps != nullptr);
@@ -136,9 +136,9 @@ namespace QuaSARQ {
             assert(cap_before > cap_after);
             size_t alloced = cap_before - cap_after;
             SYNCALL;
-            LOGENDING(1, 3, "(reserved %zd MB, %zd partitions).", ratio(alloced, MB), num_partitions);
-            assert(num_partitions);
-            return num_partitions;
+            LOGENDING(1, 3, "(reserved %zd MB, %zd partitions).", ratio(alloced, MB), _num_partitions);
+            assert(_num_partitions);
+            return _num_partitions;
         }
 
         void reset_signs() const {
@@ -196,7 +196,10 @@ namespace QuaSARQ {
         size_t _num_words_per_column;
 
         // Number of partitions spliting tableau generators' words.
-        size_t num_partitions;
+        size_t _num_partitions;
+
+        // Tableau _extension to (2n) for measurements.
+        size_t _extension;
 
     public:
 
@@ -208,16 +211,18 @@ namespace QuaSARQ {
         ,   _xs_data(nullptr)
         ,   _zs_data(nullptr)
         ,   _ss_data(nullptr)
-        ,   _num_qubits_padded(0)
         ,   _num_words(0)
+        ,   _num_qubits_padded(0)
         ,   _num_words_per_column(0)
+        ,   _num_partitions(1)
+        ,   _extension(1)
         { }
 
-        size_t alloc(const size_t& num_qubits, const size_t& max_window_bytes, const size_t& forced_num_partitions = 0) {
+        size_t alloc(const size_t& num_qubits, const size_t& max_window_bytes, const bool& measuring = false, const size_t& forced_num_partitions = 0) {
             if (!num_qubits)
                 LOGERROR("cannot allocate tableau for 0 qubits.");
             if (_num_qubits_padded == get_num_padded_bits(num_qubits))
-                return num_partitions; 
+                return _num_partitions; 
             if (_num_qubits_padded) {
                 // resize tableau.
                 LOGERROR("Not yet implemented to resize a tableau.");
@@ -225,35 +230,39 @@ namespace QuaSARQ {
             LOGN2(1, "Allocating tableau for %s%lld qubits%s.. ", CREPORTVAL, int64(num_qubits), CNORMAL);
             size_t cap_before = allocator.gpu_capacity();
             // Partition the tableau if needed.
+            _extension = measuring ? 2 : 1;
             _num_qubits_padded = get_num_padded_bits(num_qubits);
-            _num_words = get_num_words(_num_qubits_padded * _num_qubits_padded);
-            _num_words_per_column = get_num_words(num_qubits);
-            size_t max_padded_bits_two_tables = 2 * _num_qubits_padded;
-            assert(_num_words_per_column * max_padded_bits_two_tables == 2 * _num_words);
-            size_t expected_capacity_required = 2 * _num_words * sizeof(word_std_t) + max_window_bytes;
-            num_partitions = 1;
-            while ((forced_num_partitions && forced_num_partitions > num_partitions) || (expected_capacity_required >= cap_before && _num_words_per_column > 1)) {
-                _num_words_per_column = (_num_words_per_column + 0.5) / 1.5;
-                expected_capacity_required = _num_words_per_column * max_padded_bits_two_tables * sizeof(word_std_t) + max_window_bytes;
-                num_partitions++;
-            }
-            if (forced_num_partitions && forced_num_partitions != num_partitions) {
-                LOGERRORN("insufficient number of partitions");
-                throw GPU_memory_exception();
-            }
-            // Fix number of words for last partition.
-			size_t partition_bits = num_partitions * WORD_BITS;
-			while ((partition_bits * _num_words_per_column) < _num_qubits_padded)
-				_num_words_per_column++;
-            // Update number of words.
-			_num_words = _num_words_per_column * _num_qubits_padded;
-			expected_capacity_required = 2 * _num_words * sizeof(word_std_t) + max_window_bytes;       
-            if (expected_capacity_required > cap_before) {
-                LOGERRORN("insufficient memory");
-                throw GPU_memory_exception();
-            }
-            assert(num_partitions == 1 && _num_words_per_column == get_num_words(num_qubits)
-                || num_partitions > 1 && num_partitions * _num_words_per_column <= _num_qubits_padded);
+            _num_words_per_column = get_num_words(num_qubits * _extension);
+            _num_words = _num_words_per_column * _num_qubits_padded;
+
+            // TODO: rethink partitioning considering the extension.
+
+            // size_t max_padded_bits_two_tables = 2 * _num_qubits_padded;
+            // assert(_num_words_per_column * max_padded_bits_two_tables == 2 * _num_words);
+            // size_t expected_capacity_required = 2 * _num_words * sizeof(word_std_t) + max_window_bytes;
+            // _num_partitions = 1;
+            // while ((forced_num_partitions && forced_num_partitions > _num_partitions) || (expected_capacity_required >= cap_before && _num_words_per_column > 1)) {
+            //     _num_words_per_column = (_num_words_per_column + 0.5) / 1.5;
+            //     expected_capacity_required = _num_words_per_column * max_padded_bits_two_tables * sizeof(word_std_t) + max_window_bytes;
+            //     _num_partitions++;
+            // }
+            // if (forced_num_partitions && forced_num_partitions != _num_partitions) {
+            //     LOGERRORN("insufficient number of partitions");
+            //     throw GPU_memory_exception();
+            // }
+            // // Fix number of words per column for last partition.
+			// size_t partition_bits = _num_partitions * (WORD_BITS * _num_words_per_column);
+			// while (partition_bits < _num_qubits_padded)
+			// 	_num_words_per_column++;
+            // // Update number of words.
+			// _num_words = _num_words_per_column * _num_qubits_padded;
+			// expected_capacity_required = 2 * _num_words * sizeof(word_std_t) + max_window_bytes;       
+            // if (expected_capacity_required > cap_before) {
+            //     LOGERRORN("insufficient memory");
+            //     throw GPU_memory_exception();
+            // }
+            // assert(_num_partitions == 1 && _num_words_per_column == get_num_words(num_qubits * _extension)
+            //     || _num_partitions > 1 && _num_partitions * _num_words_per_column <= _num_qubits_padded);
             // Create host pinned-memory objects to hold GPU pointers.
             Table *h_xs = new (allocator.template allocate_pinned<Table>(1)) Table();
             assert(h_xs != nullptr);
@@ -292,9 +301,9 @@ namespace QuaSARQ {
             assert(cap_before > cap_after);
             size_t alloced = cap_before - cap_after;
             SYNCALL;
-            LOGENDING(1, 3, "(reserved %zd MB, %zd partitions).", ratio(alloced, MB), num_partitions);
-            assert(num_partitions);
-            return num_partitions;
+            LOGENDING(1, 3, "(reserved %zd MB, %zd partitions).", ratio(alloced, MB), _num_partitions);
+            assert(_num_partitions);
+            return _num_partitions;
         }
 
         void reset_signs() const {

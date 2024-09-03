@@ -141,22 +141,22 @@ namespace QuaSARQ {
 
         INLINE_ALL const word_t* data() const { return _data; }
 
-        INLINE_ALL void set_x_word_to_identity(const qubit_t& q, const qubit_t& offset = 0) {
-            const size_t idx = (X_OFFSET(q) + offset) * _num_words_per_column + X_WORD_OFFSET(WORD_OFFSET(q));
+        INLINE_ALL void set_x_word_to_identity(const qubit_t& q, const qubit_t& column_offset = 0, const qubit_t& word_offset = 0) {
+            const size_t idx = (X_OFFSET(q) + column_offset) * _num_words_per_column + X_WORD_OFFSET(WORD_OFFSET(q + word_offset));
             assert(idx < _num_words);
-            _data[idx].identity(q);
+            _data[idx].identity(q + word_offset);
         }
 
-        INLINE_ALL void set_z_word_to_identity(const qubit_t& q, const qubit_t& offset = 0) {
-            const size_t idx = (Z_OFFSET(q) + offset) * _num_words_per_column + Z_WORD_OFFSET(WORD_OFFSET(q));
+        INLINE_ALL void set_z_word_to_identity(const qubit_t& q, const qubit_t& column_offset = 0, const qubit_t& word_offset = 0) {
+            const size_t idx = (Z_OFFSET(q) + column_offset) * _num_words_per_column + Z_WORD_OFFSET(WORD_OFFSET(q + word_offset));
             assert(idx < _num_words);
-            _data[idx].identity(q);
+            _data[idx].identity(q + word_offset);
         }
 
-        INLINE_ALL void set_word_to_identity(const qubit_t& q, const qubit_t& offset = 0) {
-            const size_t idx = (q + offset) * _num_words_per_column + WORD_OFFSET(q);
+        INLINE_ALL void set_word_to_identity(const qubit_t& q, const qubit_t& column_offset = 0, const qubit_t& word_offset = 0) {
+            const size_t idx = (q + column_offset) * _num_words_per_column + WORD_OFFSET(q + word_offset);
             assert(idx < _num_words);
-            _data[idx].identity(q);
+            _data[idx].identity(q + word_offset);
         }
 
         INLINE_ALL word_t* words(const qubit_t& q) {          
@@ -185,20 +185,20 @@ namespace QuaSARQ {
             return _data[idx];
         }
 
-        INLINE_ALL bool check_z_word_is_identity(const qubit_t& q, const qubit_t& offset) const {
-            const size_t idx = (Z_OFFSET(q) + offset) * _num_words_per_column + WORD_OFFSET(q);
+        INLINE_ALL bool check_z_word_is_identity(const qubit_t& q, const qubit_t& column_offset) const {
+            const size_t idx = (Z_OFFSET(q) + column_offset) * _num_words_per_column + WORD_OFFSET(q);
             assert(idx < _num_words);
             return _data[idx].is_identity(q);
         }
 
-        INLINE_ALL bool check_x_word_is_identity(const qubit_t& q, const qubit_t& offset) const {
-            const size_t idx = (X_OFFSET(q) + offset) * _num_words_per_column + WORD_OFFSET(q);
+        INLINE_ALL bool check_x_word_is_identity(const qubit_t& q, const qubit_t& column_offset) const {
+            const size_t idx = (X_OFFSET(q) + column_offset) * _num_words_per_column + WORD_OFFSET(q);
             assert(idx < _num_words);
             return _data[idx].is_identity(q);
         }
 
-        INLINE_ALL bool check_word_is_identity(const qubit_t& q, const qubit_t& offset) const {
-            const size_t idx = (q + offset) * _num_words_per_column + WORD_OFFSET(q);
+        INLINE_ALL bool check_word_is_identity(const qubit_t& q, const qubit_t& column_offset) const {
+            const size_t idx = (q + column_offset) * _num_words_per_column + WORD_OFFSET(q);
             assert(idx < _num_words);
             return _data[idx].is_identity(q);
         }

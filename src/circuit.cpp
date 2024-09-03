@@ -3,22 +3,7 @@
 #include <queue>
 
 namespace QuaSARQ {
-    // Initialize gate probabilities.
-    double probabilities[NR_GATETYPES] = 
-    {
-        0,
-        0.075,
-        0.075,
-        0.075, 
-        0.125,
-        0.125,
-        0.075,  
-        0.075,
-        0.075,
-        0.075,
-        0.075,
-        0.075 
-    };
+    double probabilities[NR_GATETYPES] = {0};
 }
 
 using namespace QuaSARQ;
@@ -55,10 +40,14 @@ void Simulator::generate() {
     timer.start();
     circuit.init_depth(depth);
     locked.resize(num_qubits, 0);
-    // Set the custom probabilities:
-    probabilities[H] = options.H_p;
-    probabilities[S] = options.S_p;
-    probabilities[CX] = options.CX_p;
+    // Initialize gate probabilities.
+    for (byte_t i = 0; i < NR_GATETYPES; i++)
+        probabilities[i] = 1.0 / double(NR_GATETYPES);
+    INIT_PROB(I);
+    INIT_PROB(H);
+    INIT_PROB(S);
+    INIT_PROB(CX);
+    INIT_PROB(M);
     double sum_probs = 0;
     for (byte_t i = 0; i < NR_GATETYPES; i++)
         sum_probs += probabilities[i];
@@ -89,6 +78,9 @@ void Simulator::generate() {
                 }
                 assert(type < NR_GATETYPES);
                 assert(type < 256);
+                // Flag measurement existance.
+                if (type == M) 
+                    measuring = true;
                 // Count for statistics.
                 stats.circuit.gate_stats.types[type]++;
                 // 0: q (control), 1: target.
@@ -164,6 +156,7 @@ size_t Simulator::parse(Statistics& stats, const char* path) {
     assert(circuit_io.circuit_queue.size() == circuit_io.gate_stats.all());
     stats.circuit.max_gates = circuit_io.circuit_queue.size();
     stats.circuit.gate_stats = circuit_io.gate_stats;
+    measuring = circuit_io.measuring;
     timer.stop();
     stats.time.initial += timer.time();
     return max_qubits;

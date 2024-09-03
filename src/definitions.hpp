@@ -13,6 +13,7 @@
 #include <climits>
 #include <cstdlib>
 #include <csignal>
+#include <cstdint>
 #include <sys/stat.h>
 #include "datatypes.hpp"
 #include "constants.hpp"

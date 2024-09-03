@@ -6,46 +6,47 @@
 
 namespace QuaSARQ {
 
+    #define FOREACH_GATE(GATE) \
+        GATE(I) \
+        GATE(Z) \
+        GATE(X) \
+        GATE(Y) \
+        GATE(H) \
+        GATE(S) \
+        GATE(S_DAG) \
+        GATE(M) \
+        GATE(CX) \
+        GATE(CY) \
+        GATE(CZ) \
+        GATE(SWAP) \
+        GATE(ISWAP) \
+
+    #define GENERATE_GATE_ENUM(ENUM) ENUM,
+    #define GENERATE_GATE_STRING(STRING) #STRING,
+
     enum Gatetypes {
-        I,
-        Z,
-        X,
-        Y, 
-        H,
-        S,
-        Sdg,  // Last 1-qubit gate.
-        CX,
-        CY,
-        CZ,
-        Swap,
-        iSwap // Last 2-qubit gate.
+        FOREACH_GATE(GENERATE_GATE_ENUM)
     };
 
-    constexpr uint32 NR_GATETYPES_1 = Sdg + 1;
-    constexpr uint32 NR_GATETYPES = iSwap + 1;
+    constexpr uint32 NR_GATETYPES_1 = M + 1;
+    constexpr uint32 NR_GATETYPES = ISWAP + 1;
+
+    constexpr const char *G2S_HOST[] = {
+        FOREACH_GATE(GENERATE_GATE_STRING)
+    };
 
     // Combine 1-input gates then 2-input gates in order.
-    constexpr Gatetypes gatetypes[NR_GATETYPES] =  
-    {   
-        I,
-        Z,
-        X,
-        Y, 
-        H,
-        S,
-        Sdg,
-        CX,
-        CY,
-        CZ,
-        Swap,
-        iSwap
+    constexpr Gatetypes gatetypes[NR_GATETYPES] =  {   
+        FOREACH_GATE(GENERATE_GATE_ENUM)
     };
 
     // Gate probabilities.
     extern double probabilities[NR_GATETYPES];
 
+    #define INIT_PROB(GATETYPE) (probabilities[GATETYPE] = options.GATETYPE ## _p)
+
     // 2-input gates.
-    constexpr Gatetypes gatetypes_2[NR_GATETYPES - NR_GATETYPES_1] = { CX, CY, CZ, Swap, iSwap };
+    constexpr Gatetypes gatetypes_2[NR_GATETYPES - NR_GATETYPES_1] = { CX, CY, CZ, SWAP, ISWAP };
 
     // Check if Clifford gate is 2-input gate by linear search. 
     inline bool isGate2(const Gatetypes& c) {

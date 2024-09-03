@@ -40,35 +40,38 @@ void Simulator::report()
 		LOG1(" %sMaximum parallel gates         : %s%-12zd%s", CREPORT, CREPORTVAL, stats.circuit.max_parallel_gates, CNORMAL);
 		LOG1(" %sAverage parallel gates         : %s%-12.3f%s", CREPORT, CREPORTVAL, stats.circuit.average_parallel_gates, CNORMAL);
 		LOG1(" %sClifford gates                 : %s%-12zd%s", CREPORT, CREPORTVAL, stats.circuit.max_gates, CNORMAL);
-		LOG1(" %s X %s%12zd  (%%%-3.0f)%s CX %s%12zd  (%%%-3.0f)%s", 
+		LOG1(" %s X %s%14zd  (%%%-3.0f)%s CX %s%14zd  (%%%-3.0f)%s", 
 			CREPORT, CREPORTVAL, stats.circuit.gate_stats.types[X], 
 			percent((double)stats.circuit.gate_stats.types[X], stats.circuit.max_gates),
 			CREPORT, CREPORTVAL, stats.circuit.gate_stats.types[CX], 
 			percent((double)stats.circuit.gate_stats.types[CX], stats.circuit.max_gates), CNORMAL);
-		LOG1(" %s Y %s%12zd  (%%%-3.0f)%s CZ %s%12zd  (%%%-3.0f)%s",
+		LOG1(" %s Y %s%14zd  (%%%-3.0f)%s CZ %s%14zd  (%%%-3.0f)%s",
 			CREPORT, CREPORTVAL, stats.circuit.gate_stats.types[Y],
 			percent((double)stats.circuit.gate_stats.types[Y], stats.circuit.max_gates),
 			CREPORT, CREPORTVAL, stats.circuit.gate_stats.types[CZ], 
 			percent((double)stats.circuit.gate_stats.types[CZ], stats.circuit.max_gates), CNORMAL);
-		LOG1(" %s Z %s%12zd  (%%%-3.0f)%s CY %s%12zd  (%%%-3.0f)%s",
+		LOG1(" %s Z %s%14zd  (%%%-3.0f)%s CY %s%14zd  (%%%-3.0f)%s",
 			CREPORT, CREPORTVAL, stats.circuit.gate_stats.types[Z],
 			percent((double)stats.circuit.gate_stats.types[Z], stats.circuit.max_gates),
 			CREPORT, CREPORTVAL, stats.circuit.gate_stats.types[CY], 
 			percent((double)stats.circuit.gate_stats.types[CY], stats.circuit.max_gates), CNORMAL);
-		LOG1(" %s H %s%12zd  (%%%-3.0f)%s Swap%s%11zd  (%%%-3.0f)%s",
+		LOG1(" %s H %s%14zd  (%%%-3.0f)%s SWAP%s%13zd  (%%%-3.0f)%s",
 			CREPORT, CREPORTVAL, stats.circuit.gate_stats.types[H],
 			percent((double)stats.circuit.gate_stats.types[H], stats.circuit.max_gates),
-			CREPORT, CREPORTVAL, stats.circuit.gate_stats.types[Swap], 
-			percent((double)stats.circuit.gate_stats.types[Swap], stats.circuit.max_gates), CNORMAL);
-		LOG1(" %s S %s%12zd  (%%%-3.0f)%s iSwap%s%10zd  (%%%-3.0f)%s",
+			CREPORT, CREPORTVAL, stats.circuit.gate_stats.types[SWAP], 
+			percent((double)stats.circuit.gate_stats.types[SWAP], stats.circuit.max_gates), CNORMAL);
+		LOG1(" %s S %s%14zd  (%%%-3.0f)%s ISWAP%s%12zd  (%%%-3.0f)%s",
 			CREPORT, CREPORTVAL, stats.circuit.gate_stats.types[S],
 			percent((double)stats.circuit.gate_stats.types[S], stats.circuit.max_gates),
-			CREPORT, CREPORTVAL, stats.circuit.gate_stats.types[iSwap],
-			percent((double)stats.circuit.gate_stats.types[iSwap], stats.circuit.max_gates), CNORMAL);
-		LOG1(" %s Sdg%s%11zd  (%%%-3.0f)%s I%s%14zd  (%%%-3.0f)%s", 
-			CREPORT, CREPORTVAL, stats.circuit.gate_stats.types[Sdg], 
-			percent((double)stats.circuit.gate_stats.types[Sdg], stats.circuit.max_gates),
+			CREPORT, CREPORTVAL, stats.circuit.gate_stats.types[ISWAP],
+			percent((double)stats.circuit.gate_stats.types[ISWAP], stats.circuit.max_gates), CNORMAL);
+		LOG1(" %s S_DAG%s%11zd  (%%%-3.0f)%s I%s%16zd  (%%%-3.0f)%s", 
+			CREPORT, CREPORTVAL, stats.circuit.gate_stats.types[S_DAG], 
+			percent((double)stats.circuit.gate_stats.types[S_DAG], stats.circuit.max_gates),
 			CREPORT, CREPORTVAL, stats.circuit.gate_stats.types[I],
-			percent((double)stats.circuit.gate_stats.types[I], stats.circuit.max_gates), CNORMAL);		
+			percent((double)stats.circuit.gate_stats.types[I], stats.circuit.max_gates), CNORMAL);
+		LOG1(" %s M (Measurements) %22s%14zd  (%%%-3.0f)%s", 
+			CREPORT, CREPORTVAL, stats.circuit.gate_stats.types[S_DAG], 
+			percent((double)stats.circuit.gate_stats.types[S_DAG], stats.circuit.max_gates), CNORMAL);	
 	}
 }

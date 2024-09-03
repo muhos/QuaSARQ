@@ -88,15 +88,15 @@ namespace QuaSARQ {
                 case I: { break; }
                 case H: { do_H(signs_word, words_q1); break; }
                 case S: { do_S(signs_word, words_q1); break; }
-                case Sdg: { do_Sdg(signs_word, words_q1); break; }
+                case S_DAG: { do_Sdg(signs_word, words_q1); break; }
                 case Z: { sign_update_X_or_Z(signs_word, x_words_q1); break; }
                 case X: { sign_update_X_or_Z(signs_word, z_words_q1); break; }
                 case Y: { sign_update_Y(signs_word, x_words_q1, z_words_q1); break; }
                 case CX: { do_CX(signs_word, q1, q2); break; }
                 case CZ: { do_CZ(signs_word, q1, q2); break; }
                 case CY: { do_CY(signs_word, q1, q2); break; }
-                case Swap: { do_SWAP(x_words_q1, x_words_q2); do_SWAP(z_words_q1, z_words_q2); break; }
-                case iSwap: { do_iSWAP(signs_word, q1, q2); break; }
+                case SWAP: { do_SWAP(x_words_q1, x_words_q2); do_SWAP(z_words_q1, z_words_q2); break; }
+                case ISWAP: { do_iSWAP(signs_word, q1, q2); break; }
                 default: break;
                 }
             }
@@ -196,15 +196,15 @@ namespace QuaSARQ {
                 case I: { break; }
                 case H: { do_H(signs_word, words_q1); break; }
                 case S: { do_S(signs_word, words_q1); break; }
-                case Sdg: { do_Sdg(signs_word, words_q1); break; }
+                case S_DAG: { do_Sdg(signs_word, words_q1); break; }
                 case Z: { sign_update_X_or_Z(signs_word, x_words_q1); break; }
                 case X: { sign_update_X_or_Z(signs_word, z_words_q1); break; }
                 case Y: { sign_update_Y(signs_word, x_words_q1, z_words_q1); break; }
                 case CX: { do_CX(signs_word, q1, q2); break; }
                 case CZ: { do_CZ(signs_word, q1, q2); break; }
                 case CY: { do_CY(signs_word, q1, q2); break; }
-                case Swap: { do_SWAP(x_words_q1, x_words_q2); do_SWAP(z_words_q1, z_words_q2); break; }
-                case iSwap: { do_iSWAP(signs_word, q1, q2); break; }
+                case SWAP: { do_SWAP(x_words_q1, x_words_q2); do_SWAP(z_words_q1, z_words_q2); break; }
+                case ISWAP: { do_iSWAP(signs_word, q1, q2); break; }
                 default: break;
                 }
             }

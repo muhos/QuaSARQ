@@ -40,6 +40,7 @@ namespace QuaSARQ {
         Statistics                      stats;
         FILE*                           configfile;
         cudaStream_t*                   custreams;
+        bool                            measuring;
         
         enum { 
             COPY_STREAM1 = 0,

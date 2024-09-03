@@ -49,7 +49,7 @@ namespace QuaSARQ {
 			LOGERROR("cannot tune without opening a configuration file");
 		// Create a tableau in GPU memory for the maximum qubits.
 		const size_t max_num_qubits = num_qubits;
-		num_partitions = tableau.alloc(max_num_qubits, stats.circuit.max_window_bytes);
+		num_partitions = tableau.alloc(max_num_qubits, stats.circuit.max_window_bytes, measuring);
 		if (num_partitions > 1) num_partitions = 1;
 		gpu_circuit.initiate(stats.circuit.max_parallel_gates, stats.circuit.max_parallel_gates_buckets);
 		// Start tuning simulation with max qubits.

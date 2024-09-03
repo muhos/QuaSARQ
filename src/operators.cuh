@@ -137,7 +137,7 @@ namespace QuaSARQ {
 
     #define do_iSWAP(SIGNS, C, T) \
     { \
-        /* Swap(C, T) */ \
+        /* SWAP(C, T) */ \
         do_SWAP(x_words_ ## C, x_words_ ## T); \
         do_SWAP(z_words_ ## C, z_words_ ## T); \
         /* CZ(C, T) */ \

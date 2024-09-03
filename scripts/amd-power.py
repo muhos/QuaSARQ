@@ -125,7 +125,6 @@ class RyzenPower:
         package_power = {c: self._calc_power(package_energy_before[c], package_energy_after[c]) for c in self._cores}
         core_power = {c: self._calc_power(core_energy_before[c], core_energy_after[c]) for c in self._cores}
         table = self._format_result(package_power, core_power)
-        #print(table)
         cores = sum(core_power.values())
         return (table, cores)
 
@@ -170,6 +169,7 @@ parser.add_argument("--debug", action='store_true', help="show debug messages")
 parser.add_argument("-d", "--duration", type=float, default=0.5,
                     help="the duration of measurement in seconds, default is 0.5 second")
 # Muhammad
+parser.add_argument('-t', '--table', help="Print full table.", action=argparse.BooleanOptionalAction)
 parser.add_argument("-f", "--frequency", type=float, default=2,
                     help="the frequency of measurement in Hertz.")
 parser.add_argument("-i", "--iterations", type=int, default=1,
@@ -191,6 +191,8 @@ power = 0.0
 for i in range(0, ITERS):
     table, cores = p.measure()
     power += cores
+    if args.table:
+        print(table)
 power /= ITERS
 print("Average power consumption (w): %.2f" %power)
 

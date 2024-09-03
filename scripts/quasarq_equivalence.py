@@ -10,8 +10,6 @@ Path = os.path
 parent_dir = Path.dirname(Path.abspath(__file__))
 main_dir = Path.dirname(parent_dir) + '/'
 
-print("\t\t Equivalence Checking with QuaSARQ\n")
-
 parser = argparse.ArgumentParser("gpu_benchmark")
 parser.add_argument('-src', '--src', help="Directory to source code.", default='src')
 parser.add_argument('-c', '--circuit', help="Directory to read circuts.", default='test')
@@ -39,6 +37,8 @@ header = ['Circuit', 'Initial time', 'Schedule time', 'Simulation time', 'Energy
 random_line_idx = -1
 random_gate = ''
 org_gate = ''
+
+live_string = "QuaSARQ checking equivalence of [%-12s] the %d-time... "
 
 def write_log_file(output, log_file):
     with open(log_file, 'w') as log_f:
@@ -79,7 +79,7 @@ def run_config(circuit, csvfile, benchpath, other_benchpath):
     row = [circuit]
     avg = [0] * len(header)
     for i in range(0, nsamples):
-        print("QuaSARQ checking equivalence of [%-12s] the %d-time... " %(circuit, i+1), end='\r'), sys.stdout.flush()
+        print(live_string %(circuit, i+1), end='\r'), sys.stdout.flush()
         popen = subprocess.Popen(args, stdout=subprocess.PIPE)
         popen.wait()
         log_file = main_logs_dir + '/' + 'log_run_' + str(i) + '_' + circuit + '.txt'
@@ -147,10 +147,11 @@ def inject(lines):
     return other
 
 if __name__ == '__main__':
-    print("Compiling directory %s from scratch... " %(code_dir), end=''), sys.stdout.flush()
-    compile_clean()
-    print("done.\n")
-
+    string="Compiling directory %s from scratch... "
+    print(string %(code_dir), end='\r'), sys.stdout.flush()
+    #compile_clean()
+    string="%" + str(len(string) + len(code_dir)) + "s"
+    print(string %(" "), end='\r'), sys.stdout.flush()
     csv_path = main_logs_dir + '/equivalence.csv'
     csv_f = open(csv_path, 'a', encoding='UTF8', newline='')
     csv_writer = csv.writer(csv_f)
@@ -186,4 +187,6 @@ if __name__ == '__main__':
             os.remove(written_file_path)
             os.remove(other_written_file_path)
     csv_f.close()
-    print("QuaSARQ checked equivalence of %d circuits for %d times.%40s\n" %(len(file_list), nsamples, " ")), sys.stdout.flush()
+    end_string="%" + str(len(live_string) + 12) + "s"
+    print(end_string %(" "), end='\r'), sys.stdout.flush()
+    print("QuaSARQ checked equivalence of %d circuits for %d times." %(len(file_list), nsamples)), sys.stdout.flush()

@@ -51,42 +51,12 @@ namespace QuaSARQ {
         #define UNIX_DELIM '\r'
         #define MAX_GATENAME_LEN 16
 
-        const char* GATE_STIM[NR_GATETYPES] = {
-            "I",
-            "X",
-            "Y",
-            "Z",
-            "H",
-            "S",
-            "S_DAG",
-            "CX",
-            "CY",
-            "CZ",
-            "SWAP",
-            "ISWAP"
-        };
-
-        const Gatetypes GATESTR_TO_BYTE[NR_GATETYPES] =
-        {
-            I,
-            X,
-            Y,
-            Z,
-            H,
-            S,
-            Sdg,
-            CX,
-            CY,
-            CZ,
-            Swap,
-            iSwap
-        };
-
         void* buffer;
         char* eof;
         size_t size, max_qubits;
         Gate_stats gate_stats;
         Circuit_queue circuit_queue;
+        bool measuring;
 
 #if defined(__linux__) || defined(__CYGWIN__)
         int file;
@@ -99,6 +69,7 @@ namespace QuaSARQ {
             , eof(nullptr)
             , size(0)
             , max_qubits(0)
+            , measuring(false)
         { 
             init();
         }
@@ -126,6 +97,7 @@ namespace QuaSARQ {
             eof = nullptr;
             size = 0;
             max_qubits = 0;
+            measuring = false;
         }
 
         void write(const Circuit& circuit, const size_t& num_qubits_in_circuit) {
@@ -147,7 +119,7 @@ namespace QuaSARQ {
                     gate_ref_t r = window[i];
                     const Gate& gate = circuit.gate(r);
                     if (gate.type == I) continue;
-                    stream += string(GATE_STIM[gate.type]) + " " + to_string(gate.wires[0]);
+                    stream += string(G2S_HOST[gate.type]) + " " + to_string(gate.wires[0]);
                     if (gate.size > 1)
                         stream += " " + to_string(gate.wires[1]);
                     stream += "\n";
@@ -163,7 +135,7 @@ namespace QuaSARQ {
 
         inline Gatetypes translate_gate(char* in, const int& gatelen) {
             for (int i = 0; i < NR_GATETYPES; i++) {
-                const char* ref = GATE_STIM[i];
+                const char* ref = G2S_HOST[i];
                 int c = 0;
                 while (ref[c]) {
                     if (ref[c] != in[c])
@@ -171,7 +143,7 @@ namespace QuaSARQ {
                     c++;
                 }
                 if (gatelen == c)
-                    return GATESTR_TO_BYTE[i];
+                    return Gatetypes(i);
             }
             LOGERROR("unknown gate %s.", in);
         }
@@ -216,6 +188,8 @@ namespace QuaSARQ {
                 LOGERROR("gate name is too long.");
             gatestr[gatename_len] = '\0';           
             Gatetypes type = translate_gate(gatestr, gatename_len);
+            // Flag measurement existance.
+            if (type == M) measuring = true;
             str += gatename_len;    
             while (*str != DELIM && str < eof) {   
                 if (*str == UNIX_DELIM) { 
@@ -225,7 +199,7 @@ namespace QuaSARQ {
 				const qubit_t c = toInteger(str);
                 max_qubits = MAX(max_qubits, c);
                 qubit_t t = c;
-				if (gatename_len > 1 && type != Sdg) {
+				if (gatename_len > 1 && type != S_DAG) {
                     t = toInteger(str);
                     max_qubits = MAX(max_qubits, t);
                 }

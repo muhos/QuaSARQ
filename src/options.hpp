@@ -43,7 +43,7 @@ namespace QuaSARQ {
         size_t num_qubits;
         size_t depth;
 
-        double H_p, S_p, CX_p;
+        double I_p, H_p, S_p, CX_p, M_p;
 
         InitialState initialstate;
 
