@@ -40,6 +40,9 @@ namespace QuaSARQ {
         Statistics                      stats;
         FILE*                           configfile;
         cudaStream_t*                   custreams;
+        size_t                          max_window_bytes;
+        size_t                          max_parallel_gates;
+        size_t                          max_parallel_gates_buckets;
         bool                            measuring;
         
         enum { 

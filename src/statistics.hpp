@@ -42,12 +42,10 @@ namespace QuaSARQ {
     struct Statistics {
         struct {
             Gate_stats gate_stats;
-            size_t max_gates;
-            size_t max_parallel_gates_buckets;
-            size_t max_parallel_gates;
-            size_t max_window_bytes;
             size_t bytes;
-            double average_parallel_gates;
+            size_t num_gates;
+            size_t num_parallel_gates;
+            size_t max_parallel_gates;
         } circuit;
 
         struct {

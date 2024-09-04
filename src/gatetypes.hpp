@@ -21,23 +21,23 @@ namespace QuaSARQ {
         GATE(SWAP) \
         GATE(ISWAP) \
 
-    #define GENERATE_GATE_ENUM(ENUM) ENUM,
-    #define GENERATE_GATE_STRING(STRING) #STRING,
+    #define GATE2ENUM(ENUM) ENUM,
+    #define GATE2STR(STRING) #STRING,
 
     enum Gatetypes {
-        FOREACH_GATE(GENERATE_GATE_ENUM)
+        FOREACH_GATE(GATE2ENUM)
     };
 
     constexpr uint32 NR_GATETYPES_1 = M + 1;
     constexpr uint32 NR_GATETYPES = ISWAP + 1;
 
     constexpr const char *G2S_HOST[] = {
-        FOREACH_GATE(GENERATE_GATE_STRING)
+        FOREACH_GATE(GATE2STR)
     };
 
     // Combine 1-input gates then 2-input gates in order.
     constexpr Gatetypes gatetypes[NR_GATETYPES] =  {   
-        FOREACH_GATE(GENERATE_GATE_ENUM)
+        FOREACH_GATE(GATE2ENUM)
     };
 
     // Gate probabilities.

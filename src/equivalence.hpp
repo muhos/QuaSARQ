@@ -18,6 +18,9 @@ namespace QuaSARQ {
         DeviceCircuit<DeviceAllocator>  other_gpu_circuit;
 		Statistics                      other_stats;
 		cudaStream_t*                   other_custreams;
+		size_t                          other_max_window_bytes;
+        size_t                          other_max_parallel_gates;
+        size_t                          other_max_parallel_gates_buckets;
 		string 							ogate, rgate;
 		char							failed_state;
 

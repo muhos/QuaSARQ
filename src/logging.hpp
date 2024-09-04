@@ -18,13 +18,13 @@
 #define PREFIX      ""
 #define UNDERLINE	"\u001b[4m"
 
-#define PUTCH(CH, ...) putc(CH, stdout);
+#define PUTCH(CH, ...) putc(CH, stdout)
 
-#define PRINT(FORMAT, ...) fprintf(stdout, FORMAT, ## __VA_ARGS__);
+#define PRINT(FORMAT, ...) fprintf(stdout, FORMAT, ## __VA_ARGS__)
 
-#define LOGGPU(FORMAT, ...) printf(FORMAT, ## __VA_ARGS__);
+#define LOGGPU(FORMAT, ...) printf(FORMAT, ## __VA_ARGS__)
 
-#define LOGGPUERROR(FORMAT, ...) printf(CERROR "ERROR: " FORMAT CNORMAL, ## __VA_ARGS__);
+#define LOGGPUERROR(FORMAT, ...) printf(CERROR "ERROR: " FORMAT CNORMAL, ## __VA_ARGS__)
 
 #define LOGRULER(CH, TIMES) \
   do { \
@@ -64,7 +64,7 @@ inline void REPCH(const char& ch, const size_t& size, const size_t& off = 0) {
 	  REPCH('-', (RULELEN - len - STARTLEN)); \
 	  PUTCH('\n'); \
     } \
-  } while (0); \
+  } while (0)
 
 #define LOG0(MESSAGE) do { PRINT(PREFIX "%s\n", MESSAGE); } while (0)
 
@@ -90,7 +90,11 @@ inline void REPCH(const char& ch, const size_t& size, const size_t& off = 0) {
         if (options.verbose >= VERBOSITY) { PRINT(PREFIX FORMAT, ## __VA_ARGS__); } \
     } while(0)
 
-#define LOGDONE(VERBOSITY, MAXVERBOSITY) if (options.verbose >= VERBOSITY && options.verbose < MAXVERBOSITY) PRINT("done.\n");
+#define LOGDONE(VERBOSITY, MAXVERBOSITY)  \
+  do { \
+    if (options.verbose >= VERBOSITY && options.verbose < MAXVERBOSITY) \
+      PRINT("done.\n"); \
+  } while(0)
 
 #define LOGENDING(VERBOSITY, MAXVERBOSITY, FORMAT, ...) \
     do { \

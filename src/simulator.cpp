@@ -30,6 +30,9 @@ Simulator::Simulator() :
 	, gpu_circuit(gpu_allocator)
 	, configfile(nullptr)
 	, custreams(nullptr)
+    , max_window_bytes(0)
+    , max_parallel_gates(0)
+    , max_parallel_gates_buckets(0)
     , measuring(false)
 {
     initialize();
@@ -47,6 +50,9 @@ Simulator::Simulator(const string& path) :
     , gpu_circuit(gpu_allocator)
     , configfile(nullptr)
     , custreams(nullptr)
+    , max_window_bytes(0)
+    , max_parallel_gates(0)
+    , max_parallel_gates_buckets(0)
     , measuring(false)
 {
     initialize();
@@ -63,7 +69,7 @@ void Simulator::initialize() {
     // is done after parsing as it causes
     // degradation to CPU performance.
     // The KB extra space is used for tableau allocations.
-    gpu_allocator.create_cpu_pool(stats.circuit.max_window_bytes + KB);
+    gpu_allocator.create_cpu_pool(max_window_bytes + KB);
     if (!options.tuner_en) register_config();
     create_streams(custreams);
     SYNC(0); // Sync gpu memory pool allocation.
@@ -114,12 +120,12 @@ void Simulator::simulate() {
     // Create a tableau in GPU memory.
     Power power;
     timer.start();
-    num_partitions = tableau.alloc(num_qubits, options.overlap ? stats.circuit.bytes : stats.circuit.max_window_bytes, measuring);
+    num_partitions = tableau.alloc(num_qubits, options.overlap ? stats.circuit.bytes : max_window_bytes, measuring);
     const size_t num_qubits_per_partition = num_partitions > 1 ? tableau.num_words_per_column() * WORD_BITS : num_qubits;
     if (options.overlap)
-        gpu_circuit.initiate(circuit, stats.circuit.max_parallel_gates, stats.circuit.max_parallel_gates_buckets);
+        gpu_circuit.initiate(circuit, max_parallel_gates, max_parallel_gates_buckets);
     else
-        gpu_circuit.initiate(stats.circuit.max_parallel_gates, stats.circuit.max_parallel_gates_buckets);
+        gpu_circuit.initiate(max_parallel_gates, max_parallel_gates_buckets);
     timer.stop();
     stats.time.initial += timer.time();
     // Start step-wise simulation.

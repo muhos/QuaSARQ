@@ -3,6 +3,11 @@
 
 using namespace QuaSARQ;
 
+#define OTHER_GATE2STATISTIC(GATE) \
+	LOG1(" %s %-5s  %24s %s%-12zd (%%%-3.0f)%s", \
+			CREPORT, #GATE, ":", CREPORTVAL, other_stats.circuit.gate_stats.types[GATE], \
+			percent((double)other_stats.circuit.gate_stats.types[GATE], other_stats.circuit.num_gates), CNORMAL);	\
+
 Equivalence::Equivalence() : 
     other_num_qubits(options.num_qubits)
     , other_num_partitions(1)
@@ -16,7 +21,7 @@ Equivalence::Equivalence() :
         assert(!circuit.empty());
         create_streams(other_custreams);
         inject();
-        gpu_allocator.resize_cpu_pool(stats.circuit.max_window_bytes + other_stats.circuit.max_window_bytes + KB * 2);
+        gpu_allocator.resize_cpu_pool(max_window_bytes + other_max_window_bytes + KB * 2);
     }
 
 Equivalence::Equivalence(const string& path_to_circuit, const string& path_to_other) :
@@ -40,11 +45,14 @@ Equivalence::Equivalence(const string& path_to_circuit, const string& path_to_ot
             stats.time.initial += other_stats.time.initial;
             stats.time.schedule += other_stats.time.schedule;
         }
-        gpu_allocator.resize_cpu_pool(stats.circuit.max_window_bytes + other_stats.circuit.max_window_bytes + KB * 2);
+        gpu_allocator.resize_cpu_pool(max_window_bytes + other_max_window_bytes + KB * 2);
     }
 
 void Equivalence::inject() {
     circuit.copyTo(other_circuit);
+    other_max_window_bytes = max_window_bytes;
+    other_max_parallel_gates = max_parallel_gates;
+    other_max_parallel_gates_buckets = max_parallel_gates_buckets;
     other_num_qubits = num_qubits;
     other_depth = depth;
     other_stats = stats;
@@ -118,14 +126,14 @@ void Equivalence::check() {
     // Create two tableaus in GPU memory.
     Power power;
     timer.start();
-    size_t estimated_num_partitions = get_num_partitions(2, num_qubits, stats.circuit.max_window_bytes + other_stats.circuit.max_window_bytes, gpu_allocator.gpu_capacity());
-    num_partitions = tableau.alloc(num_qubits, stats.circuit.max_window_bytes, estimated_num_partitions);
-    other_num_partitions = other_tableau.alloc(other_num_qubits, other_stats.circuit.max_window_bytes, estimated_num_partitions);
+    size_t estimated_num_partitions = get_num_partitions(2, num_qubits, max_window_bytes + other_max_window_bytes, gpu_allocator.gpu_capacity());
+    num_partitions = tableau.alloc(num_qubits, max_window_bytes, estimated_num_partitions);
+    other_num_partitions = other_tableau.alloc(other_num_qubits, other_max_window_bytes, estimated_num_partitions);
     assert(num_partitions == other_num_partitions);
     const size_t num_qubits_per_partition = num_partitions > 1 ? tableau.num_words_per_column() * WORD_BITS : num_qubits;
     const size_t other_num_qubits_per_partition = other_num_partitions > 1 ? other_tableau.num_words_per_column() * WORD_BITS : other_num_qubits;
-    gpu_circuit.initiate(stats.circuit.max_parallel_gates, stats.circuit.max_parallel_gates_buckets);
-    other_gpu_circuit.initiate(other_stats.circuit.max_parallel_gates, other_stats.circuit.max_parallel_gates_buckets);
+    gpu_circuit.initiate(max_parallel_gates, max_parallel_gates_buckets);
+    other_gpu_circuit.initiate(other_max_parallel_gates, other_max_parallel_gates_buckets);
     timer.stop();
     stats.time.initial += timer.time();
     // Start step-wise equivalence.
@@ -150,36 +158,8 @@ void Equivalence::report(const bool& equivalent) {
     double circuit_mb = ratio((double)other_stats.circuit.bytes, double(MB));
     LOG1(" %sOther circuit memory           : %s%-12.3f  MB%s", CREPORT, CREPORTVAL, circuit_mb, CNORMAL);
     LOG1(" %sOther maximum parallel gates   : %s%-12zd%s", CREPORT, CREPORTVAL, other_stats.circuit.max_parallel_gates, CNORMAL);
-    LOG1(" %sOther average parallel gates   : %s%-12.3f%s", CREPORT, CREPORTVAL, other_stats.circuit.average_parallel_gates, CNORMAL);
-    LOG1(" %sOther Clifford gates           : %s%-12zd%s", CREPORT, CREPORTVAL, other_stats.circuit.max_gates, CNORMAL);
-    LOG1(" %s X %s%12zd  (%%%-3.0f)%s CX %s%12zd  (%%%-3.0f)%s", 
-        CREPORT, CREPORTVAL, other_stats.circuit.gate_stats.types[X], 
-        percent((double)other_stats.circuit.gate_stats.types[X], other_stats.circuit.max_gates),
-        CREPORT, CREPORTVAL, other_stats.circuit.gate_stats.types[CX], 
-        percent((double)other_stats.circuit.gate_stats.types[CX], other_stats.circuit.max_gates), CNORMAL);
-    LOG1(" %s Y %s%12zd  (%%%-3.0f)%s CZ %s%12zd  (%%%-3.0f)%s",
-        CREPORT, CREPORTVAL, other_stats.circuit.gate_stats.types[Y],
-        percent((double)other_stats.circuit.gate_stats.types[Y], other_stats.circuit.max_gates),
-        CREPORT, CREPORTVAL, other_stats.circuit.gate_stats.types[CZ], 
-        percent((double)other_stats.circuit.gate_stats.types[CZ], other_stats.circuit.max_gates), CNORMAL);
-    LOG1(" %s Z %s%12zd  (%%%-3.0f)%s CY %s%12zd  (%%%-3.0f)%s",
-        CREPORT, CREPORTVAL, other_stats.circuit.gate_stats.types[Z],
-        percent((double)other_stats.circuit.gate_stats.types[Z], other_stats.circuit.max_gates),
-        CREPORT, CREPORTVAL, other_stats.circuit.gate_stats.types[CY], 
-        percent((double)other_stats.circuit.gate_stats.types[CY], other_stats.circuit.max_gates), CNORMAL);
-    LOG1(" %s H %s%12zd  (%%%-3.0f)%s SWAP%s%11zd  (%%%-3.0f)%s",
-        CREPORT, CREPORTVAL, other_stats.circuit.gate_stats.types[H],
-        percent((double)other_stats.circuit.gate_stats.types[H], other_stats.circuit.max_gates),
-        CREPORT, CREPORTVAL, other_stats.circuit.gate_stats.types[SWAP], 
-        percent((double)other_stats.circuit.gate_stats.types[SWAP], other_stats.circuit.max_gates), CNORMAL);
-    LOG1(" %s S %s%12zd  (%%%-3.0f)%s ISWAP%s%10zd  (%%%-3.0f)%s",
-        CREPORT, CREPORTVAL, other_stats.circuit.gate_stats.types[S],
-        percent((double)other_stats.circuit.gate_stats.types[S], other_stats.circuit.max_gates),
-        CREPORT, CREPORTVAL, other_stats.circuit.gate_stats.types[ISWAP],
-        percent((double)other_stats.circuit.gate_stats.types[ISWAP], other_stats.circuit.max_gates), CNORMAL);
-    LOG1(" %s S_DAG%s%11zd  (%%%-3.0f)%s ", 
-        CREPORT, CREPORTVAL, other_stats.circuit.gate_stats.types[S_DAG], 
-        percent((double)other_stats.circuit.gate_stats.types[S_DAG], other_stats.circuit.max_gates), CNORMAL);
+    LOG1(" %sOther Clifford gates           : %s%-12zd%s", CREPORT, CREPORTVAL, other_stats.circuit.num_gates, CNORMAL);
+    FOREACH_GATE(OTHER_GATE2STATISTIC)
     if (!ogate.empty())
         LOG1(" %sInjected gates                 : %s%s -> %s%s", CREPORT, CREPORTVAL, ogate.c_str(), rgate.c_str(), CNORMAL);
     if (equivalent)

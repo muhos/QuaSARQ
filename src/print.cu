@@ -15,30 +15,13 @@ namespace QuaSARQ {
 		}
 	}
 
-	__global__ void print_paulis_k(const Table* xs, const Table* zs, const Signs* ss, const size_t num_words_per_column, const size_t num_qubits, const depth_t level) {
+	__global__ void print_paulis_k(const Table* xs, const Table* zs, const Signs* ss, const size_t num_words_per_column, const size_t num_qubits, const bool extended) {
 		if (!blockIdx.x && !threadIdx.x) {
-			const word_t *x_words = xs->data();
-			const word_t *z_words = zs->data();
-			for (size_t w = 0; w < num_qubits; w++) {
-				const word_t pow2 = POW2(w);
-				for (size_t q = 0; q < num_qubits; q++) {
-					if (q == 0 && (*ss)[WORD_OFFSET(q)] & sign_t(pow2)) {
-						LOGGPU("-");
-					}
-					else if (q == 0) {
-						LOGGPU("+");
-					}
-					const size_t word_idx = q * num_words_per_column + WORD_OFFSET(w);
-					if ((!(x_words[word_idx] & pow2)) && (!(z_words[word_idx] & pow2)))
-						LOGGPU("I");
-					if ((x_words[word_idx] & pow2) && (!(z_words[word_idx] & pow2)))
-						LOGGPU("X");
-					if ((!(x_words[word_idx] & pow2)) && (z_words[word_idx] & pow2))
-						LOGGPU("Z");
-					if ((x_words[word_idx] & pow2) && (z_words[word_idx] & pow2))
-						LOGGPU("Y");
-				}
+			print_state(*xs, *zs, *ss, 0, num_qubits, num_qubits, num_words_per_column);
+			if (extended) {
+				REPCH_GPU("-", num_qubits + 1);
 				LOGGPU("\n");
+				print_state(*xs, *zs, *ss, num_qubits, 2*num_qubits, num_qubits, num_words_per_column);
 			}
 		}
 	}
@@ -83,18 +66,18 @@ namespace QuaSARQ {
 	}
 
 	void Simulator::print_paulis(const Tableau<DeviceAllocator>& tab, const depth_t& depth_level, const bool& reversed) {
-		if (num_qubits > 1000) {
-			LOG2(0, "too many qubits, resorting to file print.");
-			return;
-		}
-		if (depth_level == -1)
-			LOG2(0, "Initial state");
+		if (depth_level == -1) 
+			LOGHEADER(0, 3, "Initial state");
 		else if (options.print_step_state)
 			LOG2(0, "State after %d-step", depth_level);
 		else if (options.print_final_state)
 			LOGHEADER(0, 3, "Final state");
+		if (num_qubits > 100) {
+            LOGWARNING("State is too large to print.");
+			fflush(stdout);
+		}
 		if (!options.sync) SYNCALL;
-        print_paulis_k << <1, 1 >> > (XZ_TABLE(tab), tab.signs(), tab.num_words_per_column(), num_qubits, depth_level);
+        print_paulis_k << <1, 1 >> > (XZ_TABLE(tab), tab.signs(), tab.num_words_per_column(), num_qubits, measuring);
         LASTERR("failed to launch print-paulis kernel");
         SYNCALL;
         fflush(stdout);

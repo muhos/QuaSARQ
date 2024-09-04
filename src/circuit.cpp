@@ -53,6 +53,8 @@ void Simulator::generate() {
         sum_probs += probabilities[i];
     for (byte_t i = 0; i < NR_GATETYPES; i++)
         probabilities[i] /= sum_probs;
+    size_t* types = stats.circuit.gate_stats.types;
+    size_t parallel_gates_per_window = 0;
     for (depth_t d = 0; d < depth; d++) {
         // Shuffle qubits used for multi-input gates.
         shuffle_qubits();
@@ -81,8 +83,6 @@ void Simulator::generate() {
                 // Flag measurement existance.
                 if (type == M) 
                     measuring = true;
-                // Count for statistics.
-                stats.circuit.gate_stats.types[type]++;
                 // 0: q (control), 1: target.
                 Gate_inputs gate_inputs;
                 gate_inputs.push(q);
@@ -103,33 +103,39 @@ void Simulator::generate() {
                         locked[gate_inputs[1]] = 1;
                     }                 
                 }
-                // Store new gate in memory.
                 circuit.addGate(d, type, gate_inputs);
                 // This lock is necessary to avoid generating
                 // same control qubit as target.
                 locked[q] = 1;
-            } 
+                // Collect statistics.
+                types[type]++;
+                if (type != I) {
+                    stats.circuit.num_parallel_gates++;
+                    parallel_gates_per_window++;
+                }
+            }
         }
-        // Reset locked.
+        stats.circuit.max_parallel_gates = MAX(stats.circuit.max_parallel_gates, parallel_gates_per_window);
         locked.reset();
+        parallel_gates_per_window = 0;
         assert(circuit.num_buckets() >= nbuckets_per_window);
         nbuckets_per_window = circuit.num_buckets() - nbuckets_per_window;
-        stats.circuit.max_parallel_gates_buckets = MAX(stats.circuit.max_parallel_gates_buckets, nbuckets_per_window);
-        stats.circuit.max_parallel_gates = MAX(stats.circuit.max_parallel_gates, circuit[d].size());
+        max_parallel_gates_buckets = MAX(max_parallel_gates_buckets, nbuckets_per_window);
+        max_parallel_gates = MAX(max_parallel_gates, circuit[d].size());
         size_t max_window_bytes = circuit[d].size() * sizeof(gate_ref_t) + nbuckets_per_window * sizeof(bucket_t);
-        stats.circuit.max_window_bytes = MAX(stats.circuit.max_window_bytes, max_window_bytes);
+        this->max_window_bytes = MAX(this->max_window_bytes, max_window_bytes);
     }
     assert(circuit.depth() == depth);
-    stats.circuit.max_gates = MAX(stats.circuit.max_gates, circuit.num_gates());
-    stats.circuit.average_parallel_gates = double(circuit.num_gates()) / depth;
-    stats.circuit.bytes = stats.circuit.max_gates * sizeof(gate_ref_t) + circuit.num_buckets() * BUCKETSIZE;
+    stats.circuit.num_gates = MAX(stats.circuit.num_gates, circuit.num_gates());
+    stats.circuit.bytes = stats.circuit.num_gates * sizeof(gate_ref_t) + circuit.num_buckets() * BUCKETSIZE;
     shuffled.clear(true);
     locked.clear(true);
     timer.stop();
     stats.time.schedule = timer.time();
     LOGDONE(1, 2);
-    LOG2(1, "Generated a total of %s%zd gates%s with an average of %s%.2f parallel gates%s.", 
-    CREPORTVAL, circuit.num_gates(), CNORMAL, CREPORTVAL, stats.circuit.average_parallel_gates, CNORMAL);
+    LOG2(1, "Generated a total of %s%zd gates%s with a maximum of %s%zd parallel gates%s.", 
+    CREPORTVAL, circuit.num_gates(), CNORMAL, 
+    CREPORTVAL, stats.circuit.max_parallel_gates, CNORMAL);
     if (options.write_rc)
         circuit_io.write(circuit, num_qubits);
 }
@@ -154,7 +160,7 @@ size_t Simulator::parse(Statistics& stats, const char* path) {
     if (!max_qubits)
         max_qubits = circuit_io.max_qubits;
     assert(circuit_io.circuit_queue.size() == circuit_io.gate_stats.all());
-    stats.circuit.max_gates = circuit_io.circuit_queue.size();
+    stats.circuit.num_gates = circuit_io.circuit_queue.size();
     stats.circuit.gate_stats = circuit_io.gate_stats;
     measuring = circuit_io.measuring;
     timer.stop();
@@ -163,7 +169,7 @@ size_t Simulator::parse(Statistics& stats, const char* path) {
 }
 
 size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
-    LOGN2(1, "Scheduling %s%zd%s gates for parallel simulation.. ", CREPORTVAL, stats.circuit.max_gates, CNORMAL);
+    LOGN2(1, "Scheduling %s%zd%s gates for parallel simulation.. ", CREPORTVAL, stats.circuit.num_gates, CNORMAL);
     LOG2(2, "");
     timer.start();
     // For locking qubits
@@ -171,8 +177,9 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
     locked.resize(num_qubits, 0);
     Vec<qubit_t, qubit_t> locked_qubits;
     locked_qubits.reserve(num_qubits);
-    circuit.init_depth(stats.circuit.max_gates / 2);  
+    circuit.init_depth(stats.circuit.num_gates / 2);  
     size_t max_depth = 0;
+    size_t parallel_gates_per_window = 0;
     // To prevent stagnation if empty wires exist per depth level.
     // In that scenario, locked qubits will never reach a fixpoint.
     qubit_t last_num_locked_qubits = 0;
@@ -192,6 +199,10 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
                         circuit.addGate(max_depth, gate.type, 1, c, t);
                         locked_qubits.push(c);
                         locked[c] = 1;
+                        if (gate.type != I) {
+                            stats.circuit.num_parallel_gates++;
+                            parallel_gates_per_window++;
+                        }
                     }
                 }
                 else {
@@ -203,6 +214,10 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
                         locked_qubits.push(t);
                         locked[c] = 1;
                         locked[t] = 1;
+                        if (gate.type != I) {
+                            stats.circuit.num_parallel_gates++;
+                            parallel_gates_per_window++;
+                        }
                     }
                     // Either one of them may not be locked.
                     // Thus, make sure the other is locked.
@@ -227,7 +242,10 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
                     break;
                 last_num_locked_qubits = max_locked_qubits;
         }
-        
+
+        stats.circuit.max_parallel_gates = MAX(stats.circuit.max_parallel_gates, parallel_gates_per_window);
+
+        parallel_gates_per_window = 0;
         last_num_locked_qubits = 0;
         if (max_locked_qubits) {
             forall_vector(locked_qubits, lq) {
@@ -238,28 +256,26 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
     
         assert(circuit.num_buckets() >= nbuckets_per_window);
         nbuckets_per_window = circuit.num_buckets() - nbuckets_per_window;
-        stats.circuit.max_parallel_gates_buckets = MAX(stats.circuit.max_parallel_gates_buckets, nbuckets_per_window);
-        stats.circuit.max_parallel_gates = MAX(stats.circuit.max_parallel_gates, circuit[max_depth].size());
+        max_parallel_gates_buckets = MAX(max_parallel_gates_buckets, nbuckets_per_window);
+        max_parallel_gates = MAX(max_parallel_gates, circuit[max_depth].size());
         size_t max_window_bytes = circuit[max_depth].size() * sizeof(gate_ref_t) + nbuckets_per_window * sizeof(bucket_t);
-        stats.circuit.max_window_bytes = MAX(stats.circuit.max_window_bytes, max_window_bytes);
+        this->max_window_bytes = MAX(this->max_window_bytes, max_window_bytes);
 
         max_depth++;
     }
     timer.stop();
     stats.time.schedule = timer.time();
     assert(max_depth <= circuit.depth());
-    assert(circuit.num_gates() == stats.circuit.max_gates);
-    stats.circuit.max_gates = MAX(stats.circuit.max_gates, circuit.num_gates());
-    stats.circuit.average_parallel_gates = double(circuit.num_gates()) / max_depth;
-    stats.circuit.bytes = stats.circuit.max_gates * sizeof(gate_ref_t) + circuit.num_buckets() * BUCKETSIZE;
+    assert(circuit.num_gates() == stats.circuit.num_gates);
+    stats.circuit.num_gates = MAX(stats.circuit.num_gates, circuit.num_gates());
+    stats.circuit.bytes = stats.circuit.num_gates * sizeof(gate_ref_t) + circuit.num_buckets() * BUCKETSIZE;
     locked.clear(true);
     locked_qubits.clear(true);
     circuit_io.destroy();
     LOGDONE(1, 2);
-    LOG2(1, "Scheduled %s%zd%s gates with a maximum of %s%zd%s and an average of %s%.2f%s parallel gates in %s%.3f%s ms.",
-        CREPORTVAL, stats.circuit.max_gates, CNORMAL,
+    LOG2(1, "Scheduled %s%zd%s gates with a maximum of %s%zd%s parallel gates in %s%.3f%s ms.",
+        CREPORTVAL, stats.circuit.num_gates, CNORMAL,
         CREPORTVAL, stats.circuit.max_parallel_gates, CNORMAL, 
-        CREPORTVAL, stats.circuit.average_parallel_gates, CNORMAL,
         CREPORTVAL, stats.time.schedule, CNORMAL);
     return max_depth;
 }

@@ -25,7 +25,7 @@ namespace QuaSARQ {
 
     // Must follow the same order of 'Gatetypes'.
     __constant__ constexpr const arg_t G2S[NR_GATETYPES] = { 
-        FOREACH_GATE(GENERATE_GATE_STRING)
+        FOREACH_GATE(GATE2STR)
     };
 
     struct Gate {

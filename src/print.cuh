@@ -8,6 +8,10 @@
 
 namespace QuaSARQ {
 
+    INLINE_DEVICE void REPCH_GPU(const char* ch, const size_t& size, const size_t& off = 0) {
+        for (size_t i = off; i < size; i++) LOGGPU("%s", ch);
+    }
+
     // Print bit-packed bits in matrix format.
     template <class T>
     INLINE_ALL void print_table(const T& t) {
@@ -77,13 +81,39 @@ namespace QuaSARQ {
         LOGGPU(" ------------------------------------------------\n");
     }
 
+    INLINE_ALL void print_state(const Table& xs, const Table& zs, const Signs& ss, 
+                                const size_t& start, const size_t& end, 
+                                const size_t& num_qubits, const size_t& num_words_per_column) {
+        for (size_t w = start; w < end; w++) {
+            const word_t pow2 = POW2(w);
+            if (ss[WORD_OFFSET(w)] & sign_t(pow2)) {
+                LOGGPU("-");
+            }
+            else {
+                LOGGPU("+");
+            }
+            for (size_t q = 0; q < num_qubits; q++) {
+                const size_t word_idx = q * num_words_per_column + WORD_OFFSET(w);
+                if ((!(xs[word_idx] & pow2)) && (!(zs[word_idx] & pow2)))
+                    LOGGPU("I");
+                if ((xs[word_idx] & pow2) && (!(zs[word_idx] & pow2)))
+                    LOGGPU("X");
+                if ((!(xs[word_idx] & pow2)) && (zs[word_idx] & pow2))
+                    LOGGPU("Z");
+                if ((xs[word_idx] & pow2) && (zs[word_idx] & pow2))
+                    LOGGPU("Y");
+            }
+            LOGGPU("\n");
+        }
+    }
+
     // Print the tableau in binary format (generators are columns).
     __global__ void print_tableau_k(const Table* xs, const Table* zs, const Signs* ss, const depth_t level);
     __global__ void print_tableau_k(const Table* ps, const Signs* ss, const depth_t level);
 
     // Print the tableau's Pauli strings.
-    __global__ void print_paulis_k(const Table* xs, const Table* zs, const Signs* ss, const size_t num_words_per_column, const size_t num_qubits, const depth_t level);
-    __global__ void print_paulis_k(const Table* ps, const Signs* ss, const size_t num_words_per_column, const size_t num_qubits, const depth_t level);
+    __global__ void print_paulis_k(const Table* xs, const Table* zs, const Signs* ss, const size_t num_words_per_column, const size_t num_qubits, const bool extended);
+    __global__ void print_paulis_k(const Table* ps, const Signs* ss, const size_t num_words_per_column, const size_t num_qubits, const bool extended);
 
     // Print gates.
     __global__ void print_gates_k(const gate_ref_t* refs, const bucket_t* gates, const gate_ref_t num_gates);
