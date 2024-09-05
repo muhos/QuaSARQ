@@ -26,6 +26,45 @@ void Simulator::get_rand_qubit(const qubit_t& control, qubit_t& random_qubit) {
     while (q != e && (control == (random_qubit = *q) || locked[random_qubit])) q++;
 }
 
+Gatetypes Simulator::get_rand_gate(const bool& measurement_only, const bool& multi_input, const bool& force_multi_input) {
+    double p = random.drand();
+    double sum_probs = 0;
+    Gatetypes type = M;
+    uint32 offset = 0;
+    uint32 limit = NR_GATETYPES_1;
+    if (force_multi_input) {
+        offset = NR_GATETYPES_1;
+        limit = NR_GATETYPES;
+    }
+    else if (multi_input && !measurement_only) 
+        limit = NR_GATETYPES;
+    if (!measurement_only) {
+        probabilities[uint32(M)] = 0;
+        type = I;
+        NORMALIZE_PROBS();
+    }
+    else {
+        probabilities[uint32(I)] = 0;
+        NORMALIZE_PROBS();
+    }
+    for (uint32 i = offset; i < limit; i++) {
+        sum_probs += probabilities[i];
+        if (p <= sum_probs) {
+            type = Gatetypes(i);
+            break;
+        }
+    }
+    if (!measurement_only) {
+        INIT_PROB(M);
+        NORMALIZE_PROBS();
+    }
+    else {
+        INIT_PROB(I);
+        NORMALIZE_PROBS();
+    }
+    return type;
+}
+
 void Simulator::generate() {
     assert(circuit_mode == RANDOM_CIRCUIT);
     if (!num_qubits) {
@@ -62,63 +101,60 @@ void Simulator::generate() {
     size_t* types = stats.circuit.gate_stats.types;
     size_t parallel_gates_per_window = 0;
     for (depth_t d = 0; d < depth; d++) {
-        // Shuffle qubits used for multi-input gates.
-        shuffle_qubits();
-        // Loop over all qubits with these assumptions:
-        //  1-input gate acts on q or
-        //  control qubit in 2-input gate = q.
-        LOG2(2, " Depth %d:", d);
+         LOG2(2, " Depth %d:", d);
         size_t nbuckets_per_window = circuit.num_buckets();
-        for (qubit_t q = 0; q < num_qubits; q++) {
-            // Locked qubit means assigned before to
-            // a target qubit of 2-input gate.
-            if (!locked[q]) {
-                // Get a random gate type. 
-                double p = random.drand();
-                sum_probs = 0;
-                Gatetypes type = I;
-                for (byte_t i = 0; i < NR_GATETYPES; i++) {
-                    sum_probs += probabilities[i];
-                    if (p <= sum_probs) {
-                        type = gatetypes[i];
-                        break;
-                    }
-                }
-                assert(type < NR_GATETYPES);
-                assert(type < 256);
-                // Flag measurement existance.
-                if (type == M) 
-                    measuring = true;
-                // 0: q (control), 1: target.
-                Gate_inputs gate_inputs;
-                gate_inputs.push(q);
-                if (isGate2(type)) {
-                    // Get (independent) random target qubit and lock it.
+        // Try to generate a measurement first.
+        Gatetypes type = get_rand_gate(true);
+        if (!options.equivalence_en && type == M) {
+            measuring = true;
+            const uint32 c = random.irand() % num_qubits;
+            circuit.addGate(d, M, 1, c, c);  
+        }
+        // Generate othe gates.
+        else if (type != M) {
+            // Shuffle qubits used for multi-input gates.
+            shuffle_qubits();
+            // Loop over all qubits with these assumptions:
+            //  1-input gate acts on q or
+            //  control qubit in 2-input gate = q.
+            for (qubit_t q = 0; q < num_qubits; q++) {
+                if (!locked[q]) {
+                    assert(type < NR_GATETYPES);
+                    assert(type < 256);
+                    assert(type != M);                 
+                    // 0: q (control), 1: target.
+                    Gate_inputs gate_inputs;
                     gate_inputs.push(q);
-                    get_rand_qubit(q, gate_inputs[1]);
-                    // If we could not find a free qubit, then we're done.
-                    if (locked[gate_inputs[1]]) 
-                        break;
-                    else if (gate_inputs[0] == gate_inputs[1]) {
-                        // Last (unlocked) qubit must be a 1-input gate.
-                        type = gatetypes[random.irand() % NR_GATETYPES_1];
-                        gate_inputs.pop();
+                    if (isGate2(type)) {
+                        // Get (independent) random target qubit and lock it.
+                        gate_inputs.push(q);
+                        get_rand_qubit(q, gate_inputs[1]);
+                        // If we could not find a free qubit, then we're done.
+                        if (locked[gate_inputs[1]]) 
+                            break;
+                        else if (gate_inputs[0] == gate_inputs[1]) {
+                            // Last (unlocked) qubit must be a 1-input gate.
+                            type = get_rand_gate(false);
+                            gate_inputs.pop();
+                        }
+                        else {                        
+                            // Lock target to avoid being control later.
+                            locked[gate_inputs[1]] = 1;
+                        }                 
                     }
-                    else {                        
-                        // Lock target to avoid being control later.
-                        locked[gate_inputs[1]] = 1;
-                    }                 
+                    circuit.addGate(d, type, gate_inputs);
+                    // This lock is necessary to avoid generating
+                    // same control qubit as target.
+                    locked[q] = 1;
+                    // Collect statistics.
+                    types[type]++;
+                    if (type != I) {
+                        stats.circuit.num_parallel_gates++;
+                        parallel_gates_per_window++;
+                    }
                 }
-                circuit.addGate(d, type, gate_inputs);
-                // This lock is necessary to avoid generating
-                // same control qubit as target.
-                locked[q] = 1;
-                // Collect statistics.
-                types[type]++;
-                if (type != I) {
-                    stats.circuit.num_parallel_gates++;
-                    parallel_gates_per_window++;
-                }
+                // Get a non-measurement random gate type. 
+                type = get_rand_gate(false, true);
             }
         }
         stats.circuit.max_parallel_gates = MAX(stats.circuit.max_parallel_gates, parallel_gates_per_window);

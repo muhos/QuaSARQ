@@ -63,6 +63,7 @@ namespace QuaSARQ {
         Simulator(const string& path);
 
         // Random circuit generation.
+        Gatetypes get_rand_gate(const bool& measurement_only, const bool& multi_input = false, const bool& force_multi_input = false);
         void get_rand_qubit(const qubit_t& control, qubit_t& qubit);
         void shuffle_qubits();
         void generate();

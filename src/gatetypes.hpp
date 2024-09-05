@@ -6,6 +6,7 @@
 
 namespace QuaSARQ {
 
+    // 1-input gates first then multi-input gates.
     #define FOREACH_GATE(GATE) \
         GATE(I) \
         GATE(Z) \
@@ -31,15 +32,20 @@ namespace QuaSARQ {
     constexpr uint32 NR_GATETYPES_1 = M + 1;
     constexpr uint32 NR_GATETYPES = ISWAP + 1;
 
-    // Combine 1-input gates then 2-input gates in order.
-    constexpr Gatetypes gatetypes[NR_GATETYPES] =  {   
-        FOREACH_GATE(GATE2ENUM)
-    };
-
     // Gate probabilities.
     extern double probabilities[NR_GATETYPES];
 
     #define INIT_PROB(GATETYPE) (probabilities[GATETYPE] = options.GATETYPE ## _p)
+
+    constexpr void NORMALIZE_PROBS() {
+        double sum_probs = 0;
+        #define SUM_PROBS(GATETYPE) \
+            sum_probs += probabilities[uint32(GATETYPE)];
+        FOREACH_GATE(SUM_PROBS);
+        #define NORM_PROBS(GATETYPE) \
+            probabilities[uint32(GATETYPE)] /= sum_probs;
+        FOREACH_GATE(NORM_PROBS);
+    }
 
     // 2-input gates.
     constexpr Gatetypes gatetypes_2[NR_GATETYPES - NR_GATETYPES_1] = { CX, CY, CZ, SWAP, ISWAP };

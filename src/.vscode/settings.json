@@ -85,7 +85,9 @@
         "*.ipp": "cpp",
         "ios": "cpp",
         "complex": "cpp",
-        "format": "cpp"
+        "format": "cpp",
+        "charconv": "cpp",
+        "variant": "cpp"
     },
     "git.ignoreLimitWarning": true
 }

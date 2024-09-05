@@ -63,10 +63,10 @@ void Equivalence::inject() {
     Gate& random_gate = other_circuit.gate(depth_level, gate_index);
     Gatetypes type = I;
     if (random_gate.size == 1) {
-        type = gatetypes[random.irand() % NR_GATETYPES_1]; 
+        type = get_rand_gate(false); 
     }
     else {
-        type = gatetypes_2[random.irand() % (NR_GATETYPES - NR_GATETYPES_1)]; 
+        type = get_rand_gate(false, false, true); 
     }
     assert(type != I);
     assert(other_stats.circuit.gate_stats.types[random_gate.type]);
