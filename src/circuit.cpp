@@ -41,9 +41,15 @@ void Simulator::generate() {
     circuit.init_depth(depth);
     locked.resize(num_qubits, 0);
     // Initialize gate probabilities.
-    for (byte_t i = 0; i < NR_GATETYPES; i++)
-        probabilities[i] = 1.0 / double(NR_GATETYPES);
-    INIT_PROB(I);
+    if (options.write_rc == 2) { // CHP format
+        for (byte_t i = 0; i < NR_GATETYPES; i++)
+            probabilities[i] = 0;
+    }
+    else {
+        for (byte_t i = 0; i < NR_GATETYPES; i++)
+            probabilities[i] = 1.0 / double(NR_GATETYPES);
+        INIT_PROB(I);
+    }
     INIT_PROB(H);
     INIT_PROB(S);
     INIT_PROB(CX);
@@ -137,7 +143,7 @@ void Simulator::generate() {
     CREPORTVAL, circuit.num_gates(), CNORMAL, 
     CREPORTVAL, stats.circuit.max_parallel_gates, CNORMAL);
     if (options.write_rc)
-        circuit_io.write(circuit, num_qubits);
+        circuit_io.write(circuit, num_qubits, options.write_rc, stats);
 }
 
 size_t Simulator::parse(Statistics& stats, const char* path) {
@@ -149,11 +155,13 @@ size_t Simulator::parse(Statistics& stats, const char* path) {
     while (str < circuit_io.eof) {
         eatWS(str);
         if (*str == '\0') break;
-        if (*str == '#' && !max_qubits) {
-            uint32 sign = 0;
-            max_qubits = toInteger(++str, sign);
-            if (sign) LOGERROR("number of qubits in header is negative.");
-            LOG2(1, "Found header %s%zd%s.", CREPORTVAL, max_qubits, CNORMAL);           
+        if (*str == '#') {
+            if (*++str == 'q' && !max_qubits) {
+                uint32 sign = 0;
+                max_qubits = toInteger(++str, sign);
+                if (sign) LOGERROR("number of qubits in header is negative.");
+                LOG2(1, "Found header %s%zd%s.", CREPORTVAL, max_qubits, CNORMAL);   
+            }        
         }
         circuit_io.read_gate(str);  
     }

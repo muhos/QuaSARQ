@@ -18,7 +18,6 @@ namespace QuaSARQ {
     BOOL_OPT opt_print_step_state("print-step-state", "print step state in form of Pauli strings on screen", false);
     BOOL_OPT opt_print_final_state("print-final-state", "print final state in form of Pauli strings on screen", false);
     BOOL_OPT opt_print_gates("print-gates", "print gates in every step on screen", false);
-    BOOL_OPT opt_write_rc("write-rc", "write random circuit to file (format: q<qubits>_d<depth>.stim)", false);
     BOOL_OPT opt_sync("sync", "synchronize all kernels and data transfers", false);
     BOOL_OPT opt_overlap("overlap", "overlap step kernel with data transfer", false);
     BOOL_OPT opt_profile_equivalence("profile-equivalence", "profile equivalence checking", false);
@@ -27,6 +26,7 @@ namespace QuaSARQ {
     INT_OPT opt_initialstate("initial", "set initial quantum state (0: 0 state, 1: + state, 2: i state)", 0, INT32R(0, 2));
     INT_OPT opt_streams("streams", "number of GPU streams to create", 3, INT32R(2, 32));
     INT_OPT opt_verbose("verbose", "set verbosity level", 1, INT32R(0, 3));
+    INT_OPT opt_write_rc("write-circuit", "write generated circuit to file (1: stim, 2: chp)", 0, INT32R(0, 2));
 
     INT64_OPT opt_tuneinitial_qubits("tune-initial-qubits", "set the initial number of qubits to start with in the tuner", 1, INT64R(1, UINT32_MAX));
     INT64_OPT opt_tunestep_qubits("tune-step-qubits", "set the increase of qubits", 1, INT64R(1, UINT32_MAX));

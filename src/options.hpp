@@ -11,6 +11,7 @@ namespace QuaSARQ {
         
         int verbose;
         int streams;
+        int write_rc;
 
         bool quiet_en;
         bool report_en;
@@ -27,7 +28,6 @@ namespace QuaSARQ {
         bool tune_identity;
         bool tune_step;
 
-        bool write_rc;
         bool print_gates;
         bool print_step_tableau;
         bool print_final_tableau;
