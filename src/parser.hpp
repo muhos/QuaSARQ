@@ -108,30 +108,42 @@ namespace QuaSARQ {
             measuring = false;
         }
 
-        void write_circuit(string& stream, const int& format, const Circuit& circuit, const size_t& num_qubits_in_circuit) {
+        void write_circuit(string& stream, const int& format, const size_t& num_qubits_in_circuit, const Circuit& circuit, const Circuit& measurements) {
             size_t max_depth = circuit.depth();
             for (depth_t d = 0; d < max_depth; d++) {
-                const Window& window = circuit[d];
-                for (qubit_t i = 0; i < window.size(); i++) {
-                    gate_ref_t r = window[i];
-                    const Gate& gate = circuit.gate(r);
-                    if (gate.type == I) continue;
-                    string gatestr = string(G2S_STIM[gate.type]);
-                    if (format == 2) {
-                        if (gatestr == "CX") 
-                            gatestr = "C";
-                        else if (gatestr == "S")
-                            gatestr = "P";
+                const Window& gate_refs = circuit[d];
+                const Window& measurement_refs = measurements[d];
+                const size_t max_refs = MAX(gate_refs.size(), measurement_refs.size());
+                for (size_t i = 0; i < max_refs; i++) {
+                    gate_ref_t gate_ref = NO_REF;
+                    gate_ref_t measurement_ref = NO_REF;
+                    const Gate* gate = nullptr;
+                    if (i < gate_refs.size()) {
+                        gate_ref = gate_refs[i];
+                        gate = circuit.gateptr(gate_ref);
+                        if (gate->type == byte_t(I)) continue;
+                        string gatestr = string(G2S_STIM[gate->type]);
+                        if (format == 2) {
+                            if (gatestr == "CX") 
+                                gatestr = "C";
+                            else if (gatestr == "S")
+                                gatestr = "P";
+                        }
+                        stream += gatestr + " " + to_string(gate->wires[0]);
+                        if (gate->size > 1)
+                            stream += " " + to_string(gate->wires[1]);
+                        stream += "\n";
                     }
-                    stream += gatestr + " " + to_string(gate.wires[0]);
-                    if (gate.size > 1)
-                        stream += " " + to_string(gate.wires[1]);
-                    stream += "\n";
+                    if (i < measurement_refs.size()) {
+                        measurement_ref = measurement_refs[i];
+                        gate = measurements.gateptr(measurement_ref);
+                        stream += "M " + to_string(gate->wires[0]) + "\n";
+                    }          
                 }
             }
         }
 
-        void write(const Circuit& circuit, const size_t& num_qubits_in_circuit, const int& format, const Statistics& stats) {
+        void write(const Circuit& circuit, const Circuit& measurements, const size_t& num_qubits_in_circuit, const int& format, const Statistics& stats) {
             size_t max_qubits = num_qubits_in_circuit;
             size_t max_depth = circuit.depth();
             string path = "q" + to_string(max_qubits) + "_d" + to_string(max_depth);
@@ -154,7 +166,7 @@ namespace QuaSARQ {
             stream += comment + "Gates distribution:\n";
             FOREACH_GATE(WRITE_STATS);
             if (format == 2) stream += "#\n";
-	        write_circuit(stream, format, circuit, num_qubits_in_circuit);
+	        write_circuit(stream, format, num_qubits_in_circuit, circuit, measurements);
             fwrite(stream.c_str(), 1, stream.size(), benchfile);
             LOGDONE(1, 3);
             if (benchfile != nullptr) {

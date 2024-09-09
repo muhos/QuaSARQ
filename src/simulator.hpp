@@ -27,6 +27,7 @@ namespace QuaSARQ {
         depth_t                         depth;
         Random                          random;
         Circuit                         circuit;
+        Circuit                         measurements;
         CircuitIO                       circuit_io;
         string                          circuit_path;
         byte_t                          circuit_mode;
@@ -35,14 +36,11 @@ namespace QuaSARQ {
         DeviceAllocator                 gpu_allocator;
         Tableau<DeviceAllocator>        tableau;
         DeviceCircuit<DeviceAllocator>  gpu_circuit;
-        Table                           host_xs, host_zs;
-        Signs                           host_ss;
+        DeviceCircuit<DeviceAllocator>  gpu_measurements;
         Statistics                      stats;
         FILE*                           configfile;
         cudaStream_t*                   custreams;
-        size_t                          max_window_bytes;
-        size_t                          max_parallel_gates;
-        size_t                          max_parallel_gates_buckets;
+        WindowInfo                      ginfo, minfo;
         bool                            measuring;
         
         enum { 
@@ -63,7 +61,7 @@ namespace QuaSARQ {
         Simulator(const string& path);
 
         // Random circuit generation.
-        Gatetypes get_rand_gate(const bool& measurement_only, const bool& multi_input = false, const bool& force_multi_input = false);
+        Gatetypes get_rand_gate(const bool& multi_input = true, const bool& force_multi_input = false);
         void get_rand_qubit(const qubit_t& control, qubit_t& qubit);
         void shuffle_qubits();
         void generate();
@@ -83,10 +81,6 @@ namespace QuaSARQ {
         // a single window of gates. Called step as it
         // advances the simulation by 1-time step.
         void step(const size_t& p, const depth_t& depth_level, const cudaStream_t* streams, const bool& reversed = false);
-
-        // This will be moved to the checker later.
-        void step_cpu_version(const depth_t& depth_level = 0);
-        void step_cpu_version(const Window& window);
 
         // Printers.
         void print_tableau(const Tableau<DeviceAllocator>& tab, const depth_t& depth_level, const bool& reverse);

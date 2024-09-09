@@ -35,9 +35,11 @@ namespace QuaSARQ {
     // Gate probabilities.
     extern double probabilities[NR_GATETYPES];
 
-    #define INIT_PROB(GATETYPE) (probabilities[GATETYPE] = options.GATETYPE ## _p)
+    #define INIT_PROB(GATETYPE) probabilities[GATETYPE] = options.GATETYPE ## _p;
+    #define RESET_PROB(GATETYPE) probabilities[GATETYPE] = 0;
+    #define UNIFORM_PROB(GATETYPE) probabilities[GATETYPE] = 1.0 / double(NR_GATETYPES);
 
-    constexpr void NORMALIZE_PROBS() {
+    inline void NORMALIZE_PROBS() {
         double sum_probs = 0;
         #define SUM_PROBS(GATETYPE) \
             sum_probs += probabilities[uint32(GATETYPE)];

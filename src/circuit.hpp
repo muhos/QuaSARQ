@@ -26,6 +26,29 @@ namespace QuaSARQ {
 	constexpr size_t GATEBUCKETS = (GATESIZE / BUCKETSIZE);
 	#define NBUCKETS(NINPUTS) (GATEBUCKETS + (NINPUTS))
 
+    struct WindowInfo {
+        size_t max_window_bytes;
+        size_t max_parallel_gates;
+        size_t max_parallel_gates_buckets;
+
+        WindowInfo() :
+              max_window_bytes(0)
+            , max_parallel_gates(0)
+            , max_parallel_gates_buckets(0)
+        {}
+
+        void max(const size_t& num_gates_per_window, const size_t& num_buckets_per_window) {
+            max_parallel_gates_buckets = MAX(max_parallel_gates_buckets, num_buckets_per_window);
+            max_parallel_gates = MAX(max_parallel_gates, num_gates_per_window);
+            size_t bytes_per_window = num_gates_per_window * sizeof(gate_ref_t) + num_buckets_per_window * sizeof(bucket_t);
+            max_window_bytes = MAX(max_window_bytes, bytes_per_window);
+        }
+
+        void operator=(const WindowInfo& from) {
+            *this = from;
+        }
+    };
+
     class Circuit : private buckets_container {
 
         #define GATE_PTR(REF) ((Gate*) buckets_container::data(REF))

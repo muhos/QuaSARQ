@@ -221,6 +221,58 @@ namespace QuaSARQ {
 
     }
 
+    __forceinline__ __device__ unsigned laneId()
+    {
+        unsigned ret; 
+        asm volatile ("mov.u32 %0, %laneid;" : "=r"(ret));
+        return ret;
+    }
+
+    __global__ void is_indeterminate_outcome(const gate_ref_t* refs, const bucket_t* measurements, Table* xs, Table* zs, Signs* ss, const size_t num_qubits, const size_t num_gates, const size_t num_words_per_column) {
+
+        int ran = 0;
+
+        for_parallel_y(i, num_gates) {
+
+            const gate_ref_t r = refs[i];
+
+            assert(r < NO_REF);
+
+            const Gate& m = (Gate&) measurements[r];
+
+            m.print();
+
+            assert(m.size == 1);
+
+            const size_t q = m.wires[0];
+
+            for_parallel_x(g, num_qubits) { // loop over stabilizer generators
+                const size_t word_idx = q * num_words_per_column + WORD_OFFSET(g + num_qubits);
+                if (word_std_t((*xs)[word_idx])) {
+                    // If outcome is indeterminate
+                    ran = 1; // if a Zbar does NOT commute with Z_b (the operator being measured), then outcome is random
+                    LOGGPU(B2B_STR, RB2B(word_std_t((*xs)[word_idx])));
+                    printf("Found generator %lld + %d with indeterminate outcome on qubit %lld\n", WORD_OFFSET(g + num_qubits), __ffs(word_std_t((*xs)[word_idx])), int64(q));
+                    break;
+                    // const uint32 mask = __activemask(), min_id = __ffs(mask) - 1;
+                    // uint32 lane_id = laneId();
+                    // if (lane_id == min_id)
+                    //     atomicMin(min_stab, p);
+                    // rowcopy(q, p, p + q->n);				// Set Xbar_p := Zbar_p
+                    // rowset(q, p + q->n, b + q->n);			// Set Zbar_p := Z_b
+                    // q->r[p + q->n] = 2 * (rand() % 2);		// moment of quantum randomness
+                    // for (i = 0; i < 2 * q->n; i++)			// Now update the Xbar's and Zbar's that don't commute with
+                    //     if ((i != p) && (q->x[i][b5] & pw)) // Z_b
+                    //         rowmult(q, i, p);
+                    // if (q->r[p + q->n])
+                    //     return 3;
+                    // else
+                    //     return 2;
+                }
+            }
+        }
+    }
+
     void Simulator::step(const size_t& p, const depth_t& depth_level, const cudaStream_t* streams, const bool& reversed) {
 
         double stime = 0;
@@ -238,13 +290,16 @@ namespace QuaSARQ {
         if (!options.overlap || (!p && ((!reversed && !depth_level) || (reversed && depth_level == depth - 1)))) {
             LOGN2(1, "Partition %zd: ", p);
             gpu_circuit.copyfrom(stats, circuit, depth_level, reversed, options.sync, options.overlap, copy_stream1, copy_stream2);
+            gpu_measurements.copyfrom(stats, measurements, depth_level, reversed, options.sync, options.overlap, copy_stream1, copy_stream2);
         }
 
         const size_t num_gates_per_window = circuit[depth_level].size();
+        const size_t num_measurements_per_window = measurements[depth_level].size();
         const size_t num_words_per_column = tableau.num_words_per_column();
         const size_t shared_element_bytes = sizeof(word_std_t);
 
         print_gates(gpu_circuit, num_gates_per_window, depth_level);
+        print_gates(gpu_measurements, num_measurements_per_window, depth_level);
 
     #if DEBUG_STEP
 
@@ -315,19 +370,29 @@ namespace QuaSARQ {
             if (!p) {
                 LOG2(1, "");
                 gpu_circuit.advance_references();
+                gpu_measurements.advance_references();
                 if (!reversed && depth_level < depth - 1) {
                     LOGN2(1, "Partition %zd: ", p);
                     gpu_circuit.copyfrom(stats, circuit, depth_level + 1, reversed, options.sync, options.overlap, copy_stream1, copy_stream2);
+                    gpu_measurements.copyfrom(stats, measurements, depth_level + 1, reversed, options.sync, options.overlap, copy_stream1, copy_stream2);
                 }
                 else if (reversed && depth_level > 0) {
                     LOGN2(1, "Partition %zd: ", p);
                     gpu_circuit.copyfrom(stats, circuit, depth_level - 1, reversed, options.sync, options.overlap, copy_stream1, copy_stream2);
+                    gpu_measurements.copyfrom(stats, measurements, depth_level - 1, reversed, options.sync, options.overlap, copy_stream1, copy_stream2);
                 }
             }
             else {
                 LOG2(1, "");
                 gpu_circuit.advance_references(num_gates_per_window, reversed);
+                gpu_measurements.advance_references(num_measurements_per_window, reversed);
             }
+        }
+
+        if (measurements.num_gates(depth_level)) {
+            SYNCALL; // just for debugging
+            printf("\ndepth %d has %d measurements\n", depth_level, measurements.num_gates(depth_level));
+            is_indeterminate_outcome<<<1, 1>>>(gpu_measurements.references(), gpu_measurements.gates(), XZ_TABLE(tableau), tableau.signs(), num_qubits, num_measurements_per_window, num_words_per_column);
         }
 
     } // End of function.

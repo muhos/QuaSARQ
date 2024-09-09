@@ -3,15 +3,15 @@
 
 namespace QuaSARQ {
 
-	__global__ void print_tableau_k(const Table* ps, const Signs* ss, const depth_t level) {
+	__global__ void print_tableau_k(const Table* ps, const Signs* ss, const depth_t level, const bool measuring) {
 		if (!blockIdx.x && !threadIdx.x) {
-			print_tables(*ps, *ss, level == MAX_DEPTH ? -1 : int64(level));
+			print_tables(*ps, *ss, level == MAX_DEPTH ? -1 : int64(level), measuring);
 		}
 	}
 
-	__global__ void print_tableau_k(const Table* xs, const Table* zs, const Signs* ss, const depth_t level) {
+	__global__ void print_tableau_k(const Table* xs, const Table* zs, const Signs* ss, const depth_t level, const bool measuring) {
 		if (!blockIdx.x && !threadIdx.x) {
-			print_tables(*xs, *zs, *ss, level == MAX_DEPTH ? -1 : int64(level));
+			print_tables(*xs, *zs, *ss, level == MAX_DEPTH ? -1 : int64(level), measuring);
 		}
 	}
 
@@ -92,7 +92,7 @@ namespace QuaSARQ {
 		else
 			LOG2(0, "Tableau after %d-step", depth_level);
 		if (!options.sync) SYNCALL;
-        print_tableau_k << <1, 1 >> > (XZ_TABLE(tab), tab.signs(), depth_level);
+        print_tableau_k << <1, 1 >> > (XZ_TABLE(tab), tab.signs(), depth_level, measuring);
         LASTERR("failed to launch print-tableau kernel");
         SYNCALL;
         fflush(stdout);

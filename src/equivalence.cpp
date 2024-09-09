@@ -21,7 +21,7 @@ Equivalence::Equivalence() :
         assert(!circuit.empty());
         create_streams(other_custreams);
         inject();
-        gpu_allocator.resize_cpu_pool(max_window_bytes + other_max_window_bytes + KB * 2);
+        gpu_allocator.resize_cpu_pool(ginfo.max_window_bytes + other_wininfo.max_window_bytes + KB * 2);
     }
 
 Equivalence::Equivalence(const string& path_to_circuit, const string& path_to_other) :
@@ -45,14 +45,12 @@ Equivalence::Equivalence(const string& path_to_circuit, const string& path_to_ot
             stats.time.initial += other_stats.time.initial;
             stats.time.schedule += other_stats.time.schedule;
         }
-        gpu_allocator.resize_cpu_pool(max_window_bytes + other_max_window_bytes + KB * 2);
+        gpu_allocator.resize_cpu_pool(ginfo.max_window_bytes + other_wininfo.max_window_bytes + KB * 2);
     }
 
 void Equivalence::inject() {
     circuit.copyTo(other_circuit);
-    other_max_window_bytes = max_window_bytes;
-    other_max_parallel_gates = max_parallel_gates;
-    other_max_parallel_gates_buckets = max_parallel_gates_buckets;
+    other_wininfo = ginfo;
     other_num_qubits = num_qubits;
     other_depth = depth;
     other_stats = stats;
@@ -66,7 +64,7 @@ void Equivalence::inject() {
         type = get_rand_gate(false); 
     }
     else {
-        type = get_rand_gate(false, false, true); 
+        type = get_rand_gate(true, true); 
     }
     assert(type != I);
     assert(other_stats.circuit.gate_stats.types[random_gate.type]);
@@ -126,14 +124,14 @@ void Equivalence::check() {
     // Create two tableaus in GPU memory.
     Power power;
     timer.start();
-    size_t estimated_num_partitions = get_num_partitions(2, num_qubits, max_window_bytes + other_max_window_bytes, gpu_allocator.gpu_capacity());
-    num_partitions = tableau.alloc(num_qubits, max_window_bytes, estimated_num_partitions);
-    other_num_partitions = other_tableau.alloc(other_num_qubits, other_max_window_bytes, estimated_num_partitions);
+    size_t estimated_num_partitions = get_num_partitions(2, num_qubits, ginfo.max_window_bytes + other_wininfo.max_window_bytes, gpu_allocator.gpu_capacity());
+    num_partitions = tableau.alloc(num_qubits, ginfo.max_window_bytes, estimated_num_partitions);
+    other_num_partitions = other_tableau.alloc(other_num_qubits, other_wininfo.max_window_bytes, estimated_num_partitions);
     assert(num_partitions == other_num_partitions);
     const size_t num_qubits_per_partition = num_partitions > 1 ? tableau.num_words_per_column() * WORD_BITS : num_qubits;
     const size_t other_num_qubits_per_partition = other_num_partitions > 1 ? other_tableau.num_words_per_column() * WORD_BITS : other_num_qubits;
-    gpu_circuit.initiate(max_parallel_gates, max_parallel_gates_buckets);
-    other_gpu_circuit.initiate(other_max_parallel_gates, other_max_parallel_gates_buckets);
+    gpu_circuit.initiate(ginfo.max_parallel_gates, ginfo.max_parallel_gates_buckets);
+    other_gpu_circuit.initiate(other_wininfo.max_parallel_gates, other_wininfo.max_parallel_gates_buckets);
     timer.stop();
     stats.time.initial += timer.time();
     // Start step-wise equivalence.

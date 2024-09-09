@@ -53,12 +53,12 @@ void Checker::check_integrity() {
 
     // Create a tableau in GPU memory.
     timer.start();
-    num_partitions = tableau.alloc(num_qubits, max_window_bytes, measuring);
+    num_partitions = tableau.alloc(num_qubits, ginfo.max_window_bytes, measuring);
     const size_t num_qubits_per_partition = num_partitions > 1 ? tableau.num_words_per_column() * WORD_BITS : num_qubits;
     if (options.overlap)
-        gpu_circuit.initiate(circuit, max_parallel_gates, max_parallel_gates_buckets);
+        gpu_circuit.initiate(circuit, ginfo.max_parallel_gates, ginfo.max_parallel_gates_buckets);
     else
-        gpu_circuit.initiate(max_parallel_gates, max_parallel_gates_buckets);
+        gpu_circuit.initiate(ginfo.max_parallel_gates, ginfo.max_parallel_gates_buckets);
     timer.stop();
     stats.time.initial += timer.time();
 

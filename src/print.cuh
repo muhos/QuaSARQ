@@ -60,25 +60,26 @@ namespace QuaSARQ {
         LOGGPU("\n");
     }
 
-    INLINE_ALL void print_tables(const Table& xs, const Table& zs, const Signs& ss, const int64& level) {
-        LOGGPU(" ---[ X-Table at (%-2lld)-step ]---------------------\n", level);
+    INLINE_ALL void print_tables(const Table& xs, const Table& zs, const Signs& ss, const int64& level, const bool& measuring) {
+        if (measuring)
+            LOGGPU(" ---[ Destab/stab X-Table at (%-2lld)-step ]---------------------\n", level);
+        else
+            LOGGPU(" ---[ X-Table at (%-2lld)-step ]---------------------\n", level);
         print_table(xs);
-        LOGGPU(" ------------------------------------------------\n");
-        LOGGPU(" ---[ Z-Table at (%-2lld)-step ]---------------------\n", level);
+        if (measuring)
+            LOGGPU(" ---[ Destab/stab Z-Table at (%-2lld)-step ]---------------------\n", level);
+        else
+            LOGGPU(" ---[ Z-Table at (%-2lld)-step ]---------------------\n", level);
         print_table(zs);
-        LOGGPU(" ------------------------------------------------\n");
         LOGGPU(" ---[ Signs at (%-2lld)-step ]-----------------------\n", level);
         print_table_signs(ss);
-        LOGGPU(" ------------------------------------------------\n");
     }
 
-    INLINE_ALL void print_tables(const Table& ps, const Signs& ss, const int64& level) {
+    INLINE_ALL void print_tables(const Table& ps, const Signs& ss, const int64& level, const bool& measuring) {
         LOGGPU(" ---[ XZ bits at (%-2lld)-step ]---------------------\n", level);
         print_table(ps);
-        LOGGPU(" ------------------------------------------------\n");
         LOGGPU(" ---[ Signs at (%-2lld)-step   ]---------------------\n", level);
         print_table_signs(ss);
-        LOGGPU(" ------------------------------------------------\n");
     }
 
     INLINE_ALL void print_state(const Table& xs, const Table& zs, const Signs& ss, 
@@ -108,8 +109,8 @@ namespace QuaSARQ {
     }
 
     // Print the tableau in binary format (generators are columns).
-    __global__ void print_tableau_k(const Table* xs, const Table* zs, const Signs* ss, const depth_t level);
-    __global__ void print_tableau_k(const Table* ps, const Signs* ss, const depth_t level);
+    __global__ void print_tableau_k(const Table* xs, const Table* zs, const Signs* ss, const depth_t level, const bool measuring);
+    __global__ void print_tableau_k(const Table* ps, const Signs* ss, const depth_t level, const bool measuring);
 
     // Print the tableau's Pauli strings.
     __global__ void print_paulis_k(const Table* xs, const Table* zs, const Signs* ss, const size_t num_words_per_column, const size_t num_qubits, const bool extended);

@@ -30,15 +30,16 @@ namespace QuaSARQ {
 
     struct Gate {
         byte_t type;
+        byte_t random;
         input_size_t size;
         qubit_t wires[0];
 
         INLINE_ALL 
-        Gate() : type(I), size(1) { }
+        Gate() : type(I), random(0), size(1) { }
 
         INLINE_ALL 
         explicit Gate(const input_size_t& size) : 
-            type(I), size(size) { }
+            type(I), random(0), size(size) { }
 
 		INLINE_ALL size_t capacity() const { assert(size); return size_t(size) * sizeof(qubit_t) + sizeof(*this); }
 

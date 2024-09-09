@@ -87,7 +87,8 @@
         "complex": "cpp",
         "format": "cpp",
         "charconv": "cpp",
-        "variant": "cpp"
+        "variant": "cpp",
+        "span": "cpp"
     },
     "git.ignoreLimitWarning": true
 }
