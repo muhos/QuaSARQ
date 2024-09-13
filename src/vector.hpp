@@ -182,18 +182,6 @@ namespace QuaSARQ {
 			dest._mem = _mem, dest.sz = sz, dest.cap = cap;
 			_mem = nullptr, sz = cap = 0;
 		}
-		__forceinline void 		print		() {
-			printf("{ ");
-			for (S i = 0; i < sz; ++i) {
-				printf("%lld ", (long long) _mem[i]);
-				if (i < sz - 1)
-					putchar(' ');
-			}
-			printf(" }\n");
-			#if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
-			fflush(stdout);
-			#endif
-		}	
 		__forceinline void		reset		() {
 			std::memset(_mem, 0, sz * sizeof(T));
 		}

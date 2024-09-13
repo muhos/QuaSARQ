@@ -4,6 +4,7 @@
 #include "collapse.cuh"
 #include "operators.cuh"
 #include "macros.cuh"
+#include "locker.cuh"
 
 namespace QuaSARQ {
 
@@ -221,16 +222,9 @@ namespace QuaSARQ {
 
     }
 
-    __forceinline__ __device__ unsigned laneId()
-    {
-        unsigned ret; 
-        asm volatile ("mov.u32 %0, %laneid;" : "=r"(ret));
-        return ret;
-    }
 
-    __global__ void is_indeterminate_outcome(const gate_ref_t* refs, const bucket_t* measurements, Table* xs, Table* zs, Signs* ss, const size_t num_qubits, const size_t num_gates, const size_t num_words_per_column) {
 
-        int ran = 0;
+    __global__ void is_indeterminate_outcome(const gate_ref_t* refs, bucket_t* measurements, Table* xs, Table* zs, Signs* ss, DeviceLocker* dlocker, const size_t num_qubits, const size_t num_gates, const size_t num_words_per_column) {
 
         for_parallel_y(i, num_gates) {
 
@@ -238,37 +232,115 @@ namespace QuaSARQ {
 
             assert(r < NO_REF);
 
-            const Gate& m = (Gate&) measurements[r];
-
-            m.print();
+            Gate& m = (Gate&) measurements[r];
 
             assert(m.size == 1);
 
             const size_t q = m.wires[0];
 
-            for_parallel_x(g, num_qubits) { // loop over stabilizer generators
-                const size_t word_idx = q * num_words_per_column + WORD_OFFSET(g + num_qubits);
-                if (word_std_t((*xs)[word_idx])) {
-                    // If outcome is indeterminate
-                    ran = 1; // if a Zbar does NOT commute with Z_b (the operator being measured), then outcome is random
-                    LOGGPU(B2B_STR, RB2B(word_std_t((*xs)[word_idx])));
-                    printf("Found generator %lld + %d with indeterminate outcome on qubit %lld\n", WORD_OFFSET(g + num_qubits), __ffs(word_std_t((*xs)[word_idx])), int64(q));
-                    break;
-                    // const uint32 mask = __activemask(), min_id = __ffs(mask) - 1;
-                    // uint32 lane_id = laneId();
-                    // if (lane_id == min_id)
-                    //     atomicMin(min_stab, p);
-                    // rowcopy(q, p, p + q->n);				// Set Xbar_p := Zbar_p
-                    // rowset(q, p + q->n, b + q->n);			// Set Zbar_p := Z_b
-                    // q->r[p + q->n] = 2 * (rand() % 2);		// moment of quantum randomness
-                    // for (i = 0; i < 2 * q->n; i++)			// Now update the Xbar's and Zbar's that don't commute with
-                    //     if ((i != p) && (q->x[i][b5] & pw)) // Z_b
-                    //         rowmult(q, i, p);
-                    // if (q->r[p + q->n])
-                    //     return 3;
-                    // else
-                    //     return 2;
+            for_parallel_x(j, num_qubits) {
+                // Check stabilizers if Xgq has 1, if so save the minimum j.
+                const size_t word_off = j + num_qubits;
+                const size_t word_idx = q * num_words_per_column + WORD_OFFSET(word_off);
+                const word_std_t word = (*xs)[word_idx];
+                if (word & POW2(word_off)) {
+                    // Find the minimum ranking thread (generator).
+                    atomicAggMin(&(m.pivot), uint32(j));
+                    // dlocker->lock();
+                    // m.print();
+                    // printf("(%lld, %lld): Found generator %lld with indeterminate outcome on qubit %lld\n", i, j, j, int64(q));
+                    // dlocker->unlock();
                 }
+            }
+        }
+    }
+
+    __device__ void rowcopy(byte_t* aux, const Table* xs, const Table* zs, const Signs* ss, const size_t& src_idx, const size_t& num_qubits, const size_t& num_words_per_column) {
+        
+        const word_std_t generator_mask = POW2(src_idx);
+        const word_std_t shifts = (src_idx & WORD_MASK);
+        word_std_t word = 0;
+
+        for_parallel_x(q, num_qubits) {
+            const size_t word_idx = q * num_words_per_column + WORD_OFFSET(src_idx);
+            word = (*xs)[word_idx];
+            aux[q] = (word & generator_mask) >> shifts;
+            word = (*zs)[word_idx];
+            aux[q + num_qubits] = (word & generator_mask) >> shifts;
+            if (q == num_qubits - 1)
+                aux[num_qubits + num_qubits] = ((*ss)[WORD_OFFSET(src_idx)] & generator_mask) >> shifts;
+        }
+    }
+
+    __device__ void print_row(DeviceLocker* dlocker, const Table* xs, const Table* zs, const Signs* ss, const size_t& src_idx, const size_t& num_qubits, const size_t& num_words_per_column) {
+        dlocker->lock();
+        LOGGPU("Row(%lld):", src_idx);
+        for (size_t i = 0; i < num_qubits; i++)
+            LOGGPU("%d", bool(word_std_t((*xs)[i * num_words_per_column + WORD_OFFSET(src_idx)]) & POW2(src_idx)));
+        LOGGPU(" ");
+        for (size_t i = 0; i < num_qubits; i++)
+            LOGGPU("%d", bool(word_std_t((*zs)[i * num_words_per_column + WORD_OFFSET(src_idx)]) & POW2(src_idx)));
+        LOGGPU(" ");
+        LOGGPU("%d\n\n", bool(word_std_t((*ss)[WORD_OFFSET(src_idx)]) & POW2(src_idx)));
+        dlocker->unlock();
+    }
+
+    __device__ void print_row(DeviceLocker* dlocker, const byte_t* aux, const size_t& num_qubits) {
+        dlocker->lock();
+        LOGGPU("Auxiliary: ");
+        for (size_t i = 0; i < num_qubits; i++)
+            LOGGPU("%d", aux[i]);
+        LOGGPU(" ");
+        for (size_t i = 0; i < num_qubits; i++)
+            LOGGPU("%d", aux[i + num_qubits]);
+        LOGGPU(" ");
+        LOGGPU("%d\n\n", aux[num_qubits + num_qubits]);
+        dlocker->unlock();
+    }
+
+    __global__ void measure_determinate(const gate_ref_t* refs, bucket_t* measurements, Table* xs, Table* zs, Signs* ss, byte_t* aux, DeviceLocker* dlocker, const size_t num_qubits, const size_t num_gates, const size_t num_words_per_column) {
+        
+        for_parallel_y(i, num_gates) {
+
+            const gate_ref_t r = refs[i];
+
+            assert(r < NO_REF);
+
+            Gate& m = (Gate&) measurements[r];
+
+            // Consdier only determinate measures.
+            if (m.pivot == MAX_QUBITS) {
+
+                m.print();
+
+                assert(m.size == 1);
+
+                const size_t q = m.wires[0];
+
+                size_t j = 0, k = 0;
+                size_t word_idx = 0;
+                word_std_t word = 0;
+                for (j = 0; j < num_qubits; j++) {
+                    // Multiply stabilizer j with stabilizer k iff destabilizer Xjq has 1 and destabilizer Xkq has 1.
+                    word_idx = q * num_words_per_column + WORD_OFFSET(j);
+                    word = (*xs)[word_idx];
+                    if (word & POW2(j)) {
+                        print_row(dlocker, xs, zs, ss, j + num_qubits, num_qubits, num_words_per_column);
+                        rowcopy(aux, xs, zs, ss, j + num_qubits, num_qubits, num_words_per_column);
+                        print_row(dlocker, aux, num_qubits);
+                        for (k = j + 1; i < num_qubits; i++) {
+                            word_idx = q * num_words_per_column + WORD_OFFSET(k);
+                            word = (*xs)[word_idx];
+                            if (word & POW2(k)) {
+                                //rowmult(aux, xs, zs, ss, k + num_qubits, num_qubits, num_words_per_column);
+                            }
+                        }
+                        // Check auxiliary sign and store thr outcome in m.
+
+                        break;
+                    }
+                }
+
             }
         }
     }
@@ -280,26 +352,15 @@ namespace QuaSARQ {
         cudaStream_t copy_stream2 = cudaStream_t(0);
         cudaStream_t kernel_stream = cudaStream_t(0);
 
-        if (options.overlap) {
-            copy_stream1 = streams[COPY_STREAM1];
-            copy_stream2 = streams[COPY_STREAM2];
-            kernel_stream = streams[KERNEL_STREAM];
-        }
-
-        // First level copy.
-        if (!options.overlap || (!p && ((!reversed && !depth_level) || (reversed && depth_level == depth - 1)))) {
-            LOGN2(1, "Partition %zd: ", p);
-            gpu_circuit.copyfrom(stats, circuit, depth_level, reversed, options.sync, options.overlap, copy_stream1, copy_stream2);
-            gpu_measurements.copyfrom(stats, measurements, depth_level, reversed, options.sync, options.overlap, copy_stream1, copy_stream2);
-        }
+        // Copy current window to GPU memory.
+        LOGN2(1, "Partition %zd, step %d: ", p, depth_level);
+        gpu_circuit.copyfrom(stats, circuit, depth_level, reversed, options.sync, copy_stream1, copy_stream2);
 
         const size_t num_gates_per_window = circuit[depth_level].size();
-        const size_t num_measurements_per_window = measurements[depth_level].size();
         const size_t num_words_per_column = tableau.num_words_per_column();
         const size_t shared_element_bytes = sizeof(word_std_t);
 
         print_gates(gpu_circuit, num_gates_per_window, depth_level);
-        print_gates(gpu_measurements, num_measurements_per_window, depth_level);
 
     #if DEBUG_STEP
 
@@ -330,7 +391,7 @@ namespace QuaSARQ {
             );
         }
 
-        LOGN2(1, "Partition %zd: Simulating the %d-time step %s using grid(%d, %d) and block(%d, %d).. ", 
+        LOGN2(1, "Partition %zd, step %d: Simulating %s using grid(%d, %d) and block(%d, %d).. ", 
             p, depth_level, !options.sync ? "asynchronously" : "",
             bestGridStep.x, bestGridStep.y, bestBlockStep.x, bestBlockStep.y);
 
@@ -338,10 +399,10 @@ namespace QuaSARQ {
 
         OPTIMIZESHARED(reduce_smem_size, bestBlockStep.y * bestBlockStep.x, shared_element_bytes);
         // sync data transfer.
-        if (!options.overlap || !p) {
-            SYNC(copy_stream1);
-            SYNC(copy_stream2);
-        }
+        SYNC(copy_stream1);
+        SYNC(copy_stream2);
+
+        // Run simulation.
         if (bestBlockStep.x > maxWarpSize)
             step_2D << < bestGridStep, bestBlockStep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_per_column, XZ_TABLE(tableau), tableau.signs());
         else
@@ -365,34 +426,15 @@ namespace QuaSARQ {
         if (options.print_step_state)
             print_paulis(tableau, depth_level, reversed);
 
-        // Overlap next copy with current kernel execution.
-        if (options.overlap) {
-            if (!p) {
-                LOG2(1, "");
-                gpu_circuit.advance_references();
-                gpu_measurements.advance_references();
-                if (!reversed && depth_level < depth - 1) {
-                    LOGN2(1, "Partition %zd: ", p);
-                    gpu_circuit.copyfrom(stats, circuit, depth_level + 1, reversed, options.sync, options.overlap, copy_stream1, copy_stream2);
-                    gpu_measurements.copyfrom(stats, measurements, depth_level + 1, reversed, options.sync, options.overlap, copy_stream1, copy_stream2);
-                }
-                else if (reversed && depth_level > 0) {
-                    LOGN2(1, "Partition %zd: ", p);
-                    gpu_circuit.copyfrom(stats, circuit, depth_level - 1, reversed, options.sync, options.overlap, copy_stream1, copy_stream2);
-                    gpu_measurements.copyfrom(stats, measurements, depth_level - 1, reversed, options.sync, options.overlap, copy_stream1, copy_stream2);
-                }
-            }
-            else {
-                LOG2(1, "");
-                gpu_circuit.advance_references(num_gates_per_window, reversed);
-                gpu_measurements.advance_references(num_measurements_per_window, reversed);
-            }
-        }
-
-        if (measurements.num_gates(depth_level)) {
+        if (circuit.is_measuring(depth_level)) {
             SYNCALL; // just for debugging
-            printf("\ndepth %d has %d measurements\n", depth_level, measurements.num_gates(depth_level));
-            is_indeterminate_outcome<<<1, 1>>>(gpu_measurements.references(), gpu_measurements.gates(), XZ_TABLE(tableau), tableau.signs(), num_qubits, num_measurements_per_window, num_words_per_column);
+            printf("\ndepth %d has %d measurements\n", depth_level, num_gates_per_window);
+            fflush(stdout);
+            if (!depth_level) locker.reset(0);
+            is_indeterminate_outcome<<<bestGridStep, bestBlockStep>>>(gpu_circuit.references(), gpu_circuit.gates(), XZ_TABLE(tableau), tableau.signs(), locker.deviceLocker(), num_qubits, num_gates_per_window, num_words_per_column);
+            print_gates(gpu_circuit, num_gates_per_window, depth_level);
+            measure_determinate<<<1, 1>>>(gpu_circuit.references(), gpu_circuit.gates(), XZ_TABLE(tableau), tableau.signs(), tableau.auxiliary(), locker.deviceLocker(), num_qubits, num_gates_per_window, num_words_per_column);
+            SYNCALL; // just for debugging
         }
 
     } // End of function.

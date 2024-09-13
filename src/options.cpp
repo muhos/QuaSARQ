@@ -19,7 +19,6 @@ namespace QuaSARQ {
     BOOL_OPT opt_print_final_state("print-final-state", "print final state in form of Pauli strings on screen", false);
     BOOL_OPT opt_print_gates("print-gates", "print gates in every step on screen", false);
     BOOL_OPT opt_sync("sync", "synchronize all kernels and data transfers", false);
-    BOOL_OPT opt_overlap("overlap", "overlap step kernel with data transfer", false);
     BOOL_OPT opt_profile_equivalence("profile-equivalence", "profile equivalence checking", false);
     BOOL_OPT opt_disable_concurrency("disable-concurrency", "disable concurrency in equivalence checking", false);
 
@@ -68,7 +67,6 @@ namespace QuaSARQ {
         check_integrity = opt_checkintegrity_en;
         checker_en = check_parallel_gates || check_integrity;
 
-        overlap = opt_overlap;
         sync = opt_sync;
 
         tune_identity = opt_tuneidentity_en;
@@ -133,22 +131,6 @@ namespace QuaSARQ {
         }
         if (equivalence_en && inpath != nullptr && other_inpath == nullptr) {
             LOGERROR("missing other citcuit to check.");
-        }
-        if (check_integrity && overlap) {
-            LOGWARNING("turning off overlapping during integrity checking.");
-            overlap = false;
-        }
-        if (tuner_en && overlap) {
-            LOGWARNING("turning off overlapping during kernel tuning.");
-            overlap = false;
-        }
-        if (sync && overlap) {
-            LOGWARNING("turning off overlapping during synchronization.");
-            overlap = false;
-        }
-        if (equivalence_en && overlap) {
-            LOGWARNING("turning off overlapping during equivalence checking.");
-            overlap = false;
         }
     }
 

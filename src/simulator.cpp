@@ -26,9 +26,9 @@ Simulator::Simulator() :
 	, random(1)
 	, circuit(MB)
 	, circuit_mode(RANDOM_CIRCUIT)
-	, tableau(gpu_allocator)
 	, gpu_circuit(gpu_allocator)
-    , gpu_measurements(gpu_allocator)
+    , locker(gpu_allocator)
+    , tableau(gpu_allocator)
 	, configfile(nullptr)
 	, custreams(nullptr)
     , measuring(false)
@@ -44,9 +44,9 @@ Simulator::Simulator(const string& path) :
     , circuit(MB)
     , circuit_path(path)
     , circuit_mode(PARSED_CIRCUIT)
-    , tableau(gpu_allocator)
     , gpu_circuit(gpu_allocator)
-    , gpu_measurements(gpu_allocator)
+    , locker(gpu_allocator)
+    , tableau(gpu_allocator)
     , configfile(nullptr)
     , custreams(nullptr)
     , measuring(false)
@@ -65,9 +65,10 @@ void Simulator::initialize() {
     // is done after parsing as it causes
     // degradation to CPU performance.
     // The KB extra space is used for tableau allocations.
-    gpu_allocator.create_cpu_pool(ginfo.max_window_bytes + KB);
+    gpu_allocator.create_cpu_pool(winfo.max_window_bytes + KB);
     if (!options.tuner_en) register_config();
     create_streams(custreams);
+    locker.alloc();
     SYNC(0); // Sync gpu memory pool allocation.
     FAULT_DETECTOR;
 }
@@ -94,16 +95,14 @@ void Simulator::simulate(const size_t& p, const bool& reversed) {
         throw GPU_memory_exception();
     }
     if (reversed) {
-        gpu_circuit.reset_circuit_offsets(circuit[depth - 1].size(), circuit.reference(depth - 1, 0), options.overlap);
-        gpu_measurements.reset_circuit_offsets(measurements[depth - 1].size(), measurements.reference(depth - 1, 0), options.overlap);
+        gpu_circuit.reset_circuit_offsets(circuit[depth - 1].size(), circuit.reference(depth - 1, 0));
         for (depth_t d = 0; d < depth; d++) {
             const depth_t b = depth - d - 1;
             step(p, b, custreams, true);
         }
     }
     else {
-        gpu_circuit.reset_circuit_offsets(0, 0, options.overlap);
-        gpu_measurements.reset_circuit_offsets(0, 0, options.overlap);
+        gpu_circuit.reset_circuit_offsets(0, 0);
         for (depth_t d = 0; d < depth; d++) {
             step(p, d, custreams);
         }
@@ -118,16 +117,9 @@ void Simulator::simulate() {
     // Create a tableau in GPU memory.
     Power power;
     timer.start();
-    num_partitions = tableau.alloc(num_qubits, options.overlap ? stats.circuit.bytes : ginfo.max_window_bytes, measuring);
+    num_partitions = tableau.alloc(num_qubits, winfo.max_window_bytes, measuring);
     const size_t num_qubits_per_partition = num_partitions > 1 ? tableau.num_words_per_column() * WORD_BITS : num_qubits;
-    if (options.overlap) {
-        gpu_circuit.initiate(circuit, ginfo.max_parallel_gates, ginfo.max_parallel_gates_buckets);
-        gpu_measurements.initiate(measurements, minfo.max_parallel_gates, minfo.max_parallel_gates_buckets);
-    }
-    else {
-        gpu_circuit.initiate(ginfo.max_parallel_gates, ginfo.max_parallel_gates_buckets);
-        gpu_measurements.initiate(minfo.max_parallel_gates, minfo.max_parallel_gates_buckets);
-    }
+    gpu_circuit.initiate(winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
     timer.stop();
     stats.time.initial += timer.time();
     // Start step-wise simulation.

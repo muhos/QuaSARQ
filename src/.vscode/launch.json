@@ -11,7 +11,7 @@
             "program": "${workspaceFolder}/quasarq",
             //"args": "--qubits=10 --verbose=1 --config-path=\"$HOME/parallel-quantum/code/kernel.config\" -print-step-tableau -print-initial-tableau"
             //"args": "--qubits=30 -print-final-tableau -print-gates -print-initial-tableau --depth=5"
-            "args": "--qubits=20 --depth=3"
+            "args": "--qubits=8 -print-step-tableau --M=.6 --verbose=2 --depth=2 -print-initial-tableau"
             //"args": "${workspaceFolder}/q1000_d100.stim ${workspaceFolder}/q1000_d100.stim"
         },
         {

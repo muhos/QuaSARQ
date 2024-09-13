@@ -34,8 +34,9 @@ NVCC := $(CUDA_PATH)/bin/nvcc -ccbin $(CXX)
 
 # compiler flags
 
+RELOC	  := -dc
 CCFLAGS   := -std=c++17 -fdiagnostics-show-option
-NVCCFLAGS := -m64 -std=c++17 
+NVCCFLAGS := -m64 -std=c++17
 
 # Common includes 
 INCLUDES  := -I../../common/inc 
@@ -174,7 +175,7 @@ $(mainsrc).$(CPPOBJEXT): $(mainsrc).cpp
 
 %.$(CUOBJEXT): %.cu
 	@$(PROGRESS) $<
-	@$(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $< 
+	@$(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) $(RELOC) -o $@ -c $< 
 	
 %.$(CPPOBJEXT): %.cpp
 	@$(PROGRESS) $<

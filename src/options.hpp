@@ -15,7 +15,6 @@ namespace QuaSARQ {
 
         bool quiet_en;
         bool report_en;
-        bool overlap;
         bool sync;
 
         bool equivalence_en;

@@ -20,27 +20,27 @@ namespace QuaSARQ {
         FOREACH_GATE(GATE2STR)
     };
 
-    struct Parsed_gate {
+    struct ParsedGate {
         qubit_t c, t;
         byte_t type;
 
-        Parsed_gate(const qubit_t& c, const qubit_t& t, const byte_t& type) :
+        ParsedGate(const qubit_t& c, const qubit_t& t, const byte_t& type) :
             c(c), t(t), type(type) {}
     };
 
-    class Circuit_queue : public Vec<Parsed_gate, size_t> {
+    class CircuitQueue : public Vec<ParsedGate, size_t> {
 
         size_t head;
 
     public:
 
-        Circuit_queue() : head(0) { }
+        CircuitQueue() : head(0) { }
 
         bool empty() const {
             return head == size();
         }
 
-        const Parsed_gate& front() {
+        const ParsedGate& front() {
             assert(head < size());
             return operator[](head);
         }
@@ -48,7 +48,7 @@ namespace QuaSARQ {
         void pop_front() { ++head; }
 
         void clear(const bool& free = false) {
-            Vec<Parsed_gate, size_t>::clear(free);
+            Vec<ParsedGate, size_t>::clear(free);
             head = 0;
         }
     };
@@ -63,7 +63,7 @@ namespace QuaSARQ {
         char* eof;
         size_t size, max_qubits;
         Gate_stats gate_stats;
-        Circuit_queue circuit_queue;
+        CircuitQueue circuit_queue;
         bool measuring;
 
 #if defined(__linux__) || defined(__CYGWIN__)
@@ -96,7 +96,6 @@ namespace QuaSARQ {
 #if defined(__linux__) || defined(__CYGWIN__)
                 if (munmap(buffer, size) != 0)
                     LOGERROR("cannot clean file mapping.");
-            
 #else
                 std::free(buffer);
 #endif
@@ -108,42 +107,33 @@ namespace QuaSARQ {
             measuring = false;
         }
 
-        void write_circuit(string& stream, const int& format, const size_t& num_qubits_in_circuit, const Circuit& circuit, const Circuit& measurements) {
+        void write_circuit(string& stream, const int& format, const size_t& num_qubits_in_circuit, const Circuit& circuit) {
             size_t max_depth = circuit.depth();
             for (depth_t d = 0; d < max_depth; d++) {
                 const Window& gate_refs = circuit[d];
-                const Window& measurement_refs = measurements[d];
-                const size_t max_refs = MAX(gate_refs.size(), measurement_refs.size());
+                const size_t max_refs = gate_refs.size();
                 for (size_t i = 0; i < max_refs; i++) {
                     gate_ref_t gate_ref = NO_REF;
-                    gate_ref_t measurement_ref = NO_REF;
                     const Gate* gate = nullptr;
-                    if (i < gate_refs.size()) {
-                        gate_ref = gate_refs[i];
-                        gate = circuit.gateptr(gate_ref);
-                        if (gate->type == byte_t(I)) continue;
-                        string gatestr = string(G2S_STIM[gate->type]);
-                        if (format == 2) {
-                            if (gatestr == "CX") 
-                                gatestr = "C";
-                            else if (gatestr == "S")
-                                gatestr = "P";
-                        }
-                        stream += gatestr + " " + to_string(gate->wires[0]);
-                        if (gate->size > 1)
-                            stream += " " + to_string(gate->wires[1]);
-                        stream += "\n";
+                    gate_ref = gate_refs[i];
+                    gate = circuit.gateptr(gate_ref);
+                    if (gate->type == byte_t(I)) continue;
+                    string gatestr = string(G2S_STIM[gate->type]);
+                    if (format == 2) {
+                        if (gatestr == "CX") 
+                            gatestr = "C";
+                        else if (gatestr == "S")
+                            gatestr = "P";
                     }
-                    if (i < measurement_refs.size()) {
-                        measurement_ref = measurement_refs[i];
-                        gate = measurements.gateptr(measurement_ref);
-                        stream += "M " + to_string(gate->wires[0]) + "\n";
-                    }          
+                    stream += gatestr + " " + to_string(gate->wires[0]);
+                    if (gate->size > 1)
+                        stream += " " + to_string(gate->wires[1]);
+                    stream += "\n";        
                 }
             }
         }
 
-        void write(const Circuit& circuit, const Circuit& measurements, const size_t& num_qubits_in_circuit, const int& format, const Statistics& stats) {
+        void write(const Circuit& circuit, const size_t& num_qubits_in_circuit, const int& format, const Statistics& stats) {
             size_t max_qubits = num_qubits_in_circuit;
             size_t max_depth = circuit.depth();
             string path = "q" + to_string(max_qubits) + "_d" + to_string(max_depth);
@@ -166,7 +156,7 @@ namespace QuaSARQ {
             stream += comment + "Gates distribution:\n";
             FOREACH_GATE(WRITE_STATS);
             if (format == 2) stream += "#\n";
-	        write_circuit(stream, format, num_qubits_in_circuit, circuit, measurements);
+	        write_circuit(stream, format, num_qubits_in_circuit, circuit);
             fwrite(stream.c_str(), 1, stream.size(), benchfile);
             LOGDONE(1, 3);
             if (benchfile != nullptr) {
@@ -245,7 +235,7 @@ namespace QuaSARQ {
                     t = toInteger(str);
                     max_qubits = MAX(max_qubits, t);
                 }
-                circuit_queue.push(Parsed_gate(c, t, type));
+                circuit_queue.push(ParsedGate(c, t, type));
                 gate_stats.types[type]++;
             }
         }

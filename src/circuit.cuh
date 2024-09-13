@@ -34,9 +34,14 @@ namespace QuaSARQ {
 
 		template <class T>
 		void copyhost(T* dest, const T* src, const size_t& size, const T& off) {
-			for (size_t i = 0; i < size; ++i) {
-				assert(src[i] >= off);
-				dest[i] = src[i] - off;
+			if (!off) {
+				std::memcpy(dest, src, size * sizeof(T));
+			}
+			else {
+				for (size_t i = 0; i < size; ++i) {
+					assert(src[i] >= off);
+					dest[i] = src[i] - off;
+				}
 			}
 		}
 
@@ -45,7 +50,7 @@ namespace QuaSARQ {
 		INLINE_ALL DeviceCircuit(ALLOCATOR& allocator) : 
 			allocator(allocator)
 		,	_buckets(nullptr)
-		,	_references(nullptr) 
+		,	_references(nullptr)
 		,	cached_buckets(nullptr)
 		,	cached_references(nullptr)
 		,	pinned_buckets(nullptr)
@@ -59,19 +64,13 @@ namespace QuaSARQ {
 		{ }
 
 		inline 
-		void reset_circuit_offsets (const gate_ref_t& references_offset, const gate_ref_t& buckets_offset, const bool& overlap = false) { 
+		void reset_circuit_offsets (const gate_ref_t& references_offset, const gate_ref_t& buckets_offset) { 
 			LOG2(2, "");
 		    LOGN2(2, "Initializing window offsets to %lld and %lld respectively.. ", int64(references_offset), int64(buckets_offset));
 			assert(references_offset < NO_REF);
 			assert(buckets_offset < NO_REF);
-			if (overlap) {
-				num_references_prev = references_offset;
-				num_buckets_prev = buckets_offset;
-			}
-			else {
-				num_references_prev = 0;
-				num_buckets_prev = 0;
-			}
+			num_references_prev = 0;
+			num_buckets_prev = 0;
 			this->buckets_offset = buckets_offset;
 			cached_references = _references;
 			cached_buckets = _buckets;
@@ -81,14 +80,10 @@ namespace QuaSARQ {
 
 		inline
 		void 		initiate	(const size_t& max_references, const size_t& max_buckets) {
-			if (!max_references)
-                LOGERROR("maximum number of references per window cannot be zero.");
-			if (!max_buckets)
-                LOGERROR("maximum number of buckets per window cannot be zero.");
-			if (max_references > MAX_QUBITS)
-				LOGERROR("maximum number of references per window is not supported.");
-			if (max_buckets > NO_REF)
-				LOGERROR("maximum number of buckets per window is not supported.");
+			if (!max_references || max_references > MAX_QUBITS)
+				LOGERROR("maximum number of references per window is invalid.");
+			if (!max_buckets || max_buckets > NO_REF)
+				LOGERROR("maximum number of buckets per window is invalid.");
 			if (this->max_references < max_references) {
 				LOGN2(2, "Resizing a (pinned) window for %lld references.. ", int64(max_references));
 				this->max_references = max_references;
@@ -104,40 +99,12 @@ namespace QuaSARQ {
 				cached_buckets = _buckets;
 				allocator.template resize_pinned<bucket_t>(pinned_buckets, max_buckets);
 				LOGDONE(2, 3);
-			}		
-		}
-
-		inline
-		void 		initiate	(const Circuit& circuit, const size_t& max_references, const size_t& max_buckets) {
-			if (!max_references)
-				LOGERROR("maximum number of references per window cannot be zero.");
-			if (!max_buckets)
-				LOGERROR("maximum number of buckets per window cannot be zero.");
-			if (max_references > MAX_QUBITS)
-				LOGERROR("maximum number of references is not supported.");
-			if (max_buckets > NO_REF)
-				LOGERROR("maximum number of buckets per window is not supported.");
-			if (this->max_references < max_references) {
-				LOGN2(2, "Resizing pinned window and device circuit of %lld resp. %lld references .. ", int64(max_references), circuit.num_gates());
-				this->max_references = max_references;
-				_references = allocator.template allocate<gate_ref_t>(circuit.num_gates());
-				cached_references = _references;
-				allocator.template resize_pinned<gate_ref_t>(pinned_references, max_references);
-				LOGDONE(2, 3);
-			}
-			if (this->max_buckets < max_buckets) {
-				LOGN2(2, "Resizing pinned window and device circuit of %lld resp. %lld buckets .. ", int64(max_buckets), circuit.num_buckets());
-				this->max_buckets = max_buckets;
-				_buckets = allocator.template allocate<bucket_t>(circuit.num_buckets());
-				cached_buckets = _buckets;
-				allocator.template resize_pinned<bucket_t>(pinned_buckets, max_buckets);
-				LOGDONE(2, 3);
 			}
 		}
 
 		inline
 		void 		copyfrom 	(Statistics& stats, const Circuit& circuit, const depth_t& depth_level
-								, const bool& reversed, const bool& sync, const bool& overlap, const cudaStream_t& s1, const cudaStream_t& s2) {
+								, const bool& reversed, const bool& sync, const cudaStream_t& s1, const cudaStream_t& s2) {
 			if (_references == nullptr)
                 LOGERROR("cannot copy empty references to device.");
 			if (_buckets == nullptr)
@@ -152,16 +119,14 @@ namespace QuaSARQ {
 			const auto* buckets = circuit.data(buckets_offset);
 			double ttime = 0;
 			if (sync) cutimer.start(s1);
-			if (overlap) {
-				LOGN2(1, "Copying %lld references (offset by %c%lld) and %lld buckets per depth level %lld %ssynchroneously.. ", 
-					int64(curr_num_references), reversed ? '-' : '+' , int64(num_references_prev), int64(curr_num_buckets), int64(depth_level), sync ? "" : "a");
-				copyhost(pinned_references, window, curr_num_references, gate_ref_t(0));
-			}
-			else {
-				LOGN2(1, "Copying %lld references and %lld buckets (offset by %c%lld) per depth level %lld %ssynchroneously.. ", 
-					int64(curr_num_references), int64(curr_num_buckets), reversed ? '-' : '+' , int64(buckets_offset), int64(depth_level), sync ? "" : "a");
-				copyhost(pinned_references, window, curr_num_references, buckets_offset);
-			}
+			LOGN2(1, "Copying %lld references and %lld buckets (offset by %c%lld) per depth level %lld %ssynchroneously.. ", 
+				int64(curr_num_references), 
+				int64(curr_num_buckets), 
+				reversed ? '-' : '+' , 
+				int64(buckets_offset), 
+				int64(depth_level), 
+				sync ? "" : "a");
+			copyhost(pinned_references, window, curr_num_references, buckets_offset);
 			CHECK(cudaMemcpyAsync(_references + num_references_prev, pinned_references, sizeof(gate_ref_t) * curr_num_references, cudaMemcpyHostToDevice, s1));
 			if (sync) { 
 				cutimer.stop(s1); 
@@ -170,10 +135,6 @@ namespace QuaSARQ {
 			}
 			copyhost(pinned_buckets, buckets, curr_num_buckets, bucket_t(0));
 			CHECK(cudaMemcpyAsync(_buckets + num_buckets_prev, pinned_buckets, BUCKETSIZE * curr_num_buckets, cudaMemcpyHostToDevice, s2));
-			if (overlap) {
-				num_references_prev += curr_num_references;
-				num_buckets_prev += curr_num_buckets;
-			}
 			if (sync) {
 				cutimer.stop(s2);
 				ttime += cutimer.time();

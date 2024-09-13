@@ -20,6 +20,7 @@ namespace QuaSARQ {
     typedef uint32 depth_t;
     typedef Vec<bucket_t, size_t> buckets_container;
     typedef Vec<gate_ref_t, size_t> Window;
+    typedef Vec<bool, size_t> Marker;
 
 
     constexpr depth_t MAX_DEPTH = -1;
@@ -55,7 +56,7 @@ namespace QuaSARQ {
 
         Vec<Window, depth_t> windows; 
         Vec<size_t, depth_t> nbuckets;
-
+        Marker               measuring_windows;
         size_t ngates;
 
     public:
@@ -78,6 +79,7 @@ namespace QuaSARQ {
             assert(sizeof(qubit_t) == BUCKETSIZE);
             assert(depth < MAX_DEPTH);
             windows.resize(depth); 
+            measuring_windows.resize(depth, false); 
             nbuckets.resize(depth, 0);
         }
 
@@ -115,6 +117,12 @@ namespace QuaSARQ {
         size_t     num_gates    (const depth_t& depth_level) const {
             assert(depth_level < MAX_DEPTH);
             return windows[depth_level].size();
+        }
+
+        inline
+        bool       is_measuring (const depth_t& depth_level) const { 
+            assert(depth_level < MAX_DEPTH);
+            return measuring_windows[depth_level]; 
         }
 
         inline
@@ -219,27 +227,19 @@ namespace QuaSARQ {
 			nbuckets[depth_level] += NBUCKETS(size);
 			assert(nbuckets[depth_level] <= num_buckets());
 			++ngates;
-			if (options.verbose > 1) {
-				LOGN2(2, "  Gate(d: %d, r = %d):", depth_level, r);
-				gate->print();
-			}
 			return gate;
         }
 
         inline
-            Gate* addGate       (const depth_t& depth_level, const byte_t& type, const input_size_t& size, const qubit_t& c, const qubit_t& t) {
+        Gate*       addGate     (const depth_t& depth_level, const byte_t& type, const qubit_t& c, const qubit_t& t = MAX_QUBITS) {
             assert(depth_level < MAX_DEPTH);
+            const input_size_t& size = input_size_t(t != MAX_QUBITS) + 1;
             const size_t buckets = NBUCKETS(size);
             gate_ref_t r = (gate_ref_t)buckets_container::alloc(buckets);
-            Gate* gate = GATE_PTR(r);
-            gate->size = size;
+            Gate* gate = new GATE_PTR(r) Gate();
             assert(gate->capacity() == buckets * sizeof(bucket_t));
             gate->type = type;
             gate->wires[0] = c;
-            if (c != t) {
-                assert(size > 1);
-                gate->wires[1] = t;
-            }
             if (windows.size() <= depth_level) {
                 windows.expand(depth_level + 1);
                 nbuckets.expand(depth_level + 1, 0);
@@ -247,12 +247,22 @@ namespace QuaSARQ {
             windows[depth_level].push(r);
             nbuckets[depth_level] += buckets;
             assert(nbuckets[depth_level] <= num_buckets());
-            ++ngates;
-            if (options.verbose > 1) {
-                LOGN2(2, "  Gate(d: %d, r = %d):", depth_level, r);
-                gate->print();
+            if (t != MAX_QUBITS) {
+                assert(size > 1);
+                gate->wires[1] = t;
+                gate->size = size;
             }
+            ++ngates;
             return gate;
+        }
+
+        inline 
+        void        markMeasure (const depth_t& depth_level) {
+            if (measuring_windows.size() <= depth_level) {
+                measuring_windows.expand(depth_level + 1, false);
+            }
+            if (!measuring_windows[depth_level]) 
+                measuring_windows[depth_level] = true;
         }
 
         inline
@@ -273,6 +283,24 @@ namespace QuaSARQ {
             nbuckets.clear(true);
             ngates = 0;
         }
+
+        inline
+        void        print       (const bool& only_measurements = false) {
+            for (depth_t d = 0; d < windows.size(); d++) {
+                if (only_measurements && !measuring_windows[d]) continue;
+                LOG1(" Depth %d%s:", d, measuring_windows[d] ? " (measuring window)" : "");
+                for (size_t i = 0; i < windows[d].size(); i++) {
+                    const gate_ref_t& r = windows[d][i];
+                    const Gate& g = gate(r);
+                    if (only_measurements && g.type != M) continue;
+                    LOGN1("  Gate(r = %d", r);
+                    if (g.type == M)
+                        PRINT(", p = %lld", g.pivot == MAX_QUBITS? int64(-1) : int64(g.pivot));
+                    PRINT("): ");
+                    gate(r).print();
+                }
+            }
+        } 
     };
 
 }

@@ -48,6 +48,16 @@ Gatetypes Simulator::get_rand_gate(const bool& multi_input, const bool& force_mu
     return type;
 }
 
+// Add measurements to circuit.
+void add_measurements(Circuit& circuit, Vec<qubit_t, size_t>& measurements, WindowInfo& winfo, const depth_t& depth_level) {
+    size_t num_gate_buckets_per_window = circuit.num_buckets();
+    for (size_t i = 0; i < measurements.size(); i++)
+        circuit.addGate(depth_level, M, measurements[i]);
+    measurements.clear();
+    circuit.markMeasure(depth_level);
+    winfo.max(circuit[depth_level].size(), (circuit.num_buckets() - num_gate_buckets_per_window));
+}
+
 void Simulator::generate() {
     assert(circuit_mode == RANDOM_CIRCUIT);
     if (!num_qubits) {
@@ -78,9 +88,12 @@ void Simulator::generate() {
     size_t* types = stats.circuit.gate_stats.types;
     size_t parallel_gates_per_window = 0;
     for (depth_t d = 0; d < depth; d++) {
-        LOG2(2, " Depth %d:", d);
         size_t num_gate_buckets_per_window = circuit.num_buckets();
-        size_t num_measurement_buckets_per_window = measurements.num_buckets();
+        // Add measurements to circuit if exist.
+        if (measurements.size()) {
+            add_measurements(circuit, measurements, winfo, d);
+            continue;
+        }
         // Shuffle qubits used for multi-input gates.
         shuffle_qubits();
         // Loop over all qubits with these assumptions:
@@ -90,7 +103,7 @@ void Simulator::generate() {
             if (!locked[q]) {
                 Gatetypes type = get_rand_gate();
                 assert(type < NR_GATETYPES);
-                assert(type < 256);             
+                assert(type < 256);    
                 // 0: q (control), 1: target.
                 Gate_inputs gate_inputs;
                 gate_inputs.push(q);
@@ -111,9 +124,16 @@ void Simulator::generate() {
                         locked[gate_inputs[1]] = 1;
                     }                 
                 }
-                Circuit& container = (type != M) ? circuit : measurements;
-                if (type == M) measuring = true;
-                container.addGate(d, type, gate_inputs);
+                if (type == M) {
+                    if (d < depth - 1) {
+                        measurements.push(q);
+                        measuring = true;
+                    }
+                    else
+                        continue;
+                }
+                else  
+                    circuit.addGate(d, type, gate_inputs);
                 // This lock is necessary to avoid generating
                 // same control qubit as target.
                 locked[q] = 1;
@@ -129,14 +149,15 @@ void Simulator::generate() {
         locked.reset();
         parallel_gates_per_window = 0;
         assert(circuit.num_buckets() >= num_gate_buckets_per_window);
-        ginfo.max(circuit[d].size(), (circuit.num_buckets() - num_gate_buckets_per_window));
-        minfo.max(measurements[d].size(), (measurements.num_buckets() - num_measurement_buckets_per_window));
+        assert(circuit.depth() > d);
+        winfo.max(circuit[d].size(), (circuit.num_buckets() - num_gate_buckets_per_window));
     }
-    assert(circuit.depth() == depth);
+    assert(circuit.depth() <= depth + 1);
     stats.circuit.num_gates = MAX(stats.circuit.num_gates, circuit.num_gates());
     stats.circuit.bytes = stats.circuit.num_gates * sizeof(gate_ref_t) + circuit.num_buckets() * BUCKETSIZE;
     shuffled.clear(true);
     locked.clear(true);
+    measurements.clear(true);
     timer.stop();
     stats.time.schedule = timer.time();
     LOGDONE(1, 2);
@@ -144,7 +165,9 @@ void Simulator::generate() {
     CREPORTVAL, circuit.num_gates(), CNORMAL, 
     CREPORTVAL, stats.circuit.max_parallel_gates, CNORMAL);
     if (options.write_rc)
-        circuit_io.write(circuit, measurements, num_qubits, options.write_rc, stats);
+        circuit_io.write(circuit, num_qubits, options.write_rc, stats);
+    if (options.verbose > 1)
+        circuit.print();
 }
 
 size_t Simulator::parse(Statistics& stats, const char* path) {
@@ -186,29 +209,42 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
     locked.resize(num_qubits, 0);
     Vec<qubit_t, qubit_t> locked_qubits;
     locked_qubits.reserve(num_qubits);
-    circuit.init_depth(stats.circuit.num_gates / 2);  
+    circuit.init_depth(stats.circuit.num_gates / 2);
     size_t max_depth = 0;
     size_t parallel_gates_per_window = 0;
     // To prevent stagnation if empty wires exist per depth level.
     // In that scenario, locked qubits will never reach a fixpoint.
     qubit_t last_num_locked_qubits = 0;
     qubit_t max_locked_qubits = 0;
-    while (max_depth < MAX_DEPTH && !circuit_io.circuit_queue.empty()) {
+    for (; max_depth < MAX_DEPTH && !circuit_io.circuit_queue.empty(); max_depth++) {
 
         size_t num_gate_buckets_per_window = circuit.num_buckets();
-        size_t num_measurement_buckets_per_window = measurements.num_buckets();
+
+        // Add measurements to circuit if exist.
+        if (measurements.size()) {
+            for (size_t i = 0; i < measurements.size(); i++)
+                circuit.addGate(max_depth, M, measurements[i]);
+            measurements.clear();
+            circuit.markMeasure(max_depth);
+            winfo.max(circuit[max_depth].size(), (circuit.num_buckets() - num_gate_buckets_per_window));
+            continue;
+        }
 
         // Forall gates in order find an independent gate.
         while (!circuit_io.circuit_queue.empty()) {
-                const Parsed_gate gate = circuit_io.circuit_queue.front();
+                const ParsedGate gate = circuit_io.circuit_queue.front();
                 const qubit_t c = gate.c;
                 const qubit_t t = gate.t;
                 const bool is_c_unlocked = !locked[c];
                 if (c == t) {
                     if (is_c_unlocked) {
                         circuit_io.circuit_queue.pop_front();
-                        Circuit& container = (gate.type != M) ? circuit : measurements;
-                        container.addGate(max_depth, gate.type, 1, c, t);
+                        if (gate.type == M) {
+                            measurements.push(c);
+                            measuring = true;
+                        }
+                        else     
+                            circuit.addGate(max_depth, gate.type, c);
                         locked_qubits.push(c);
                         locked[c] = 1;
                         if (gate.type != I) {
@@ -222,7 +258,7 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
                     if (is_c_unlocked && is_t_unlocked) {
                         circuit_io.circuit_queue.pop_front();
                         assert(gate.type != M);
-                        circuit.addGate(max_depth, gate.type, 2, c, t);
+                        circuit.addGate(max_depth, gate.type, c, t);
                         locked_qubits.push(c);
                         locked_qubits.push(t);
                         locked[c] = 1;
@@ -246,7 +282,7 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
                     }
                 }
                 // If this is true, we know that no more gates
-                // can be scheduled at the same depth. Thus, 
+                // can be scheduled at themax_depth++; same depth. Thus, 
                 // we have to start a new depth level.
                 // In other words, all gates in between 0 and n - 1
                 // have been already scheduled if they are not locked.
@@ -255,6 +291,7 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
                     break;
                 last_num_locked_qubits = max_locked_qubits;
         }
+        max_depth++;
 
         stats.circuit.max_parallel_gates = MAX(stats.circuit.max_parallel_gates, parallel_gates_per_window);
 
@@ -268,10 +305,7 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
         }
     
         assert(circuit.num_buckets() >= num_gate_buckets_per_window);
-        ginfo.max(circuit[max_depth].size(), (circuit.num_buckets() - num_gate_buckets_per_window));
-        minfo.max(measurements[max_depth].size(), (measurements.num_buckets() - num_measurement_buckets_per_window));
-
-        max_depth++;
+        winfo.max(circuit[max_depth].size(), (circuit.num_buckets() - num_gate_buckets_per_window));
     }
     timer.stop();
     stats.time.schedule = timer.time();

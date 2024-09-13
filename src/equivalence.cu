@@ -52,8 +52,6 @@ namespace QuaSARQ {
 
     bool Equivalence::check(const size_t& p, const cudaStream_t* streams, const cudaStream_t* other_streams) {
 
-        assert(!options.overlap);
-
         double stime = 0;
         cudaStream_t copy_stream1 = streams[COPY_STREAM1];
         cudaStream_t copy_stream2 = streams[COPY_STREAM2];
@@ -85,7 +83,7 @@ namespace QuaSARQ {
             if (p < num_partitions && d < depth) {
                 LOGN2(1, "Partition %zd: ", p);
                 if (d > 0) SYNC(kernel_stream);
-                gpu_circuit.copyfrom(stats, circuit, d, false, options.sync, false, copy_stream1, copy_stream2);
+                gpu_circuit.copyfrom(stats, circuit, d, false, options.sync, copy_stream1, copy_stream2);
                 num_gates_per_window = circuit[d].size();
                 print_gates(gpu_circuit, num_gates_per_window, d);
             }
@@ -94,7 +92,7 @@ namespace QuaSARQ {
             if (p < other_num_partitions && d < other_depth) {
                 LOGN2(1, "Partition %zd: ", p);
                 if (d > 0) SYNC(other_kernel_stream);
-                other_gpu_circuit.copyfrom(other_stats, other_circuit, d, false, options.sync, false, other_copy_stream1, other_copy_stream2);
+                other_gpu_circuit.copyfrom(other_stats, other_circuit, d, false, options.sync, other_copy_stream1, other_copy_stream2);
                 other_num_gates_per_window = other_circuit[d].size();
                 print_gates(other_gpu_circuit, other_num_gates_per_window, d);
             }

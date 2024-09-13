@@ -30,21 +30,21 @@ namespace QuaSARQ {
 
     struct Gate {
         byte_t type;
-        byte_t random;
         input_size_t size;
+        qubit_t pivot;
         qubit_t wires[0];
 
         INLINE_ALL 
-        Gate() : type(I), random(0), size(1) { }
+        Gate() : type(I), size(1), pivot(MAX_QUBITS) { }
 
         INLINE_ALL 
         explicit Gate(const input_size_t& size) : 
-            type(I), random(0), size(size) { }
+            type(I), size(size), pivot(MAX_QUBITS) { }
 
 		INLINE_ALL size_t capacity() const { assert(size); return size_t(size) * sizeof(qubit_t) + sizeof(*this); }
 
         INLINE_ALL
-        void print() const {
+        void print(const bool& nonl = false) const {
             if (type < NR_GATETYPES) {
                 LOGGPU("  %s(", G2S[type]);
             }
@@ -56,7 +56,8 @@ namespace QuaSARQ {
                 if (i < size - 1)
                     LOGGPU(",");
             }
-            LOGGPU(")\n");
+            if (type == M) LOGGPU(", p: %d", pivot);
+            LOGGPU(")%s", nonl ? "" : "\n");
         }
  
     };

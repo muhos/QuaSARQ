@@ -165,8 +165,6 @@ namespace QuaSARQ {
 
         INLINE_ALL Table* ptable() const { assert(_ps != nullptr); return _ps; }
 
-        INLINE_ALL sign_t* signs_data() const { assert(_ss_data != nullptr); return _ss_data; }
-
         bool is_table_identity() const {
             Table tmp;
             CHECK(cudaMemcpy(&tmp, _ps, sizeof(Table), cudaMemcpyDeviceToHost));
@@ -188,6 +186,7 @@ namespace QuaSARQ {
         word_t* _xs_data;
         word_t* _zs_data;
         sign_t* _ss_data;
+        byte_t* _auxiliary;
 
         size_t _num_words;
         size_t _num_qubits_padded;
@@ -199,7 +198,7 @@ namespace QuaSARQ {
         size_t _num_partitions;
 
         // Tableau extension to (2n) for measurements.
-        size_t _extension;
+        size_t _ext_num_qubits;
 
     public:
 
@@ -211,11 +210,12 @@ namespace QuaSARQ {
         ,   _xs_data(nullptr)
         ,   _zs_data(nullptr)
         ,   _ss_data(nullptr)
+        ,   _auxiliary(nullptr)
         ,   _num_words(0)
         ,   _num_qubits_padded(0)
         ,   _num_words_per_column(0)
         ,   _num_partitions(1)
-        ,   _extension(1)
+        ,   _ext_num_qubits(0)
         { }
 
         size_t alloc(const size_t& num_qubits, const size_t& max_window_bytes, const bool& measuring = false, const size_t& forced_num_partitions = 0) {
@@ -230,8 +230,8 @@ namespace QuaSARQ {
             LOGN2(1, "Allocating tableau for %s%lld qubits%s.. ", CREPORTVAL, int64(num_qubits), CNORMAL);
             size_t cap_before = allocator.gpu_capacity();
             // Partition the tableau if needed.
-            _extension = measuring ? 2 : 1;
-            const size_t num_words_per_column_whole_tableau = get_num_words(num_qubits * _extension);
+            _ext_num_qubits = measuring ? (2 * num_qubits) : num_qubits;
+            const size_t num_words_per_column_whole_tableau = get_num_words(_ext_num_qubits);
             _num_qubits_padded = get_num_padded_bits(num_qubits);
             _num_words_per_column = num_words_per_column_whole_tableau;
             _num_words = _num_words_per_column * _num_qubits_padded;
@@ -258,7 +258,7 @@ namespace QuaSARQ {
                 LOGERRORN("insufficient memory");
                 throw GPU_memory_exception();
             }
-            assert(_num_partitions == 1 && _num_words_per_column == get_num_words(num_qubits * _extension)
+            assert(_num_partitions == 1 && _num_words_per_column == get_num_words(_ext_num_qubits)
                 || _num_partitions > 1 && _num_partitions * _num_words_per_column >= num_words_per_column_whole_tableau);
             
             // Create host pinned-memory objects to hold GPU pointers.
@@ -285,6 +285,11 @@ namespace QuaSARQ {
             const size_t num_sign_words = _num_words_per_column;
             _ss_data = allocator.template allocate<sign_t>(num_sign_words);        
             assert(_ss_data != nullptr);
+
+            if (measuring) {
+                _auxiliary = allocator.template allocate<byte_t>(max_padded_bits_two_tables + 1);        
+                assert(_auxiliary != nullptr);
+            }
 
             // bind the allocated GPU pointers to the host object,
             // then transfer it to the GPU.
@@ -332,9 +337,7 @@ namespace QuaSARQ {
 
         INLINE_ALL Table* ztable() const { assert(_zs != nullptr); return _zs; }
 
-        INLINE_ALL sign_t* signs_data() const { assert(_ss_data != nullptr); return _ss_data; }
-
-        INLINE_ALL word_t* xtable_data() const { assert(_xs_data != nullptr); return _xs_data; }
+        INLINE_ALL byte_t* auxiliary() const { assert(_auxiliary != nullptr); return _auxiliary; }
 
         bool is_table_identity() const {
             Table tmp_zs, tmp_xs;

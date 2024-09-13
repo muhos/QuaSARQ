@@ -21,7 +21,7 @@ Equivalence::Equivalence() :
         assert(!circuit.empty());
         create_streams(other_custreams);
         inject();
-        gpu_allocator.resize_cpu_pool(ginfo.max_window_bytes + other_wininfo.max_window_bytes + KB * 2);
+        gpu_allocator.resize_cpu_pool(winfo.max_window_bytes + other_wininfo.max_window_bytes + KB * 2);
     }
 
 Equivalence::Equivalence(const string& path_to_circuit, const string& path_to_other) :
@@ -45,12 +45,12 @@ Equivalence::Equivalence(const string& path_to_circuit, const string& path_to_ot
             stats.time.initial += other_stats.time.initial;
             stats.time.schedule += other_stats.time.schedule;
         }
-        gpu_allocator.resize_cpu_pool(ginfo.max_window_bytes + other_wininfo.max_window_bytes + KB * 2);
+        gpu_allocator.resize_cpu_pool(winfo.max_window_bytes + other_wininfo.max_window_bytes + KB * 2);
     }
 
 void Equivalence::inject() {
     circuit.copyTo(other_circuit);
-    other_wininfo = ginfo;
+    other_wininfo = winfo;
     other_num_qubits = num_qubits;
     other_depth = depth;
     other_stats = stats;
@@ -88,14 +88,14 @@ bool Equivalence::check(const InitialState& istate, const size_t& num_qubits_per
             assert(prev_num_qubits < num_qubits);
             LOGN2(1, "Partition %zd: ", p);
             identity(tableau, prev_num_qubits, (p == num_partitions - 1) ? (num_qubits - prev_num_qubits) : num_qubits_per_partition, custreams, istate);
-            gpu_circuit.reset_circuit_offsets(0, 0, false);
+            gpu_circuit.reset_circuit_offsets(0, 0);
         }
         if (p < other_num_partitions) {
             const size_t other_prev_num_qubits = other_num_qubits_per_partition * p;
             assert(other_prev_num_qubits < other_num_qubits);
             LOGN2(1, "Partition %zd: ", p);
             identity(other_tableau, other_prev_num_qubits, (p == other_num_partitions - 1) ? (other_num_qubits - other_prev_num_qubits) : other_num_qubits_per_partition, other_custreams, istate);
-            other_gpu_circuit.reset_circuit_offsets(0, 0, false);
+            other_gpu_circuit.reset_circuit_offsets(0, 0);
         }
         if (check(p, custreams, other_custreams)) {
             all_equivalent++;
@@ -124,13 +124,13 @@ void Equivalence::check() {
     // Create two tableaus in GPU memory.
     Power power;
     timer.start();
-    size_t estimated_num_partitions = get_num_partitions(2, num_qubits, ginfo.max_window_bytes + other_wininfo.max_window_bytes, gpu_allocator.gpu_capacity());
-    num_partitions = tableau.alloc(num_qubits, ginfo.max_window_bytes, estimated_num_partitions);
+    size_t estimated_num_partitions = get_num_partitions(2, num_qubits, winfo.max_window_bytes + other_wininfo.max_window_bytes, gpu_allocator.gpu_capacity());
+    num_partitions = tableau.alloc(num_qubits, winfo.max_window_bytes, estimated_num_partitions);
     other_num_partitions = other_tableau.alloc(other_num_qubits, other_wininfo.max_window_bytes, estimated_num_partitions);
     assert(num_partitions == other_num_partitions);
     const size_t num_qubits_per_partition = num_partitions > 1 ? tableau.num_words_per_column() * WORD_BITS : num_qubits;
     const size_t other_num_qubits_per_partition = other_num_partitions > 1 ? other_tableau.num_words_per_column() * WORD_BITS : other_num_qubits;
-    gpu_circuit.initiate(ginfo.max_parallel_gates, ginfo.max_parallel_gates_buckets);
+    gpu_circuit.initiate(winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
     other_gpu_circuit.initiate(other_wininfo.max_parallel_gates, other_wininfo.max_parallel_gates_buckets);
     timer.stop();
     stats.time.initial += timer.time();

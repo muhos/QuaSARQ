@@ -2,6 +2,7 @@
 #define __SIMULATOR_H
 
 #include "vector.cuh"
+#include "locker.cuh"
 #include "tableau.cuh"
 #include "circuit.cuh"
 #include "timer.cuh"
@@ -27,20 +28,20 @@ namespace QuaSARQ {
         depth_t                         depth;
         Random                          random;
         Circuit                         circuit;
-        Circuit                         measurements;
         CircuitIO                       circuit_io;
         string                          circuit_path;
         byte_t                          circuit_mode;
+        Vec<qubit_t, size_t>            measurements;
         Vec<qubit_t, size_t>            shuffled;
         Vec<byte_t, size_t>             locked;
         DeviceAllocator                 gpu_allocator;
-        Tableau<DeviceAllocator>        tableau;
         DeviceCircuit<DeviceAllocator>  gpu_circuit;
-        DeviceCircuit<DeviceAllocator>  gpu_measurements;
+        Locker<DeviceAllocator>         locker;
+        Tableau<DeviceAllocator>        tableau;
         Statistics                      stats;
         FILE*                           configfile;
         cudaStream_t*                   custreams;
-        WindowInfo                      ginfo, minfo;
+        WindowInfo                      winfo;
         bool                            measuring;
         
         enum { 
