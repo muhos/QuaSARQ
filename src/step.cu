@@ -1,10 +1,10 @@
 #include "simulator.hpp"
 #include "step.cuh"
 #include "tuner.cuh"
-#include "collapse.cuh"
 #include "operators.cuh"
 #include "macros.cuh"
 #include "locker.cuh"
+#include "warp.cuh"
 
 namespace QuaSARQ {
 
@@ -222,125 +222,76 @@ namespace QuaSARQ {
 
     }
 
-
-
     __global__ void is_indeterminate_outcome(const gate_ref_t* refs, bucket_t* measurements, Table* xs, Table* zs, Signs* ss, DeviceLocker* dlocker, const size_t num_qubits, const size_t num_gates, const size_t num_words_per_column) {
 
         for_parallel_y(i, num_gates) {
-
             const gate_ref_t r = refs[i];
-
             assert(r < NO_REF);
-
             Gate& m = (Gate&) measurements[r];
-
             assert(m.size == 1);
-
-            const size_t q = m.wires[0];
-
-            for_parallel_x(j, num_qubits) {
-                // Check stabilizers if Xgq has 1, if so save the minimum j.
-                const size_t word_off = j + num_qubits;
-                const size_t word_idx = q * num_words_per_column + WORD_OFFSET(word_off);
-                const word_std_t word = (*xs)[word_idx];
-                if (word & POW2(word_off)) {
-                    // Find the minimum ranking thread (generator).
-                    atomicAggMin(&(m.pivot), uint32(j));
-                    // dlocker->lock();
-                    // m.print();
-                    // printf("(%lld, %lld): Found generator %lld with indeterminate outcome on qubit %lld\n", i, j, j, int64(q));
-                    // dlocker->unlock();
+            const size_t col = m.wires[0] * num_words_per_column;
+            for_parallel_x(j, num_words_per_column) {
+                // Check stabilizers if Xgq has 1, if so save the minimum row index.
+                const word_std_t word = (*xs)[col + j];
+                if (word) {
+                    const int64 generator_index = GET_GENERATOR_INDEX(word, j);
+                    //printf("(%lld, %lld): ffs in word(" B2B_STR ") = %d, generator index = %lld\n", i, j, RB2B(word), bit_index_per_word, generator_index);
+                    // Find the minimum generator.
+                    if (generator_index >= num_qubits)
+                        atomicMin(&(m.pivot), uint32(generator_index - num_qubits));
                 }
+            }
+        }
+
+    }
+
+    __global__ void measure_determinate(const gate_ref_t* refs, bucket_t* measurements, Table* xs, Table* zs, Signs* ss, uint32* aux_sign, byte_t* aux, DeviceLocker* dlocker, const size_t num_qubits, const size_t num_gates, const size_t num_words_per_column) {
+        
+        uint32* shared_signs = SharedMemory<uint32>();
+
+        for_parallel_y(i, num_gates) {
+            const gate_ref_t r = refs[i];
+            assert(r < NO_REF);
+            Gate& m = (Gate&) measurements[r];
+            // Consdier only determinate measures.
+            if (m.pivot == MAX_QUBITS) {
+                assert(m.size == 1);
+                measure_determinate_qubit(*dlocker, m, *xs, *zs, *ss, shared_signs, aux, num_qubits, num_words_per_column);
             }
         }
     }
 
-    __device__ void rowcopy(byte_t* aux, const Table* xs, const Table* zs, const Signs* ss, const size_t& src_idx, const size_t& num_qubits, const size_t& num_words_per_column) {
+    __global__ void measure_indeterminate(const gate_ref_t* refs, bucket_t* measurements, Table* xs, Table* zs, Signs* ss, byte_t* aux, DeviceLocker* dlocker, const size_t num_qubits, const size_t num_gates, const size_t num_words_per_column) {
         
-        const word_std_t generator_mask = POW2(src_idx);
-        const word_std_t shifts = (src_idx & WORD_MASK);
-        word_std_t word = 0;
-
-        for_parallel_x(q, num_qubits) {
-            const size_t word_idx = q * num_words_per_column + WORD_OFFSET(src_idx);
-            word = (*xs)[word_idx];
-            aux[q] = (word & generator_mask) >> shifts;
-            word = (*zs)[word_idx];
-            aux[q + num_qubits] = (word & generator_mask) >> shifts;
-            if (q == num_qubits - 1)
-                aux[num_qubits + num_qubits] = ((*ss)[WORD_OFFSET(src_idx)] & generator_mask) >> shifts;
-        }
-    }
-
-    __device__ void print_row(DeviceLocker* dlocker, const Table* xs, const Table* zs, const Signs* ss, const size_t& src_idx, const size_t& num_qubits, const size_t& num_words_per_column) {
-        dlocker->lock();
-        LOGGPU("Row(%lld):", src_idx);
-        for (size_t i = 0; i < num_qubits; i++)
-            LOGGPU("%d", bool(word_std_t((*xs)[i * num_words_per_column + WORD_OFFSET(src_idx)]) & POW2(src_idx)));
-        LOGGPU(" ");
-        for (size_t i = 0; i < num_qubits; i++)
-            LOGGPU("%d", bool(word_std_t((*zs)[i * num_words_per_column + WORD_OFFSET(src_idx)]) & POW2(src_idx)));
-        LOGGPU(" ");
-        LOGGPU("%d\n\n", bool(word_std_t((*ss)[WORD_OFFSET(src_idx)]) & POW2(src_idx)));
-        dlocker->unlock();
-    }
-
-    __device__ void print_row(DeviceLocker* dlocker, const byte_t* aux, const size_t& num_qubits) {
-        dlocker->lock();
-        LOGGPU("Auxiliary: ");
-        for (size_t i = 0; i < num_qubits; i++)
-            LOGGPU("%d", aux[i]);
-        LOGGPU(" ");
-        for (size_t i = 0; i < num_qubits; i++)
-            LOGGPU("%d", aux[i + num_qubits]);
-        LOGGPU(" ");
-        LOGGPU("%d\n\n", aux[num_qubits + num_qubits]);
-        dlocker->unlock();
-    }
-
-    __global__ void measure_determinate(const gate_ref_t* refs, bucket_t* measurements, Table* xs, Table* zs, Signs* ss, byte_t* aux, DeviceLocker* dlocker, const size_t num_qubits, const size_t num_gates, const size_t num_words_per_column) {
-        
-        for_parallel_y(i, num_gates) {
-
+        for(size_t i = 0; i < num_gates; i++) {
             const gate_ref_t r = refs[i];
-
             assert(r < NO_REF);
-
             Gate& m = (Gate&) measurements[r];
-
-            // Consdier only determinate measures.
-            if (m.pivot == MAX_QUBITS) {
-
-                m.print();
-
+            if (m.pivot != MAX_QUBITS) {
                 assert(m.size == 1);
-
-                const size_t q = m.wires[0];
-
-                size_t j = 0, k = 0;
-                size_t word_idx = 0;
+                const size_t col = m.wires[0] * num_words_per_column;
                 word_std_t word = 0;
-                for (j = 0; j < num_qubits; j++) {
-                    // Multiply stabilizer j with stabilizer k iff destabilizer Xjq has 1 and destabilizer Xkq has 1.
-                    word_idx = q * num_words_per_column + WORD_OFFSET(j);
-                    word = (*xs)[word_idx];
-                    if (word & POW2(j)) {
-                        print_row(dlocker, xs, zs, ss, j + num_qubits, num_qubits, num_words_per_column);
-                        rowcopy(aux, xs, zs, ss, j + num_qubits, num_qubits, num_words_per_column);
-                        print_row(dlocker, aux, num_qubits);
-                        for (k = j + 1; i < num_qubits; i++) {
-                            word_idx = q * num_words_per_column + WORD_OFFSET(k);
-                            word = (*xs)[word_idx];
-                            if (word & POW2(k)) {
-                                //rowmult(aux, xs, zs, ss, k + num_qubits, num_qubits, num_words_per_column);
-                            }
-                        }
-                        // Check auxiliary sign and store thr outcome in m.
-
-                        break;
-                    }
+                // Check again if this gate changed to determinate.
+                bool is_determinate = true;
+                for_parallel_x(j, num_words_per_column) {
+                    const word_std_t word = (*xs)[col + j];
+                    printf("(%lld, %lld): word(" B2B_STR ")\n", i, j, RB2B(word));
                 }
-
+                // for (size_t j = 0; j < num_words_per_column; j++) {
+                //     // Check if all stabilizers are zero.
+                //     const word_std_t word = (*xs)[col + j];
+                //     if (word) {
+                //         const int64 generator_index = GET_GENERATOR_INDEX(word, j);
+                //         //printf("(%lld, %lld): ffs in word(" B2B_STR ") = %d, generator index = %lld\n", i, j, RB2B(word), bit_index_per_word, generator_index);
+                //         if (generator_index >= num_qubits) {
+                //             is_determinate = false;
+                //             break;
+                //         }
+                //     }
+                // }
+                // if (is_determinate) {
+                //     measure_determinate_qubit(*dlocker, *xs, *zs, *ss, aux, m.wires[0], num_qubits, num_words_per_column);
+                // }
             }
         }
     }
@@ -362,79 +313,85 @@ namespace QuaSARQ {
 
         print_gates(gpu_circuit, num_gates_per_window, depth_level);
 
-    #if DEBUG_STEP
+        if (!circuit.is_measuring(depth_level)) {
 
-        LOG1(" Debugging at %sdepth %2d:", reversed ? "reversed " : "", depth_level);
-        OPTIMIZESHARED(reduce_smem_size, bestBlockStep.y * bestBlockStep.x, shared_element_bytes);
-        step_2D << < dim3(1, 1), dim3(1, 1), reduce_smem_size >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_per_column, tableau.xtable(), tableau.ztable(), tableau.signs());
-        LASTERR("failed to launch step kernel");
-        SYNCALL;
+            #if DEBUG_STEP
 
-    #else
-
-        if (options.tune_step) {
-            tune_kernel
-            (
-            #if TUNE_WARPED_VERSION
-                step_2D_warped, "step warped"
-            #else
-                step_2D, "step"
-            #endif
-                // best kernel config to be found. 
-                , bestBlockStep, bestGridStep
-                // shared memory size.
-                , shared_element_bytes, true
-                // data length.         
-                , num_gates_per_window, num_words_per_column
-                // kernel arguments.
-                , gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_per_column, XZ_TABLE(tableau), tableau.signs()
-            );
-        }
-
-        LOGN2(1, "Partition %zd, step %d: Simulating %s using grid(%d, %d) and block(%d, %d).. ", 
-            p, depth_level, !options.sync ? "asynchronously" : "",
-            bestGridStep.x, bestGridStep.y, bestBlockStep.x, bestBlockStep.y);
-
-        if (options.sync) cutimer.start();
-
-        OPTIMIZESHARED(reduce_smem_size, bestBlockStep.y * bestBlockStep.x, shared_element_bytes);
-        // sync data transfer.
-        SYNC(copy_stream1);
-        SYNC(copy_stream2);
-
-        // Run simulation.
-        if (bestBlockStep.x > maxWarpSize)
-            step_2D << < bestGridStep, bestBlockStep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_per_column, XZ_TABLE(tableau), tableau.signs());
-        else
-            step_2D_warped << < bestGridStep, bestBlockStep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_per_column, XZ_TABLE(tableau), tableau.signs());
-
-        if (options.sync) { 
+            LOG1(" Debugging at %sdepth %2d:", reversed ? "reversed " : "", depth_level);
+            OPTIMIZESHARED(reduce_smem_size, 1, shared_element_bytes);
+            step_2D << < dim3(1, 1), dim3(1, 1), reduce_smem_size >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_per_column, tableau.xtable(), tableau.ztable(), tableau.signs());
             LASTERR("failed to launch step kernel");
-            cutimer.stop();
-            stime = cutimer.time();
-        }
+            SYNCALL;
+            #else
 
-        if (options.sync) {
-            LOG2(1, "done in %f ms", stime);
-        }
-        else LOGDONE(1, 3);
+            if (options.tune_step) {
+                tune_kernel
+                (
+                #if TUNE_WARPED_VERSION
+                    step_2D_warped, "step warped"
+                #else
+                    step_2D, "step"
+                #endif
+                    // best kernel config to be found. 
+                    , bestBlockStep, bestGridStep
+                    // shared memory size.
+                    , shared_element_bytes, true
+                    // data length.         
+                    , num_gates_per_window, num_words_per_column
+                    // kernel arguments.
+                    , gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_per_column, XZ_TABLE(tableau), tableau.signs()
+                );
+            }
 
-    #endif // End of debug/release mode.
+            LOGN2(1, "Partition %zd, step %d: Simulating %s using grid(%d, %d) and block(%d, %d).. ", 
+                p, depth_level, !options.sync ? "asynchronously" : "",
+                bestGridStep.x, bestGridStep.y, bestBlockStep.x, bestBlockStep.y);
 
-        if (options.print_step_tableau)
-            print_tableau(tableau, depth_level, reversed);
-        if (options.print_step_state)
-            print_paulis(tableau, depth_level, reversed);
+            OPTIMIZESHARED(reduce_smem_size, bestBlockStep.y * bestBlockStep.x, shared_element_bytes);
 
-        if (circuit.is_measuring(depth_level)) {
+            // sync data transfer.
+            SYNC(copy_stream1);
+            SYNC(copy_stream2);
+
+            if (options.sync) cutimer.start();
+
+            // Run simulation.
+            if (bestBlockStep.x > maxWarpSize)
+                step_2D << < bestGridStep, bestBlockStep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_per_column, XZ_TABLE(tableau), tableau.signs());
+            else
+                step_2D_warped << < bestGridStep, bestBlockStep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_per_column, XZ_TABLE(tableau), tableau.signs());
+
+            if (options.sync) { 
+                LASTERR("failed to launch step kernel");
+                cutimer.stop();
+                stime = cutimer.time();
+            }
+            if (options.sync) {
+                LOG2(1, "done in %f ms", stime);
+            }
+            else LOGDONE(1, 3);
+
+            #endif 
+
+            if (options.print_step_tableau)
+                print_tableau(tableau, depth_level, reversed);
+            if (options.print_step_state)
+                print_paulis(tableau, depth_level, reversed);
+        } // END of non-measuring simulation.
+        else {
             SYNCALL; // just for debugging
             printf("\ndepth %d has %d measurements\n", depth_level, num_gates_per_window);
             fflush(stdout);
             if (!depth_level) locker.reset(0);
             is_indeterminate_outcome<<<bestGridStep, bestBlockStep>>>(gpu_circuit.references(), gpu_circuit.gates(), XZ_TABLE(tableau), tableau.signs(), locker.deviceLocker(), num_qubits, num_gates_per_window, num_words_per_column);
-            print_gates(gpu_circuit, num_gates_per_window, depth_level);
-            measure_determinate<<<1, 1>>>(gpu_circuit.references(), gpu_circuit.gates(), XZ_TABLE(tableau), tableau.signs(), tableau.auxiliary(), locker.deviceLocker(), num_qubits, num_gates_per_window, num_words_per_column);
+            printf("After checking determinism: "), print_gates(gpu_circuit, num_gates_per_window, depth_level);
+            SYNCALL;
+            OPTIMIZESHARED(reduce_smem_size, bestBlockStep.y * bestBlockStep.x, sizeof(uint32));
+            measure_determinate<<<bestGridStep, bestBlockStep, reduce_smem_size, 0>>>(gpu_circuit.references(), gpu_circuit.gates(), XZ_TABLE(tableau), tableau.signs(), tableau.auxiliary_sign(), tableau.auxiliary(), locker.deviceLocker(), num_qubits, num_gates_per_window, num_words_per_column);
+            printf("After determinate measuring: "), print_gates(gpu_circuit, num_gates_per_window, depth_level);
             SYNCALL; // just for debugging
+            //measure_indeterminate<<<1, 4>>>(gpu_circuit.references(), gpu_circuit.gates(), XZ_TABLE(tableau), tableau.signs(), tableau.auxiliary(), locker.deviceLocker(), num_qubits, num_gates_per_window, num_words_per_column);
+            //SYNCALL; // just for debugging
         }
 
     } // End of function.

@@ -1,0 +1,292 @@
+
+CHP: Efficient Simulator for Stabilizer Quantum Circuits
+by Scott Aaronson
+Measuring qubit 0
+row(20):
++ZIIIIIIIIIIIIIIIIIII
+
+Outcome of measuring qubit 0: 0
+Measuring qubit 5
+row(25):
++IIIIIZIIIIIIIIIIIIII
+
+Outcome of measuring qubit 5: 0
+Measuring qubit 6
+row(26):
++IIIIIIZIIIIIIIIIIIII
+
+Outcome of measuring qubit 6: 0
+Measuring qubit 9
+row(29):
++IIIIIIIIIZIIIIIIIIII
+
+Outcome of measuring qubit 9: 0
+Measuring qubit 11
+row(31):
++IIIIIIIIIIIZIIIIIIII
+
+Outcome of measuring qubit 11: 0
+Measuring qubit 13
+row(33):
++IIIIIIIIIIIIIZIIIIII
+
+Outcome of measuring qubit 13: 0
+Measuring qubit 0
+row(20):
++ZIIIIIIIIIIIIIIIIIII
+
+Outcome of measuring qubit 0: 0
+Measuring qubit 2
+row(22):
++IIZIIIIIIIIIIIIIIIII
+
+Outcome of measuring qubit 2: 0
+Measuring qubit 8
+row(28):
++IIIIIIIIZIIIIIIIIIII
+
+Outcome of measuring qubit 8: 0
+Measuring qubit 11
+row(31):
++IIIIIIIIIIIZIIIIIIII
+
+Outcome of measuring qubit 11: 0
+qubit 1 is random on generator 1
+0
+Measuring qubit 3
+row(23):
++IIIZIIIIIIIIIIIIIIII
+
+Outcome of measuring qubit 3: 0
+qubit 5 is random on generator 5
+0
+Measuring qubit 11
+row(31):
++IIIIIIIIIIIZIIIIIIII
+
+Outcome of measuring qubit 11: 0
+Measuring qubit 13
+row(33):
++IIIIIIIIIIIIIZIIIIII
+
+Outcome of measuring qubit 13: 0
+Measuring qubit 15
+row(23):
++IIIZIIIIIIIIIIIIIIII
+row(35):
++IIIZIIIIIIIIIIIZIIII
+scratch:
+0IIIIIIIIIIIIIIIZIIII
+
+Outcome of measuring qubit 15: 0
+Measuring qubit 17
+row(21):
++IXIIIIIIIIIIIIIIIIII
+row(29):
++ZIIIIIIIIZIIIIIIIIII
+scratch:
+0ZXIIIIIIIZIIIIIIIIII
+row(37):
++ZXIIIIIIIZIIIIIIIZII
+scratch:
+0IIIIIIIIIIIIIIIIIZII
+
+Outcome of measuring qubit 17: 0
+Measuring qubit 0
+row(20):
++ZIIIIIIIIIIIIIIIIIII
+
+Outcome of measuring qubit 0: 0
+qubit 1 is random on generator 1
+0
+Measuring qubit 3
+row(23):
++IIIZIIIIIIIIIIIIIIII
+
+Outcome of measuring qubit 3: 0
+Measuring qubit 4
+row(24):
++IIIIZIIIIIIIIIIIIIII
+
+Outcome of measuring qubit 4: 0
+Measuring qubit 7
+row(27):
++IIIIIIIZIIIIIIIIIIII
+
+Outcome of measuring qubit 7: 0
+qubit 8 is random on generator 8
+0
+Measuring qubit 9
+row(20):
++ZIIIIIIIIIIIIIIIIIII
+row(29):
++ZIIIIIIIIZIIIIIIIIII
+scratch:
+0IIIIIIIIIZIIIIIIIIII
+
+Outcome of measuring qubit 9: 0
+Measuring qubit 11
+row(31):
++IIIIIIIIIIIZIIIIIIII
+
+Outcome of measuring qubit 11: 0
+qubit 14 is random on generator 10
+0
+Measuring qubit 0
+row(20):
++ZIIIIIIIIIIIIIIIIIII
+
+Outcome of measuring qubit 0: 0
+qubit 1 is random on generator 1
+0
+Measuring qubit 2
+row(22):
++IIZIIIIIIIIIIIIIIIII
+
+Outcome of measuring qubit 2: 0
+Measuring qubit 6
+row(26):
++IIIIIIZIIIIIIIIIIIII
+
+Outcome of measuring qubit 6: 0
+qubit 10 is random on generator 10
+0
+qubit 13 is random on generator 10
+0
+qubit 17 is random on generator 17
+0
+Measuring qubit 2
+row(22):
++IIZIIIIIIIIIIIIIIIII
+
+Outcome of measuring qubit 2: 0
+Measuring qubit 3
+row(23):
++IIIZIIIIIIIIIIIIIIII
+
+Outcome of measuring qubit 3: 0
+Measuring qubit 4
+row(24):
++IIIIZIIIIIIIIIIIIIII
+
+Outcome of measuring qubit 4: 0
+Measuring qubit 7
+row(27):
++IIIIIIIZIIIIIIIIIIII
+
+Outcome of measuring qubit 7: 0
+qubit 10 is random on generator 10
+0
+qubit 12 is random on generator 12
+0
+qubit 14 is random on generator 5
+0
+qubit 16 is random on generator 5
+0
+Measuring qubit 0
+row(20):
++ZIIIIIIIIIIIIIIIIIII
+
+Outcome of measuring qubit 0: 0
+Measuring qubit 4
+row(24):
++IIIIZIIIIIIIIIIIIIII
+
+Outcome of measuring qubit 4: 0
+qubit 5 is random on generator 5
+0
+qubit 6 is random on generator 6
+0
+Measuring qubit 7
+row(27):
++IIIIIIIZIIIIIIIIIIII
+
+Outcome of measuring qubit 7: 0
+qubit 12 is random on generator 12
+0
+qubit 13 is random on generator 10
+0
+qubit 14 is random on generator 5
+0
+Measuring qubit 15
+row(23):
++IIIZIIIIIIIIIIIIIIII
+row(27):
++IIIIIIIZIIIIIIIIIIII
+scratch:
+0IIIZIIIZIIIIIIIIIIII
+row(35):
++IIIZIIIZIIIIIIIZIIII
+scratch:
+0IIIIIIIIIIIIIIIZIIII
+
+Outcome of measuring qubit 15: 0
+qubit 2 is random on generator 2
+0
+Measuring qubit 4
+row(24):
++IIIIZIIIIIIIIIIIIIII
+
+Outcome of measuring qubit 4: 0
+qubit 5 is random on generator 5
+0
+qubit 13 is random on generator 10
+0
+qubit 14 is random on generator 5
+0
+Measuring qubit 15
+row(23):
++IIIZIIIIIIIIIIIIIIII
+row(27):
++IIIIIIIZIIIIIIIIIIII
+scratch:
+0IIIZIIIZIIIIIIIIIIII
+row(35):
++IIIZIIIZIIIIIIIZIIII
+scratch:
+0IIIIIIIIIIIIIIIZIIII
+
+Outcome of measuring qubit 15: 0
+qubit 16 is random on generator 5
+0
+Measuring qubit 0
+row(20):
++ZIIIIIIIIIIIIIIIIIII
+
+Outcome of measuring qubit 0: 0
+qubit 2 is random on generator 2
+0
+Measuring qubit 4
+row(24):
++IIIIZIIIIIIIIIIIIIII
+
+Outcome of measuring qubit 4: 0
+qubit 9 is random on generator 9
+0
+qubit 12 is random on generator 12
+0
+qubit 17 is random on generator 17
+0
+Measuring qubit 0
+row(20):
++ZIIIIIIIIIIIIIIIIIII
+
+Outcome of measuring qubit 0: 0
+qubit 5 is random on generator 5
+0
+Measuring qubit 7
+row(27):
++IIIIIIIZIIIIIIIIIIII
+
+Outcome of measuring qubit 7: 0
+qubit 10 is random on generator 10
+0
+qubit 12 is random on generator 12
+0
+qubit 14 is random on generator 5
+0
+qubit 15 is random on generator 5
+0
+qubit 16 is random on generator 5
+0
+

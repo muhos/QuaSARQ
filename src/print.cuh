@@ -4,6 +4,7 @@
 #include "table.cuh"
 #include "signs.cuh"
 #include "vector.cuh"
+#include "locker.cuh"
 #include "circuit.cuh"
 
 namespace QuaSARQ {
@@ -106,6 +107,55 @@ namespace QuaSARQ {
             }
             LOGGPU("\n");
         }
+    }
+
+    INLINE_DEVICE void print_column(DeviceLocker& dlocker, const Table& xs, const Table& zs, const Signs& ss, const size_t& q, const size_t& num_qubits, const size_t& num_words_per_column) {
+        dlocker.lock();
+        LOGGPU("   X(%-2lld)   Z(%-2lld)   S\n", q, q, q);
+        for (size_t i = 0; i < 2 * num_qubits; i++) {
+            if (i == num_qubits) {
+                REPCH_GPU("-", 20);
+                LOGGPU("\n");
+            }
+            LOGGPU("%-2lld   %-2d     %-2d     %-2d\n", i,
+                bool(word_std_t(xs[q * num_words_per_column + WORD_OFFSET(i)]) & POW2(i)),
+                bool(word_std_t(zs[q * num_words_per_column + WORD_OFFSET(i)]) & POW2(i)),
+                bool(word_std_t(ss[WORD_OFFSET(i)]) & POW2(i)));
+        }
+        dlocker.unlock();
+    }
+
+    INLINE_DEVICE void print_row(DeviceLocker& dlocker, const Gate& m, const Table& xs, const Table& zs, const Signs& ss, const size_t& src_idx, const size_t& num_qubits, const size_t& num_words_per_column) {
+        dlocker.lock();
+        m.print(true);
+        LOGGPU("--> Row(%lld):   ", src_idx);
+        for (size_t i = 0; i < num_qubits; i++)
+            LOGGPU("%d", bool(word_std_t(xs[i * num_words_per_column + WORD_OFFSET(src_idx)]) & POW2(src_idx)));
+        LOGGPU(" ");
+        for (size_t i = 0; i < num_qubits; i++)
+            LOGGPU("%d", bool(word_std_t(zs[i * num_words_per_column + WORD_OFFSET(src_idx)]) & POW2(src_idx)));
+        LOGGPU(" ");
+        LOGGPU("%d\n", bool(word_std_t(ss[WORD_OFFSET(src_idx)]) & POW2(src_idx)));
+        dlocker.unlock();
+    }
+
+    INLINE_DEVICE void print_row(DeviceLocker& dlocker, const Gate& m, const byte_t* aux, const size_t& num_qubits) {
+        dlocker.lock();
+        m.print(true);
+        LOGGPU("--> Auxiliary: ");
+        for (size_t i = 0; i < num_qubits; i++)
+            LOGGPU("%d", aux[i]);
+        LOGGPU(" ");
+        for (size_t i = 0; i < num_qubits; i++)
+            LOGGPU("%d", aux[i + num_qubits]);
+        LOGGPU("\n");
+        dlocker.unlock();
+    }
+
+    INLINE_DEVICE void print_measurement(DeviceLocker& dlocker, const Gate& m) {
+        dlocker.lock();
+        LOGGPU("Outcome of qubit %d is %d\n", m.wires[0], m.measurement);
+        dlocker.unlock();
     }
 
     // Print the tableau in binary format (generators are columns).

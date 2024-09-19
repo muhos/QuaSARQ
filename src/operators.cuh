@@ -4,37 +4,13 @@
 #include "table.cuh"
 #include "gate.cuh"
 #include "signs.cuh"
+#include "atomic.cuh"
 
 namespace QuaSARQ {
 
     /**********************************/
     /*** Clifford sign instructions ***/
     /**********************************/
-#if defined(WORD_SIZE_8)
-    #if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
-    INLINE_DEVICE sign_t
-    #else
-    INLINE_DEVICE void
-    #endif
-    atomicXOR(sign_t* addr, const uint32& value) {
-        assert(value <= WORD_MAX);
-        uint64 addr_val = (uint64)addr;
-        uint32* al_addr = reinterpret_cast<uint32*> (addr_val & (0xFFFFFFFFFFFFFFFCULL));
-        uint32 al_offset = uint32(addr_val & 3) << 3;
-        uint32 byte = value << al_offset;
-        #if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
-        return sign_t((atomicXor(al_addr, byte) >> al_offset) & 0xFF);
-        #else
-        atomicXor(al_addr, byte);
-        #endif
-    }
-#else
-    INLINE_DEVICE sign_t
-    atomicXOR(sign_t* addr, const word_std_t& value) {
-        return atomicXor(addr, value);
-    }
-#endif
-
     #define sign_update_global(SIGNS, VALUE) SIGNS ^= (VALUE)
     
     #define sign_update_X_or_Z(SIGNS, SOURCE) sign_update_global(SIGNS, word_std_t(SOURCE))

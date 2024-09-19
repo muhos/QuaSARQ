@@ -88,7 +88,8 @@
         "format": "cpp",
         "charconv": "cpp",
         "variant": "cpp",
-        "span": "cpp"
+        "span": "cpp",
+        "shared_mutex": "cpp"
     },
     "git.ignoreLimitWarning": true
 }

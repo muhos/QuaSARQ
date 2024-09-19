@@ -187,6 +187,7 @@ namespace QuaSARQ {
         word_t* _zs_data;
         sign_t* _ss_data;
         byte_t* _auxiliary;
+        uint32* _auxiliary_sign;
 
         size_t _num_words;
         size_t _num_qubits_padded;
@@ -287,7 +288,9 @@ namespace QuaSARQ {
             assert(_ss_data != nullptr);
 
             if (measuring) {
-                _auxiliary = allocator.template allocate<byte_t>(max_padded_bits_two_tables + 1);        
+                _auxiliary_sign = allocator.template allocate<uint32>(1);        
+                assert(_auxiliary_sign != nullptr);
+                _auxiliary = allocator.template allocate<byte_t>(max_padded_bits_two_tables);        
                 assert(_auxiliary != nullptr);
             }
 
@@ -336,6 +339,8 @@ namespace QuaSARQ {
         INLINE_ALL Table* xtable() const { assert(_xs != nullptr); return _xs; }
 
         INLINE_ALL Table* ztable() const { assert(_zs != nullptr); return _zs; }
+
+        INLINE_ALL uint32* auxiliary_sign() const { assert(_auxiliary_sign != nullptr); return _auxiliary_sign; }
 
         INLINE_ALL byte_t* auxiliary() const { assert(_auxiliary != nullptr); return _auxiliary; }
 

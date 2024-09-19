@@ -21,7 +21,8 @@ namespace QuaSARQ {
     typedef uint32 bucket_t;
 
     constexpr size_t BUCKETSIZE = sizeof(bucket_t);
-    constexpr gate_ref_t NO_REF     = -1;
+    constexpr gate_ref_t NO_REF = -1;
+    constexpr byte_t UNMEASURED = -1;
 
     // Must follow the same order of 'Gatetypes'.
     __constant__ constexpr const arg_t G2S[NR_GATETYPES] = { 
@@ -31,15 +32,16 @@ namespace QuaSARQ {
     struct Gate {
         byte_t type;
         input_size_t size;
+        byte_t measurement;
         qubit_t pivot;
         qubit_t wires[0];
 
         INLINE_ALL 
-        Gate() : type(I), size(1), pivot(MAX_QUBITS) { }
+        Gate() : type(I), size(1), measurement(UNMEASURED), pivot(MAX_QUBITS) { }
 
         INLINE_ALL 
         explicit Gate(const input_size_t& size) : 
-            type(I), size(size), pivot(MAX_QUBITS) { }
+            type(I), size(size), measurement(UNMEASURED), pivot(MAX_QUBITS) { }
 
 		INLINE_ALL size_t capacity() const { assert(size); return size_t(size) * sizeof(qubit_t) + sizeof(*this); }
 
@@ -56,7 +58,9 @@ namespace QuaSARQ {
                 if (i < size - 1)
                     LOGGPU(",");
             }
-            if (type == M) LOGGPU(", p: %d", pivot);
+            if (type == M) {
+                LOGGPU(", p: %d, m: %d", pivot, measurement);
+            }
             LOGGPU(")%s", nonl ? "" : "\n");
         }
  

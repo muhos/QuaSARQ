@@ -25,6 +25,7 @@ namespace QuaSARQ {
 			}
 		}
 	}
+	
 
 	__global__ void print_paulis_k(const Table* ps, const Signs* ss, const size_t num_words_per_column, const size_t num_qubits, const depth_t level) {
 		if (!blockIdx.x && !threadIdx.x) {
@@ -100,7 +101,6 @@ namespace QuaSARQ {
 
 	void Simulator::print_gates(const DeviceCircuit<DeviceAllocator>& gates, const gate_ref_t& num_gates, const depth_t& depth_level) {
 		if (!options.print_gates) return;
-		LOG2(0, "");
 		LOG2(0, " Gates on GPU for %d-time step:", depth_level);
 		if (!options.sync) SYNCALL;
 		print_gates_k << <1, 1 >> > (gates.references(), gates.gates(), num_gates);
