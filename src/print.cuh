@@ -87,7 +87,7 @@ namespace QuaSARQ {
                                 const size_t& start, const size_t& end, 
                                 const size_t& num_qubits, const size_t& num_words_per_column) {
         for (size_t w = start; w < end; w++) {
-            const word_t pow2 = POW2(w);
+            const word_t pow2 = BITMASK_GLOBAL(w);
             if (ss[WORD_OFFSET(w)] & sign_t(pow2)) {
                 LOGGPU("-");
             }
@@ -118,9 +118,9 @@ namespace QuaSARQ {
                 LOGGPU("\n");
             }
             LOGGPU("%-2lld   %-2d     %-2d     %-2d\n", i,
-                bool(word_std_t(xs[q * num_words_per_column + WORD_OFFSET(i)]) & POW2(i)),
-                bool(word_std_t(zs[q * num_words_per_column + WORD_OFFSET(i)]) & POW2(i)),
-                bool(word_std_t(ss[WORD_OFFSET(i)]) & POW2(i)));
+                bool(word_std_t(xs[q * num_words_per_column + WORD_OFFSET(i)]) & BITMASK_GLOBAL(i)),
+                bool(word_std_t(zs[q * num_words_per_column + WORD_OFFSET(i)]) & BITMASK_GLOBAL(i)),
+                bool(word_std_t(ss[WORD_OFFSET(i)]) & BITMASK_GLOBAL(i)));
         }
         dlocker.unlock();
     }
@@ -130,12 +130,12 @@ namespace QuaSARQ {
         m.print(true);
         LOGGPU("--> Row(%lld):   ", src_idx);
         for (size_t i = 0; i < num_qubits; i++)
-            LOGGPU("%d", bool(word_std_t(xs[i * num_words_per_column + WORD_OFFSET(src_idx)]) & POW2(src_idx)));
+            LOGGPU("%d", bool(word_std_t(xs[i * num_words_per_column + WORD_OFFSET(src_idx)]) & BITMASK_GLOBAL(src_idx)));
         LOGGPU(" ");
         for (size_t i = 0; i < num_qubits; i++)
-            LOGGPU("%d", bool(word_std_t(zs[i * num_words_per_column + WORD_OFFSET(src_idx)]) & POW2(src_idx)));
+            LOGGPU("%d", bool(word_std_t(zs[i * num_words_per_column + WORD_OFFSET(src_idx)]) & BITMASK_GLOBAL(src_idx)));
         LOGGPU(" ");
-        LOGGPU("%d\n", bool(word_std_t(ss[WORD_OFFSET(src_idx)]) & POW2(src_idx)));
+        LOGGPU("%d\n", bool(word_std_t(ss[WORD_OFFSET(src_idx)]) & BITMASK_GLOBAL(src_idx)));
         dlocker.unlock();
     }
 
@@ -149,6 +149,21 @@ namespace QuaSARQ {
         for (size_t i = 0; i < num_qubits; i++)
             LOGGPU("%d", aux[i + num_qubits]);
         LOGGPU("\n");
+        dlocker.unlock();
+    }
+
+    INLINE_DEVICE void print_shared_aux(DeviceLocker& dlocker, const Gate& m, const uint32* aux, const size_t& num_qubits, const size_t& copied_row, const size_t& multiplied_row) {
+        dlocker.lock();
+        if (!threadIdx.x) {
+            uint32 offset = threadIdx.y * 3 * blockDim.x;
+            LOGGPU("offset(%d), qubit(%d), row(%lld) x row(%lld):\n", offset, m.wires[0], copied_row, multiplied_row);
+            for (uint32 i = 0; i < blockDim.x; i++)
+                LOGGPU(" offset(%d): aux_xs[b:%d, t:%d] = %d\n", offset, blockIdx.x, i, aux[offset + i]);
+            for (uint32 i = blockDim.x; i < 2 * blockDim.x; i++)
+                LOGGPU(" offset(%d): aux_zs[b:%d, t:%d] = %d\n", offset, blockIdx.x, i, aux[offset + i]);
+            for (uint32 i = 2 * blockDim.x; i < 3 * blockDim.x; i++)
+                LOGGPU(" offset(%d): aux_ss[b:%d, t:%d] = %d\n", offset, blockIdx.x, i, aux[offset + i]);
+        }
         dlocker.unlock();
     }
 

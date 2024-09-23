@@ -31,7 +31,7 @@ namespace QuaSARQ {
 		if (!blockIdx.x && !threadIdx.x) {
 			const word_t *words = ps->data();
 			for (size_t w = 0; w < num_qubits; w++) {
-				const word_t pow2 = POW2(w);
+				const word_t pow2 = BITMASK_GLOBAL(w);
 				for (size_t q = 0; q < num_qubits; q++) {
 					if (q == 0 && (*ss)[WORD_OFFSET(q)] & sign_t(pow2)) {
 						LOGGPU("-");
@@ -59,7 +59,7 @@ namespace QuaSARQ {
 		if (!blockIdx.x && !threadIdx.x) {
 			for (gate_ref_t i = 0; i < num_gates; i++) {
 				const gate_ref_t r = refs[i];
-				LOGGPU(" Gate(%d, r:%d):", i, r);
+				LOGGPU(" Gate(%3d , r:%3d):", i, r);
 				const Gate &gate = (Gate &)gates[r];
 				gate.print();
 			}
@@ -67,6 +67,7 @@ namespace QuaSARQ {
 	}
 
 	void Simulator::print_paulis(const Tableau<DeviceAllocator>& tab, const depth_t& depth_level, const bool& reversed) {
+		if (!options.sync) SYNCALL;
 		if (depth_level == -1) 
 			LOGHEADER(0, 3, "Initial state");
 		else if (options.print_step_state)
@@ -77,7 +78,6 @@ namespace QuaSARQ {
             LOGWARNING("State is too large to print.");
 			fflush(stdout);
 		}
-		if (!options.sync) SYNCALL;
         print_paulis_k << <1, 1 >> > (XZ_TABLE(tab), tab.signs(), tab.num_words_per_column(), num_qubits, measuring);
         LASTERR("failed to launch print-paulis kernel");
         SYNCALL;
@@ -85,6 +85,7 @@ namespace QuaSARQ {
 	}
 
 	void Simulator::print_tableau(const Tableau<DeviceAllocator>& tab, const depth_t& depth_level, const bool& reversed) {
+		if (!options.sync) SYNCALL;
 		LOG2(0, "");
 		if (depth_level == -1)
 			LOG2(0, "Initial tableau before simulation");
@@ -92,7 +93,6 @@ namespace QuaSARQ {
 			LOG2(0, "Final tableau after %d %ssimulation steps", depth, reversed ? "reversed " : "");
 		else
 			LOG2(0, "Tableau after %d-step", depth_level);
-		if (!options.sync) SYNCALL;
         print_tableau_k << <1, 1 >> > (XZ_TABLE(tab), tab.signs(), depth_level, measuring);
         LASTERR("failed to launch print-tableau kernel");
         SYNCALL;
@@ -101,8 +101,8 @@ namespace QuaSARQ {
 
 	void Simulator::print_gates(const DeviceCircuit<DeviceAllocator>& gates, const gate_ref_t& num_gates, const depth_t& depth_level) {
 		if (!options.print_gates) return;
-		LOG2(0, " Gates on GPU for %d-time step:", depth_level);
 		if (!options.sync) SYNCALL;
+		LOG2(0, " Gates on GPU for %d-time step:", depth_level);
 		print_gates_k << <1, 1 >> > (gates.references(), gates.gates(), num_gates);
 		LASTERR("failed to launch print-gates kernel");
 		SYNCALL;

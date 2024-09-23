@@ -33,7 +33,8 @@ namespace QuaSARQ {
     constexpr qubit_t MAX_QUBITS = -1;
     constexpr size_t MAX_WORDS = size_t(MAX_QUBITS - 1) * size_t(MAX_QUBITS - 1) / 2;
 
-    #define POW2(P) (word_std_t(1) << word_std_t(P & WORD_MASK))
+    #define BITMASK_GLOBAL(VAL) (word_std_t(1) << word_std_t(VAL & WORD_MASK))
+    #define BITMASK(VAL) (word_std_t(1) << word_std_t(VAL))
 
 	class word_t {
 
@@ -89,11 +90,11 @@ namespace QuaSARQ {
         }
 
         INLINE_ALL void identity(const qubit_t& word_idx) {
-            word = POW2(word_idx);
+            word = BITMASK_GLOBAL(word_idx);
         }
 
         INLINE_ALL bool is_identity(const qubit_t& word_idx) {
-            return word == POW2(word_idx);
+            return word == BITMASK_GLOBAL(word_idx);
         }
 
 	};

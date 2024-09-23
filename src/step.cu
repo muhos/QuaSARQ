@@ -18,9 +18,9 @@ namespace QuaSARQ {
     #endif
     Signs* ss) {
         grid_t tx = threadIdx.x;
-        grid_t bx = blockDim.x;
-        grid_t global_offset = blockIdx.x * bx;
-        grid_t collapse_tid = threadIdx.y * bx + tx;
+        grid_t BX = blockDim.x;
+        grid_t global_offset = blockIdx.x * BX;
+        grid_t collapse_tid = threadIdx.y * BX + tx;
         word_std_t* shared_signs = SharedMemory<word_std_t>();
         sign_t* signs = ss->data();
 
@@ -102,9 +102,15 @@ namespace QuaSARQ {
                 }
             }
 
-            load_shared(shared_signs, signs_word, collapse_tid, tx, num_gates);
-            collapse_shared(shared_signs, signs_word, collapse_tid, bx, tx);
-            collapse_warp(shared_signs, signs_word, collapse_tid, bx, tx);
+            // Only blocks >= 64 use shared memory, < 64 use warp communications.
+            if (BX >= 64) {
+			    shared_signs[collapse_tid] = (tx < num_gates) ? signs_word : 0;
+			    __syncthreads();
+		    }
+
+            collapse_load_shared(shared_signs, signs_word, collapse_tid, tx, num_gates);
+            collapse_shared(shared_signs, signs_word, collapse_tid, BX, tx);
+            collapse_warp(shared_signs, signs_word, collapse_tid, BX, tx);
 
             // Atomically collapse all blocks.
             if (!tx && global_offset < num_gates) {
@@ -123,8 +129,8 @@ namespace QuaSARQ {
     #endif
     Signs* ss) {
         grid_t tx = threadIdx.x;
-        grid_t bx = blockDim.x;
-        grid_t global_offset = blockIdx.x * bx;
+        grid_t BX = blockDim.x;
+        grid_t global_offset = blockIdx.x * BX;
         word_std_t* shared_signs = SharedMemory<word_std_t>();
         sign_t* signs = ss->data();
 
@@ -135,16 +141,16 @@ namespace QuaSARQ {
             #ifdef INTERLEAVE_XZ
                 #ifdef INTERLEAVE_WORDS
                 word_t* generators = (!tx) ? ps->data() + X_OFFSET(w) : nullptr;
-                generators = (word_t*)__shfl_sync(FULL_WARP, uint64(generators), 0, bx);
+                generators = (word_t*)__shfl_sync(FULL_WARP, uint64(generators), 0, BX);
                 #else
                 word_t* generators = (!tx) ? ps->data() + w : nullptr;
-                generators = (word_t*)__shfl_sync(FULL_WARP, uint64(generators), 0, bx);
+                generators = (word_t*)__shfl_sync(FULL_WARP, uint64(generators), 0, BX);
                 #endif
             #else
             word_t* x_gens_word = (!tx) ? xs->data() + w : nullptr;
-            x_gens_word = (word_t*)__shfl_sync(FULL_WARP, uint64(x_gens_word), 0, bx);
+            x_gens_word = (word_t*)__shfl_sync(FULL_WARP, uint64(x_gens_word), 0, BX);
             word_t* z_gens_word = (!tx) ? zs->data() + w : nullptr;
-            z_gens_word = (word_t*)__shfl_sync(FULL_WARP, uint64(z_gens_word), 0, bx);
+            z_gens_word = (word_t*)__shfl_sync(FULL_WARP, uint64(z_gens_word), 0, BX);
             #endif
 
             for_parallel_x(i, num_gates) {
@@ -210,7 +216,7 @@ namespace QuaSARQ {
                 }
             }
 
-            assert(bx <= 32);
+            assert(BX <= 32);
             collapse_warp_only(signs_word);
 
             // Atomically collapse all blocks.
@@ -234,21 +240,150 @@ namespace QuaSARQ {
                 // Check stabilizers if Xgq has 1, if so save the minimum row index.
                 const word_std_t word = (*xs)[col + j];
                 if (word) {
-                    const int64 generator_index = GET_GENERATOR_INDEX(word, j);
-                    //printf("(%lld, %lld): ffs in word(" B2B_STR ") = %d, generator index = %lld\n", i, j, RB2B(word), bit_index_per_word, generator_index);
-                    // Find the minimum generator.
-                    if (generator_index >= num_qubits)
-                        atomicMin(&(m.pivot), uint32(generator_index - num_qubits));
+                    const int64 bit_offset = j << WORD_POWER;
+                    const int64 first_one_pos = int64(__ffsll(word)) - 1;
+                    assert(first_one_pos >= 0);
+                    int64 generator_index = 0;
+                    uint32 min_pivot = MAX_QUBITS;
+                    // Find the first high generator per word.
+                    #pragma unroll
+                    for (int64 bit_index = first_one_pos; bit_index < WORD_BITS; ++bit_index) {
+                        if (word & BITMASK(bit_index)) {
+                            generator_index = bit_index + bit_offset;
+                            if (generator_index >= num_qubits) {
+                                min_pivot = generator_index - num_qubits;
+                                break;
+                            }
+                        }
+                    }
+                    if (min_pivot != MAX_QUBITS)
+                        atomicMin(&(m.pivot), min_pivot);
                 }
             }
         }
 
     }
 
-    __global__ void measure_determinate(const gate_ref_t* refs, bucket_t* measurements, Table* xs, Table* zs, Signs* ss, uint32* aux_sign, byte_t* aux, DeviceLocker* dlocker, const size_t num_qubits, const size_t num_gates, const size_t num_words_per_column) {
-        
-        uint32* shared_signs = SharedMemory<uint32>();
 
+    INLINE_DEVICE void row_aux_mul(Gate& m, uint32* aux, uint32* aux_signs, const Table& xs, const Table& zs, const Signs& ss, const size_t& src_idx, const size_t& num_qubits, const size_t& num_words_per_column) {
+        uint32* aux_xs = aux;
+        uint32* aux_zs = aux + blockDim.x;
+        assert(aux_signs == aux_zs + blockDim.x);
+        const grid_t tx = threadIdx.x, BX = blockDim.x;
+        const grid_t global_offset = blockIdx.x * BX;
+        const grid_t shared_tid = threadIdx.y * BX * 3 + tx;
+        const grid_t q = blockIdx.x * BX + tx;
+        const word_std_t generator_mask = BITMASK_GLOBAL(src_idx);
+        const word_std_t shifts = (src_idx & WORD_MASK);
+        const uint32 s = (ss[WORD_OFFSET(src_idx)] & generator_mask) >> shifts;
+        assert(s <= 1);
+
+        // XOR s with the outcome only once.
+        if (!q) {
+            m.measurement ^= s;
+        }
+
+        // only track parity (0 for positive or 1 for i, -i, -1)
+        uint32 p = 0; 
+        if (q < num_qubits && tx < num_qubits) {
+            const size_t word_idx = q * num_words_per_column + WORD_OFFSET(src_idx);
+            uint32 x = ((word_std_t(xs[word_idx]) & generator_mask) >> shifts);
+            uint32 z = ((word_std_t(zs[word_idx]) & generator_mask) >> shifts);
+            assert(x <= 1);
+            assert(z <= 1);
+            const uint32 aux_x = aux_xs[shared_tid];
+            const uint32 aux_z = aux_zs[shared_tid];
+            assert(aux_x <= 1);
+            assert(aux_z <= 1);
+            aux_xs[shared_tid] ^= x;
+            aux_zs[shared_tid] ^= z;
+            // We don't need to sync shared memory here.
+            // It would be done in collapse_load_shared.
+            uint32 x_only = x & ~z;  // X 
+            uint32 y = x & z;        // Y 
+            uint32 z_only = ~x & z;  // Z 
+            uint32 aux_x_only = aux_x & ~aux_z;  // aux_X
+            uint32 aux_y = aux_x & aux_z;        // aux_Y 
+            uint32 aux_z_only = ~aux_x & aux_z;  // aux_Z 
+            p  ^= (x_only & aux_y)        // XY=iZ
+                ^ (x_only & aux_z_only)   // XZ=-iY
+                ^ (y      & aux_z_only)   // YZ=iX
+                ^ (y      & aux_x_only)   // YX=-iZ
+                ^ (z_only & aux_x_only)   // ZX=iY
+                ^ (z_only & aux_y);       // ZY=-iX
+        }
+
+        // Collapse thread-local p's in shared memory.
+        assert(p < 2);
+        collapse_load_shared(aux_signs, p, shared_tid, tx, num_qubits);
+        collapse_shared(aux_signs, p, shared_tid, BX, tx);
+        collapse_warp(aux_signs, p, shared_tid, BX, tx);
+        
+        // Do: *aux_sign ^= p, where p here holds the collapsed value of a block.
+        if (!tx && global_offset < num_qubits) {
+            atomicByteXOR(&m.measurement, p);
+        }
+    }
+
+    INLINE_DEVICE void row_to_aux(byte_t& measurement, uint32* aux, const Table& xs, const Table& zs, const Signs& ss, const size_t& src_idx, const size_t& num_qubits, const size_t& num_words_per_column) {
+        const word_std_t generator_mask = BITMASK_GLOBAL(src_idx);
+        const word_std_t shifts = (src_idx & WORD_MASK);
+        const grid_t tx = threadIdx.x, BX = blockDim.x;
+        const grid_t shared_tid = threadIdx.y * BX * 3 + tx;
+        const grid_t q = blockIdx.x * BX + tx;
+        if (!q) {
+            assert(measurement == UNMEASURED);
+            measurement = (ss[WORD_OFFSET(src_idx)] & generator_mask) >> shifts;
+            assert(measurement <= 1);
+        }
+        uint32* aux_xs = aux;
+        uint32* aux_zs = aux + blockDim.x;
+        if (q < num_qubits && tx < num_qubits) {
+            const size_t word_idx = q * num_words_per_column + WORD_OFFSET(src_idx);
+            aux_xs[shared_tid] = (word_std_t(xs[word_idx]) & generator_mask) >> shifts;
+            aux_zs[shared_tid] = (word_std_t(zs[word_idx]) & generator_mask) >> shifts;
+        }
+        else {
+            aux_xs[shared_tid] = 0;
+            aux_zs[shared_tid] = 0;
+        }
+        __syncthreads();
+    }
+
+
+    INLINE_DEVICE uint32 measure_determinate_qubit(DeviceLocker& dlocker, Gate& m, Table& xs, Table& zs, Signs& ss, uint32* smem, const size_t num_qubits, const size_t num_words_per_column) {
+        const size_t col = m.wires[0] * num_words_per_column;
+        word_std_t word = 0;
+        uint32* aux = smem;
+        uint32* aux_signs = aux + 2 * blockDim.x;
+        for (size_t j = 0; j < num_words_per_column; j++) {
+            word = xs[col + j];
+            if (word) {
+                const int64 generator_index = GET_GENERATOR_INDEX(word, j);
+                // GET_GENERATOR_INDEX will work here as we check destabilizers,
+                // which are stored first in bit-packing. Thus, we don't need to
+                // loop over bits inside each word.
+                if (generator_index < num_qubits) {
+                    // TODO: transform the rows involved here into words. This could improve the rowmul operation.                 
+                    row_to_aux(m.measurement, aux, xs, zs, ss, generator_index + num_qubits, num_qubits, num_words_per_column);
+                    //print_shared_aux(dlocker, m, aux, num_qubits, generator_index + num_qubits, generator_index + num_qubits);
+                    //if (!global_tx) print_row(dlocker, m, xs, zs, ss, generator_index + num_qubits, num_qubits, num_words_per_column);
+                    for (size_t k = generator_index + 1; k < num_qubits; k++) {
+                        word = xs[col + WORD_OFFSET(k)];
+                        if (word & BITMASK_GLOBAL(k)) {
+                            //if (!global_tx) print_row(dlocker, m, xs, zs, ss, k + num_qubits, num_qubits, num_words_per_column);
+                            row_aux_mul(m, aux, aux_signs, xs, zs, ss, k + num_qubits, num_qubits, num_words_per_column);
+                            //print_shared_aux(dlocker, m, aux, num_qubits, generator_index + num_qubits, k + num_qubits);
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    __global__ void measure_determinate(const gate_ref_t* refs, bucket_t* measurements, Table* xs, Table* zs, Signs* ss, uint32* aux_sign, byte_t* aux, DeviceLocker* dlocker, const size_t num_qubits, const size_t num_gates, const size_t num_words_per_column) {
+        uint32* smem = SharedMemory<uint32>();
         for_parallel_y(i, num_gates) {
             const gate_ref_t r = refs[i];
             assert(r < NO_REF);
@@ -256,7 +391,7 @@ namespace QuaSARQ {
             // Consdier only determinate measures.
             if (m.pivot == MAX_QUBITS) {
                 assert(m.size == 1);
-                measure_determinate_qubit(*dlocker, m, *xs, *zs, *ss, shared_signs, aux, num_qubits, num_words_per_column);
+                measure_determinate_qubit(*dlocker, m, *xs, *zs, *ss, smem, num_qubits, num_words_per_column);
             }
         }
     }
@@ -379,17 +514,30 @@ namespace QuaSARQ {
                 print_paulis(tableau, depth_level, reversed);
         } // END of non-measuring simulation.
         else {
-            SYNCALL; // just for debugging
+            // sync data transfer.
+            SYNC(copy_stream1);
+            SYNC(copy_stream2);
+
             printf("\ndepth %d has %d measurements\n", depth_level, num_gates_per_window);
+
             fflush(stdout);
+
             if (!depth_level) locker.reset(0);
-            is_indeterminate_outcome<<<bestGridStep, bestBlockStep>>>(gpu_circuit.references(), gpu_circuit.gates(), XZ_TABLE(tableau), tableau.signs(), locker.deviceLocker(), num_qubits, num_gates_per_window, num_words_per_column);
+            is_indeterminate_outcome<<<bestGridStep, bestBlockStep, 0, kernel_stream>>>(gpu_circuit.references(), gpu_circuit.gates(), XZ_TABLE(tableau), tableau.signs(), locker.deviceLocker(), num_qubits, num_gates_per_window, num_words_per_column);
             printf("After checking determinism: "), print_gates(gpu_circuit, num_gates_per_window, depth_level);
-            SYNCALL;
-            OPTIMIZESHARED(reduce_smem_size, bestBlockStep.y * bestBlockStep.x, sizeof(uint32));
-            measure_determinate<<<bestGridStep, bestBlockStep, reduce_smem_size, 0>>>(gpu_circuit.references(), gpu_circuit.gates(), XZ_TABLE(tableau), tableau.signs(), tableau.auxiliary_sign(), tableau.auxiliary(), locker.deviceLocker(), num_qubits, num_gates_per_window, num_words_per_column);
-            printf("After determinate measuring: "), print_gates(gpu_circuit, num_gates_per_window, depth_level);
-            SYNCALL; // just for debugging
+
+            OPTIMIZESHARED(smem_size, bestBlockStep.y * (bestBlockStep.x * 3), sizeof(uint32));
+
+            // This kernel cannot use grid-stride loops in
+            // x-dim. Nr. of blocks must be always sufficient
+            // as we use shraed memory as scratch space.
+            dim3 nThreads(8, 8);
+            uint32 nBlocksX = ROUNDUPBLOCKS(num_qubits, nThreads.x);
+            OPTIMIZEBLOCKS(nBlocksY, num_gates_per_window, nThreads.y);
+            measure_determinate<<<dim3(nBlocksX, nBlocksY), nThreads, smem_size, kernel_stream>>>(gpu_circuit.references(), gpu_circuit.gates(), XZ_TABLE(tableau), tableau.signs(), tableau.auxiliary_sign(), tableau.auxiliary(), locker.deviceLocker(), num_qubits, num_gates_per_window, num_words_per_column);
+            
+            printf("After measuring: "), print_gates(gpu_circuit, num_gates_per_window, depth_level);
+            
             //measure_indeterminate<<<1, 4>>>(gpu_circuit.references(), gpu_circuit.gates(), XZ_TABLE(tableau), tableau.signs(), tableau.auxiliary(), locker.deviceLocker(), num_qubits, num_gates_per_window, num_words_per_column);
             //SYNCALL; // just for debugging
         }

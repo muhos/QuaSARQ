@@ -48,18 +48,18 @@ namespace QuaSARQ {
         INLINE_ALL
         void print(const bool& nonl = false) const {
             if (type < NR_GATETYPES) {
-                LOGGPU("  %s(", G2S[type]);
+                LOGGPU(" %2s(", G2S[type]);
             }
             else {
                 LOGGPU("  Unknown(");
             }
             for (input_size_t i = 0; i < size; i++) { 
-                LOGGPU("%d", wires[i]);
+                LOGGPU("%3d", wires[i]);
                 if (i < size - 1)
-                    LOGGPU(",");
+                    LOGGPU(" , ");
             }
             if (type == M) {
-                LOGGPU(", p: %d, m: %d", pivot, measurement);
+                LOGGPU(" , p: %3d , m: %d", pivot, measurement);
             }
             LOGGPU(")%s", nonl ? "" : "\n");
         }

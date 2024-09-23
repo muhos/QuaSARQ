@@ -21,7 +21,7 @@ namespace QuaSARQ {
 
         word_std_t* shared_xored = SharedMemory<word_std_t>();
         grid_t tx = threadIdx.x;
-        grid_t bx = blockDim.x;
+        grid_t BX = blockDim.x;
         grid_t global_offset = blockIdx.x * blockDim.x;
         grid_t collapse_tid = threadIdx.y * blockDim.x + tx;
 
@@ -57,11 +57,11 @@ namespace QuaSARQ {
 
             word_std_t xored = xored_x ^ xored_z;
 
-            load_shared(shared_xored, xored, collapse_tid, tx, num_qubits);
+            collapse_load_shared(shared_xored, xored, collapse_tid, tx, num_qubits);
 
-            collapse_shared(shared_xored, xored, collapse_tid, bx, tx);
+            collapse_shared(shared_xored, xored, collapse_tid, BX, tx);
 
-            collapse_warp(shared_xored, xored, collapse_tid, bx, tx);
+            collapse_warp(shared_xored, xored, collapse_tid, BX, tx);
 
             if (!tx && global_offset < num_qubits) {     
                 atomicAdd(&checksum, __popcll(uint64(xored)));
@@ -80,9 +80,9 @@ namespace QuaSARQ {
 
         word_std_t* shared_xored = SharedMemory<word_std_t>();
         grid_t tx = threadIdx.x;
-        grid_t bx = blockDim.x;
-        grid_t global_offset = blockIdx.x * bx;
-        grid_t collapse_tid = threadIdx.y * bx + tx;
+        grid_t BX = blockDim.x;
+        grid_t global_offset = blockIdx.x * BX;
+        grid_t collapse_tid = threadIdx.y * BX + tx;
 
         for_parallel_y(w, num_words_per_column) {
 
@@ -115,11 +115,11 @@ namespace QuaSARQ {
 
             word_std_t xored = xored_x ^ xored_z;
 
-            load_shared(shared_xored, xored, collapse_tid, tx, num_qubits);
+            collapse_load_shared(shared_xored, xored, collapse_tid, tx, num_qubits);
 
-            collapse_shared(shared_xored, xored, collapse_tid, bx, tx);
+            collapse_shared(shared_xored, xored, collapse_tid, BX, tx);
 
-            collapse_warp(shared_xored, xored, collapse_tid, bx, tx);
+            collapse_warp(shared_xored, xored, collapse_tid, BX, tx);
 
             if (!tx && global_offset < num_qubits) {
                 atomicAdd(&checksum, __popcll(uint64(xored)));
@@ -138,7 +138,7 @@ namespace QuaSARQ {
 
         word_std_t* shared_xored = SharedMemory<word_std_t>();
         grid_t tx = threadIdx.x;
-        grid_t bx = blockDim.x;
+        grid_t BX = blockDim.x;
         grid_t global_offset = blockIdx.x * blockDim.x;
         grid_t collapse_tid = threadIdx.y * blockDim.x + tx;
 
@@ -177,11 +177,11 @@ namespace QuaSARQ {
     #endif
             word_std_t xored = xored_x ^ xored_z;
 
-            load_shared(shared_xored, xored, collapse_tid, tx, num_qubits);
+            collapse_load_shared(shared_xored, xored, collapse_tid, tx, num_qubits);
 
-            collapse_shared(shared_xored, xored, collapse_tid, bx, tx);
+            collapse_shared(shared_xored, xored, collapse_tid, BX, tx);
 
-            collapse_warp(shared_xored, xored, collapse_tid, bx, tx);
+            collapse_warp(shared_xored, xored, collapse_tid, BX, tx);
 
             if (!tx && global_offset < num_qubits) {
                 atomicAdd(&checksum, __popcll(uint64(xored)));
