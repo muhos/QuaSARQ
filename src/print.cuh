@@ -152,24 +152,26 @@ namespace QuaSARQ {
         dlocker.unlock();
     }
 
-    INLINE_DEVICE void print_shared_aux(DeviceLocker& dlocker, const Gate& m, const uint32* aux, const size_t& num_qubits, const size_t& copied_row, const size_t& multiplied_row) {
+    INLINE_DEVICE void print_shared_aux(DeviceLocker& dlocker, const Gate& m, byte_t* smem, const size_t& num_qubits, const size_t& copied_row, const size_t& multiplied_row) {
         dlocker.lock();
         if (!threadIdx.x) {
-            uint32 offset = threadIdx.y * 3 * blockDim.x;
+            uint32 offset = threadIdx.y * blockDim.x * 2;
+            byte_t* aux = smem;
+            int* aux_power = (int*)(aux + blockDim.y * blockDim.x * 2);
+            byte_t* aux_xs = aux;
+            byte_t* aux_zs = aux + blockDim.x;
+            int* pos_is = aux_power;
+            int* neg_is = aux_power + blockDim.x;
             LOGGPU("offset(%d), qubit(%d), row(%lld) x row(%lld):\n", offset, m.wires[0], copied_row, multiplied_row);
             for (uint32 i = 0; i < blockDim.x; i++)
-                LOGGPU(" offset(%d): aux_xs[b:%d, t:%d] = %d\n", offset, blockIdx.x, i, aux[offset + i]);
+                LOGGPU(" offset(%d): aux_xs[b:%d, t:%d] = %d\n", offset, blockIdx.x, i, aux_xs[offset + i]);
             for (uint32 i = blockDim.x; i < 2 * blockDim.x; i++)
-                LOGGPU(" offset(%d): aux_zs[b:%d, t:%d] = %d\n", offset, blockIdx.x, i, aux[offset + i]);
-            for (uint32 i = 2 * blockDim.x; i < 3 * blockDim.x; i++)
-                LOGGPU(" offset(%d): aux_ss[b:%d, t:%d] = %d\n", offset, blockIdx.x, i, aux[offset + i]);
+                LOGGPU(" offset(%d): aux_zs[b:%d, t:%d] = %d\n", offset, blockIdx.x, i, aux_zs[offset + i]);
+            for (uint32 i = 0; i < blockDim.x; i++)
+                LOGGPU(" offset(%d): pos_i[b:%d, t:%d] = %d\n", offset, blockIdx.x, i, pos_is[offset + i]);
+            for (uint32 i = blockDim.x; i < 2 * blockDim.x; i++)
+                LOGGPU(" offset(%d): neg_i[b:%d, t:%d] = %d\n", offset, blockIdx.x, i, neg_is[offset + i]);
         }
-        dlocker.unlock();
-    }
-
-    INLINE_DEVICE void print_measurement(DeviceLocker& dlocker, const Gate& m) {
-        dlocker.lock();
-        LOGGPU("Outcome of qubit %d is %d\n", m.wires[0], m.measurement);
         dlocker.unlock();
     }
 

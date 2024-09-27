@@ -18,6 +18,7 @@ namespace QuaSARQ {
     BOOL_OPT opt_print_step_state("print-step-state", "print step state in form of Pauli strings on screen", false);
     BOOL_OPT opt_print_final_state("print-final-state", "print final state in form of Pauli strings on screen", false);
     BOOL_OPT opt_print_gates("print-gates", "print gates in every step on screen", false);
+    BOOL_OPT opt_print_measurements("print-measurements", "print gates in every step on screen", false);
     BOOL_OPT opt_sync("sync", "synchronize all kernels and data transfers", false);
     BOOL_OPT opt_profile_equivalence("profile-equivalence", "profile equivalence checking", false);
     BOOL_OPT opt_disable_concurrency("disable-concurrency", "disable concurrency in equivalence checking", false);
@@ -78,6 +79,7 @@ namespace QuaSARQ {
         print_final_state = opt_print_final_state;
         print_step_state = opt_print_step_state;
         print_gates = opt_print_gates;
+        print_measurements= opt_print_measurements;
         print_step_tableau = opt_print_tableau_step;
         print_final_tableau = opt_print_tableau_final;
         print_initial_tableau = opt_print_tableau_initial;

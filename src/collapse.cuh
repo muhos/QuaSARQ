@@ -1,6 +1,6 @@
 
-#ifndef __CU_REDUCE_H
-#define __CU_REDUCE_H
+#ifndef __CU_COLLAPSE_H
+#define __CU_COLLAPSE_H
 
 #include "definitions.cuh"
 #include "shared.cuh"

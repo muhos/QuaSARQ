@@ -50,14 +50,14 @@ namespace QuaSARQ {
 			assert(NTHREADS);                                    \
 			assert(maxGPUBlocks);                                \
 			grid_t NBLOCKS = ROUNDUPBLOCKS(DATALEN, NTHREADS); 	 \
-			NBLOCKS = MIN(NBLOCKS, maxGPUBlocks);  		 		 \
+			NBLOCKS = MIN(NBLOCKS, maxGPUBlocks)  		 		 \
 
 	#define OPTIMIZEBLOCKS2D(NBLOCKS, DATALEN, NTHREADS)         \
 			assert(DATALEN);                                     \
 			assert(NTHREADS);                                    \
 			assert(maxGPUBlocks2D);                              \
 			grid_t NBLOCKS = ROUNDUPBLOCKS(DATALEN, NTHREADS); 	 \
-			NBLOCKS = MIN(NBLOCKS, maxGPUBlocks2D);  		     \
+			NBLOCKS = MIN(NBLOCKS, maxGPUBlocks2D)  		     \
 
 	// macros for shared memory calculation
     #define OPTIMIZESHARED(SMEMSIZE, NTHREADS, MINCAP)       \
@@ -65,7 +65,7 @@ namespace QuaSARQ {
             assert(NTHREADS);                                \
             assert(maxGPUSharedMem);                         \
             const size_t SMEMSIZE = (NTHREADS) * (MINCAP);   \
-            assert(maxGPUSharedMem >= SMEMSIZE);             \
+            assert(maxGPUSharedMem >= SMEMSIZE)              \
 
 }
 

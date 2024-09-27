@@ -5,6 +5,7 @@
 #include "macros.cuh"
 #include "locker.cuh"
 #include "warp.cuh"
+#include "sum.cuh"
 
 namespace QuaSARQ {
 
@@ -265,79 +266,84 @@ namespace QuaSARQ {
     }
 
 
-    INLINE_DEVICE void row_aux_mul(Gate& m, uint32* aux, uint32* aux_signs, const Table& xs, const Table& zs, const Signs& ss, const size_t& src_idx, const size_t& num_qubits, const size_t& num_words_per_column) {
-        uint32* aux_xs = aux;
-        uint32* aux_zs = aux + blockDim.x;
-        assert(aux_signs == aux_zs + blockDim.x);
+    INLINE_DEVICE void row_aux_mul(DeviceLocker& dlocker, Gate& m, byte_t* aux, int* aux_power, const Table& xs, const Table& zs, const Signs& ss, const size_t& src_idx, const size_t& aux_idx, const size_t& num_qubits, const size_t& num_words_per_column) {
+        byte_t* aux_xs = aux;
+        byte_t* aux_zs = aux + blockDim.x;
+        int* pos_is = aux_power;
+        int* neg_is = aux_power + blockDim.x;
         const grid_t tx = threadIdx.x, BX = blockDim.x;
         const grid_t global_offset = blockIdx.x * BX;
-        const grid_t shared_tid = threadIdx.y * BX * 3 + tx;
+        const grid_t shared_tid = threadIdx.y * BX * 2 + tx;
         const grid_t q = blockIdx.x * BX + tx;
         const word_std_t generator_mask = BITMASK_GLOBAL(src_idx);
         const word_std_t shifts = (src_idx & WORD_MASK);
-        const uint32 s = (ss[WORD_OFFSET(src_idx)] & generator_mask) >> shifts;
+        const int s = (ss[WORD_OFFSET(src_idx)] & generator_mask) >> shifts;
         assert(s <= 1);
 
-        // XOR s with the outcome only once.
+        // track power of i.
+        int pos_i = 0, neg_i = 0;    
         if (!q) {
-            m.measurement ^= s;
+            // First add s.
+            m.measurement += s * 2; // s = {0, 1} * 2
         }
-
-        // only track parity (0 for positive or 1 for i, -i, -1)
-        uint32 p = 0; 
         if (q < num_qubits && tx < num_qubits) {
             const size_t word_idx = q * num_words_per_column + WORD_OFFSET(src_idx);
-            uint32 x = ((word_std_t(xs[word_idx]) & generator_mask) >> shifts);
-            uint32 z = ((word_std_t(zs[word_idx]) & generator_mask) >> shifts);
+            byte_t x = ((word_std_t(xs[word_idx]) & generator_mask) >> shifts);
+            byte_t z = ((word_std_t(zs[word_idx]) & generator_mask) >> shifts);
             assert(x <= 1);
             assert(z <= 1);
-            const uint32 aux_x = aux_xs[shared_tid];
-            const uint32 aux_z = aux_zs[shared_tid];
+            const byte_t aux_x = aux_xs[shared_tid];
+            const byte_t aux_z = aux_zs[shared_tid];
             assert(aux_x <= 1);
             assert(aux_z <= 1);
             aux_xs[shared_tid] ^= x;
             aux_zs[shared_tid] ^= z;
             // We don't need to sync shared memory here.
             // It would be done in collapse_load_shared.
-            uint32 x_only = x & ~z;  // X 
-            uint32 y = x & z;        // Y 
-            uint32 z_only = ~x & z;  // Z 
-            uint32 aux_x_only = aux_x & ~aux_z;  // aux_X
-            uint32 aux_y = aux_x & aux_z;        // aux_Y 
-            uint32 aux_z_only = ~aux_x & aux_z;  // aux_Z 
-            p  ^= (x_only & aux_y)        // XY=iZ
-                ^ (x_only & aux_z_only)   // XZ=-iY
-                ^ (y      & aux_z_only)   // YZ=iX
-                ^ (y      & aux_x_only)   // YX=-iZ
-                ^ (z_only & aux_x_only)   // ZX=iY
-                ^ (z_only & aux_y);       // ZY=-iX
+            int x_only = x & ~z;  // X 
+            int y = x & z;        // Y 
+            int z_only = ~x & z;  // Z 
+            int aux_x_only = aux_x & ~aux_z;  // aux_X
+            int aux_y = aux_x & aux_z;        // aux_Y 
+            int aux_z_only = ~aux_x & aux_z;  // aux_Z 
+            assert(x_only <= 1);
+            assert(y <= 1);
+            assert(z_only <= 1);
+            assert(aux_x_only <= 1);
+            assert(aux_y <= 1);
+            assert(aux_z_only <= 1);
+            // XY=iZ, YZ=iX, ZX=iY
+            pos_i = (x_only & aux_y) + (y & aux_z_only) + (z_only & aux_x_only);
+            assert(pos_i <= 1);
+            // XZ=-iY, YX=-iZ, ZY=-iX     
+            neg_i = (x_only & aux_z_only) + (y & aux_x_only) + (z_only & aux_y); 
+            assert(neg_i <= 1);
         }
 
-        // Collapse thread-local p's in shared memory.
-        assert(p < 2);
-        collapse_load_shared(aux_signs, p, shared_tid, tx, num_qubits);
-        collapse_shared(aux_signs, p, shared_tid, BX, tx);
-        collapse_warp(aux_signs, p, shared_tid, BX, tx);
+        // accumulate thread-local values in shared memory.
+        load_shared(pos_is, pos_i, neg_is, neg_i, shared_tid, tx, num_qubits);
+        sum_shared(pos_is, pos_i, neg_is, neg_i, shared_tid, BX, tx);
+        sum_warp(pos_is, pos_i, neg_is, neg_i, shared_tid, BX, tx);
         
-        // Do: *aux_sign ^= p, where p here holds the collapsed value of a block.
-        if (!tx && global_offset < num_qubits) {
-            atomicByteXOR(&m.measurement, p);
+        if (!tx) {
+            int old_measurement = atomicAdd(&m.measurement, (pos_i - neg_i));
+            assert(old_measurement < UNMEASURED);
         }
     }
 
-    INLINE_DEVICE void row_to_aux(byte_t& measurement, uint32* aux, const Table& xs, const Table& zs, const Signs& ss, const size_t& src_idx, const size_t& num_qubits, const size_t& num_words_per_column) {
+    INLINE_DEVICE void row_to_aux(int& measurement, byte_t* aux, const Table& xs, const Table& zs, const Signs& ss, const size_t& src_idx, const size_t& num_qubits, const size_t& num_words_per_column) {
         const word_std_t generator_mask = BITMASK_GLOBAL(src_idx);
         const word_std_t shifts = (src_idx & WORD_MASK);
         const grid_t tx = threadIdx.x, BX = blockDim.x;
-        const grid_t shared_tid = threadIdx.y * BX * 3 + tx;
+        const grid_t shared_tid = threadIdx.y * BX * 2 + tx;
         const grid_t q = blockIdx.x * BX + tx;
         if (!q) {
             assert(measurement == UNMEASURED);
-            measurement = (ss[WORD_OFFSET(src_idx)] & generator_mask) >> shifts;
-            assert(measurement <= 1);
+            measurement = int((ss[WORD_OFFSET(src_idx)] & generator_mask) >> shifts) * 2;
+            assert(measurement >= 0 && measurement <= 2);
         }
-        uint32* aux_xs = aux;
-        uint32* aux_zs = aux + blockDim.x;
+        byte_t* aux_xs = aux;
+        byte_t* aux_zs = aux + blockDim.x;
         if (q < num_qubits && tx < num_qubits) {
             const size_t word_idx = q * num_words_per_column + WORD_OFFSET(src_idx);
             aux_xs[shared_tid] = (word_std_t(xs[word_idx]) & generator_mask) >> shifts;
@@ -351,11 +357,11 @@ namespace QuaSARQ {
     }
 
 
-    INLINE_DEVICE uint32 measure_determinate_qubit(DeviceLocker& dlocker, Gate& m, Table& xs, Table& zs, Signs& ss, uint32* smem, const size_t num_qubits, const size_t num_words_per_column) {
+    INLINE_DEVICE void measure_determinate_qubit(DeviceLocker& dlocker, Gate& m, Table& xs, Table& zs, Signs& ss, byte_t* smem, const size_t num_qubits, const size_t num_words_per_column) {
         const size_t col = m.wires[0] * num_words_per_column;
         word_std_t word = 0;
-        uint32* aux = smem;
-        uint32* aux_signs = aux + 2 * blockDim.x;
+        byte_t* aux = smem;
+        int* aux_power = (int*)(aux + blockDim.y * blockDim.x * 2);
         for (size_t j = 0; j < num_words_per_column; j++) {
             word = xs[col + j];
             if (word) {
@@ -372,7 +378,7 @@ namespace QuaSARQ {
                         word = xs[col + WORD_OFFSET(k)];
                         if (word & BITMASK_GLOBAL(k)) {
                             //if (!global_tx) print_row(dlocker, m, xs, zs, ss, k + num_qubits, num_qubits, num_words_per_column);
-                            row_aux_mul(m, aux, aux_signs, xs, zs, ss, k + num_qubits, num_qubits, num_words_per_column);
+                            row_aux_mul(dlocker, m, aux, aux_power, xs, zs, ss, k + num_qubits, generator_index + num_qubits, num_qubits, num_words_per_column);
                             //print_shared_aux(dlocker, m, aux, num_qubits, generator_index + num_qubits, k + num_qubits);
                         }
                     }
@@ -383,7 +389,7 @@ namespace QuaSARQ {
     }
 
     __global__ void measure_determinate(const gate_ref_t* refs, bucket_t* measurements, Table* xs, Table* zs, Signs* ss, uint32* aux_sign, byte_t* aux, DeviceLocker* dlocker, const size_t num_qubits, const size_t num_gates, const size_t num_words_per_column) {
-        uint32* smem = SharedMemory<uint32>();
+        byte_t* smem = SharedMemory<byte_t>();
         for_parallel_y(i, num_gates) {
             const gate_ref_t r = refs[i];
             assert(r < NO_REF);
@@ -446,7 +452,7 @@ namespace QuaSARQ {
         const size_t num_words_per_column = tableau.num_words_per_column();
         const size_t shared_element_bytes = sizeof(word_std_t);
 
-        print_gates(gpu_circuit, num_gates_per_window, depth_level);
+        //print_gates(gpu_circuit, num_gates_per_window, depth_level);
 
         if (!circuit.is_measuring(depth_level)) {
 
@@ -518,25 +524,20 @@ namespace QuaSARQ {
             SYNC(copy_stream1);
             SYNC(copy_stream2);
 
-            printf("\ndepth %d has %d measurements\n", depth_level, num_gates_per_window);
-
-            fflush(stdout);
-
             if (!depth_level) locker.reset(0);
             is_indeterminate_outcome<<<bestGridStep, bestBlockStep, 0, kernel_stream>>>(gpu_circuit.references(), gpu_circuit.gates(), XZ_TABLE(tableau), tableau.signs(), locker.deviceLocker(), num_qubits, num_gates_per_window, num_words_per_column);
-            printf("After checking determinism: "), print_gates(gpu_circuit, num_gates_per_window, depth_level);
-
-            OPTIMIZESHARED(smem_size, bestBlockStep.y * (bestBlockStep.x * 3), sizeof(uint32));
 
             // This kernel cannot use grid-stride loops in
             // x-dim. Nr. of blocks must be always sufficient
             // as we use shraed memory as scratch space.
-            dim3 nThreads(8, 8);
+            dim3 nThreads(256, 2);
             uint32 nBlocksX = ROUNDUPBLOCKS(num_qubits, nThreads.x);
             OPTIMIZEBLOCKS(nBlocksY, num_gates_per_window, nThreads.y);
+            OPTIMIZESHARED(smem_size, nThreads.y * (nThreads.x * 2), sizeof(int) + sizeof(byte_t));
+
             measure_determinate<<<dim3(nBlocksX, nBlocksY), nThreads, smem_size, kernel_stream>>>(gpu_circuit.references(), gpu_circuit.gates(), XZ_TABLE(tableau), tableau.signs(), tableau.auxiliary_sign(), tableau.auxiliary(), locker.deviceLocker(), num_qubits, num_gates_per_window, num_words_per_column);
             
-            printf("After measuring: "), print_gates(gpu_circuit, num_gates_per_window, depth_level);
+            print_measurements(gpu_circuit, num_gates_per_window, depth_level);
             
             //measure_indeterminate<<<1, 4>>>(gpu_circuit.references(), gpu_circuit.gates(), XZ_TABLE(tableau), tableau.signs(), tableau.auxiliary(), locker.deviceLocker(), num_qubits, num_gates_per_window, num_words_per_column);
             //SYNCALL; // just for debugging

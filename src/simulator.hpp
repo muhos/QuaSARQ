@@ -87,6 +87,7 @@ namespace QuaSARQ {
         void print_tableau(const Tableau<DeviceAllocator>& tab, const depth_t& depth_level, const bool& reverse);
         void print_paulis(const Tableau<DeviceAllocator>& tab, const depth_t& depth_level, const bool& reversed);
         void print_gates(const DeviceCircuit<DeviceAllocator>& gates, const gate_ref_t& num_gates, const depth_t& depth_level);
+        void print_measurements(const DeviceCircuit<DeviceAllocator>& gates, const gate_ref_t& num_gates, const depth_t& depth_level);
 
     };
 

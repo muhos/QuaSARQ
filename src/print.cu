@@ -66,6 +66,18 @@ namespace QuaSARQ {
 		}
 	}
 
+	__global__ void print_measurements_k(const gate_ref_t* refs, const bucket_t* measurements, const gate_ref_t num_gates) {
+		if (!blockIdx.x && !threadIdx.x) {
+			for (gate_ref_t i = 0; i < num_gates; i++) {
+				const gate_ref_t r = refs[i];
+				const Gate &m = (Gate &)measurements[r];
+				LOGGPU(" %8d     %10s    %2c\n", m.wires[0], 
+					m.pivot == MAX_QUBITS ? "definite" : "random",  
+					m.measurement != UNMEASURED ? char(((m.measurement % 4 + 4) % 4 >> 1) + 48) : 'U');
+			}
+		}
+	}
+
 	void Simulator::print_paulis(const Tableau<DeviceAllocator>& tab, const depth_t& depth_level, const bool& reversed) {
 		if (!options.sync) SYNCALL;
 		if (depth_level == -1) 
@@ -104,6 +116,18 @@ namespace QuaSARQ {
 		if (!options.sync) SYNCALL;
 		LOG2(0, " Gates on GPU for %d-time step:", depth_level);
 		print_gates_k << <1, 1 >> > (gates.references(), gates.gates(), num_gates);
+		LASTERR("failed to launch print-gates kernel");
+		SYNCALL;
+		fflush(stdout);
+	}
+
+	void Simulator::print_measurements(const DeviceCircuit<DeviceAllocator>& gates, const gate_ref_t& num_gates, const depth_t& depth_level) {
+		if (!options.print_measurements) return;
+		if (!circuit.is_measuring(depth_level)) return;
+		if (!options.sync) SYNCALL;
+		LOG2(0, " Measurements on GPU for %d-time step:", depth_level);
+		LOG2(0, "%10s   %10s     %5s", "Qubit", "Type", "Outcome");
+		print_measurements_k << <1, 1 >> > (gates.references(), gates.gates(), num_gates);
 		LASTERR("failed to launch print-gates kernel");
 		SYNCALL;
 		fflush(stdout);
