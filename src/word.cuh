@@ -69,6 +69,26 @@ namespace QuaSARQ {
             return *this;
         }
 
+        INLINE_ALL word_t& operator&=(const word_t& other) {
+            word &= other.word;
+            return *this;
+        }
+
+        INLINE_ALL word_t& operator|=(const word_t& other) {
+            word |= other.word;
+            return *this;
+        }
+
+        INLINE_ALL word_t& operator&=(const word_std_t& other) {
+            word &= other;
+            return *this;
+        }
+
+        INLINE_ALL word_t& operator|=(const word_std_t& other) {
+            word |= other;
+            return *this;
+        }
+
         INLINE_ALL word_t operator~() const {
             return word_t(~word);
         }

@@ -229,7 +229,32 @@ namespace QuaSARQ {
 
     }
 
-    __global__ void is_indeterminate_outcome(const gate_ref_t* refs, bucket_t* measurements, Table* xs, Table* zs, Signs* ss, DeviceLocker* dlocker, const size_t num_qubits, const size_t num_gates, const size_t num_words_per_column) {
+    INLINE_DEVICE uint32 find_min_pivot(Gate& m, uint32& new_pivot, const word_std_t& word, const size_t& word_idx, const size_t num_qubits) {
+        uint32 old_pivot = MAX_QUBITS;
+        new_pivot = old_pivot;
+        if (word) {
+            const int64 bit_offset = word_idx << WORD_POWER;
+            const int64 first_one_pos = int64(__ffsll(word)) - 1;
+            assert(first_one_pos >= 0);
+            int64 generator_index = 0;
+            // Find the first high generator per word.
+            #pragma unroll
+            for (int64 bit_index = first_one_pos; bit_index < WORD_BITS; ++bit_index) {
+                if (word & BITMASK(bit_index)) {
+                    generator_index = bit_index + bit_offset;
+                    if (generator_index >= num_qubits) {
+                        new_pivot = generator_index - num_qubits;
+                        break;
+                    }
+                }
+            }
+            if (new_pivot != MAX_QUBITS)
+                old_pivot = atomicMin(&(m.pivot), new_pivot);
+        }
+        return old_pivot;
+    }
+
+    __global__ void is_indeterminate_outcome(bucket_t* measurements, const gate_ref_t* refs, const Table* xs, const size_t num_qubits, const size_t num_gates, const size_t num_words_per_column) {
 
         for_parallel_y(i, num_gates) {
             const gate_ref_t r = refs[i];
@@ -239,27 +264,8 @@ namespace QuaSARQ {
             const size_t col = m.wires[0] * num_words_per_column;
             for_parallel_x(j, num_words_per_column) {
                 // Check stabilizers if Xgq has 1, if so save the minimum row index.
-                const word_std_t word = (*xs)[col + j];
-                if (word) {
-                    const int64 bit_offset = j << WORD_POWER;
-                    const int64 first_one_pos = int64(__ffsll(word)) - 1;
-                    assert(first_one_pos >= 0);
-                    int64 generator_index = 0;
-                    uint32 min_pivot = MAX_QUBITS;
-                    // Find the first high generator per word.
-                    #pragma unroll
-                    for (int64 bit_index = first_one_pos; bit_index < WORD_BITS; ++bit_index) {
-                        if (word & BITMASK(bit_index)) {
-                            generator_index = bit_index + bit_offset;
-                            if (generator_index >= num_qubits) {
-                                min_pivot = generator_index - num_qubits;
-                                break;
-                            }
-                        }
-                    }
-                    if (min_pivot != MAX_QUBITS)
-                        atomicMin(&(m.pivot), min_pivot);
-                }
+                uint32 new_pivot;
+                find_min_pivot(m, new_pivot, (*xs)[col + j], j, num_qubits);
             }
         }
 
@@ -373,11 +379,11 @@ namespace QuaSARQ {
                     // TODO: transform the rows involved here into words. This could improve the rowmul operation.                 
                     row_to_aux(m.measurement, aux, xs, zs, ss, generator_index + num_qubits, num_qubits, num_words_per_column);
                     //print_shared_aux(dlocker, m, aux, num_qubits, generator_index + num_qubits, generator_index + num_qubits);
-                    //if (!global_tx) print_row(dlocker, m, xs, zs, ss, generator_index + num_qubits, num_qubits, num_words_per_column);
+                    //if (!global_tx) print_row(*dlocker, m, *xs, *zs, *ss, generator_index + num_qubits, num_qubits, num_words_per_column);
                     for (size_t k = generator_index + 1; k < num_qubits; k++) {
                         word = xs[col + WORD_OFFSET(k)];
                         if (word & BITMASK_GLOBAL(k)) {
-                            //if (!global_tx) print_row(dlocker, m, xs, zs, ss, k + num_qubits, num_qubits, num_words_per_column);
+                            //if (!global_tx) print_row(*dlocker, m, *xs, *zs, *ss, k + num_qubits, num_qubits, num_words_per_column);
                             row_aux_mul(dlocker, m, aux, aux_power, xs, zs, ss, k + num_qubits, generator_index + num_qubits, num_qubits, num_words_per_column);
                             //print_shared_aux(dlocker, m, aux, num_qubits, generator_index + num_qubits, k + num_qubits);
                         }
@@ -402,37 +408,128 @@ namespace QuaSARQ {
         }
     }
 
+    INLINE_DEVICE void row_to_row(Table& xs, Table& zs, Signs& ss, const size_t& dest_idx, const size_t& src_idx, const size_t& num_qubits, const size_t& num_words_per_column) {
+        const word_std_t src_bit_pos = src_idx & WORD_MASK;
+        const word_std_t dest_bit_pos = dest_idx & WORD_MASK;
+        const word_std_t dest_reset_mask = ~BITMASK_GLOBAL(dest_idx);
+        for_parallel_x(q, num_qubits) {
+            const size_t src_row = WORD_OFFSET(src_idx);
+            const size_t dest_row = WORD_OFFSET(dest_idx);
+            const size_t src_word_idx = q * num_words_per_column + src_row;
+            const size_t dest_word_idx = q * num_words_per_column + dest_row;
+            word_std_t x_src = xs[src_word_idx];
+            word_std_t z_src = zs[src_word_idx];
+            x_src = (x_src >> src_bit_pos) & 1;
+            z_src = (z_src >> src_bit_pos) & 1;
+            assert(x_src <= 1);
+            assert(z_src <= 1);
+            word_std_t x = xs[dest_word_idx];
+            word_std_t z = zs[dest_word_idx];
+            x &= dest_reset_mask;
+            z &= dest_reset_mask;  
+            xs[dest_word_idx] = (x | (x_src << dest_bit_pos));
+            zs[dest_word_idx] = (z | (z_src << dest_bit_pos));
+            if (!q) {
+                word_std_t s_src = ss[src_row];
+                word_std_t s = ss[dest_row];
+                s &= dest_reset_mask;
+                s_src = (s_src >> src_bit_pos) & 1;
+                assert(s_src <= 1);
+                ss[dest_row] = (s | (s_src << dest_bit_pos));
+            }
+        }
+    }
+
+    INLINE_DEVICE void row_set(Table& xs, Table& zs, Signs& ss, const size_t& dest_idx, const size_t& qubit, const size_t& num_qubits, const size_t& num_words_per_column) {
+        const word_std_t dest_bit_pos = dest_idx & WORD_MASK;
+        const word_std_t dest_reset_mask = ~BITMASK_GLOBAL(dest_idx);
+        for_parallel_x(q, num_qubits) {
+            const size_t dest_row = WORD_OFFSET(dest_idx);
+            const size_t dest_word_idx = q * num_words_per_column + dest_row;
+            xs[dest_word_idx] &= dest_reset_mask;
+            zs[dest_word_idx] &= dest_reset_mask; 
+            if (q == qubit) {
+                ss[dest_row] &= dest_reset_mask;
+                zs[dest_word_idx] |= (word_std_t(1) << dest_bit_pos);
+            }
+        }
+    }
+
     __global__ void measure_indeterminate(const gate_ref_t* refs, bucket_t* measurements, Table* xs, Table* zs, Signs* ss, byte_t* aux, DeviceLocker* dlocker, const size_t num_qubits, const size_t num_gates, const size_t num_words_per_column) {
         
         for(size_t i = 0; i < num_gates; i++) {
             const gate_ref_t r = refs[i];
             assert(r < NO_REF);
             Gate& m = (Gate&) measurements[r];
-            if (m.pivot != MAX_QUBITS) {
+            uint32 destab_pivot = m.pivot;
+            if (destab_pivot != MAX_QUBITS) {
                 assert(m.size == 1);
+                // First we need to test the validity of this pivot,
+                // by checking if the corresponding generator is HIGH.
+                const size_t stab_pivot = destab_pivot + num_qubits;
                 const size_t col = m.wires[0] * num_words_per_column;
-                word_std_t word = 0;
-                // Check again if this gate changed to determinate.
-                bool is_determinate = true;
-                for_parallel_x(j, num_words_per_column) {
-                    const word_std_t word = (*xs)[col + j];
-                    printf("(%lld, %lld): word(" B2B_STR ")\n", i, j, RB2B(word));
+                const word_std_t generator_word = (*xs)[col + WORD_OFFSET(stab_pivot)];
+                const word_std_t generator_bit = generator_word & BITMASK_GLOBAL(stab_pivot);
+                if (generator_bit) {
+                    // We are good to go to do measurement.
+
+                    // rowcopy(q, p, p + q->n);				// Set Xbar_p := Zbar_p
+                    row_to_row(*xs, *zs, *ss, destab_pivot, stab_pivot, num_qubits, num_words_per_column);
+
+                    // rowset(q, p + q->n, b + q->n);			// Set Zbar_p := Z_b
+                    row_set(*xs, *zs, *ss, stab_pivot, m.wires[0], num_qubits, num_words_per_column);
+
+                    // q->r[p + q->n] = 2 * (rand() % 2);		// moment of quantum randomness
+                    // Outcome of measurement.
+                    m.measurement = 2 * (i % 2); //2 * (rand() % 2);		// moment of quantum randomness
+                    // for (i = 0; i < 2 * q->n; i++)			// Now update the Xbar's and Zbar's that don't commute with
+                    //      if ((i != p) && (q->x[i][b5] & pw)) // Z_b
+                    //          rowmult(q, i, p);
+                    for (size_t j = 0; j < 2 * num_qubits; j++) {
+                        word_std_t word = (*xs)[col + WORD_OFFSET(j)];
+                        if (word & BITMASK_GLOBAL(j)) {
+                            if (!global_tx) print_row(*dlocker, m, *xs, *zs, *ss, destab_pivot, num_qubits, num_words_per_column);
+                            row_aux_mul(dlocker, m, xs, zs, ss, k + num_qubits, generator_index + num_qubits, num_qubits, num_words_per_column);
+                            if (!global_tx) print_row(*dlocker, m, *xs, *zs, *ss, stab_pivot, num_qubits, num_words_per_column);
+                        }
+                    }
+                    // if (q->r[p + q->n])
+                    //     return 3;
+                    // else
+                    //     return 2;
                 }
-                // for (size_t j = 0; j < num_words_per_column; j++) {
-                //     // Check if all stabilizers are zero.
-                //     const word_std_t word = (*xs)[col + j];
-                //     if (word) {
-                //         const int64 generator_index = GET_GENERATOR_INDEX(word, j);
-                //         //printf("(%lld, %lld): ffs in word(" B2B_STR ") = %d, generator index = %lld\n", i, j, RB2B(word), bit_index_per_word, generator_index);
-                //         if (generator_index >= num_qubits) {
-                //             is_determinate = false;
-                //             break;
-                //         }
-                //     }
-                // }
-                // if (is_determinate) {
-                //     measure_determinate_qubit(*dlocker, *xs, *zs, *ss, aux, m.wires[0], num_qubits, num_words_per_column);
-                // }
+                else {
+                    // In this situation, we have to possible scenarios:
+                    // 1) the pivot has changed to a different value.
+                    // 2) There is no pivot and this gate became determinate.
+                    // In either case, we need to check again for a pivot, 
+                    // but this time we don't have to find the minimum, as
+                    // we need the pivot immediately.
+
+                    // The idea is to check with atomicMin, as we did above 
+                    // with the exception that we check the old value of atomicMin, 
+                    // if the current thread found a pivot and the old value is MAX_QUBITS,
+                    // this this pivot is new and we are good to go, if the old value, 
+                    // already have been set to some pivot, we don't do anything and skip.
+                    // By the end of this kernel, we could have some determinate gates (non-set pivots).
+                    // Thus we need to run the measure_determinate kernel again after this one, we have to do this
+                    // in a iteratively as long as we have determinate gates.
+
+                    // Actually no, we can do also determinate gates here, by checking if are at the last thread ID and the old value, 
+                    // of the atomicMin is still non-pivot, that means we couldn't find any pivot. We should test both approaches or maybe do some heuristic like counting how many
+                    // determinate gates found, if they are suffiently large, do them in parallel, otherwise do them here.
+
+                    // Reset current pivot.
+                    if (!global_tx)
+                        m.pivot = MAX_QUBITS;
+                    // Check stabilizers if Xgq has 1, if so save the minimum row index.
+                    for_parallel_x(j, num_words_per_column) {    
+                        uint32 old_pivot = find_min_pivot(m, destab_pivot, (*xs)[col + j], j, num_qubits);
+                        if (old_pivot == MAX_QUBITS && destab_pivot != MAX_QUBITS) {
+                            
+                        }
+                    }
+                }
             }
         }
     }
@@ -452,9 +549,9 @@ namespace QuaSARQ {
         const size_t num_words_per_column = tableau.num_words_per_column();
         const size_t shared_element_bytes = sizeof(word_std_t);
 
-        //print_gates(gpu_circuit, num_gates_per_window, depth_level);
-
         if (!circuit.is_measuring(depth_level)) {
+
+            print_gates(gpu_circuit, num_gates_per_window, depth_level);
 
             #if DEBUG_STEP
 
@@ -525,7 +622,7 @@ namespace QuaSARQ {
             SYNC(copy_stream2);
 
             if (!depth_level) locker.reset(0);
-            is_indeterminate_outcome<<<bestGridStep, bestBlockStep, 0, kernel_stream>>>(gpu_circuit.references(), gpu_circuit.gates(), XZ_TABLE(tableau), tableau.signs(), locker.deviceLocker(), num_qubits, num_gates_per_window, num_words_per_column);
+            is_indeterminate_outcome<<<bestGridStep, bestBlockStep, 0, kernel_stream>>>(gpu_circuit.gates(), gpu_circuit.references(), tableau.xtable(), num_qubits, num_gates_per_window, num_words_per_column);
 
             // This kernel cannot use grid-stride loops in
             // x-dim. Nr. of blocks must be always sufficient
@@ -538,9 +635,15 @@ namespace QuaSARQ {
             measure_determinate<<<dim3(nBlocksX, nBlocksY), nThreads, smem_size, kernel_stream>>>(gpu_circuit.references(), gpu_circuit.gates(), XZ_TABLE(tableau), tableau.signs(), tableau.auxiliary_sign(), tableau.auxiliary(), locker.deviceLocker(), num_qubits, num_gates_per_window, num_words_per_column);
             
             print_measurements(gpu_circuit, num_gates_per_window, depth_level);
+
+            print_gates(gpu_circuit, num_gates_per_window, depth_level);
             
-            //measure_indeterminate<<<1, 4>>>(gpu_circuit.references(), gpu_circuit.gates(), XZ_TABLE(tableau), tableau.signs(), tableau.auxiliary(), locker.deviceLocker(), num_qubits, num_gates_per_window, num_words_per_column);
-            //SYNCALL; // just for debugging
+            measure_indeterminate<<<1, 16>>>(gpu_circuit.references(), gpu_circuit.gates(), XZ_TABLE(tableau), tableau.signs(), tableau.auxiliary(), locker.deviceLocker(), num_qubits, num_gates_per_window, num_words_per_column);
+            SYNCALL; // just for debugging
+            
+            print_tableau(tableau, depth_level, false);
+
+            print_gates(gpu_circuit, num_gates_per_window, depth_level);
         }
 
     } // End of function.
