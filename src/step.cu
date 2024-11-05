@@ -250,6 +250,8 @@ namespace QuaSARQ {
 
             print_gates(gpu_circuit, num_gates_per_window, depth_level);
 
+            print_gates(gpu_circuit, num_gates_per_window, depth_level);
+
             #if DEBUG_STEP
 
             LOG1(" Debugging at %sdepth %2d:", reversed ? "reversed " : "", depth_level);
