@@ -89,7 +89,8 @@
         "charconv": "cpp",
         "variant": "cpp",
         "span": "cpp",
-        "shared_mutex": "cpp"
+        "shared_mutex": "cpp",
+        "*.cupp": "cpp"
     },
     "git.ignoreLimitWarning": true
 }

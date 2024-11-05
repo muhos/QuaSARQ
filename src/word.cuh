@@ -14,12 +14,15 @@
 namespace QuaSARQ {
 
 #if defined(WORD_SIZE_8)
+    #define POPC __popc
     typedef byte_t word_std_t;
     constexpr size_t WORD_POWER = 3;
 #elif defined(WORD_SIZE_32)
+    #define POPC __popc
     typedef uint32 word_std_t;
     constexpr size_t WORD_POWER = 5;
 #elif defined(WORD_SIZE_64)
+    #define POPC __popcll
     typedef uint64 word_std_t;
     constexpr size_t WORD_POWER = 6;
 #endif
@@ -69,6 +72,31 @@ namespace QuaSARQ {
             return *this;
         }
 
+        INLINE_ALL word_t& operator&=(const word_t& other) {
+            word &= other.word;
+            return *this;
+        }
+
+        INLINE_ALL word_t& operator|=(const word_t& other) {
+            word |= other.word;
+            return *this;
+        }
+
+        INLINE_ALL word_t& operator&=(const word_std_t& other) {
+            word &= other;
+            return *this;
+        }
+
+        INLINE_ALL word_t& operator|=(const word_std_t& other) {
+            word |= other;
+            return *this;
+        }
+
+        INLINE_ALL word_t& operator^=(const word_std_t& other) {
+            word ^= other;
+            return *this;
+        }
+
         INLINE_ALL word_t operator~() const {
             return word_t(~word);
         }
@@ -113,7 +141,7 @@ namespace QuaSARQ {
 
 #if defined(WORD_SIZE_8)
 
-    #define B2B_STR "%-2c%-2c%-2c%-2c%-2c%-2c%-2c%-2c"
+    #define B2B_STR "%-3c%-3c%-3c%-3c%-3c%-3c%-3c%-3c"
     #define RB2B(WORD)  \
     ((WORD) & 0x01 ? '1' : '0'), \
     ((WORD) & 0x02 ? '1' : '0'), \
@@ -126,7 +154,7 @@ namespace QuaSARQ {
 
 #elif defined(WORD_SIZE_32) || defined(WORD_SIZE_64)
 
-    #define B2B_STR "%-2c%-2c%-2c%-2c%-2c%-2c%-2c%-2c%-2c%-2c%-2c%-2c%-2c%-2c%-2c%-2c%-2c%-2c%-2c%-2c%-2c%-2c%-2c%-2c%-2c%-2c%-2c%-2c%-2c%-2c%-2c%-2c"
+    #define B2B_STR "%-3c%-3c%-3c%-3c%-3c%-3c%-3c%-3c%-3c%-3c%-3c%-3c%-3c%-3c%-3c%-3c%-3c%-3c%-3c%-3c%-3c%-3c%-3c%-3c%-3c%-3c%-3c%-3c%-3c%-3c%-3c%-3c"
     #define RB2B(WORD)  \
     ((WORD) & 0x00000001UL ? '1' : '0'), \
     ((WORD) & 0x00000002UL ? '1' : '0'), \

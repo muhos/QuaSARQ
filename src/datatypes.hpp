@@ -3,6 +3,7 @@
 #define __DATATYPES_H
 
 #include <cstddef>
+#include <cstdint>
 
 namespace QuaSARQ {
 

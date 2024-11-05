@@ -22,7 +22,7 @@ namespace QuaSARQ {
 	extern dim3 bestBlockIdentity, bestGridIdentity;
 	extern dim3 bestBlockCheckIdentity, bestGridCheckIdentity;
 	extern dim3 bestBlockStep, bestGridStep;
-	extern dim3 bestBlockSignCollapse, bestGridSignCollapse;
+	extern dim3 bestBlockMeasure, bestGridMeasure;
 
 	// x
 	#define global_bx		((grid_t)blockDim.x * blockIdx.x)

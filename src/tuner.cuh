@@ -44,7 +44,7 @@ namespace QuaSARQ {
 		const bool& shared_size_yextend,
 		const size_t& data_size_in_x, 
 		const size_t& data_size_in_y,
-		const gate_ref_t* gate_refs, const bucket_t* gate_buckets, const size_t& num_gates, const size_t& num_words_per_column, 
+		const gate_ref_t* gate_refs, const bucket_t* gate_buckets, const size_t& num_gates, const size_t& num_words_major, 
 		#ifdef INTERLEAVE_XZ
 		Table* ps, 
 		#else

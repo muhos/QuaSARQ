@@ -3,9 +3,6 @@ src/*.cuo
 src/quasarq
 src/libquasarq.a
 src/*.out
-src/*.stim
+src/*.txt
 src/*.chp
-src/*.qasm
-qasm2stim/qasm2stim
-src/.DS_Store
-scripts/.DS_Store
+src/*.stim

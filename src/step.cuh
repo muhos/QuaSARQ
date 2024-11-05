@@ -15,7 +15,7 @@
 namespace QuaSARQ {
 
     // Simulate a single window per circuit.
-    __global__ void step_2D(const gate_ref_t* refs, const bucket_t* gates, const size_t num_gates, const size_t num_words_per_column, 
+    __global__ void step_2D(const gate_ref_t* refs, const bucket_t* gates, const size_t num_gates, const size_t num_words_major, 
     #ifdef INTERLEAVE_XZ
     Table* ps, 
     #else
@@ -23,15 +23,13 @@ namespace QuaSARQ {
     #endif
     Signs* ss);
 
-    __global__ void step_2D_warped(const gate_ref_t* refs, const bucket_t* gates, const size_t num_gates, const size_t num_words_per_column, 
+    __global__ void step_2D_warped(const gate_ref_t* refs, const bucket_t* gates, const size_t num_gates, const size_t num_words_major, 
     #ifdef INTERLEAVE_XZ
     Table* ps, 
     #else
     Table* xs, Table* zs,
     #endif
     Signs* ss);
-
-    #define GET_GENERATOR_INDEX(WORD, WORD_IDX) ((int64(__ffsll(WORD)) - 1) + int64((WORD_IDX) << WORD_POWER))
 
 }
 

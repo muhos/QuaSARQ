@@ -34,6 +34,7 @@ namespace QuaSARQ {
         bool print_step_state;
         bool print_final_state;
         bool print_measurements;
+        bool print_tableau_decimal;
 
         bool profile_equivalence;
         bool disable_concurrency;

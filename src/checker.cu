@@ -11,7 +11,7 @@ namespace QuaSARQ {
 
     __managed__ uint64 checksum;
 
-    __global__ void check_identity_Z_2D(const size_t offset, const size_t num_qubits, const size_t num_words_per_column, 
+    __global__ void check_identity_Z_2D(const size_t offset, const size_t num_qubits, const size_t num_words_major, 
     #ifdef INTERLEAVE_XZ
     Table* ps
     #else
@@ -25,7 +25,7 @@ namespace QuaSARQ {
         grid_t global_offset = blockIdx.x * blockDim.x;
         grid_t collapse_tid = threadIdx.y * blockDim.x + tx;
 
-        for_parallel_y(w, num_words_per_column) {
+        for_parallel_y(w, num_words_major) {
 
             word_std_t xored_z = word_std_t(0);
             word_std_t xored_x = word_std_t(0);
@@ -38,8 +38,8 @@ namespace QuaSARQ {
                     LOGGPU(" Qubit %lld\n", (q + offset));
                     ps->flag_not_indentity();                  
                 }
-                xored_z ^= word_std_t(gens_per_word[(Z_OFFSET(q) + offset) * num_words_per_column]);
-                xored_x ^= word_std_t(gens_per_word[(X_OFFSET(q) + offset) * num_words_per_column]);
+                xored_z ^= word_std_t(gens_per_word[(Z_OFFSET(q) + offset) * num_words_major]);
+                xored_x ^= word_std_t(gens_per_word[(X_OFFSET(q) + offset) * num_words_major]);
             }
     #else
             word_t* z_gens_per_word = zs->data() + w;
@@ -50,8 +50,8 @@ namespace QuaSARQ {
                     LOGGPU(" Qubit %lld\n", (q + offset));
                     zs->flag_not_indentity();                  
                 }
-                xored_z ^= word_std_t(z_gens_per_word[(q + offset) * num_words_per_column]);
-                xored_x ^= word_std_t(x_gens_per_word[(q + offset) * num_words_per_column]);
+                xored_z ^= word_std_t(z_gens_per_word[(q + offset) * num_words_major]);
+                xored_x ^= word_std_t(x_gens_per_word[(q + offset) * num_words_major]);
             }
     #endif
 
@@ -70,7 +70,7 @@ namespace QuaSARQ {
         }
     }
 
-    __global__ void check_identity_X_2D(const size_t offset, const size_t num_qubits, const size_t num_words_per_column, 
+    __global__ void check_identity_X_2D(const size_t offset, const size_t num_qubits, const size_t num_words_major, 
     #ifdef INTERLEAVE_XZ
     Table* ps
     #else
@@ -84,7 +84,7 @@ namespace QuaSARQ {
         grid_t global_offset = blockIdx.x * BX;
         grid_t collapse_tid = threadIdx.y * BX + tx;
 
-        for_parallel_y(w, num_words_per_column) {
+        for_parallel_y(w, num_words_major) {
 
             word_std_t xored_z = word_std_t(0);
             word_std_t xored_x = word_std_t(0);
@@ -97,8 +97,8 @@ namespace QuaSARQ {
                     LOGGPU(" Qubit %lld\n", (q + offset));
                     ps->flag_not_indentity();                  
                 }
-                xored_z ^= word_std_t(gens_per_word[(Z_OFFSET(q) + offset) * num_words_per_column]);
-                xored_x ^= word_std_t(gens_per_word[(X_OFFSET(q) + offset) * num_words_per_column]);
+                xored_z ^= word_std_t(gens_per_word[(Z_OFFSET(q) + offset) * num_words_major]);
+                xored_x ^= word_std_t(gens_per_word[(X_OFFSET(q) + offset) * num_words_major]);
             }
     #else
             word_t* z_gens_per_word = zs->data() + w;
@@ -108,8 +108,8 @@ namespace QuaSARQ {
                 if (!w && !xs->check_word_is_identity(q, offset)) {
                     xs->flag_not_indentity();
                 }
-                xored_z ^= word_std_t(z_gens_per_word[(q + offset) * num_words_per_column]);
-                xored_x ^= word_std_t(x_gens_per_word[(q + offset) * num_words_per_column]);
+                xored_z ^= word_std_t(z_gens_per_word[(q + offset) * num_words_major]);
+                xored_x ^= word_std_t(x_gens_per_word[(q + offset) * num_words_major]);
             }
     #endif
 
@@ -128,7 +128,7 @@ namespace QuaSARQ {
         }
     }
 
-    __global__ void check_identity_2D(const size_t offset, const size_t num_qubits, const size_t num_words_per_column, 
+    __global__ void check_identity_2D(const size_t offset, const size_t num_qubits, const size_t num_words_major, 
     #ifdef INTERLEAVE_XZ
     Table* ps
     #else
@@ -142,7 +142,7 @@ namespace QuaSARQ {
         grid_t global_offset = blockIdx.x * blockDim.x;
         grid_t collapse_tid = threadIdx.y * blockDim.x + tx;
 
-        for_parallel_y(w, num_words_per_column) {
+        for_parallel_y(w, num_words_major) {
 
             word_std_t xored_z = word_std_t(0);
             word_std_t xored_x = word_std_t(0);
@@ -157,8 +157,8 @@ namespace QuaSARQ {
                 if (!w && !ps->check_x_word_is_identity(q, offset)) {
                     ps->flag_not_indentity();
                 }
-                xored_z ^= word_std_t(gens_per_word[(Z_OFFSET(q) + offset) * num_words_per_column]);
-                xored_x ^= word_std_t(gens_per_word[(X_OFFSET(q) + offset) * num_words_per_column]);
+                xored_z ^= word_std_t(gens_per_word[(Z_OFFSET(q) + offset) * num_words_major]);
+                xored_x ^= word_std_t(gens_per_word[(X_OFFSET(q) + offset) * num_words_major]);
             }
     #else
             word_t* z_gens_per_word = zs->data() + w;
@@ -171,8 +171,8 @@ namespace QuaSARQ {
                 if (!w && !xs->check_word_is_identity(q, offset)) {
                     xs->flag_not_indentity();
                 }
-                xored_z ^= word_std_t(z_gens_per_word[(q + offset) * num_words_per_column]);
-                xored_x ^= word_std_t(x_gens_per_word[(q + offset) * num_words_per_column]);
+                xored_z ^= word_std_t(z_gens_per_word[(q + offset) * num_words_major]);
+                xored_x ^= word_std_t(x_gens_per_word[(q + offset) * num_words_major]);
             }
     #endif
             word_std_t xored = xored_x ^ xored_z;
@@ -196,7 +196,7 @@ namespace QuaSARQ {
         if (options.initialstate == Zero) {         
             OPTIMIZESHARED(reduce_smem_size, bestBlockCheckIdentity.y * bestBlockCheckIdentity.x, sizeof(word_std_t));
             checksum = 0;
-            check_identity_Z_2D << < bestGridCheckIdentity, bestBlockCheckIdentity, reduce_smem_size >> > (offset_per_partition, num_qubits_per_partition, tableau.num_words_per_column(), XZ_TABLE(tableau));
+            check_identity_Z_2D << < bestGridCheckIdentity, bestBlockCheckIdentity, reduce_smem_size >> > (offset_per_partition, num_qubits_per_partition, tableau.num_words_major(), XZ_TABLE(tableau));
             LASTERR("failed to launch identity kernel");
             // Call is_table_identity() is blocking, thus it's
             // safe to read checksum on host afterwards.
@@ -205,7 +205,7 @@ namespace QuaSARQ {
         else if (options.initialstate == Plus) {
             OPTIMIZESHARED(reduce_smem_size, bestBlockCheckIdentity.y * bestBlockCheckIdentity.x, sizeof(word_std_t));
             checksum = 0;
-            check_identity_X_2D << < bestGridCheckIdentity, bestBlockCheckIdentity, reduce_smem_size >> > (offset_per_partition, num_qubits_per_partition, tableau.num_words_per_column(), XZ_TABLE(tableau));
+            check_identity_X_2D << < bestGridCheckIdentity, bestBlockCheckIdentity, reduce_smem_size >> > (offset_per_partition, num_qubits_per_partition, tableau.num_words_major(), XZ_TABLE(tableau));
             LASTERR("failed to launch identity kernel");
             // Call is_table_identity() is blocking, thus it's
             // safe to read checksum on host afterwards.
@@ -215,7 +215,7 @@ namespace QuaSARQ {
             assert(options.initialstate == Imag);
             OPTIMIZESHARED(reduce_smem_size, bestBlockCheckIdentity.y * bestBlockCheckIdentity.x, sizeof(word_std_t));
             checksum = 0;
-            check_identity_2D << < bestGridCheckIdentity, bestBlockCheckIdentity, reduce_smem_size >> > (offset_per_partition, num_qubits_per_partition, tableau.num_words_per_column(), XZ_TABLE(tableau));
+            check_identity_2D << < bestGridCheckIdentity, bestBlockCheckIdentity, reduce_smem_size >> > (offset_per_partition, num_qubits_per_partition, tableau.num_words_major(), XZ_TABLE(tableau));
             LASTERR("failed to launch identity kernel");
             // Call is_table_identity() is blocking, thus it's
             // safe to read checksum on host afterwards.

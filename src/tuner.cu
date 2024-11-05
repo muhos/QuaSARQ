@@ -58,7 +58,7 @@ namespace QuaSARQ {
 			// Reset old configuration.
 			reset();
 			// Tune identity.
-			identity(tableau, 0, tableau.num_words_per_column() * WORD_BITS, custreams, options.initialstate);
+			identity(tableau, 0, tableau.num_words_major() * WORD_BITS, custreams, options.initialstate);
 			// Parse a circuit.
 			parse();
 			// Start step-wise simulation.
@@ -226,7 +226,7 @@ namespace QuaSARQ {
 		const bool& shared_size_yextend,
 		const size_t& data_size_in_x, 
 		const size_t& data_size_in_y,
-		const gate_ref_t* gate_refs, const bucket_t* gate_buckets, const size_t& num_gates, const size_t& num_words_per_column, 
+		const gate_ref_t* gate_refs, const bucket_t* gate_buckets, const size_t& num_gates, const size_t& num_words_major, 
 		#ifdef INTERLEAVE_XZ
 		Table* ps, 
 		#else
@@ -236,7 +236,7 @@ namespace QuaSARQ {
 	{
 		assert(gate_ref_t(num_gates) == num_gates);
 		assert(gate_ref_t(data_size_in_x) == data_size_in_x);
-		TUNE_2D(gate_refs, gate_buckets, num_gates, num_words_per_column, TUNE_XZ_TABLES, ss);
+		TUNE_2D(gate_refs, gate_buckets, num_gates, num_words_major, TUNE_XZ_TABLES, ss);
 	}
 
 }

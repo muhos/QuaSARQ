@@ -58,14 +58,14 @@ namespace QuaSARQ {
 
 	#if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
 		#define CHECK(FUNCCALL) \
-			{ \
+			do { \
 				const cudaError_t returncode = FUNCCALL; \
 				if (returncode != cudaSuccess) { \
 					fprintf(stderr, "CUDA runtime failure due to %s", cudaGetErrorString(returncode)); \
 					cudaDeviceReset(); \
 					exit(1); \
 				} \
-			}
+			} while (0)
 	#else
 		#define CHECK(FUNCCALL) FUNCCALL
 	#endif

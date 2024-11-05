@@ -1,17 +1,19 @@
 #include "simulator.hpp"
 #include "step.cuh"
+#include "transpose.cuh"
+#include "measurement.cuh"
 #include "tuner.cuh"
 #include "operators.cuh"
 #include "macros.cuh"
 #include "locker.cuh"
 #include "warp.cuh"
-#include "sum.cuh"
+
 
 namespace QuaSARQ {
 
     dim3 bestBlockStep(2, 128), bestGridStep(103, 52);
 
-    __global__ void step_2D(const gate_ref_t* refs, const bucket_t* gates, const size_t num_gates, const size_t num_words_per_column, 
+    __global__ void step_2D(const gate_ref_t* refs, const bucket_t* gates, const size_t num_gates, const size_t num_words_major, 
     #ifdef INTERLEAVE_XZ
     Table* ps, 
     #else
@@ -25,7 +27,7 @@ namespace QuaSARQ {
         word_std_t* shared_signs = SharedMemory<word_std_t>();
         sign_t* signs = ss->data();
 
-        for_parallel_y(w, num_words_per_column) {
+        for_parallel_y(w, num_words_major) {
 
             word_std_t signs_word = signs[w];
 
@@ -56,14 +58,14 @@ namespace QuaSARQ {
                 assert(q1 < MAX_QUBITS);
                 assert(q2 < MAX_QUBITS);
 
-                const size_t q1_x_word_idx = X_OFFSET(q1) * num_words_per_column;
-                const size_t q2_x_word_idx = X_OFFSET(q2) * num_words_per_column;
+                const size_t q1_x_word_idx = X_OFFSET(q1) * num_words_major;
+                const size_t q2_x_word_idx = X_OFFSET(q2) * num_words_major;
                 #ifdef INTERLEAVE_WORDS
-                const size_t q1_z_word_idx = Z_OFFSET(q1) * num_words_per_column + 1;
-                const size_t q2_z_word_idx = Z_OFFSET(q2) * num_words_per_column + 1;
+                const size_t q1_z_word_idx = Z_OFFSET(q1) * num_words_major + 1;
+                const size_t q2_z_word_idx = Z_OFFSET(q2) * num_words_major + 1;
                 #else
-                const size_t q1_z_word_idx = Z_OFFSET(q1) * num_words_per_column;
-                const size_t q2_z_word_idx = Z_OFFSET(q2) * num_words_per_column;
+                const size_t q1_z_word_idx = Z_OFFSET(q1) * num_words_major;
+                const size_t q2_z_word_idx = Z_OFFSET(q2) * num_words_major;
                 #endif
 
                 #ifdef INTERLEAVE_XZ
@@ -122,7 +124,7 @@ namespace QuaSARQ {
 
     }
 
-    __global__ void step_2D_warped(const gate_ref_t* refs, const bucket_t* gates, const size_t num_gates, const size_t num_words_per_column, 
+    __global__ void step_2D_warped(const gate_ref_t* refs, const bucket_t* gates, const size_t num_gates, const size_t num_words_major, 
     #ifdef INTERLEAVE_XZ
     Table* ps, 
     #else
@@ -135,7 +137,7 @@ namespace QuaSARQ {
         word_std_t* shared_signs = SharedMemory<word_std_t>();
         sign_t* signs = ss->data();
 
-        for_parallel_y(w, num_words_per_column) {
+        for_parallel_y(w, num_words_major) {
 
             word_std_t signs_word = signs[w];
 
@@ -170,14 +172,14 @@ namespace QuaSARQ {
                 assert(q1 < MAX_QUBITS);
                 assert(q2 < MAX_QUBITS);
 
-                const size_t q1_x_word_idx = X_OFFSET(q1) * num_words_per_column;
-                const size_t q2_x_word_idx = X_OFFSET(q2) * num_words_per_column;
+                const size_t q1_x_word_idx = X_OFFSET(q1) * num_words_major;
+                const size_t q2_x_word_idx = X_OFFSET(q2) * num_words_major;
                 #ifdef INTERLEAVE_WORDS
-                const size_t q1_z_word_idx = Z_OFFSET(q1) * num_words_per_column + 1;
-                const size_t q2_z_word_idx = Z_OFFSET(q2) * num_words_per_column + 1;
+                const size_t q1_z_word_idx = Z_OFFSET(q1) * num_words_major + 1;
+                const size_t q2_z_word_idx = Z_OFFSET(q2) * num_words_major + 1;
                 #else
-                const size_t q1_z_word_idx = Z_OFFSET(q1) * num_words_per_column;
-                const size_t q2_z_word_idx = Z_OFFSET(q2) * num_words_per_column;
+                const size_t q1_z_word_idx = Z_OFFSET(q1) * num_words_major;
+                const size_t q2_z_word_idx = Z_OFFSET(q2) * num_words_major;
                 #endif
 
                 #ifdef INTERLEAVE_XZ
@@ -229,214 +231,6 @@ namespace QuaSARQ {
 
     }
 
-    __global__ void is_indeterminate_outcome(const gate_ref_t* refs, bucket_t* measurements, Table* xs, Table* zs, Signs* ss, DeviceLocker* dlocker, const size_t num_qubits, const size_t num_gates, const size_t num_words_per_column) {
-
-        for_parallel_y(i, num_gates) {
-            const gate_ref_t r = refs[i];
-            assert(r < NO_REF);
-            Gate& m = (Gate&) measurements[r];
-            assert(m.size == 1);
-            const size_t col = m.wires[0] * num_words_per_column;
-            for_parallel_x(j, num_words_per_column) {
-                // Check stabilizers if Xgq has 1, if so save the minimum row index.
-                const word_std_t word = (*xs)[col + j];
-                if (word) {
-                    const int64 bit_offset = j << WORD_POWER;
-                    const int64 first_one_pos = int64(__ffsll(word)) - 1;
-                    assert(first_one_pos >= 0);
-                    int64 generator_index = 0;
-                    uint32 min_pivot = MAX_QUBITS;
-                    // Find the first high generator per word.
-                    #pragma unroll
-                    for (int64 bit_index = first_one_pos; bit_index < WORD_BITS; ++bit_index) {
-                        if (word & BITMASK(bit_index)) {
-                            generator_index = bit_index + bit_offset;
-                            if (generator_index >= num_qubits) {
-                                min_pivot = generator_index - num_qubits;
-                                break;
-                            }
-                        }
-                    }
-                    if (min_pivot != MAX_QUBITS)
-                        atomicMin(&(m.pivot), min_pivot);
-                }
-            }
-        }
-
-    }
-
-
-    INLINE_DEVICE void row_aux_mul(DeviceLocker& dlocker, Gate& m, byte_t* aux, int* aux_power, const Table& xs, const Table& zs, const Signs& ss, const size_t& src_idx, const size_t& aux_idx, const size_t& num_qubits, const size_t& num_words_per_column) {
-        byte_t* aux_xs = aux;
-        byte_t* aux_zs = aux + blockDim.x;
-        int* pos_is = aux_power;
-        int* neg_is = aux_power + blockDim.x;
-        const grid_t tx = threadIdx.x, BX = blockDim.x;
-        const grid_t global_offset = blockIdx.x * BX;
-        const grid_t shared_tid = threadIdx.y * BX * 2 + tx;
-        const grid_t q = blockIdx.x * BX + tx;
-        const word_std_t generator_mask = BITMASK_GLOBAL(src_idx);
-        const word_std_t shifts = (src_idx & WORD_MASK);
-        const int s = (ss[WORD_OFFSET(src_idx)] & generator_mask) >> shifts;
-        assert(s <= 1);
-
-        // track power of i.
-        int pos_i = 0, neg_i = 0;    
-        if (!q) {
-            // First add s.
-            m.measurement += s * 2; // s = {0, 1} * 2
-        }
-        if (q < num_qubits && tx < num_qubits) {
-            const size_t word_idx = q * num_words_per_column + WORD_OFFSET(src_idx);
-            byte_t x = ((word_std_t(xs[word_idx]) & generator_mask) >> shifts);
-            byte_t z = ((word_std_t(zs[word_idx]) & generator_mask) >> shifts);
-            assert(x <= 1);
-            assert(z <= 1);
-            const byte_t aux_x = aux_xs[shared_tid];
-            const byte_t aux_z = aux_zs[shared_tid];
-            assert(aux_x <= 1);
-            assert(aux_z <= 1);
-            aux_xs[shared_tid] ^= x;
-            aux_zs[shared_tid] ^= z;
-            // We don't need to sync shared memory here.
-            // It would be done in collapse_load_shared.
-            int x_only = x & ~z;  // X 
-            int y = x & z;        // Y 
-            int z_only = ~x & z;  // Z 
-            int aux_x_only = aux_x & ~aux_z;  // aux_X
-            int aux_y = aux_x & aux_z;        // aux_Y 
-            int aux_z_only = ~aux_x & aux_z;  // aux_Z 
-            assert(x_only <= 1);
-            assert(y <= 1);
-            assert(z_only <= 1);
-            assert(aux_x_only <= 1);
-            assert(aux_y <= 1);
-            assert(aux_z_only <= 1);
-            // XY=iZ, YZ=iX, ZX=iY
-            pos_i = (x_only & aux_y) + (y & aux_z_only) + (z_only & aux_x_only);
-            assert(pos_i <= 1);
-            // XZ=-iY, YX=-iZ, ZY=-iX     
-            neg_i = (x_only & aux_z_only) + (y & aux_x_only) + (z_only & aux_y); 
-            assert(neg_i <= 1);
-        }
-
-        // accumulate thread-local values in shared memory.
-        load_shared(pos_is, pos_i, neg_is, neg_i, shared_tid, tx, num_qubits);
-        sum_shared(pos_is, pos_i, neg_is, neg_i, shared_tid, BX, tx);
-        sum_warp(pos_is, pos_i, neg_is, neg_i, shared_tid, BX, tx);
-        
-        if (!tx) {
-            int old_measurement = atomicAdd(&m.measurement, (pos_i - neg_i));
-            assert(old_measurement < UNMEASURED);
-        }
-    }
-
-    INLINE_DEVICE void row_to_aux(int& measurement, byte_t* aux, const Table& xs, const Table& zs, const Signs& ss, const size_t& src_idx, const size_t& num_qubits, const size_t& num_words_per_column) {
-        const word_std_t generator_mask = BITMASK_GLOBAL(src_idx);
-        const word_std_t shifts = (src_idx & WORD_MASK);
-        const grid_t tx = threadIdx.x, BX = blockDim.x;
-        const grid_t shared_tid = threadIdx.y * BX * 2 + tx;
-        const grid_t q = blockIdx.x * BX + tx;
-        if (!q) {
-            assert(measurement == UNMEASURED);
-            measurement = int((ss[WORD_OFFSET(src_idx)] & generator_mask) >> shifts) * 2;
-            assert(measurement >= 0 && measurement <= 2);
-        }
-        byte_t* aux_xs = aux;
-        byte_t* aux_zs = aux + blockDim.x;
-        if (q < num_qubits && tx < num_qubits) {
-            const size_t word_idx = q * num_words_per_column + WORD_OFFSET(src_idx);
-            aux_xs[shared_tid] = (word_std_t(xs[word_idx]) & generator_mask) >> shifts;
-            aux_zs[shared_tid] = (word_std_t(zs[word_idx]) & generator_mask) >> shifts;
-        }
-        else {
-            aux_xs[shared_tid] = 0;
-            aux_zs[shared_tid] = 0;
-        }
-        __syncthreads();
-    }
-
-
-    INLINE_DEVICE void measure_determinate_qubit(DeviceLocker& dlocker, Gate& m, Table& xs, Table& zs, Signs& ss, byte_t* smem, const size_t num_qubits, const size_t num_words_per_column) {
-        const size_t col = m.wires[0] * num_words_per_column;
-        word_std_t word = 0;
-        byte_t* aux = smem;
-        int* aux_power = (int*)(aux + blockDim.y * blockDim.x * 2);
-        for (size_t j = 0; j < num_words_per_column; j++) {
-            word = xs[col + j];
-            if (word) {
-                const int64 generator_index = GET_GENERATOR_INDEX(word, j);
-                // GET_GENERATOR_INDEX will work here as we check destabilizers,
-                // which are stored first in bit-packing. Thus, we don't need to
-                // loop over bits inside each word.
-                if (generator_index < num_qubits) {
-                    // TODO: transform the rows involved here into words. This could improve the rowmul operation.                 
-                    row_to_aux(m.measurement, aux, xs, zs, ss, generator_index + num_qubits, num_qubits, num_words_per_column);
-                    //print_shared_aux(dlocker, m, aux, num_qubits, generator_index + num_qubits, generator_index + num_qubits);
-                    //if (!global_tx) print_row(dlocker, m, xs, zs, ss, generator_index + num_qubits, num_qubits, num_words_per_column);
-                    for (size_t k = generator_index + 1; k < num_qubits; k++) {
-                        word = xs[col + WORD_OFFSET(k)];
-                        if (word & BITMASK_GLOBAL(k)) {
-                            //if (!global_tx) print_row(dlocker, m, xs, zs, ss, k + num_qubits, num_qubits, num_words_per_column);
-                            row_aux_mul(dlocker, m, aux, aux_power, xs, zs, ss, k + num_qubits, generator_index + num_qubits, num_qubits, num_words_per_column);
-                            //print_shared_aux(dlocker, m, aux, num_qubits, generator_index + num_qubits, k + num_qubits);
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-    }
-
-    __global__ void measure_determinate(const gate_ref_t* refs, bucket_t* measurements, Table* xs, Table* zs, Signs* ss, uint32* aux_sign, byte_t* aux, DeviceLocker* dlocker, const size_t num_qubits, const size_t num_gates, const size_t num_words_per_column) {
-        byte_t* smem = SharedMemory<byte_t>();
-        for_parallel_y(i, num_gates) {
-            const gate_ref_t r = refs[i];
-            assert(r < NO_REF);
-            Gate& m = (Gate&) measurements[r];
-            // Consdier only determinate measures.
-            if (m.pivot == MAX_QUBITS) {
-                assert(m.size == 1);
-                measure_determinate_qubit(*dlocker, m, *xs, *zs, *ss, smem, num_qubits, num_words_per_column);
-            }
-        }
-    }
-
-    __global__ void measure_indeterminate(const gate_ref_t* refs, bucket_t* measurements, Table* xs, Table* zs, Signs* ss, byte_t* aux, DeviceLocker* dlocker, const size_t num_qubits, const size_t num_gates, const size_t num_words_per_column) {
-        
-        for(size_t i = 0; i < num_gates; i++) {
-            const gate_ref_t r = refs[i];
-            assert(r < NO_REF);
-            Gate& m = (Gate&) measurements[r];
-            if (m.pivot != MAX_QUBITS) {
-                assert(m.size == 1);
-                const size_t col = m.wires[0] * num_words_per_column;
-                word_std_t word = 0;
-                // Check again if this gate changed to determinate.
-                bool is_determinate = true;
-                for_parallel_x(j, num_words_per_column) {
-                    const word_std_t word = (*xs)[col + j];
-                    printf("(%lld, %lld): word(" B2B_STR ")\n", i, j, RB2B(word));
-                }
-                // for (size_t j = 0; j < num_words_per_column; j++) {
-                //     // Check if all stabilizers are zero.
-                //     const word_std_t word = (*xs)[col + j];
-                //     if (word) {
-                //         const int64 generator_index = GET_GENERATOR_INDEX(word, j);
-                //         //printf("(%lld, %lld): ffs in word(" B2B_STR ") = %d, generator index = %lld\n", i, j, RB2B(word), bit_index_per_word, generator_index);
-                //         if (generator_index >= num_qubits) {
-                //             is_determinate = false;
-                //             break;
-                //         }
-                //     }
-                // }
-                // if (is_determinate) {
-                //     measure_determinate_qubit(*dlocker, *xs, *zs, *ss, aux, m.wires[0], num_qubits, num_words_per_column);
-                // }
-            }
-        }
-    }
-
     void Simulator::step(const size_t& p, const depth_t& depth_level, const cudaStream_t* streams, const bool& reversed) {
 
         double stime = 0;
@@ -449,18 +243,18 @@ namespace QuaSARQ {
         gpu_circuit.copyfrom(stats, circuit, depth_level, reversed, options.sync, copy_stream1, copy_stream2);
 
         const size_t num_gates_per_window = circuit[depth_level].size();
-        const size_t num_words_per_column = tableau.num_words_per_column();
+        const size_t num_words_major = tableau.num_words_major();
         const size_t shared_element_bytes = sizeof(word_std_t);
 
-        //print_gates(gpu_circuit, num_gates_per_window, depth_level);
-
         if (!circuit.is_measuring(depth_level)) {
+
+            print_gates(gpu_circuit, num_gates_per_window, depth_level);
 
             #if DEBUG_STEP
 
             LOG1(" Debugging at %sdepth %2d:", reversed ? "reversed " : "", depth_level);
             OPTIMIZESHARED(reduce_smem_size, 1, shared_element_bytes);
-            step_2D << < dim3(1, 1), dim3(1, 1), reduce_smem_size >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_per_column, tableau.xtable(), tableau.ztable(), tableau.signs());
+            step_2D << < dim3(1, 1), dim3(1, 1), reduce_smem_size >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, tableau.xtable(), tableau.ztable(), tableau.signs());
             LASTERR("failed to launch step kernel");
             SYNCALL;
             #else
@@ -478,9 +272,9 @@ namespace QuaSARQ {
                     // shared memory size.
                     , shared_element_bytes, true
                     // data length.         
-                    , num_gates_per_window, num_words_per_column
+                    , num_gates_per_window, num_words_major
                     // kernel arguments.
-                    , gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_per_column, XZ_TABLE(tableau), tableau.signs()
+                    , gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs()
                 );
             }
 
@@ -498,9 +292,9 @@ namespace QuaSARQ {
 
             // Run simulation.
             if (bestBlockStep.x > maxWarpSize)
-                step_2D << < bestGridStep, bestBlockStep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_per_column, XZ_TABLE(tableau), tableau.signs());
+                step_2D << < bestGridStep, bestBlockStep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs());
             else
-                step_2D_warped << < bestGridStep, bestBlockStep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_per_column, XZ_TABLE(tableau), tableau.signs());
+                step_2D_warped << < bestGridStep, bestBlockStep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs());
 
             if (options.sync) { 
                 LASTERR("failed to launch step kernel");
@@ -520,27 +314,7 @@ namespace QuaSARQ {
                 print_paulis(tableau, depth_level, reversed);
         } // END of non-measuring simulation.
         else {
-            // sync data transfer.
-            SYNC(copy_stream1);
-            SYNC(copy_stream2);
-
-            if (!depth_level) locker.reset(0);
-            is_indeterminate_outcome<<<bestGridStep, bestBlockStep, 0, kernel_stream>>>(gpu_circuit.references(), gpu_circuit.gates(), XZ_TABLE(tableau), tableau.signs(), locker.deviceLocker(), num_qubits, num_gates_per_window, num_words_per_column);
-
-            // This kernel cannot use grid-stride loops in
-            // x-dim. Nr. of blocks must be always sufficient
-            // as we use shraed memory as scratch space.
-            dim3 nThreads(256, 2);
-            uint32 nBlocksX = ROUNDUPBLOCKS(num_qubits, nThreads.x);
-            OPTIMIZEBLOCKS(nBlocksY, num_gates_per_window, nThreads.y);
-            OPTIMIZESHARED(smem_size, nThreads.y * (nThreads.x * 2), sizeof(int) + sizeof(byte_t));
-
-            measure_determinate<<<dim3(nBlocksX, nBlocksY), nThreads, smem_size, kernel_stream>>>(gpu_circuit.references(), gpu_circuit.gates(), XZ_TABLE(tableau), tableau.signs(), tableau.auxiliary_sign(), tableau.auxiliary(), locker.deviceLocker(), num_qubits, num_gates_per_window, num_words_per_column);
-            
-            print_measurements(gpu_circuit, num_gates_per_window, depth_level);
-            
-            //measure_indeterminate<<<1, 4>>>(gpu_circuit.references(), gpu_circuit.gates(), XZ_TABLE(tableau), tableau.signs(), tableau.auxiliary(), locker.deviceLocker(), num_qubits, num_gates_per_window, num_words_per_column);
-            //SYNCALL; // just for debugging
+            measure(p, depth_level, streams, reversed);
         }
 
     } // End of function.

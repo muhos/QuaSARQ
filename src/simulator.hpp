@@ -38,6 +38,7 @@ namespace QuaSARQ {
         DeviceCircuit<DeviceAllocator>  gpu_circuit;
         Locker<DeviceAllocator>         locker;
         Tableau<DeviceAllocator>        tableau;
+        Tableau<DeviceAllocator>        inv_tableau;
         Statistics                      stats;
         FILE*                           configfile;
         cudaStream_t*                   custreams;
@@ -78,10 +79,11 @@ namespace QuaSARQ {
         // Launch a kernel to make identity tableau.
         void identity(Tableau<DeviceAllocator>& tab, const size_t& offset_per_partition, const size_t& num_qubits_per_partition, const cudaStream_t* streams, const InitialState& istate = Zero);
 
-        // Launch a kernel to update the tableau using
-        // a single window of gates. Called step as it
-        // advances the simulation by 1-time step.
+        // Advances the simulation by 1-time step.
         void step(const size_t& p, const depth_t& depth_level, const cudaStream_t* streams, const bool& reversed = false);
+        
+        // Do measurements in a single simulation step.
+        void measure(const size_t& p, const depth_t& depth_level, const cudaStream_t* streams, const bool& reversed = false);
 
         // Printers.
         void print_tableau(const Tableau<DeviceAllocator>& tab, const depth_t& depth_level, const bool& reverse);

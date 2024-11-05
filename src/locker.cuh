@@ -22,6 +22,8 @@ namespace QuaSARQ {
 
 		NOINLINE_DEVICE void lock();
 
+		NOINLINE_DEVICE bool unlocked();
+
 		NOINLINE_DEVICE void unlock();
 
 	};

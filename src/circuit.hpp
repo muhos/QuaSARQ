@@ -285,20 +285,25 @@ namespace QuaSARQ {
         }
 
         inline
+        void        print_window(const depth_t& depth_level) {
+            LOG1(" Depth %d%s:", depth_level, measuring_windows[depth_level] ? " (measuring window)" : "");
+            for (size_t i = 0; i < windows[depth_level].size(); i++) {
+                const gate_ref_t& r = windows[depth_level][i];
+                const Gate& g = gate(r);
+                LOGN1("  Gate(r = %d", r);
+                if (g.type == M)
+                    PRINT(", p = %lld", g.pivot == MAX_QUBITS? int64(-1) : int64(g.pivot));
+                PRINT("): ");
+                gate(r).print();
+            }
+            fflush(stdout);
+        } 
+
+        inline
         void        print       (const bool& only_measurements = false) {
             for (depth_t d = 0; d < windows.size(); d++) {
                 if (only_measurements && !measuring_windows[d]) continue;
-                LOG1(" Depth %d%s:", d, measuring_windows[d] ? " (measuring window)" : "");
-                for (size_t i = 0; i < windows[d].size(); i++) {
-                    const gate_ref_t& r = windows[d][i];
-                    const Gate& g = gate(r);
-                    if (only_measurements && g.type != M) continue;
-                    LOGN1("  Gate(r = %d", r);
-                    if (g.type == M)
-                        PRINT(", p = %lld", g.pivot == MAX_QUBITS? int64(-1) : int64(g.pivot));
-                    PRINT("): ");
-                    gate(r).print();
-                }
+                print_window(d);
             }
         } 
     };
