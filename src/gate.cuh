@@ -1,5 +1,5 @@
-#ifndef __GATE_H
-#define __GATE_H
+#ifndef __CU_GATE_H
+#define __CU_GATE_H
 
 #include "definitions.cuh"
 #include "datatypes.hpp"
@@ -21,7 +21,7 @@ namespace QuaSARQ {
     typedef uint32 bucket_t;
 
     constexpr size_t BUCKETSIZE = sizeof(bucket_t);
-    constexpr gate_ref_t NO_REF = -1;
+    constexpr gate_ref_t NO_REF = UINT32_MAX;
     constexpr int UNMEASURED = INT_MAX;
 
     // Must follow the same order of 'Gatetypes'.
@@ -33,22 +33,21 @@ namespace QuaSARQ {
         byte_t type;
         input_size_t size;
         int measurement;
-        qubit_t pivot;
         qubit_t wires[0];
 
         INLINE_ALL 
-        Gate() : type(I), size(1), measurement(UNMEASURED), pivot(MAX_QUBITS) { }
+        Gate() : type(I), size(1), measurement(UNMEASURED) { }
 
         INLINE_ALL 
         explicit Gate(const input_size_t& size) : 
-            type(I), size(size), measurement(UNMEASURED), pivot(MAX_QUBITS) { }
+            type(I), size(size), measurement(UNMEASURED) { }
 
 		INLINE_ALL size_t capacity() const { assert(size); return size_t(size) * sizeof(qubit_t) + sizeof(*this); }
 
         INLINE_ALL
         void print(const bool& nonl = false) const {
             if (type < NR_GATETYPES) {
-                LOGGPU(" %2s(", G2S[type]);
+                LOGGPU(" %5s(", G2S[type]);
             }
             else {
                 LOGGPU("  Unknown(");
@@ -59,7 +58,7 @@ namespace QuaSARQ {
                     LOGGPU(" , ");
             }
             if (type == M) {
-                LOGGPU(" , p: %3d , m: %d", pivot, measurement != UNMEASURED ? ((measurement % 4 + 4) % 4 >> 1) : UNMEASURED);
+                LOGGPU(" , m: %d", measurement != UNMEASURED ? ((measurement % 4 + 4) % 4 >> 1) : UNMEASURED);
             }
             LOGGPU(")%s", nonl ? "" : "\n");
         }

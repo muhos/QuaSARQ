@@ -11,11 +11,11 @@ namespace QuaSARQ {
 	public:
 		INLINE_DEVICE operator T* () {
 			extern __shared__ int _smem[];
-			return (T*)_smem;
+			return reinterpret_cast<T*>(_smem);
 		}
 		INLINE_DEVICE operator const T* () const {
 			extern __shared__ int _smem[];
-			return (T*)_smem;
+			return reinterpret_cast<T*>(_smem);
 		}
 
 	};

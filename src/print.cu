@@ -197,7 +197,7 @@ namespace QuaSARQ {
         int* pos_is = aux_power;
         int* neg_is = aux_power + blockDim.x;
         if (!global_tx) {
-            if (multiplied_row == -1)
+            if (multiplied_row == UINT64_MAX)
                 LOGGPU("qubit(%d), copied row(%lld):\n", m.wires[0], copied_row);
             else 
                 LOGGPU("qubit(%d), row(%lld) x row(%lld):\n", m.wires[0], copied_row, multiplied_row);
@@ -260,24 +260,30 @@ namespace QuaSARQ {
 		}
 	}
 
-	__global__ void print_gates_k(const gate_ref_t* refs, const bucket_t* gates, const gate_ref_t num_gates) {
+
+	__global__ void print_gates_k(const gate_ref_t* refs, const bucket_t* gates, const Pivot* pivots, const gate_ref_t num_gates) {
 		if (!global_tx) {
 			for (gate_ref_t i = 0; i < num_gates; i++) {
 				const gate_ref_t r = refs[i];
-				LOGGPU(" Gate(%3d , r:%3d):", i, r);
+				LOGGPU("  Gate(%3d , r:%3d):", i, r);
 				const Gate &gate = (Gate &)gates[r];
 				gate.print();
+                if (gate.type == M) {
+                    REPCH_GPU(" ", 25);
+                    LOGGPU("pivot");
+                    pivots[i].print();
+                }
 			}
 		}
 	}
 
-	__global__ void print_measurements_k(const gate_ref_t* refs, const bucket_t* measurements, const gate_ref_t num_gates) {
+	__global__ void print_measurements_k(const gate_ref_t* refs, const bucket_t* measurements, const Pivot* pivots, const gate_ref_t num_gates) {
 		if (!global_tx) {
 			for (gate_ref_t i = 0; i < num_gates; i++) {
 				const gate_ref_t r = refs[i];
 				const Gate &m = (Gate &)measurements[r];
 				LOGGPU(" %8d     %10s    %2c\n", m.wires[0], 
-					m.pivot == MAX_QUBITS ? "definite" : "random",  
+					pivots[i].indeterminate == INVALID_PIVOT ? "definite" : "random",  
 					m.measurement != UNMEASURED ? char(((m.measurement % 4 + 4) % 4 >> 1) + 48) : 'U');
 				// LOGGPU(" %8d     %10s    %2d\n", m.wires[0], 
 				// 	m.pivot == MAX_QUBITS ? "definite" : "random",  
@@ -319,24 +325,24 @@ namespace QuaSARQ {
         fflush(stdout);
 	}
 
-	void Simulator::print_gates(const DeviceCircuit<DeviceAllocator>& gates, const gate_ref_t& num_gates, const depth_t& depth_level) {
+	void Simulator::print_gates(const DeviceCircuit<DeviceAllocator>& gpu_circuit, const gate_ref_t& num_gates, const depth_t& depth_level) {
 		if (!options.print_gates) return;
 		if (!options.sync) SYNCALL;
 		LOG2(0, " Gates on GPU for %d-time step:", depth_level);
-		print_gates_k << <1, 1 >> > (gates.references(), gates.gates(), num_gates);
+		print_gates_k << <1, 1 >> > (gpu_circuit.references(), gpu_circuit.gates(), gpu_circuit.pivots(), num_gates);
 		LASTERR("failed to launch print-gates kernel");
 		SYNCALL;
 		fflush(stdout);
 	}
 
-	void Simulator::print_measurements(const DeviceCircuit<DeviceAllocator>& gates, const gate_ref_t& num_gates, const depth_t& depth_level) {
+	void Simulator::print_measurements(const DeviceCircuit<DeviceAllocator>& gpu_circuit, const gate_ref_t& num_gates, const depth_t& depth_level) {
 		if (!options.print_measurements) return;
 		if (!circuit.is_measuring(depth_level)) return;
 		if (!options.sync) SYNCALL;
 		LOG2(0, " Measurements on GPU for %d-time step:", depth_level);
 		LOG2(0, "%10s   %10s     %5s", "Qubit", "Type", "Outcome");
-		print_measurements_k << <1, 1 >> > (gates.references(), gates.gates(), num_gates);
-		LASTERR("failed to launch print-gates kernel");
+		print_measurements_k << <1, 1 >> > (gpu_circuit.references(), gpu_circuit.gates(), gpu_circuit.pivots(), num_gates);
+		LASTERR("failed to launch print-measurements kernel");
 		SYNCALL;
 		fflush(stdout);
 	}

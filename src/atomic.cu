@@ -31,7 +31,7 @@ namespace QuaSARQ {
     NOINLINE_DEVICE void
     #endif
     atomicXOR(word_std_t* addr, const uint32& value) {
-        assert(value <= WORD_MAX);
+        assert(value <= WORDS_MAX);
 		EXTRACT_BYTE_FROM_ADDR(addr, value);
         #if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
         return word_std_t((atomicXor(byte_addr, byte) >> al_offset) & 0xFF);

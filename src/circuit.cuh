@@ -3,7 +3,7 @@
 #define __CU_CIRCUIT_H
 
 #include "definitions.cuh"
-#include "vector.cuh"
+#include "pivot.cuh"
 #include "timer.cuh"
 #include "circuit.hpp"
 #include "statistics.hpp"
@@ -14,6 +14,8 @@ namespace QuaSARQ {
 	class DeviceCircuit {
 
 		ALLOCATOR& allocator;
+
+		Pivot* _pivots;
 
 		bucket_t* _buckets;
 		gate_ref_t* _references;
@@ -44,6 +46,7 @@ namespace QuaSARQ {
 
 		INLINE_ALL DeviceCircuit(ALLOCATOR& allocator) : 
 			allocator(allocator)
+		,	_pivots(nullptr)
 		,	_buckets(nullptr)
 		,	_references(nullptr)
 		,	pinned_buckets(nullptr)
@@ -72,6 +75,7 @@ namespace QuaSARQ {
 			if (this->max_references < max_references) {
 				LOGN2(2, "Resizing a (pinned) window for %lld references.. ", int64(max_references));
 				this->max_references = max_references;
+				_pivots = allocator.template allocate<Pivot>(max_references);
 				_references = allocator.template allocate<gate_ref_t>(max_references);
 				allocator.template resize_pinned<gate_ref_t>(pinned_references, max_references);
 				LOGDONE(2, 3);
@@ -161,6 +165,21 @@ namespace QuaSARQ {
 		}
 
 		inline
+		Pivot 		copypivoto 	(Circuit& circuit, const uint32& gate_index, const cudaStream_t& stream) {
+			LOGN2(2, "Copying gate pivot to host asynchroneously.. ");
+			Pivot pivot;
+			CHECK(cudaMemcpyAsync(&(pivot), _pivots + gate_index, sizeof(Pivot), cudaMemcpyDeviceToHost, stream));
+			LOGDONE(2, 3);
+			return pivot;
+		}
+
+		inline
+		Pivot*    	 pivots		() { return _pivots; }
+
+		inline const
+		Pivot*    	 pivots		() const { return _pivots; }
+
+		inline
 		bucket_t*    gates		() { return _buckets; }
 
 		inline const
@@ -173,7 +192,7 @@ namespace QuaSARQ {
 		gate_ref_t*  references	() const { return _references; }
 
 		inline 
-		gate_ref_t get_buckets_offset() const { return buckets_offset; }
+		gate_ref_t 	get_buckets_offset() const { return buckets_offset; }
 
 	};
 }

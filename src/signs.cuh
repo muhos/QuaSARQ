@@ -77,46 +77,58 @@ namespace QuaSARQ {
 
         INLINE_ALL size_t size() const { return _num_words; }
 
-        // Return a pointer to q's sign.
-        INLINE_ALL sign_t* data(const qubit_t& q = 0) { 
-            assert(q < _num_words);
+        // Return a pointer to g's sign.
+        INLINE_ALL sign_t* data(const qubit_t& g = 0) { 
+            assert(g < _num_words);
             assert(!_is_unpacked);
-            return _data + q;
+            return _data + g;
         }
 
-        // Return a pointer to q's sign.
-        INLINE_ALL const sign_t* data(const qubit_t& q = 0) const {
-            assert(q < _num_words);
+        // Return a pointer to g's sign.
+        INLINE_ALL const sign_t* data(const qubit_t& g = 0) const {
+            assert(g < _num_words);
             assert(!_is_unpacked);
-            return _data + q;
+            return _data + g;
         }
 
-         // Return a pointer to q's sign.
-        INLINE_ALL int* unpacked_data(const qubit_t& q = 0) { 
-            assert(q < _num_words);
+         // Return a pointer to g's sign.
+        INLINE_ALL int* unpacked_data(const qubit_t& g = 0) { 
+            assert(g < _num_words);
             assert(_is_unpacked);
-            return _unpacked_data + q;
+            return _unpacked_data + g;
         }
 
-        // Return a pointer to q's sign.
-        INLINE_ALL const int* unpacked_data(const qubit_t& q = 0) const {
-            assert(q < _num_words);
+        // Return a pointer to g's sign.
+        INLINE_ALL const int* unpacked_data(const qubit_t& g = 0) const {
+            assert(g < _num_words);
             assert(_is_unpacked);
-            return _unpacked_data + q;
+            return _unpacked_data + g;
+        }
+
+        INLINE_ALL void set_unpacked_sign(const size_t& g, const int& sign) {
+            assert(g < _num_words);
+            assert(_is_unpacked);
+            _unpacked_data[g] = sign;
+        }
+
+        INLINE_ALL int get_unpacked_sign(const size_t& g) const {
+            assert(g < _num_words);
+            assert(_is_unpacked);
+            return _unpacked_data[g];
         }
 
         // Return sign word.
-        INLINE_ALL sign_t& operator[] (const size_t& q) {
-            assert(q < _num_words);
+        INLINE_ALL sign_t& operator[] (const size_t& g) {
+            assert(g < _num_words);
             assert(!_is_unpacked);
-            return _data[q];
+            return _data[g];
         }
 
         // Return sign word.
-        INLINE_ALL sign_t operator[] (const size_t& q) const {
-            assert(q < _num_words);
+        INLINE_ALL sign_t operator[] (const size_t& g) const {
+            assert(g < _num_words);
             assert(!_is_unpacked);
-            return _data[q];
+            return _data[g];
         }
 
     };

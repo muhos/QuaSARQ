@@ -23,7 +23,7 @@ namespace QuaSARQ {
     typedef Vec<bool, size_t> Marker;
 
 
-    constexpr depth_t MAX_DEPTH = -1;
+    constexpr depth_t MAX_DEPTH = UINT32_MAX;
 	constexpr size_t GATEBUCKETS = (GATESIZE / BUCKETSIZE);
 	#define NBUCKETS(NINPUTS) (GATEBUCKETS + (NINPUTS))
 
@@ -292,7 +292,7 @@ namespace QuaSARQ {
                 const Gate& g = gate(r);
                 LOGN1("  Gate(r = %d", r);
                 if (g.type == M)
-                    PRINT(", p = %lld", g.pivot == MAX_QUBITS? int64(-1) : int64(g.pivot));
+                    PRINT(", m = %d", g.measurement);
                 PRINT("): ");
                 gate(r).print();
             }

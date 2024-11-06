@@ -55,19 +55,8 @@ namespace QuaSARQ {
             assert(pos_i >= 0 && pos_i <= 64); \
             assert(neg_i >= 0 && neg_i <= 64); \
             int old_value = atomicAdd(&(GLOBAL_POWER), (pos_i - neg_i) % 4); \
-            CHECK_SIGN_OVERFLOW(src_idx, old_value, (pos_i - neg_i) % 4); \
+            CHECK_SIGN_OVERFLOW(des_idx, old_value, (pos_i - neg_i) % 4); \
         }
-
-    // Let threads in x-dim find the minimum stabilizer generator commuting.
-    INLINE_DEVICE void find_min_pivot(Gate& m, const Table& inv_xs, const size_t num_qubits, const size_t num_words_minor) {
-        const qubit_t q = m.wires[0], q_w = WORD_OFFSET(q);
-        const word_std_t q_mask = BITMASK_GLOBAL(q);
-        for_parallel_x(g, num_qubits) {
-            const word_std_t qubit_word = inv_xs[(g + num_qubits) * num_words_minor + q_w];
-            if (qubit_word & q_mask)
-                atomicMin(&m.pivot, g);
-        }
-    }
 
     
 
@@ -149,14 +138,22 @@ namespace QuaSARQ {
         }
     }
 
-    // Find all stabilizer generators commuting if exist.
-    __global__ void is_indeterminate_outcome(bucket_t* measurements, const gate_ref_t* refs, const Table* inv_xs, 
-                                            const size_t num_qubits, const size_t num_gates, const size_t num_words_minor);
+    // Reset pivots.
+    __global__ void reset_pivots(Pivot* pivots, const size_t num_gates);
+
+    // Find all generators commuting if exist.
+    __global__ void find_pivots_initial(Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs, const Table* inv_xs, 
+                                        const size_t num_gates, const size_t num_qubits, const size_t num_words_minor);
+
+    // Initialize measurements with generator signs.
+    __global__ void initialize_determinate_measurements(Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs,
+                                        const Table* inv_xs, const Signs* inv_ss,
+                                        const size_t num_gates, const size_t num_qubits, const size_t num_words_minor);
 
     // Measure all determinate qubits in parallel.
-    __global__ void measure_determinate(Table* inv_xs, Table* inv_zs, Signs* inv_ss, DeviceLocker* dlocker, 
-                                        bucket_t* measurements, const gate_ref_t* refs, const size_t num_gates, 
-                                        const size_t num_qubits, const size_t num_words_minor);
+    __global__ void measure_determinate(DeviceLocker* dlocker, Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs,
+                                        const Table* inv_xs, const Table* inv_zs, 
+                                        const size_t num_gates, const size_t num_qubits, const size_t num_words_minor);
 
     // For single measurements.
     __global__ void is_indeterminate_outcome_single(bucket_t* measurements, const gate_ref_t* refs, const Table* inv_xs, 

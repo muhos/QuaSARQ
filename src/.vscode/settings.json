@@ -90,7 +90,8 @@
         "variant": "cpp",
         "span": "cpp",
         "shared_mutex": "cpp",
-        "*.cupp": "cpp"
+        "*.cupp": "cpp",
+        "any": "cpp"
     },
     "git.ignoreLimitWarning": true
 }

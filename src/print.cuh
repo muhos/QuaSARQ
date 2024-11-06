@@ -28,7 +28,7 @@ namespace QuaSARQ {
 
     NOINLINE_DEVICE void print_row(DeviceLocker& dlocker, const Gate& m, const Table& inv_xs, const Table& inv_zs, const Signs& inv_ss, const size_t& row, const size_t& num_words_minor);
 
-    NOINLINE_DEVICE void print_shared_aux(DeviceLocker& dlocker, const Gate& m, byte_t* smem, const size_t& copied_row, const size_t& multiplied_row = -1);
+    NOINLINE_DEVICE void print_shared_aux(DeviceLocker& dlocker, const Gate& m, byte_t* smem, const size_t& copied_row, const size_t& multiplied_row = UINT64_MAX);
 
     // Print the tableau in binary format (generators are columns).
     __global__ void print_tableau_k(const Table* xs, const Table* zs, const Signs* ss, const size_t num_qubits, const depth_t level, const bool measuring);
@@ -39,7 +39,10 @@ namespace QuaSARQ {
     __global__ void print_paulis_k(const Table* ps, const Signs* ss, const size_t num_words_major, const size_t num_qubits, const bool extended);
 
     // Print gates.
-    __global__ void print_gates_k(const gate_ref_t* refs, const bucket_t* gates, const gate_ref_t num_gates);
+    __global__ void print_gates_k(const gate_ref_t* refs, const bucket_t* gates, const Pivot* pivots, const gate_ref_t num_gates);
+
+    // Print measurements.
+    __global__ void print_measurements_k(const gate_ref_t* refs, const bucket_t* measurements, const Pivot* pivots, const gate_ref_t num_gates);
 
 }
 
