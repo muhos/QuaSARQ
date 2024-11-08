@@ -67,7 +67,9 @@ void Simulator::initialize() {
     // is done after parsing as it causes
     // degradation to CPU performance.
     // The KB extra space is used for tableau allocations.
-    gpu_allocator.create_cpu_pool(winfo.max_window_bytes + KB);
+    gpu_allocator.create_cpu_pool(winfo.max_window_bytes 
+                                + winfo.max_parallel_gates * sizeof(Pivot)
+                                + KB);
     if (!options.tuner_en) register_config();
     create_streams(custreams);
     locker.alloc();
@@ -77,10 +79,16 @@ void Simulator::initialize() {
 
 void Simulator::create_streams(cudaStream_t*& streams) {
     if (streams == nullptr) {
+        assert(options.streams >= 4);
         LOGN2(1, "Allocating %d GPU streams..", options.streams);
         streams = new cudaStream_t[options.streams];
         for (int i = 0; i < options.streams; i++) 
             cudaStreamCreate(streams + i);
+        // We need at least two copy streams and two kernel streams.
+        copy_streams[0] = streams[0];
+        copy_streams[1] = streams[1];
+        kernel_streams[0] = streams[2];
+        kernel_streams[1] = streams[3];
         LOGDONE(1, 3);
     }
 }
@@ -100,13 +108,13 @@ void Simulator::simulate(const size_t& p, const bool& reversed) {
         gpu_circuit.reset_circuit_offset(circuit.reference(depth - 1, 0));
         for (depth_t d = 0; d < depth; d++) {
             const depth_t b = depth - d - 1;
-            step(p, b, custreams, true);
+            step(p, b, true);
         }
     }
     else {
         gpu_circuit.reset_circuit_offset(0);
         for (depth_t d = 0; d < depth; d++) {
-            step(p, d, custreams);
+            step(p, d);
         }
     }
     if (options.print_final_tableau)

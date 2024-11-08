@@ -132,7 +132,7 @@ namespace QuaSARQ {
         }
     }
 
-    __global__ void measure_determinate(DeviceLocker* dlocker, Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs,
+    __global__ void measure_determinate(DeviceLocker* dlocker, const Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs,
                                         const Table* inv_xs, const Table* inv_zs, 
                                         const size_t num_gates, const size_t num_qubits, const size_t num_words_minor) {
         word_std_t* aux = SharedMemory<word_std_t>();
@@ -269,13 +269,15 @@ namespace QuaSARQ {
     //     measure_determinate_qubit(*dlocker, m, *inv_xs, *inv_zs, unpacked_ss, aux, aux_power, num_qubits, num_words_minor);
     // }
 
-    void Simulator::measure(const size_t& p, const depth_t& depth_level, const cudaStream_t* streams, const bool& reversed) {
+    void Simulator::measure(const size_t& p, const depth_t& depth_level, const bool& reversed) {
 
-        cudaStream_t copy_stream1 = cudaStream_t(0);
-        cudaStream_t copy_stream2 = cudaStream_t(0);
-        cudaStream_t kernel_stream = cudaStream_t(0);
+        assert(options.streams >= 4);
+        cudaStream_t copy_stream1 = copy_streams[0];
+        cudaStream_t copy_stream2 = copy_streams[1];
+        cudaStream_t kernel_stream1 = kernel_streams[0];
+        cudaStream_t kernel_stream2 = kernel_streams[1];
 
-        if (!depth_level) locker.reset(copy_stream1);
+        if (!depth_level) locker.reset(kernel_stream1);
 
         const size_t num_words_minor = inv_tableau.num_words_minor();
         const size_t num_words_major = inv_tableau.num_words_major();
@@ -285,34 +287,40 @@ namespace QuaSARQ {
         uint32 nBlocks_gates = ROUNDUPBLOCKS(num_gates_per_window, nThreads_gates);
 
         // Reset pivots.
-        reset_pivots <<<nBlocks_gates, nThreads_gates, 0, copy_stream1>>> (gpu_circuit.pivots(), num_gates_per_window);
+        reset_pivots <<<nBlocks_gates, nThreads_gates, 0, kernel_stream2>>> (gpu_circuit.pivots(), num_gates_per_window);
 
         // Transpose the tableau into row-major format.
-        transpose_to_rowmajor<<< bestGridMeasure, bestBlockMeasure, 0, kernel_stream >>>(XZ_TABLE(inv_tableau), inv_tableau.signs(), XZ_TABLE(tableau), tableau.signs(), num_words_major, num_words_minor, num_qubits);
+        transpose_to_rowmajor<<< bestGridMeasure, bestBlockMeasure, 0, kernel_stream1 >>>(XZ_TABLE(inv_tableau), inv_tableau.signs(), XZ_TABLE(tableau), tableau.signs(), num_words_major, num_words_minor, num_qubits);
         if (options.sync) {
             LASTERR("failed to launch transpose_to_rowmajor kernel");
-            SYNC(kernel_stream);
+            SYNC(kernel_stream1);
         }
 
-        // Sync streams.
+        // Sync copying gates to device.
         SYNC(copy_stream1);
         SYNC(copy_stream2);
+        // Sync resetting pivots.
+        SYNC(kernel_stream2);
 
-        find_pivots_initial <<<bestGridMeasure, bestBlockMeasure, 0, kernel_stream>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), inv_tableau.xtable(), num_gates_per_window, num_qubits, num_words_minor);
+        find_pivots_initial <<<bestGridMeasure, bestBlockMeasure, 0, kernel_stream1>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), inv_tableau.xtable(), num_gates_per_window, num_qubits, num_words_minor);
         if (options.sync) {
             LASTERR("failed to launch find_pivots_initial kernel");
-            SYNC(kernel_stream);
+            SYNC(kernel_stream1);
         }
 
         //print_tableau(inv_tableau, depth_level, false);
 
-        initialize_determinate_measurements <<<nBlocks_gates, nThreads_gates, 0, kernel_stream>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), inv_tableau.xtable(), inv_tableau.signs(), num_gates_per_window, num_qubits, num_words_minor);
+        initialize_determinate_measurements <<<nBlocks_gates, nThreads_gates, 0, kernel_stream1>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), inv_tableau.xtable(), inv_tableau.signs(), num_gates_per_window, num_qubits, num_words_minor);
         if (options.sync) {
             LASTERR("failed to launch initialize_determinate_measurements kernel");
-            SYNC(kernel_stream);
+            SYNC(kernel_stream1);
         }
 
-        print_gates(gpu_circuit, num_gates_per_window, depth_level);
+        // Sync modifying pivots.
+        SYNC(kernel_stream1);
+        // Copy pivots to host.
+        gpu_circuit.copypivots(copy_stream1);
+        
 
         // This kernel cannot use grid-stride loops in
         // x-dim. Nr. of blocks must be always sufficient
@@ -322,15 +330,16 @@ namespace QuaSARQ {
         OPTIMIZEBLOCKS(nBlocksY_det, num_gates_per_window, nThreads_det.y);
         dim3 nBlocks_det(nBlocksX_det, nBlocksY_det);
         OPTIMIZESHARED(smem_size_det, nThreads_det.y * (nThreads_det.x * 2), sizeof(int) + sizeof(word_std_t));
-        measure_determinate <<<nBlocks_det, nThreads_det, smem_size_det, kernel_stream>>> (locker.deviceLocker(), gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), num_gates_per_window, num_qubits, num_words_minor);
+        measure_determinate <<<nBlocks_det, nThreads_det, smem_size_det, kernel_stream1>>> (locker.deviceLocker(), gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), num_gates_per_window, num_qubits, num_words_minor);
         if (options.sync) {
             LASTERR("failed to launch measure_determinate kernel");
-            SYNC(kernel_stream);
+            SYNC(kernel_stream1);
         }
 
-        // ========> REPLACE this with pivots copy not gates.
+        // Sync copying pivots.
+        SYNC(copy_stream1);
 
-        //gpu_circuit.copyto(circuit, depth_level);
+        print_gates(gpu_circuit, num_gates_per_window, depth_level);
 
         //circuit.print_window(depth_level);
 
@@ -347,26 +356,26 @@ namespace QuaSARQ {
         //     qubit_t curr_pivot = m->pivot;
         //     if (curr_pivot != MAX_QUBITS) {
         //         //printf("--> before measuring\n"), print_tableau(inv_tableau, depth_level, reversed);
-        //         measure_indeterminate_single<<<nBlocks_indet, nThreads_indet, smem_size_indet, kernel_stream>>>(XZ_TABLE(inv_tableau), inv_tableau.signs(), locker.deviceLocker(), gpu_circuit.gates(), gpu_circuit.references(), i, num_qubits, num_words_minor);
-        //         is_indeterminate_outcome_single<<<nBlocks_indet, nThreads_indet, 0, kernel_stream>>>(gpu_circuit.gates(), gpu_circuit.references(), inv_tableau.xtable(), i, num_qubits, num_words_minor);
-        //         gpu_circuit.copygateto(circuit, r, depth_level, kernel_stream);
-        //         SYNC(kernel_stream);
+        //         measure_indeterminate_single<<<nBlocks_indet, nThreads_indet, smem_size_indet, kernel_stream1>>>(XZ_TABLE(inv_tableau), inv_tableau.signs(), locker.deviceLocker(), gpu_circuit.gates(), gpu_circuit.references(), i, num_qubits, num_words_minor);
+        //         is_indeterminate_outcome_single<<<nBlocks_indet, nThreads_indet, 0, kernel_stream1>>>(gpu_circuit.gates(), gpu_circuit.references(), inv_tableau.xtable(), i, num_qubits, num_words_minor);
+        //         gpu_circuit.copygateto(circuit, r, depth_level, kernel_stream1);
+        //         SYNC(kernel_stream1);
         //         if (m->pivot != curr_pivot) {
         //             printf("pivot %d changed to %d\n", curr_pivot, m->pivot);
         //             if (m->pivot == MAX_QUBITS)
-        //                 measure_determinate_single<<<nBlocks_indet, nThreads_indet, smem_size_indet, kernel_stream>>>(XZ_TABLE(inv_tableau), inv_tableau.signs(), locker.deviceLocker(), gpu_circuit.gates(), gpu_circuit.references(), i, num_qubits, num_words_minor);
+        //                 measure_determinate_single<<<nBlocks_indet, nThreads_indet, smem_size_indet, kernel_stream1>>>(XZ_TABLE(inv_tableau), inv_tableau.signs(), locker.deviceLocker(), gpu_circuit.gates(), gpu_circuit.references(), i, num_qubits, num_words_minor);
         //             else
-        //                 measure_indeterminate_single<<<nBlocks_indet, nThreads_indet, smem_size_indet, kernel_stream>>>(XZ_TABLE(inv_tableau), inv_tableau.signs(), locker.deviceLocker(), gpu_circuit.gates(), gpu_circuit.references(), i, num_qubits, num_words_minor);
+        //                 measure_indeterminate_single<<<nBlocks_indet, nThreads_indet, smem_size_indet, kernel_stream1>>>(XZ_TABLE(inv_tableau), inv_tableau.signs(), locker.deviceLocker(), gpu_circuit.gates(), gpu_circuit.references(), i, num_qubits, num_words_minor);
         //         }
         //         //printf("\n--> after measuring"), m->print(true), printf(":"), print_tableau(inv_tableau, depth_level, false);
         //     }
         // }
 
         // Transpose the tableau back into column-major format.
-        transpose_to_colmajor<<< bestGridMeasure, bestBlockMeasure, 0, kernel_stream >>>(XZ_TABLE(tableau), tableau.signs(), XZ_TABLE(inv_tableau), inv_tableau.signs(), num_words_major, num_words_minor, num_qubits);
+        transpose_to_colmajor<<< bestGridMeasure, bestBlockMeasure, 0, kernel_stream1 >>>(XZ_TABLE(tableau), tableau.signs(), XZ_TABLE(inv_tableau), inv_tableau.signs(), num_words_major, num_words_minor, num_qubits);
         if (options.sync) {
             LASTERR("failed to launch transpose_to_rowmajor kernel");
-            SYNC(kernel_stream);
+            SYNC(kernel_stream1);
         }
 
         //print_gates(gpu_circuit, num_gates_per_window, depth_level);

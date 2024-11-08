@@ -42,6 +42,8 @@ namespace QuaSARQ {
         Statistics                      stats;
         FILE*                           configfile;
         cudaStream_t*                   custreams;
+        cudaStream_t                    copy_streams[2];
+        cudaStream_t                    kernel_streams[2];
         WindowInfo                      winfo;
         bool                            measuring;
         
@@ -80,10 +82,10 @@ namespace QuaSARQ {
         void identity(Tableau<DeviceAllocator>& tab, const size_t& offset_per_partition, const size_t& num_qubits_per_partition, const cudaStream_t* streams, const InitialState& istate = Zero);
 
         // Advances the simulation by 1-time step.
-        void step(const size_t& p, const depth_t& depth_level, const cudaStream_t* streams, const bool& reversed = false);
+        void step(const size_t& p, const depth_t& depth_level, const bool& reversed = false);
         
         // Do measurements in a single simulation step.
-        void measure(const size_t& p, const depth_t& depth_level, const cudaStream_t* streams, const bool& reversed = false);
+        void measure(const size_t& p, const depth_t& depth_level, const bool& reversed = false);
 
         // Printers.
         void print_tableau(const Tableau<DeviceAllocator>& tab, const depth_t& depth_level, const bool& reverse);

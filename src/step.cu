@@ -231,12 +231,19 @@ namespace QuaSARQ {
 
     }
 
-    void Simulator::step(const size_t& p, const depth_t& depth_level, const cudaStream_t* streams, const bool& reversed) {
+    void Simulator::step(const size_t& p, const depth_t& depth_level, const bool& reversed) {
 
         double stime = 0;
-        cudaStream_t copy_stream1 = cudaStream_t(0);
-        cudaStream_t copy_stream2 = cudaStream_t(0);
-        cudaStream_t kernel_stream = cudaStream_t(0);
+        assert(options.streams >= 3);
+        const cudaStream_t copy_stream1 = copy_streams[0];
+        const cudaStream_t copy_stream2 = copy_streams[1];
+        const cudaStream_t kernel_stream = kernel_streams[0];
+
+        // Sync previous kernel streams before copying new gates.
+        if (depth_level) { 
+            SYNC(kernel_streams[0]);
+            SYNC(kernel_streams[1]);
+        }
 
         // Copy current window to GPU memory.
         LOGN2(1, "Partition %zd, step %d: ", p, depth_level);
@@ -314,7 +321,7 @@ namespace QuaSARQ {
                 print_paulis(tableau, depth_level, reversed);
         } // END of non-measuring simulation.
         else {
-            measure(p, depth_level, streams, reversed);
+            measure(p, depth_level, reversed);
         }
 
     } // End of function.

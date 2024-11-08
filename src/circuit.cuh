@@ -16,12 +16,13 @@ namespace QuaSARQ {
 		ALLOCATOR& allocator;
 
 		Pivot* _pivots;
+		Pivot* _pinned_pivots;
 
 		bucket_t* _buckets;
 		gate_ref_t* _references;
 
-		bucket_t* pinned_buckets;
-		gate_ref_t* pinned_references;
+		bucket_t* _pinned_buckets;
+		gate_ref_t* _pinned_references;
 
 		size_t max_references;
 		size_t max_buckets;
@@ -49,15 +50,15 @@ namespace QuaSARQ {
 		,	_pivots(nullptr)
 		,	_buckets(nullptr)
 		,	_references(nullptr)
-		,	pinned_buckets(nullptr)
-		,	pinned_references(nullptr)
+		,	_pinned_buckets(nullptr)
+		,	_pinned_references(nullptr)
 		,	max_references(0)
 		,	max_buckets(0)
 		,	buckets_offset(0)
 		{ }
 
 		inline 
-		void reset_circuit_offset(const gate_ref_t& buckets_offset) { 
+		void reset_circuit_offset		(const gate_ref_t& buckets_offset) { 
 			LOG2(2, "");
 		    LOGN2(2, "Initializing offset of window buckets to %lld.. ", int64(buckets_offset));
 			assert(buckets_offset < NO_REF);
@@ -67,7 +68,7 @@ namespace QuaSARQ {
 		} 
 
 		inline
-		void 		initiate	(const size_t& max_references, const size_t& max_buckets) {
+		void 		initiate			(const size_t& max_references, const size_t& max_buckets) {
 			if (!max_references || max_references > MAX_QUBITS)
 				LOGERROR("maximum number of references per window is invalid.");
 			if (!max_buckets || max_buckets > NO_REF)
@@ -76,21 +77,22 @@ namespace QuaSARQ {
 				LOGN2(2, "Resizing a (pinned) window for %lld references.. ", int64(max_references));
 				this->max_references = max_references;
 				_pivots = allocator.template allocate<Pivot>(max_references);
+				allocator.template resize_pinned<Pivot>(_pinned_pivots, max_references);
 				_references = allocator.template allocate<gate_ref_t>(max_references);
-				allocator.template resize_pinned<gate_ref_t>(pinned_references, max_references);
+				allocator.template resize_pinned<gate_ref_t>(_pinned_references, max_references);
 				LOGDONE(2, 3);
 			}
 			if (this->max_buckets < max_buckets) {
 				LOGN2(2, "Resizing a (pinned) window for %lld buckets.. ", int64(max_buckets));
 				this->max_buckets = max_buckets;
 				_buckets = allocator.template allocate<bucket_t>(max_buckets);
-				allocator.template resize_pinned<bucket_t>(pinned_buckets, max_buckets);
+				allocator.template resize_pinned<bucket_t>(_pinned_buckets, max_buckets);
 				LOGDONE(2, 3);
 			}
 		}
 
 		inline
-		void 		copyfrom 	(Statistics& stats, const Circuit& circuit, const depth_t& depth_level, 
+		void 		copyfrom 			(Statistics& stats, const Circuit& circuit, const depth_t& depth_level, 
 								const bool& reversed, const bool& sync, const cudaStream_t& s1, const cudaStream_t& s2) {
 			if (_references == nullptr)
                 LOGERROR("cannot copy empty references to device.");
@@ -113,15 +115,15 @@ namespace QuaSARQ {
 				int64(buckets_offset), 
 				int64(depth_level), 
 				sync ? "" : "a");
-			copyhost(pinned_references, window, curr_num_references, buckets_offset);
-			CHECK(cudaMemcpyAsync(_references, pinned_references, sizeof(gate_ref_t) * curr_num_references, cudaMemcpyHostToDevice, s1));
+			copyhost(_pinned_references, window, curr_num_references, buckets_offset);
+			CHECK(cudaMemcpyAsync(_references, _pinned_references, sizeof(gate_ref_t) * curr_num_references, cudaMemcpyHostToDevice, s1));
 			if (sync) { 
 				cutimer.stop(s1); 
 				ttime += cutimer.time();
 				cutimer.start(s2);
 			}
-			copyhost(pinned_buckets, buckets, curr_num_buckets, bucket_t(0));
-			CHECK(cudaMemcpyAsync(_buckets, pinned_buckets, BUCKETSIZE * curr_num_buckets, cudaMemcpyHostToDevice, s2));
+			copyhost(_pinned_buckets, buckets, curr_num_buckets, bucket_t(0));
+			CHECK(cudaMemcpyAsync(_buckets, _pinned_buckets, BUCKETSIZE * curr_num_buckets, cudaMemcpyHostToDevice, s2));
 			if (sync) {
 				cutimer.stop(s2);
 				ttime += cutimer.time();
@@ -140,7 +142,7 @@ namespace QuaSARQ {
 		}
 
 		inline
-		void 		copyto 		(Circuit& circuit, const depth_t& depth_level) {
+		void 		copyto 			(Circuit& circuit, const depth_t& depth_level) {
 			const auto curr_num_buckets = circuit.num_buckets(depth_level);
 			const gate_ref_t prev_buckets_offset = buckets_offset - curr_num_buckets;
 			if (prev_buckets_offset >= circuit.num_buckets()) 
@@ -151,7 +153,14 @@ namespace QuaSARQ {
 		}
 
 		inline
-		void 		copygateto 	(Circuit& circuit, const gate_ref_t& host_ref, const depth_t& depth_level, const cudaStream_t& stream) {
+		void 		copypivots		(const cudaStream_t& stream) {
+			LOGN2(1, "Copying back %lld pivots to host asynchroneously.. ", int64(max_references));
+			CHECK(cudaMemcpyAsync(_pinned_pivots, _pivots, sizeof(Pivot) * max_references, cudaMemcpyDeviceToHost, stream));
+			LOGDONE(1, 3);
+		}
+
+		inline
+		void 		copygateto 		(Circuit& circuit, const gate_ref_t& host_ref, const depth_t& depth_level, const cudaStream_t& stream) {
 			const size_t prev_buckets_offset = circuit.reference(depth_level, 0);
 			assert(host_ref >= prev_buckets_offset);
 			const gate_ref_t device_ref = host_ref - prev_buckets_offset;
@@ -165,7 +174,7 @@ namespace QuaSARQ {
 		}
 
 		inline
-		Pivot 		copypivoto 	(Circuit& circuit, const uint32& gate_index, const cudaStream_t& stream) {
+		Pivot 		copypivotto 	(Circuit& circuit, const uint32& gate_index, const cudaStream_t& stream) {
 			LOGN2(2, "Copying gate pivot to host asynchroneously.. ");
 			Pivot pivot;
 			CHECK(cudaMemcpyAsync(&(pivot), _pivots + gate_index, sizeof(Pivot), cudaMemcpyDeviceToHost, stream));
@@ -174,22 +183,28 @@ namespace QuaSARQ {
 		}
 
 		inline
-		Pivot*    	 pivots		() { return _pivots; }
+		Pivot*    	 pivots			() { return _pivots; }
 
 		inline const
-		Pivot*    	 pivots		() const { return _pivots; }
+		Pivot*    	 pivots			() const { return _pivots; }
 
 		inline
-		bucket_t*    gates		() { return _buckets; }
+		Pivot*    	 host_pivots	() { return _pinned_pivots; }
 
 		inline const
-		bucket_t*    gates		() const { return _buckets; }
+		Pivot*    	 host_pivots	() const { return _pinned_pivots; }
 
 		inline
-		gate_ref_t*  references	() { return _references; }
+		bucket_t*    gates			() { return _buckets; }
 
 		inline const
-		gate_ref_t*  references	() const { return _references; }
+		bucket_t*    gates			() const { return _buckets; }
+
+		inline
+		gate_ref_t*  references		() { return _references; }
+
+		inline const
+		gate_ref_t*  references		() const { return _references; }
 
 		inline 
 		gate_ref_t 	get_buckets_offset() const { return buckets_offset; }

@@ -24,7 +24,7 @@ namespace QuaSARQ {
     BOOL_OPT opt_disable_concurrency("disable-concurrency", "disable concurrency in equivalence checking", false);
 
     INT_OPT opt_initialstate("initial", "set initial quantum state (0: 0 state, 1: + state, 2: i state)", 0, INT32R(0, 2));
-    INT_OPT opt_streams("streams", "number of GPU streams to create", 3, INT32R(2, 32));
+    INT_OPT opt_streams("streams", "number of GPU streams to create", 4, INT32R(4, 32));
     INT_OPT opt_verbose("verbose", "set verbosity level", 1, INT32R(0, 3));
     INT_OPT opt_write_rc("write-circuit", "write generated circuit to file (1: stim, 2: chp)", 0, INT32R(0, 2));
 
