@@ -49,7 +49,7 @@ namespace QuaSARQ {
 			assert(DATALEN);                                     \
 			assert(NTHREADS);                                    \
 			assert(maxGPUBlocks);                                \
-			grid_t NBLOCKS = ROUNDUPBLOCKS(DATALEN, NTHREADS); 	 \
+			NBLOCKS = ROUNDUPBLOCKS(DATALEN, NTHREADS); 	 \
 			NBLOCKS = MIN(NBLOCKS, maxGPUBlocks)  		 		 \
 
 	#define OPTIMIZEBLOCKS2D(NBLOCKS, DATALEN, NTHREADS)         \

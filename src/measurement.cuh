@@ -58,38 +58,6 @@ namespace QuaSARQ {
             CHECK_SIGN_OVERFLOW(des_idx, old_value, (pos_i - neg_i) % 4); \
         }
 
-    
-
-    // Copy a tableau row to another.
-    INLINE_DEVICE void row_to_row(Table& inv_xs, Table& inv_zs, int* inv_ss, const grid_t& des_idx, const grid_t& src_idx, const size_t& num_words_minor) {
-        for_parallel_x(w, num_words_minor) {
-            const grid_t src_word_idx = src_idx * num_words_minor + w;
-            const grid_t des_word_idx = des_idx * num_words_minor + w;
-            inv_xs[des_word_idx] = inv_xs[src_word_idx];
-            inv_zs[des_word_idx] = inv_zs[src_word_idx];
-            if (!w) {
-                inv_ss[des_idx] = inv_ss[src_idx];
-            }
-        }
-    }
-
-    // Set a stabilizer generator row to zero, then set Zq to 1.
-    INLINE_DEVICE void row_set(Table& inv_xs, Table& inv_zs, int* inv_ss, const grid_t& des_idx, const size_t& q, const size_t& num_words_minor) {
-        const grid_t q_w = WORD_OFFSET(q);
-        const grid_t row = des_idx * num_words_minor;
-        for_parallel_x(w, num_words_minor) {
-            if (w != q_w) {
-                const grid_t des_word_idx = row + w;
-                inv_xs[des_word_idx] = 0;
-                inv_zs[des_word_idx] = 0; 
-            }
-        }
-        if (!global_tx) {
-            inv_ss[des_idx] = 0;
-            inv_xs[row + q_w] = 0;
-            inv_zs[row + q_w] = BITMASK_GLOBAL(q);
-        }
-    }
 
     // Multiply two tableau rows.
     INLINE_DEVICE void row_mul(DeviceLocker& dlocker, Gate& m, int* aux_power, Table& inv_xs, Table& inv_zs, int* inv_ss, const grid_t& des_idx, const grid_t& src_idx, const grid_t& q_w, const size_t& num_words_minor) {
@@ -156,12 +124,13 @@ namespace QuaSARQ {
                                         const size_t num_gates, const size_t num_qubits, const size_t num_words_minor);
 
     // For single measurements.
-    __global__ void is_indeterminate_outcome_single(bucket_t* measurements, const gate_ref_t* refs, const Table* inv_xs, 
-                                                    const size_t gate_index, const size_t num_qubits, const size_t num_words_minor);
+    __global__ void measure_indeterminate_phase1(DeviceLocker* dlocker, Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs, 
+                                                Table* inv_xs, Table* inv_zs, Signs *inv_ss,
+                                                const size_t gate_index, const size_t num_qubits, const size_t num_words_minor);
 
-    __global__ void measure_determinate_single(Table* inv_xs, Table* inv_zs, Signs *inv_ss, DeviceLocker* dlocker, 
-                                        bucket_t* measurements, const gate_ref_t* refs, const size_t gate_index, 
-                                        const size_t num_qubits, const size_t num_words_minor);
+    __global__ void measure_indeterminate_phase2(DeviceLocker* dlocker, Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs, 
+                                                Table* inv_xs, Table* inv_zs, Signs *inv_ss,
+                                                const size_t gate_index, const size_t num_qubits, const size_t num_words_minor);
 
     __global__ void measure_indeterminate_single(Table* inv_xs, Table* inv_zs, Signs *inv_ss, DeviceLocker* dlocker, 
                                         bucket_t* measurements, const gate_ref_t* refs, const size_t gate_index, 

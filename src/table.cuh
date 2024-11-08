@@ -81,6 +81,7 @@ namespace QuaSARQ {
         size_t _num_words_major;
         bool _is_identity;
         bool _is_rowmajor;
+        bool _is_stab_valid;
         Context _context;
 
     public:
@@ -92,6 +93,7 @@ namespace QuaSARQ {
             , _num_words_major(0)
             , _is_identity(true)
             , _is_rowmajor(false)
+            , _is_stab_valid(false)
             , _context(UNKNOWN)
         { }
 
@@ -228,6 +230,10 @@ namespace QuaSARQ {
                 _is_rowmajor = false;
             }
         }
+
+        INLINE_ALL void set_stab(const bool& val) { _is_stab_valid = val; }
+
+        INLINE_ALL bool is_stab_valid() const { return _is_stab_valid; }
 
         INLINE_ALL bool is_identity() const { return _is_identity; }
 
