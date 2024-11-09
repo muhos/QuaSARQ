@@ -43,6 +43,26 @@ namespace QuaSARQ {
         }
     }
 
+    INLINE_DEVICE void initialize_determinate_measurement_qubit(Gate& m, const size_t& pivot, const Table& inv_xs, const Signs& inv_ss, const size_t num_qubits, const size_t num_words_minor) {
+        // Determinate pivot must be there if measurement is not indeterminate. CAN we prove this?
+        assert(pivot != INVALID_PIVOT);
+        assert(m.size == 1);
+        assert(pivot < num_qubits);
+        const grid_t stab_pivot = pivot + num_qubits;
+        m.measurement = inv_ss.get_unpacked_sign(stab_pivot);
+        assert(m.measurement != UNMEASURED);
+        const qubit_t q = m.wires[0], q_w = WORD_OFFSET(q);
+        const word_std_t q_mask = BITMASK_GLOBAL(q);
+        for (grid_t des_pivot = pivot + 1; des_pivot < num_qubits; des_pivot++) {
+            const word_std_t qubit_word = inv_xs[des_pivot * num_words_minor + q_w];
+            if (qubit_word & q_mask) {
+                CHECK_SIGN_OVERFLOW(des_pivot, m.measurement, inv_ss.get_unpacked_sign(des_pivot + num_qubits));
+                //printf("M(%3d): adding sign[%lld]: %d to measurement: %d -> measurement: %d\n", q, des_pivot + num_qubits, inv_ss->get_unpacked_sign(des_pivot + num_qubits), m.measurement, inv_ss->get_unpacked_sign(des_pivot + num_qubits) + m.measurement);
+                m.measurement += inv_ss.get_unpacked_sign(des_pivot + num_qubits);
+            }
+        }
+    }
+
     __global__ void initialize_determinate_measurements(Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs,
                                         const Table* inv_xs, const Signs* inv_ss,
                                         const size_t num_gates, const size_t num_qubits, const size_t num_words_minor) {
@@ -50,27 +70,10 @@ namespace QuaSARQ {
             // Check if the current gate is determinate
             // Indeterminate has higher priority here.
             if (pivots[i].indeterminate == INVALID_PIVOT) {
-                // Determinate pivot must be there if measurement is not indeterminate. CAN we prove this?
-                assert(pivots[i].determinate != INVALID_PIVOT);
                 const gate_ref_t r = refs[i];
                 assert(r < NO_REF);
                 Gate& m = (Gate&) measurements[r];
-                assert(m.size == 1);
-                assert(pivots[i].determinate < num_qubits);
-                const grid_t pivot = pivots[i].determinate;
-                const grid_t stab_pivot = pivot + num_qubits;
-                m.measurement = inv_ss->get_unpacked_sign(stab_pivot);
-                assert(m.measurement != UNMEASURED);
-                const qubit_t q = m.wires[0], q_w = WORD_OFFSET(q);
-                const word_std_t q_mask = BITMASK_GLOBAL(q);
-                for (grid_t des_pivot = pivot + 1; des_pivot < num_qubits; des_pivot++) {
-                    const word_std_t qubit_word = (*inv_xs)[des_pivot * num_words_minor + q_w];
-                    if (qubit_word & q_mask) {
-                        CHECK_SIGN_OVERFLOW(des_pivot, m.measurement, inv_ss->get_unpacked_sign(des_pivot + num_qubits));
-                        //printf("M(%3d): adding sign[%lld]: %d to measurement: %d -> measurement: %d\n", q, des_pivot + num_qubits, inv_ss->get_unpacked_sign(des_pivot + num_qubits), m.measurement, inv_ss->get_unpacked_sign(des_pivot + num_qubits) + m.measurement);
-                        m.measurement += inv_ss->get_unpacked_sign(des_pivot + num_qubits);
-                    }
-                }
+                initialize_determinate_measurement_qubit(m, pivots[i].determinate, *inv_xs, *inv_ss, num_qubits, num_words_minor);
             }
             // Mark determinate pivot invalid if measurement is indeterminate.
             else if (pivots[i].determinate != INVALID_PIVOT) {
@@ -136,49 +139,6 @@ namespace QuaSARQ {
             }
         }
     }
-
-    // __global__ void measure_indeterminate(Table* inv_xs, Table* inv_zs, Signs *inv_ss, DeviceLocker* dlocker, 
-    //                                     bucket_t* measurements, const gate_ref_t* refs, const size_t gate_index, 
-    //                                     const size_t num_gates, const size_t num_qubits, const size_t num_words_minor) {
-    //     word_std_t* aux = SharedMemory<word_std_t>();
-    //     int* aux_power = reinterpret_cast<int*>(aux + blockDim.y * blockDim.x * 2);
-    //     int* unpacked_ss = inv_ss->unpacked_data();
-    //     const gate_ref_t r = refs[gate_index];
-    //     Gate& m = (Gate&) measurements[r];
-    //     if (m.pivot != INVALID_PIVOT) {
-    //         const uint32 destab_pivot = m.pivot;
-    //         const qubit_t q = m.wires[0], q_w = WORD_OFFSET(q);
-    //         const word_std_t q_mask = BITMASK_GLOBAL(q);
-    //         const grid_t stab_pivot = destab_pivot + num_qubits;
-    //         word_std_t qubit_word = (*inv_xs)[stab_pivot * num_words_minor + q_w];
-    //         // If pivot is still valid in the current quantum state.
-    //         if (qubit_word & q_mask) {
-    //             row_to_row((*inv_xs), (*inv_zs), unpacked_ss, destab_pivot, stab_pivot, num_words_minor);
-    //             row_set((*inv_xs), (*inv_zs), unpacked_ss, stab_pivot, q, num_words_minor);
-    //             if (!global_tx) {
-    //                 const int rand_measure = 2; //2 * (rand() % 2);
-    //                 m.measurement = rand_measure;
-    //                 unpacked_ss[stab_pivot] = rand_measure;
-    //             }
-    //             for (grid_t j = 0; j < 2 * num_qubits; j++) {
-    //                 const word_std_t qubit_word = (*inv_xs)[j * num_words_minor + q_w];
-    //                 // (j != stab_pivot) is defensive against data racing over qubit_word.
-    //                 if ((j != destab_pivot) && (j != stab_pivot) && (qubit_word & q_mask)) {
-    //                     row_mul(*dlocker, m, aux_power, *inv_xs, *inv_zs, unpacked_ss, j, destab_pivot, q_w, num_words_minor);
-    //                 }
-    //             }
-    //         }
-    //         // Pivot changed due to previous indeterminate measurement.
-    //         else {
-    //             if (!global_tx) m.pivot = INVALID_PIVOT;
-    //             find_min_pivot(m, *inv_xs, num_qubits, num_words_minor);
-    //             //if (!global_tx) printf("-----------> pivot changed! <-------------\n");
-    //         }
-    //     }
-    //     else {
-    //         measure_determinate_qubit(*dlocker, m, *inv_xs, *inv_zs, unpacked_ss, aux, aux_power, num_qubits, num_words_minor);
-    //     }
-    // }
 
     __global__ void measure_indeterminate_phase1(DeviceLocker* dlocker, Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs, 
                                                 Table* inv_xs, Table* inv_zs, Signs *inv_ss,
@@ -247,15 +207,15 @@ namespace QuaSARQ {
                                                 Table* inv_xs, Table* inv_zs, Signs *inv_ss,
                                                 const size_t gate_index, const size_t num_qubits, const size_t num_words_minor) {
         // Update X and set a ranfom measurement.
-        const gate_ref_t r = refs[gate_index];
-        Gate& m = (Gate&) measurements[r];
-        const grid_t destab_pivot = pivots[gate_index].indeterminate;
-        assert(pivots[gate_index].determinate == INVALID_PIVOT);
-        assert(destab_pivot != INVALID_PIVOT);
-        const grid_t stab_pivot = destab_pivot + num_qubits;
-        const qubit_t q = m.wires[0], q_w = WORD_OFFSET(q);
-        const word_std_t q_mask = BITMASK_GLOBAL(q);
         if (inv_xs->is_stab_valid()) {
+            const gate_ref_t r = refs[gate_index];
+            Gate& m = (Gate&) measurements[r];
+            const grid_t destab_pivot = pivots[gate_index].indeterminate;
+            assert(pivots[gate_index].determinate == INVALID_PIVOT);
+            assert(destab_pivot != INVALID_PIVOT);
+            const grid_t stab_pivot = destab_pivot + num_qubits;
+            const qubit_t q = m.wires[0], q_w = WORD_OFFSET(q);
+            const word_std_t q_mask = BITMASK_GLOBAL(q);
             int* unpacked_ss = inv_ss->unpacked_data();
             for_parallel_x(des_idx, 2 * num_qubits) {
                 const word_std_t des_qubit_word = (*inv_xs)[des_idx * num_words_minor + q_w];
@@ -274,13 +234,37 @@ namespace QuaSARQ {
         }
     }
 
-    __global__ void find_pivots(Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs, const Table* inv_xs, 
+    __global__ void find_new_pivots(Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs, const Table* inv_xs, 
                                 const size_t gate_index, const size_t num_qubits, const size_t num_words_minor) {
         const gate_ref_t r = refs[gate_index];
         assert(r < NO_REF);
         Gate& m = (Gate&) measurements[r];
         assert(m.size == 1);
         find_min_pivot(pivots[gate_index], m.wires[0], *inv_xs, num_qubits, num_words_minor);
+    }
+
+    __global__ void initialize_single_determinate_measurement(const Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs,
+                                        const Table* inv_xs, const Signs* inv_ss,
+                                        const size_t gate_index, const size_t num_qubits, const size_t num_words_minor) {
+        assert(pivots[gate_index].indeterminate == INVALID_PIVOT);
+        const gate_ref_t r = refs[gate_index];
+        assert(r < NO_REF);
+        Gate& m = (Gate&) measurements[r];
+        initialize_determinate_measurement_qubit(m, pivots[gate_index].determinate, *inv_xs, *inv_ss, num_qubits, num_words_minor);
+    }
+
+    __global__ void measure_single_determinate(DeviceLocker* dlocker, const Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs,
+                                        const Table* inv_xs, const Table* inv_zs, 
+                                        const size_t gate_index, const size_t num_qubits, const size_t num_words_minor) {
+        assert(pivots[gate_index].indeterminate == INVALID_PIVOT);
+        assert(pivots[gate_index].determinate != INVALID_PIVOT);
+        word_std_t* aux = SharedMemory<word_std_t>();
+        int* aux_power = reinterpret_cast<int*>(aux + blockDim.y * blockDim.x * 2);
+        const gate_ref_t r = refs[gate_index];
+        assert(r < NO_REF);
+        Gate& m = (Gate&) measurements[r];
+        assert(m.size == 1);
+        measure_determinate_qubit(*dlocker, m, aux, aux_power, *inv_xs, *inv_zs, pivots[gate_index].determinate, num_qubits, num_words_minor);
     }
 
     void Simulator::measure(const size_t& p, const depth_t& depth_level, const bool& reversed) {
@@ -353,9 +337,9 @@ namespace QuaSARQ {
         // Sync copying pivots.
         SYNC(copy_stream1);
 
-        printf("--> gates before measuring\n"), print_gates(gpu_circuit, num_gates_per_window, depth_level);
+        printf("--> gates before indeterminate measuring\n"), print_gates(gpu_circuit, num_gates_per_window, depth_level);
 
-        uint32 nThreads_indet = 32;
+        uint32 nThreads_indet = 4;
         uint32 nBlocks_indet = ROUNDUPBLOCKS(num_words_minor, nThreads_indet);
         OPTIMIZESHARED(smem_size_indet, (nThreads_indet * 2), sizeof(int) + sizeof(word_std_t));
         Window& window = circuit[depth_level];
@@ -365,22 +349,33 @@ namespace QuaSARQ {
             Pivot curr_pivot = host_pivots[i];
             if (curr_pivot.indeterminate != INVALID_PIVOT) {
                 assert(curr_pivot.determinate == INVALID_PIVOT);
-                printf("--> before measuring\n"), print_tableau(inv_tableau, depth_level, reversed);
+                printf("--> before measuring\n"), circuit.gateptr(depth_level, i)->print(true), printf(":\n"), print_tableau(inv_tableau, depth_level, reversed);
                 measure_indeterminate_phase1 <<<nBlocks_indet, nThreads_indet, smem_size_indet, kernel_stream1>>> (locker.deviceLocker(), gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), inv_tableau.signs(), i, num_qubits, num_words_minor);
                 OPTIMIZEBLOCKS(nBlocks_indet, 2 * num_qubits, nThreads_indet);
+
+                // TODO: try communicating is_stab() before launching phase2, could save time
+                // as in case of false no need to run phase2.
+
                 measure_indeterminate_phase2 <<<nBlocks_indet, nThreads_indet,               0, kernel_stream1>>> (locker.deviceLocker(), gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), inv_tableau.signs(), i, num_qubits, num_words_minor);
                 OPTIMIZEBLOCKS(nBlocks_indet, num_words_minor, nThreads_indet);
-                find_pivots                  <<<nBlocks_indet, nThreads_indet,               0, kernel_stream1>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), inv_tableau.xtable(), i, num_qubits, num_words_minor);
+                find_new_pivots              <<<nBlocks_indet, nThreads_indet,               0, kernel_stream1>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), inv_tableau.xtable(), i, num_qubits, num_words_minor);
                 gpu_circuit.copypivotto(new_pivot, i, kernel_stream1);
                 SYNC(kernel_stream1);
                 if (new_pivot.indeterminate != curr_pivot.indeterminate) {
                     printf("pivot %d changed to %d\n", curr_pivot.indeterminate, new_pivot.indeterminate);
-                    // if (m->pivot == INVALID_PIVOT)
-                    //     measure_determinate_single<<<nBlocks_indet, nThreads_indet, smem_size_indet, kernel_stream1>>>(XZ_TABLE(inv_tableau), inv_tableau.signs(), locker.deviceLocker(), gpu_circuit.gates(), gpu_circuit.references(), i, num_qubits, num_words_minor);
-                    // else
-                    //     measure_indeterminate_single<<<nBlocks_indet, nThreads_indet, smem_size_indet, kernel_stream1>>>(XZ_TABLE(inv_tableau), inv_tableau.signs(), locker.deviceLocker(), gpu_circuit.gates(), gpu_circuit.references(), i, num_qubits, num_words_minor);
+                    if (new_pivot.indeterminate == INVALID_PIVOT) {
+                        initialize_single_determinate_measurement <<<1, 1, 0, kernel_stream1>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), inv_tableau.xtable(), inv_tableau.signs(), i, num_qubits, num_words_minor);
+                        OPTIMIZEBLOCKS(nBlocks_indet, num_words_minor, nThreads_indet);
+                        measure_determinate <<<nBlocks_indet, nThreads_indet, smem_size_indet, kernel_stream1>>> (locker.deviceLocker(), gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), i, num_qubits, num_words_minor);
+                    }
+                    else {
+                        OPTIMIZEBLOCKS(nBlocks_indet, num_words_minor, nThreads_indet);
+                        measure_indeterminate_phase1 <<<nBlocks_indet, nThreads_indet, smem_size_indet, kernel_stream1>>> (locker.deviceLocker(), gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), inv_tableau.signs(), i, num_qubits, num_words_minor);
+                        OPTIMIZEBLOCKS(nBlocks_indet, 2 * num_qubits, nThreads_indet);
+                        measure_indeterminate_phase2 <<<nBlocks_indet, nThreads_indet,               0, kernel_stream1>>> (locker.deviceLocker(), gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), inv_tableau.signs(), i, num_qubits, num_words_minor);
+                    }
                 }
-                printf("\n--> after measuring"), circuit.gateptr(depth_level, i)->print(true), printf(":"), print_tableau(inv_tableau, depth_level, false);
+                printf("\n--> after measuring"), circuit.gateptr(depth_level, i)->print(true), printf(":\n"), print_tableau(inv_tableau, depth_level, reversed);
             }
         }
 
