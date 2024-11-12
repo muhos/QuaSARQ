@@ -43,8 +43,8 @@ namespace QuaSARQ {
         const word_std_t X_DES_ONLY =  (X_DES) & ~(Z_DES);  \
         const word_std_t Y_DES      =  (X_DES) &  (Z_DES);  \
         const word_std_t Z_DES_ONLY = ~(X_DES) &  (Z_DES);  \
-        POS_I = POPC(X_SRC_ONLY & Y_DES)      + POPC(Y_SRC & Z_DES_ONLY) + POPC(Z_SRC_ONLY & X_DES_ONLY); \
-        NEG_I = POPC(X_SRC_ONLY & Z_DES_ONLY) + POPC(Y_SRC & X_DES_ONLY) + POPC(Z_SRC_ONLY & Y_DES)
+        POS_I += POPC(X_SRC_ONLY & Y_DES)      + POPC(Y_SRC & Z_DES_ONLY) + POPC(Z_SRC_ONLY & X_DES_ONLY); \
+        NEG_I += POPC(X_SRC_ONLY & Z_DES_ONLY) + POPC(Y_SRC & X_DES_ONLY) + POPC(Z_SRC_ONLY & Y_DES)
 
     // Accumulate thread-local values in shared memory.
     #define ACCUMULATE_POWER_I(GLOBAL_POWER) \

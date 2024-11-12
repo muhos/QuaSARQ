@@ -153,9 +153,9 @@ namespace QuaSARQ {
 		}
 
 		inline
-		void 		copypivots		(const cudaStream_t& stream) {
-			LOGN2(1, "Copying back %lld pivots to host asynchroneously.. ", int64(max_references));
-			CHECK(cudaMemcpyAsync(_pinned_pivots, _pivots, sizeof(Pivot) * max_references, cudaMemcpyDeviceToHost, stream));
+		void 		copypivots		(const cudaStream_t& stream, const size_t& num_gates) {
+			LOGN2(1, "Copying back %lld pivots to host asynchroneously.. ", int64(num_gates));
+			CHECK(cudaMemcpyAsync(_pinned_pivots, _pivots, sizeof(Pivot) * num_gates, cudaMemcpyDeviceToHost, stream));
 			LOGDONE(1, 3);
 		}
 

@@ -361,6 +361,13 @@ namespace QuaSARQ {
             return tmp_xs.is_identity() && tmp_zs.is_identity();
         }
 
+        bool is_xstab_valid(const cudaStream_t& stream = 0) const { 
+            Table tmp_xs;
+            CHECK(cudaMemcpyAsync(&tmp_xs, _xs, sizeof(Table), cudaMemcpyDeviceToHost, stream));
+            SYNC(stream);
+            return tmp_xs.is_stab_valid();
+        }
+
     };
 
 #endif

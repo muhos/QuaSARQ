@@ -113,7 +113,6 @@ namespace QuaSARQ {
 		LOG2(1, "Tunning %s kernel with maximum of %zd trials and %-.5f milliseconds precision...", opname, TRIALS, PRECISION); \
 		int min_precision_hits = MIN_PRECISION_HITS;  \
 		const grid_t maxBlocksPerGrid = maxGPUBlocks << 1; \
-		grid_t initBlocksPerGrid = 0; \
 		OPTIMIZEBLOCKS(initBlocksPerGrid, size, initThreadsPerBlock); \
 		double minRuntime = double(UINTMAX_MAX); \
 		bool early_exit = false; \

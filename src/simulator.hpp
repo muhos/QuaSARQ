@@ -86,6 +86,7 @@ namespace QuaSARQ {
         
         // Do measurements in a single simulation step.
         void measure(const size_t& p, const depth_t& depth_level, const bool& reversed = false);
+        void measure_indeterminate(const depth_t& depth_level, const cudaStream_t& stream = 0);
 
         // Printers.
         void print_tableau(const Tableau<DeviceAllocator>& tab, const depth_t& depth_level, const bool& reverse);
