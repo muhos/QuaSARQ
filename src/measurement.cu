@@ -94,7 +94,7 @@ namespace QuaSARQ {
         word_std_t* aux_zs = aux_xs + blockDim.x;
         int* pos_is = aux_power;
         int* neg_is = aux_power + blockDim.x;
-        if (w < num_words_minor && tx < num_words_minor) {
+        if (w < num_words_minor) {
             const grid_t qubits_word_idx = src_idx * num_words_minor + w;
             aux_xs[shared_tid] = inv_xs[qubits_word_idx];
             aux_zs[shared_tid] = inv_zs[qubits_word_idx];
@@ -109,7 +109,7 @@ namespace QuaSARQ {
             if (qubit_word & q_mask) {
                 const grid_t des_idx = des_pivot + num_qubits;
                 int pos_i = 0, neg_i = 0;    
-                if (w < num_words_minor && tx < num_words_minor) {
+                if (w < num_words_minor) {
                     const grid_t qubits_word_idx = des_idx * num_words_minor + w;
                     const word_std_t x     = inv_xs[qubits_word_idx], z     = inv_zs[qubits_word_idx];
                     const word_std_t aux_x = aux_xs[shared_tid]     , aux_z = aux_zs[shared_tid];
@@ -140,18 +140,19 @@ namespace QuaSARQ {
         }
     }
 
+    // TODO: possible optimizations:
+    //  - try to load source row into shared memory.
+    //  - use 2D threads however, this kernel has to be split into two kernels
+    //    one to copy the row in 1D, the other to do the multiplcations in 2D.
+    //    this will be quite effective as #muls is high w.r.t num_qubits
+
     __global__ void measure_indeterminate_phase1(DeviceLocker* dlocker, Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs, 
                                                 Table* inv_xs, Table* inv_zs, Signs *inv_ss,
                                                 const size_t gate_index, const size_t num_qubits, const size_t num_words_minor) {
-        int* unpacked_ss = inv_ss->unpacked_data();
-        word_std_t* aux = SharedMemory<word_std_t>();
-        int* pos_is = reinterpret_cast<int*>(aux + blockDim.x * 2);
-        int* neg_is = pos_is + blockDim.x;
-        const grid_t destab_pivot = pivots[gate_index].indeterminate;
-        assert(pivots[gate_index].determinate == INVALID_PIVOT);
-        assert(destab_pivot != INVALID_PIVOT);
         const grid_t tx = threadIdx.x, BX = blockDim.x;
         const grid_t w = blockIdx.x * BX + tx;
+        const grid_t destab_pivot = pivots[gate_index].indeterminate;
+        assert(destab_pivot != INVALID_PIVOT);  
         const grid_t stab_pivot = destab_pivot + num_qubits;
         const grid_t stab_row = stab_pivot * num_words_minor;
         const gate_ref_t r = refs[gate_index];
@@ -162,6 +163,10 @@ namespace QuaSARQ {
         // If pivot is still valid in the current quantum state.
         if (qubit_stab_word & q_mask) {
             inv_xs->set_stab(true);
+            int* unpacked_ss = inv_ss->unpacked_data();
+            word_std_t* aux = SharedMemory<word_std_t>();
+            int* pos_is = reinterpret_cast<int*>(aux + blockDim.x * 2);
+            int* neg_is = pos_is + blockDim.x;
             const grid_t shared_tid = threadIdx.y * BX * 2 + tx;
             if (w < num_words_minor) {
                 const grid_t src_word_idx = stab_row + w;
@@ -203,6 +208,78 @@ namespace QuaSARQ {
         }
     }
 
+    __global__ void measure_indeterminate_phase1_shared(DeviceLocker* dlocker, Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs, 
+                                                Table* inv_xs, Table* inv_zs, Signs *inv_ss,
+                                                const size_t gate_index, const size_t num_qubits, const size_t num_words_minor) {
+        const grid_t tx = threadIdx.x, BX = blockDim.x;
+        const grid_t w = blockIdx.x * BX + tx;
+        const grid_t destab_pivot = pivots[gate_index].indeterminate;
+        assert(destab_pivot != INVALID_PIVOT);  
+        const grid_t stab_pivot = destab_pivot + num_qubits;
+        const grid_t stab_row = stab_pivot * num_words_minor;
+        const gate_ref_t r = refs[gate_index];
+        const Gate& m = (Gate&) measurements[r];
+        const qubit_t q = m.wires[0], q_w = WORD_OFFSET(q);
+        const word_std_t q_mask = BITMASK_GLOBAL(q);
+        const word_std_t qubit_stab_word = (*inv_xs)[stab_row + q_w];
+        // If pivot is still valid in the current quantum state.
+        if (qubit_stab_word & q_mask) {
+            inv_xs->set_stab(true);
+            int* unpacked_ss = inv_ss->unpacked_data();
+            word_std_t* aux = SharedMemory<word_std_t>();
+            word_std_t* aux_xs = aux;
+            word_std_t* aux_zs = aux_xs + blockDim.x;
+            int* pos_is = reinterpret_cast<int*>(aux + blockDim.x * 2);
+            int* neg_is = pos_is + blockDim.x;
+            const grid_t shared_tid = threadIdx.y * BX * 2 + tx;
+            if (w < num_words_minor) {
+                const grid_t src_word_idx = stab_row + w;
+                const grid_t des_word_idx = destab_pivot * num_words_minor + w;
+                word_std_t src_x = (*inv_xs)[src_word_idx];
+                word_std_t src_z = (*inv_zs)[src_word_idx];
+                (*inv_xs)[des_word_idx] = src_x;
+                (*inv_zs)[des_word_idx] = src_z;
+                aux_xs[shared_tid] = src_x;
+                aux_zs[shared_tid] = src_z;
+                if (w != q_w) {
+                    (*inv_xs)[src_word_idx] = 0;
+                    (*inv_zs)[src_word_idx] = 0; 
+                }
+                else {
+                    (*inv_zs)[src_word_idx] = q_mask;
+                    unpacked_ss[destab_pivot] = unpacked_ss[stab_pivot];
+                }
+            }
+            else {
+                aux_xs[shared_tid] = 0;
+                aux_zs[shared_tid] = 0;
+            }
+            __syncthreads();
+            for (grid_t des_idx = 0; des_idx < 2 * num_qubits; des_idx++) {
+                const word_std_t des_qubit_word = (*inv_xs)[des_idx * num_words_minor + q_w];
+                if ((des_idx != destab_pivot) && (des_idx != stab_pivot) && (des_qubit_word & q_mask)) {
+                    int pos_i = 0, neg_i = 0; 
+                    if (w < num_words_minor) {
+                        const grid_t des_word_idx = des_idx * num_words_minor + w;
+                        const word_std_t src_x = aux_xs[shared_tid], src_z = aux_zs[shared_tid];
+                        const word_std_t des_x = (*inv_xs)[des_word_idx], des_z = (*inv_zs)[des_word_idx];
+                        if (w != q_w) 
+                            (*inv_xs)[des_word_idx] = des_x ^ src_x;
+                        (*inv_zs)[des_word_idx] = des_z ^ src_z;
+                        COMPUTE_POWER_I(pos_i, neg_i, src_x, src_z, des_x, des_z);
+                    }
+                    ACCUMULATE_POWER_I(unpacked_ss[des_idx]);
+                }
+            }
+        }
+        // Pivot changed due to previous indeterminate measurement.
+        else if (!w) { 
+            // Reset pivot.
+            inv_xs->set_stab(false);
+            pivots[gate_index].reset();
+        }
+    }
+
     __global__ void measure_indeterminate_phase2(DeviceLocker* dlocker, Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs, 
                                                 Table* inv_xs, Table* inv_zs, Signs *inv_ss,
                                                 const size_t gate_index, const size_t num_qubits, const size_t num_words_minor) {
@@ -211,7 +288,6 @@ namespace QuaSARQ {
             const gate_ref_t r = refs[gate_index];
             Gate& m = (Gate&) measurements[r];
             const grid_t destab_pivot = pivots[gate_index].indeterminate;
-            assert(pivots[gate_index].determinate == INVALID_PIVOT);
             assert(destab_pivot != INVALID_PIVOT);
             const grid_t stab_pivot = destab_pivot + num_qubits;
             const qubit_t q = m.wires[0], q_w = WORD_OFFSET(q);
@@ -256,7 +332,6 @@ namespace QuaSARQ {
     __global__ void measure_single_determinate(DeviceLocker* dlocker, const Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs,
                                         const Table* inv_xs, const Table* inv_zs, 
                                         const size_t gate_index, const size_t num_qubits, const size_t num_words_minor) {
-        assert(pivots[gate_index].indeterminate == INVALID_PIVOT);
         assert(pivots[gate_index].determinate != INVALID_PIVOT);
         word_std_t* aux = SharedMemory<word_std_t>();
         int* aux_power = reinterpret_cast<int*>(aux + blockDim.y * blockDim.x * 2);
@@ -337,10 +412,9 @@ namespace QuaSARQ {
         // Sync copying pivots.
         SYNC(copy_stream1);
 
-        printf("--> gates before indeterminate measuring\n"), print_gates(gpu_circuit, num_gates_per_window, depth_level);
+        //printf("--> gates before indeterminate measuring\n"), print_gates(gpu_circuit, num_gates_per_window, depth_level);
 
-        uint32 nThreads_indet = 4;
-        uint32 nBlocks_indet = ROUNDUPBLOCKS(num_words_minor, nThreads_indet);
+        uint32 nThreads_indet = 256, nBlocks_indet = 0;
         OPTIMIZESHARED(smem_size_indet, (nThreads_indet * 2), sizeof(int) + sizeof(word_std_t));
         Window& window = circuit[depth_level];
         Pivot* host_pivots = gpu_circuit.host_pivots();
@@ -349,33 +423,34 @@ namespace QuaSARQ {
             Pivot curr_pivot = host_pivots[i];
             if (curr_pivot.indeterminate != INVALID_PIVOT) {
                 assert(curr_pivot.determinate == INVALID_PIVOT);
-                printf("--> before measuring\n"), circuit.gateptr(depth_level, i)->print(true), printf(":\n"), print_tableau(inv_tableau, depth_level, reversed);
+                //printf("--> before measuring\n"), circuit.gateptr(depth_level, i)->print(true), printf(":\n"), print_tableau(inv_tableau, depth_level, reversed);
+                nBlocks_indet = ROUNDUPBLOCKS(num_words_minor, nThreads_indet);
                 measure_indeterminate_phase1 <<<nBlocks_indet, nThreads_indet, smem_size_indet, kernel_stream1>>> (locker.deviceLocker(), gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), inv_tableau.signs(), i, num_qubits, num_words_minor);
-                OPTIMIZEBLOCKS(nBlocks_indet, 2 * num_qubits, nThreads_indet);
-
+                
                 // TODO: try communicating is_stab() before launching phase2, could save time
                 // as in case of false no need to run phase2.
-
+                OPTIMIZEBLOCKS(nBlocks_indet, 2 * num_qubits, nThreads_indet);
                 measure_indeterminate_phase2 <<<nBlocks_indet, nThreads_indet,               0, kernel_stream1>>> (locker.deviceLocker(), gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), inv_tableau.signs(), i, num_qubits, num_words_minor);
+
                 OPTIMIZEBLOCKS(nBlocks_indet, num_words_minor, nThreads_indet);
                 find_new_pivots              <<<nBlocks_indet, nThreads_indet,               0, kernel_stream1>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), inv_tableau.xtable(), i, num_qubits, num_words_minor);
                 gpu_circuit.copypivotto(new_pivot, i, kernel_stream1);
                 SYNC(kernel_stream1);
                 if (new_pivot.indeterminate != curr_pivot.indeterminate) {
-                    printf("pivot %d changed to %d\n", curr_pivot.indeterminate, new_pivot.indeterminate);
+                    //printf("pivot %d changed to %d\n", curr_pivot.indeterminate, new_pivot.indeterminate);
                     if (new_pivot.indeterminate == INVALID_PIVOT) {
                         initialize_single_determinate_measurement <<<1, 1, 0, kernel_stream1>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), inv_tableau.xtable(), inv_tableau.signs(), i, num_qubits, num_words_minor);
-                        OPTIMIZEBLOCKS(nBlocks_indet, num_words_minor, nThreads_indet);
-                        measure_determinate <<<nBlocks_indet, nThreads_indet, smem_size_indet, kernel_stream1>>> (locker.deviceLocker(), gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), i, num_qubits, num_words_minor);
+                        nBlocks_indet = ROUNDUPBLOCKS(num_words_minor, nThreads_indet);
+                        measure_single_determinate <<<nBlocks_indet, nThreads_indet, smem_size_indet, kernel_stream1>>> (locker.deviceLocker(), gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), i, num_qubits, num_words_minor);
                     }
                     else {
-                        OPTIMIZEBLOCKS(nBlocks_indet, num_words_minor, nThreads_indet);
+                        nBlocks_indet = ROUNDUPBLOCKS(num_words_minor, nThreads_indet);
                         measure_indeterminate_phase1 <<<nBlocks_indet, nThreads_indet, smem_size_indet, kernel_stream1>>> (locker.deviceLocker(), gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), inv_tableau.signs(), i, num_qubits, num_words_minor);
                         OPTIMIZEBLOCKS(nBlocks_indet, 2 * num_qubits, nThreads_indet);
                         measure_indeterminate_phase2 <<<nBlocks_indet, nThreads_indet,               0, kernel_stream1>>> (locker.deviceLocker(), gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), inv_tableau.signs(), i, num_qubits, num_words_minor);
                     }
                 }
-                printf("\n--> after measuring"), circuit.gateptr(depth_level, i)->print(true), printf(":\n"), print_tableau(inv_tableau, depth_level, reversed);
+                //printf("\n--> after measuring"), circuit.gateptr(depth_level, i)->print(true), printf(":\n"), print_tableau(inv_tableau, depth_level, reversed);
             }
         }
 

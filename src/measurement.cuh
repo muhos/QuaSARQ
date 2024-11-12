@@ -52,8 +52,8 @@ namespace QuaSARQ {
         sum_shared(pos_is, pos_i, neg_is, neg_i, shared_tid, BX, tx); \
         sum_warp(pos_is, pos_i, neg_is, neg_i, shared_tid, BX, tx); \
         if (!tx) { \
-            assert(pos_i >= 0 && pos_i <= 64); \
-            assert(neg_i >= 0 && neg_i <= 64); \
+            assert(pos_i >= 0 && pos_i < UNMEASURED); \
+            assert(neg_i >= 0 && neg_i < UNMEASURED); \
             int old_value = atomicAdd(&(GLOBAL_POWER), (pos_i - neg_i) % 4); \
             CHECK_SIGN_OVERFLOW(des_idx, old_value, (pos_i - neg_i) % 4); \
         }
