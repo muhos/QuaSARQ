@@ -42,6 +42,9 @@ namespace QuaSARQ {
 	#define for_parallel_y(IDX, SIZE) \
 		for (grid_t IDX = global_ty, stride = stride_y, data_size = grid_t(SIZE); IDX < data_size; IDX += stride)
 
+	#define for_parallel_y_off(IDX, OFF, SIZE) \
+		for (grid_t IDX = global_ty + OFF, stride = stride_y, data_size = grid_t(SIZE); IDX < data_size; IDX += stride)
+
 	// macros for blocks calculation
 	#define ROUNDUPBLOCKS(DATALEN, NTHREADS) ((grid_t(DATALEN) + (NTHREADS) - 1) / (NTHREADS))
 

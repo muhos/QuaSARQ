@@ -73,7 +73,7 @@ namespace QuaSARQ {
 
     // Measure all determinate qubits in parallel.
     __global__ void measure_determinate(DeviceLocker* dlocker, const Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs,
-                                        const Table* inv_xs, const Table* inv_zs, 
+                                        const Table* inv_xs, const Table* inv_zs, const Signs *inv_ss,
                                         const size_t num_gates, const size_t num_qubits, const size_t num_words_minor);
 
     // For single measurements.

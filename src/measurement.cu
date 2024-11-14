@@ -51,16 +51,16 @@ namespace QuaSARQ {
         const grid_t stab_pivot = pivot + num_qubits;
         m.measurement = inv_ss.get_unpacked_sign(stab_pivot);
         assert(m.measurement != UNMEASURED);
-        const qubit_t q = m.wires[0], q_w = WORD_OFFSET(q);
-        const word_std_t q_mask = BITMASK_GLOBAL(q);
-        for (grid_t des_pivot = pivot + 1; des_pivot < num_qubits; des_pivot++) {
-            const word_std_t qubit_word = inv_xs[des_pivot * num_words_minor + q_w];
-            if (qubit_word & q_mask) {
-                CHECK_SIGN_OVERFLOW(des_pivot, m.measurement, inv_ss.get_unpacked_sign(des_pivot + num_qubits));
-                //printf("M(%3d): adding sign[%lld]: %d to measurement: %d -> measurement: %d\n", q, des_pivot + num_qubits, inv_ss->get_unpacked_sign(des_pivot + num_qubits), m.measurement, inv_ss->get_unpacked_sign(des_pivot + num_qubits) + m.measurement);
-                m.measurement += inv_ss.get_unpacked_sign(des_pivot + num_qubits);
-            }
-        }
+        // const qubit_t q = m.wires[0], q_w = WORD_OFFSET(q);
+        // const word_std_t q_mask = BITMASK_GLOBAL(q);
+        // for (grid_t des_pivot = pivot + 1; des_pivot < num_qubits; des_pivot++) {
+        //     const word_std_t qubit_word = inv_xs[des_pivot * num_words_minor + q_w];
+        //     if (qubit_word & q_mask) {
+        //         CHECK_SIGN_OVERFLOW(des_pivot, m.measurement, inv_ss.get_unpacked_sign(des_pivot + num_qubits));
+        //         //printf("M(%3d): adding sign[%lld]: %d to measurement: %d -> measurement: %d\n", q, des_pivot + num_qubits, inv_ss->get_unpacked_sign(des_pivot + num_qubits), m.measurement, inv_ss->get_unpacked_sign(des_pivot + num_qubits) + m.measurement);
+        //         m.measurement += inv_ss.get_unpacked_sign(des_pivot + num_qubits);
+        //     }
+        // }
     }
 
     __global__ void initialize_determinate_measurements(Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs,
@@ -83,7 +83,7 @@ namespace QuaSARQ {
     }
 
     // Measure a determinate qubit.
-    INLINE_DEVICE void measure_determinate_qubit(DeviceLocker& dlocker, Gate& m, word_std_t* aux, int* aux_power, const Table& inv_xs, const Table& inv_zs, const size_t& src_pivot, const size_t num_qubits, const size_t num_words_minor) {
+    INLINE_DEVICE void measure_determinate_qubit(DeviceLocker& dlocker, Gate& m, word_std_t* aux, int* aux_power, const Table& inv_xs, const Table& inv_zs, const Signs& inv_ss, const size_t& src_pivot, const size_t num_qubits, const size_t num_words_minor) {
         const grid_t src_idx = src_pivot + num_qubits;
         const qubit_t q = m.wires[0], q_w = WORD_OFFSET(q);
         const word_std_t q_mask = BITMASK_GLOBAL(q);
@@ -118,12 +118,14 @@ namespace QuaSARQ {
                     COMPUTE_POWER_I(pos_i, neg_i, x, z, aux_x, aux_z);
                 }
                 ACCUMULATE_POWER_I(m.measurement);
+                if (!w)
+                    atomicAdd(&(m.measurement), inv_ss.get_unpacked_sign(des_idx));
             }
         }
     }
 
     __global__ void measure_determinate(DeviceLocker* dlocker, const Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs,
-                                        const Table* inv_xs, const Table* inv_zs, 
+                                        const Table* inv_xs, const Table* inv_zs, const Signs* inv_ss, 
                                         const size_t num_gates, const size_t num_qubits, const size_t num_words_minor) {
         word_std_t* aux = SharedMemory<word_std_t>();
         int* aux_power = reinterpret_cast<int*>(aux + blockDim.y * blockDim.x * 2);
@@ -135,7 +137,7 @@ namespace QuaSARQ {
             // Consider only determinate measures.
             if (pivots[i].indeterminate == INVALID_PIVOT) {
                 assert(pivots[i].determinate != INVALID_PIVOT);
-                measure_determinate_qubit(*dlocker, m, aux, aux_power, *inv_xs, *inv_zs, pivots[i].determinate, num_qubits, num_words_minor);
+                measure_determinate_qubit(*dlocker, m, aux, aux_power, *inv_xs, *inv_zs, *inv_ss, pivots[i].determinate, num_qubits, num_words_minor);
             }
         }
     }
@@ -323,7 +325,7 @@ namespace QuaSARQ {
     }
 
     __global__ void measure_single_determinate(DeviceLocker* dlocker, const Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs,
-                                        const Table* inv_xs, const Table* inv_zs, 
+                                        const Table* inv_xs, const Table* inv_zs, const Signs* inv_ss, 
                                         const size_t gate_index, const size_t num_qubits, const size_t num_words_minor) {
         assert(pivots[gate_index].determinate != INVALID_PIVOT);
         word_std_t* aux = SharedMemory<word_std_t>();
@@ -332,7 +334,7 @@ namespace QuaSARQ {
         assert(r < NO_REF);
         Gate& m = (Gate&) measurements[r];
         assert(m.size == 1);
-        measure_determinate_qubit(*dlocker, m, aux, aux_power, *inv_xs, *inv_zs, pivots[gate_index].determinate, num_qubits, num_words_minor);
+        measure_determinate_qubit(*dlocker, m, aux, aux_power, *inv_xs, *inv_zs, *inv_ss, pivots[gate_index].determinate, num_qubits, num_words_minor);
     }
 
     void Simulator::measure(const size_t& p, const depth_t& depth_level, const bool& reversed) {
@@ -396,7 +398,7 @@ namespace QuaSARQ {
         OPTIMIZEBLOCKS2D(nBlocksY_det, num_gates_per_window, nThreads_det.y);
         dim3 nBlocks_det(nBlocksX_det, nBlocksY_det);
         OPTIMIZESHARED(smem_size_det, nThreads_det.y * (nThreads_det.x * 2), sizeof(int) + sizeof(word_std_t));
-        measure_determinate <<<nBlocks_det, nThreads_det, smem_size_det, kernel_stream1>>> (locker.deviceLocker(), gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), num_gates_per_window, num_qubits, num_words_minor);
+        measure_determinate <<<nBlocks_det, nThreads_det, smem_size_det, kernel_stream1>>> (locker.deviceLocker(), gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), inv_tableau.signs(), num_gates_per_window, num_qubits, num_words_minor);
         if (options.sync) {
             LASTERR("failed to launch measure_determinate kernel");
             SYNC(kernel_stream1);
@@ -467,7 +469,7 @@ namespace QuaSARQ {
                     //printf("pivot %d changed to %d\n", curr_pivot.indeterminate, new_pivot.indeterminate);
                     if (new_pivot.indeterminate == INVALID_PIVOT) {
                         initialize_single_determinate_measurement <<<1, 1, 0, stream>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), inv_tableau.xtable(), inv_tableau.signs(), i, num_qubits, num_words_minor);
-                        measure_single_determinate <<<nBlocks_det, nThreads_det, smem_size_det, stream>>> (locker.deviceLocker(), gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), i, num_qubits, num_words_minor);
+                        measure_single_determinate <<<nBlocks_det, nThreads_det, smem_size_det, stream>>> (locker.deviceLocker(), gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), inv_tableau.signs(), i, num_qubits, num_words_minor);
                     }
                     else {
                         //measure_indeterminate_phase1 <<<nBlocks_indet, nThreads_indet, smem_size_indet, stream>>> (locker.deviceLocker(), gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), inv_tableau.signs(), i, num_qubits, num_words_minor);
