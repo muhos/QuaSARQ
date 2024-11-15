@@ -188,8 +188,9 @@ namespace QuaSARQ {
         sign_t* _ss_data;
         int* _unpacked_ss_data;
 
-        size_t _num_words;
+        size_t _num_qubits;
         size_t _num_qubits_padded;
+        size_t _num_words;
 
         // Number of words encoding generators' bits in column-major.
         size_t _num_words_major;
@@ -217,8 +218,9 @@ namespace QuaSARQ {
         ,   _zs_data(nullptr)
         ,   _ss_data(nullptr)
         ,   _unpacked_ss_data(nullptr)
-        ,   _num_words(0)
+        ,   _num_qubits(0)
         ,   _num_qubits_padded(0)
+        ,   _num_words(0)
         ,   _num_words_major(0)
         ,   _num_words_minor(0)
         ,   _num_partitions(1)
@@ -238,6 +240,7 @@ namespace QuaSARQ {
             LOGN2(1, "Allocating tableau for %s%lld qubits%s.. ", CREPORTVAL, int64(num_qubits), CNORMAL);
             size_t cap_before = allocator.gpu_capacity();
             // Partition the tableau if needed.
+            _num_qubits = num_qubits;
             _ext_num_qubits = measuring ? (2 * num_qubits) : num_qubits;
             const size_t num_words_major_whole_tableau = get_num_words(_ext_num_qubits);
             _num_qubits_padded = get_num_padded_bits(num_qubits);
@@ -366,6 +369,22 @@ namespace QuaSARQ {
             CHECK(cudaMemcpyAsync(&tmp_xs, _xs, sizeof(Table), cudaMemcpyDeviceToHost, stream));
             SYNC(stream);
             return tmp_xs.is_stab_valid();
+        }
+
+        bool is_xstab_valid(const qubit_t& q, const size_t& pivot, const cudaStream_t& stream = 0) const { 
+            assert(_num_qubits);
+            assert(_num_words_minor);
+            const size_t stab_pivot = pivot + _num_qubits;
+            const qubit_t q_w = WORD_OFFSET(q);
+            const word_std_t q_mask = BITMASK_GLOBAL(q);
+            assert(_xs_data != nullptr);
+            assert((stab_pivot * _num_words_minor + q_w) < _num_words);
+            const word_t* device_word_ptr = _xs_data + stab_pivot * _num_words_minor + q_w;
+            word_t host_word;
+            CHECK(cudaMemcpyAsync(&host_word, device_word_ptr, sizeof(word_t), cudaMemcpyDeviceToHost, stream));
+            SYNC(stream);
+            //printf("pivot: %d, word = " B2B_STR "\n", stab_pivot, RB2B(word_std_t(host_word)));
+            return (word_std_t(host_word) & q_mask);
         }
 
     };

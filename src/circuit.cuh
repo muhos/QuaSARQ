@@ -16,11 +16,10 @@ namespace QuaSARQ {
 		ALLOCATOR& allocator;
 
 		Pivot* _pivots;
-		Pivot* _pinned_pivots;
-
 		bucket_t* _buckets;
 		gate_ref_t* _references;
 
+		Pivot* _pinned_pivots;
 		bucket_t* _pinned_buckets;
 		gate_ref_t* _pinned_references;
 
@@ -50,6 +49,7 @@ namespace QuaSARQ {
 		,	_pivots(nullptr)
 		,	_buckets(nullptr)
 		,	_references(nullptr)
+		,	_pinned_pivots(nullptr)
 		,	_pinned_buckets(nullptr)
 		,	_pinned_references(nullptr)
 		,	max_references(0)

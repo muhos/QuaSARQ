@@ -58,6 +58,19 @@ namespace QuaSARQ {
             CHECK_SIGN_OVERFLOW(des_idx, old_value, (pos_i - neg_i) % 4); \
         }
 
+    #define ACCUMULATE_POWER_I_OFFSET(GLOBAL_POWER, OFFSET) \
+        load_shared(pos_is, pos_i, neg_is, neg_i, shared_tid, tx, num_words_minor); \
+        sum_shared(pos_is, pos_i, neg_is, neg_i, shared_tid, BX, tx); \
+        sum_warp(pos_is, pos_i, neg_is, neg_i, shared_tid, BX, tx); \
+        if (!tx) { \
+            assert(pos_i >= 0 && pos_i < UNMEASURED); \
+            assert(neg_i >= 0 && neg_i < UNMEASURED); \
+            int block_value = (pos_i - neg_i) % 4; \
+            if (!blockIdx.x) block_value += (OFFSET); \
+            int old_value = atomicAdd(&(GLOBAL_POWER), block_value); \
+            CHECK_SIGN_OVERFLOW(des_idx, old_value, block_value); \
+        }
+
 
     // Reset pivots.
     __global__ void reset_pivots(Pivot* pivots, const size_t num_gates);

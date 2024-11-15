@@ -156,8 +156,8 @@ namespace QuaSARQ {
 			addr_t void_ptr = static_cast<addr_t>(ptr);
 			alloc_list_t::iterator allocated_block = cpu_alloc_list.find(void_ptr);
 			if (allocated_block == cpu_alloc_list.end()) {
-				LOGERRORN("memory block %p is not allocated via the GPU allocator", void_ptr);
-				throw GPU_memory_exception();
+				LOGERRORN("memory block %p is not allocated via the CPU allocator", void_ptr);
+				throw CPU_memory_exception();
 			}
 			const size_t size = allocated_block->second;
 			assert(is_aligned(size));
@@ -192,8 +192,8 @@ namespace QuaSARQ {
 				addr_t void_ptr = static_cast<addr_t>(ptr);
 				alloc_list_t::iterator allocated_block = cpu_alloc_list.find(void_ptr);
 				if (allocated_block == cpu_alloc_list.end()) {
-					LOGERRORN("memory block %p is not allocated via the GPU allocator", void_ptr);
-					throw GPU_memory_exception();
+					LOGERRORN("memory block %p is not allocated via the CPU allocator", void_ptr);
+					throw CPU_memory_exception();
 				}
 				const size_t size = allocated_block->second;
 				assert(is_aligned(size));
