@@ -4,9 +4,13 @@
 
 #include "datatypes.hpp"
 #include "constants.hpp"
+#include "kernelconfig.hpp"
 
 namespace QuaSARQ {
 
+    #define CONFIG2OPTION(CONFIG) \
+        bool tune_ ## CONFIG;
+    
     struct Options {
         
         int verbose;
@@ -24,8 +28,7 @@ namespace QuaSARQ {
         bool check_integrity;
 
         bool tuner_en;
-        bool tune_identity;
-        bool tune_step;
+        FOREACH_CONFIG(CONFIG2OPTION);
 
         bool print_gates;
         bool print_step_tableau;

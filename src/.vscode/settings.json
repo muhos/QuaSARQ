@@ -91,7 +91,14 @@
         "span": "cpp",
         "shared_mutex": "cpp",
         "*.cupp": "cpp",
-        "any": "cpp"
+        "any": "cpp",
+        "strstream": "cpp",
+        "cfenv": "cpp",
+        "unordered_set": "cpp",
+        "source_location": "cpp",
+        "stdfloat": "cpp",
+        "cinttypes": "cpp",
+        "typeindex": "cpp"
     },
     "git.ignoreLimitWarning": true
 }

@@ -14,8 +14,7 @@ namespace QuaSARQ {
 	#define UNDEFINED -1
 	#define MIN(x,y)		((x) < (y) ? (x) : (y))
 	#define MAX(x,y)		((x) > (y) ? (x) : (y))
-	#define RESETSTRUCT(MEMPTR) \
-		std::memset(MEMPTR, 0, sizeof(*MEMPTR));
+	#define RESETSTRUCT(MEMPTR) std::memset(MEMPTR, 0, sizeof(*MEMPTR));
 
 	constexpr double ratio		(const double& x, const double& y) { return y ? x / y : 0; }
 	constexpr size_t ratio		(const size_t& x, const size_t& y) { return y ? x / y : 0; }

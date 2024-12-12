@@ -5,9 +5,8 @@
 
 namespace QuaSARQ {
 
-    // Set these to the tuned values (other than 1) 
-    // to avoid trigeering the tuner. 
-    dim3 bestBlockCheckIdentity(2, 128), bestGridCheckIdentity(89, 17);
+    dim3 bestBlockCheckIdentity(2, 128); 
+    dim3 bestGridCheckIdentity(89, 17);
 
     __managed__ uint64 checksum;
 

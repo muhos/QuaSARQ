@@ -11,8 +11,6 @@
 
 namespace QuaSARQ {
 
-    dim3 bestBlockStep(2, 128), bestGridStep(103, 52);
-
     __global__ void step_2D(const gate_ref_t* refs, const bucket_t* gates, const size_t num_gates, const size_t num_words_major, 
     #ifdef INTERLEAVE_XZ
     Table* ps, 
@@ -275,21 +273,21 @@ namespace QuaSARQ {
                     step_2D, "step"
                 #endif
                     // best kernel config to be found. 
-                    , bestBlockStep, bestGridStep
+                    , bestblockstep, bestgridstep
                     // shared memory size.
                     , shared_element_bytes, true
                     // data length.         
                     , num_gates_per_window, num_words_major
                     // kernel arguments.
-                    , gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs()
+                    , gpu_circuit.references(), gpu_circuit.gates(), XZ_TABLE(tableau), tableau.signs()
                 );
             }
 
             LOGN2(1, "Partition %zd, step %d: Simulating %s using grid(%d, %d) and block(%d, %d).. ", 
                 p, depth_level, !options.sync ? "asynchronously" : "",
-                bestGridStep.x, bestGridStep.y, bestBlockStep.x, bestBlockStep.y);
+                bestgridstep.x, bestgridstep.y, bestblockstep.x, bestblockstep.y);
 
-            OPTIMIZESHARED(reduce_smem_size, bestBlockStep.y * bestBlockStep.x, shared_element_bytes);
+            OPTIMIZESHARED(reduce_smem_size, bestblockstep.y * bestblockstep.x, shared_element_bytes);
 
             // sync data transfer.
             SYNC(copy_stream1);
@@ -298,10 +296,10 @@ namespace QuaSARQ {
             if (options.sync) cutimer.start();
 
             // Run simulation.
-            if (bestBlockStep.x > maxWarpSize)
-                step_2D << < bestGridStep, bestBlockStep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs());
+            if (bestblockstep.x > maxWarpSize)
+                step_2D << < bestgridstep, bestblockstep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs());
             else
-                step_2D_warped << < bestGridStep, bestBlockStep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs());
+                step_2D_warped << < bestgridstep, bestblockstep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs());
 
             if (options.sync) { 
                 LASTERR("failed to launch step kernel");

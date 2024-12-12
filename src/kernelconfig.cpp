@@ -1,6 +1,38 @@
 
 #include "simulator.hpp"
-#include "grid.cuh"
+
+namespace QuaSARQ {
+
+	FOREACH_CONFIG_INIT(CONFIG2INITIAL);
+
+	#define CONFIG2BOOL(NAME) \
+		bool fetched ## NAME = false;
+
+	#define CONFIG2FETCHED(CONFIG) \
+		dim3 bestblock ## CONFIG ## Fetched; \
+		dim3 bestgrid ## CONFIG ## Fetched;
+
+	#define CONFIG2FETCHED_LOGIC(NAME) \
+		if (eq(line, #NAME)) { \
+			bestgrid ## NAME ## Fetched.x = toInteger(line); \
+			bestgrid ## NAME ## Fetched.y = toInteger(line); \
+			bestblock ## NAME ## Fetched.x = toInteger(line); \
+			bestblock ## NAME ## Fetched.y = toInteger(line); \
+			fetched ## NAME = true; \
+			eatWS(line); \
+		}
+
+	#define CONFIG2APPLY(CONFIG) \
+		if (fetched ## CONFIG) { \
+			bestblock ## CONFIG = bestblock ## CONFIG ## Fetched; \
+			bestgrid ## CONFIG = bestgrid ## CONFIG ## Fetched; \
+		}
+
+	#define CONFIG2PRINT(CONFIG) \
+		if (fetched ## CONFIG) { \
+			LOG2(1, " read " #CONFIG " configuration with %%%.1f accuracy: grid(%d, %d), block(%d, %d)", accuracy, bestgrid ## CONFIG.x, bestgrid ## CONFIG.y, bestblock ## CONFIG.x, bestblock ## CONFIG.y); \
+		}
+}
 
 using namespace QuaSARQ;
 
@@ -25,8 +57,6 @@ void Simulator::close_config() {
 }
 
 void Simulator::register_config() {
-    // No need to read configuration file.
-    // if (IDENTITY_CONFIG[0] || STEP_CONFIG[0]) return;
     if (!open_config()) return;
     struct stat st;
 	if (!canAccess(options.configpath, st)) {
@@ -38,14 +68,10 @@ void Simulator::register_config() {
     char* buffer = calloc<char>(st.st_size);
 	if (!fread(buffer, 1, st.st_size, configfile))
 		LOGERROR("cannot read kernel configuration file.");
-    // scan buffer and store configs in a map <key: qubits, value: config>
-    // Print the read data
 	int64 min_diff = UINT32_MAX;
     int64 config_qubits = 0;
-	dim3 bestBlockResetFetched, bestGridResetFetched;
-	dim3 bestBlockIdentityFetched, bestGridIdentityFetched;
-	dim3 bestBlockStepFetched, bestGridStepFetched;
-	bool fetchedR = false, fetchedI = false, fetchedS = false;
+	FOREACH_CONFIG(CONFIG2FETCHED);
+	FOREACH_CONFIG(CONFIG2BOOL);
 	char* line = buffer;
     while (line[0] != '\0') {
         //printf("%s\n", line);
@@ -55,71 +81,14 @@ void Simulator::register_config() {
 		int64 diff = abs(int64(num_qubits) - config_qubits);
 		assert(diff >= 0);
 		eatWS(line);
-		// Should be an I or S.
-		assert(*line == 'R' || *line == 'I' || *line == 'S');
-		if (*line == 'R') {
-			bestGridResetFetched.x = toInteger(++line);
-			if (!bestGridResetFetched.x)
-				LOGERROR("Expected non-zero grid dimention for reset.");
-			bestBlockResetFetched.x = toInteger(line);
-			if (!bestBlockResetFetched.x)
-				LOGERROR("Expected non-zero block dimention for reset.");
-			fetchedR = true;
-			eatWS(line);
-		}
-		if (*line == 'I') {
-			bestGridIdentityFetched.x = toInteger(++line);
-			if (!bestGridIdentityFetched.x)
-				LOGERROR("Expected non-zero grid dimention for indentity.");
-			bestBlockIdentityFetched.x = toInteger(line);
-			if (!bestBlockIdentityFetched.x)
-				LOGERROR("Expected non-zero block dimention for indentity.");
-			fetchedI = true;
-			eatWS(line);
-		}
-		if (*line == 'S') {
-			bestGridStepFetched.x = toInteger(++line);
-			if (!bestGridStepFetched.x)
-				LOGERROR("Expected non-zero grid x-dimention for step.");
-			bestGridStepFetched.y = toInteger(line);
-			if (!bestGridStepFetched.y)
-				LOGERROR("Expected non-zero grid y-dimention for step.");
-			bestBlockStepFetched.x = toInteger(line);
-			if (!bestBlockStepFetched.x)
-				LOGERROR("Expected non-zero block x-dimention for step.");
-			bestBlockStepFetched.y = toInteger(line);
-			if (!bestBlockStepFetched.y)
-				LOGERROR("Expected non-zero block y-dimention for step.");
-			fetchedS = true;
-			eatWS(line);
-		}
+		FOREACH_CONFIG(CONFIG2FETCHED_LOGIC);
 		if (diff <= min_diff) {
 			min_diff = diff;
-			if (fetchedR) {
-				bestBlockReset = bestBlockResetFetched;
-				bestGridReset = bestGridResetFetched;
-			}
-			if (fetchedI) {
-				bestBlockIdentity = bestBlockIdentityFetched;
-				bestGridIdentity = bestGridIdentityFetched;
-			}
-			if (fetchedS) {
-				bestBlockStep = bestBlockStepFetched;
-				bestGridStep  = bestGridStepFetched;
-			}
+			FOREACH_CONFIG(CONFIG2APPLY);
 		}
-		if (!fetchedI && !fetchedR && !fetchedS)
-			LOGERROR("Expected at least one tuned kernel.");
     }
 	double accuracy = 100.0 - percent(double(min_diff), double(num_qubits));
-	if (fetchedR)
-		LOG2(1, "Read best reset configuration with %%%.1f accuracy: grid(%d), block(%d)", accuracy, bestGridReset.x, bestBlockReset.x);
-	if (fetchedI)
-		LOG2(1, "Read best identity configuration with %%%.1f accuracy: grid(%d), block(%d)", accuracy, bestGridIdentity.x, bestBlockIdentity.x);
-	if (fetchedS) {
-		LOG2(1, "Read best step configuration with %%%.1f accuracy: grid(%d, %d), block(%d, %d)", accuracy, 
-			bestGridStep.x, bestGridStep.y, bestBlockStep.x, bestBlockStep.y);
-	}
+	FOREACH_CONFIG(CONFIG2PRINT);
     close_config();
     std::free(buffer);
 }

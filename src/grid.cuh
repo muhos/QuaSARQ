@@ -16,14 +16,6 @@ namespace QuaSARQ {
 	extern grid_t maxWarpSize;
 	extern size_t maxGPUSharedMem;
 
-	// Kernel configuration parameters.
-	// If they are set to default (1), tuner will be triggered.
-	extern dim3 bestBlockReset, bestGridReset;
-	extern dim3 bestBlockIdentity, bestGridIdentity;
-	extern dim3 bestBlockCheckIdentity, bestGridCheckIdentity;
-	extern dim3 bestBlockStep, bestGridStep;
-	extern dim3 bestBlockMeasure, bestGridMeasure;
-
 	// x
 	#define global_bx		((grid_t)blockDim.x * blockIdx.x)
 	#define global_bx_off	(((grid_t)blockDim.x << 1) * blockIdx.x)

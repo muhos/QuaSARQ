@@ -82,6 +82,12 @@ namespace QuaSARQ {
         ~Statistics() {
             circuit.gate_stats.destroy();
         }
+
+        void reset() {
+            circuit.gate_stats.destroy();
+            RESETSTRUCT(this);
+            circuit.gate_stats.alloc();
+        }
     };
 
 }

@@ -5,13 +5,20 @@
 
 namespace QuaSARQ {
 
+    #define CONFIG2INPUT(CONFIG) \
+        BOOL_OPT opt_tune_ ## CONFIG ## _en("tune-"#CONFIG, "tune "#CONFIG" kernels", false);
+
+    #define CONFIG2ASSIGN(CONFIG) \
+        tune_ ## CONFIG = opt_tune_ ## CONFIG ## _en;
+
+    #define ENABLE_TUNER(CONFIG) \
+        tuner_en |= tune_ ## CONFIG;
+
     BOOL_OPT opt_quiet_en("q", "be quiet", false);
     BOOL_OPT opt_report_en("report", "report statistics", true);
     BOOL_OPT opt_equivalence_en("equivalence", "do equivalence checking", false);
     BOOL_OPT opt_checkparallelgates_en("check-parallel-gates", "check parallel gates independency", false);
     BOOL_OPT opt_checkintegrity_en("check-integrity", "check circuit integrity for possible logical errors", false);
-    BOOL_OPT opt_tuneidentity_en("tune-identity", "tune identity kernel", false);
-    BOOL_OPT opt_tunestep_en("tune-step", "tune tree-based step kernel", false);
     BOOL_OPT opt_print_tableau_step("print-step-tableau", "print tableau after every simulation step on screen in binary format", false);
     BOOL_OPT opt_print_tableau_final("print-final-tableau", "print final tableau after simulation ends on screen in binary format", false);
     BOOL_OPT opt_print_tableau_initial("print-initial-tableau", "print initial tableau before simulation on screen in binary format", false);
@@ -22,16 +29,17 @@ namespace QuaSARQ {
     BOOL_OPT opt_sync("sync", "synchronize all kernels and data transfers", false);
     BOOL_OPT opt_profile_equivalence("profile-equivalence", "profile equivalence checking", false);
     BOOL_OPT opt_disable_concurrency("disable-concurrency", "disable concurrency in equivalence checking", false);
+    FOREACH_CONFIG(CONFIG2INPUT);
 
     INT_OPT opt_initialstate("initial", "set initial quantum state (0: 0 state, 1: + state, 2: i state)", 0, INT32R(0, 2));
     INT_OPT opt_streams("streams", "number of GPU streams to create", 4, INT32R(4, 32));
     INT_OPT opt_verbose("verbose", "set verbosity level", 1, INT32R(0, 3));
     INT_OPT opt_write_rc("write-circuit", "write generated circuit to file (1: stim, 2: chp)", 0, INT32R(0, 2));
 
-    INT64_OPT opt_tuneinitial_qubits("tune-initial-qubits", "set the initial number of qubits to start with in the tuner", 1, INT64R(1, UINT32_MAX));
-    INT64_OPT opt_tunestep_qubits("tune-step-qubits", "set the increase of qubits", 1, INT64R(1, UINT32_MAX));
-    INT64_OPT opt_num_qubits("qubits", "set number of qubits for random generation (if no input file given)", 1, INT64R(1, UINT32_MAX));
-    INT64_OPT opt_depth("depth", "set circuit depth for random generation (if no input file given)", 1, INT64R(1, UINT32_MAX));
+    INT64_OPT opt_tuneinitial_qubits("tune-initial-qubits", "set the initial number of qubits to start with in the tuner", 1000, INT64R(1, UINT32_MAX));
+    INT64_OPT opt_tunestep_qubits("tune-step-qubits", "set the increase of qubits", 1000, INT64R(1, UINT32_MAX));
+    INT64_OPT opt_num_qubits("qubits", "set number of qubits for random generation (if no input file given)", 2000, INT64R(1, UINT32_MAX));
+    INT64_OPT opt_depth("depth", "set circuit depth for random generation (if no input file given)", 2, INT64R(1, UINT32_MAX));
 
     DOUBLE_OPT opt_I_prob("I", "Frequency of I gates in a generated random circuit", 0.05, FP64R(0,1));
     DOUBLE_OPT opt_H_prob("H", "Frequency of H gates in a generated random circuit", 0.08, FP64R(0,1));
@@ -70,9 +78,8 @@ namespace QuaSARQ {
 
         sync = opt_sync;
 
-        tune_identity = opt_tuneidentity_en;
-        tune_step = opt_tunestep_en;
-        tuner_en = tune_identity || tune_step;
+        FOREACH_CONFIG(CONFIG2ASSIGN);
+        FOREACH_CONFIG(ENABLE_TUNER);
         tuner_initial_qubits = opt_tuneinitial_qubits;
         tuner_step_qubits = opt_tunestep_qubits;
 
@@ -110,10 +117,6 @@ namespace QuaSARQ {
         if (equivalence_en) {
             tuner_en = false;
             checker_en = false;
-        }
-        if (tuner_en && depth > 1) {
-            LOG2(1, "%s  Depth is set to %s1%s in tuning mode.%s", CARGDEFAULT, CARGVALUE, CARGDEFAULT, CNORMAL);
-            depth = 1;
         }
         if (tuner_step_qubits > num_qubits) {
             LOG2(1, "%s  Stepwise qubits %s%zd%s is downsized to %s%zd%s maximum.%s", CARGDEFAULT, CARGVALUE, tuner_step_qubits, CARGDEFAULT, CARGVALUE, num_qubits, CARGDEFAULT, CNORMAL);

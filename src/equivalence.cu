@@ -101,7 +101,7 @@ namespace QuaSARQ {
 
             if (p < num_partitions && d < depth) {
                 LOG1(" Debugging circuit-1 at depth %2d:", d);
-                OPTIMIZESHARED(reduce_smem_size, bestBlockStep.y * bestBlockStep.x, shared_element_bytes);
+                OPTIMIZESHARED(reduce_smem_size, bestblockstep.y * bestblockstep.x, shared_element_bytes);
                 step_2D << < dim3(1, 1), dim3(1, 1), reduce_smem_size >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs());
                 LASTERR("failed to launch step kernel");
                 SYNCALL;
@@ -109,7 +109,7 @@ namespace QuaSARQ {
 
             if (p < other_num_partitions && d < other_depth) {
                 LOG1(" Debugging circuit-2 at depth %2d:", d);
-                OPTIMIZESHARED(reduce_smem_size, bestBlockStep.y * bestBlockStep.x, shared_element_bytes);
+                OPTIMIZESHARED(reduce_smem_size, bestblockstep.y * bestblockstep.x, shared_element_bytes);
                 step_2D << < dim3(1, 1), dim3(1, 1), reduce_smem_size >> > (other_gpu_circuit.references(), other_gpu_circuit.gates(), other_num_gates_per_window, other_num_words_major, XZ_TABLE(other_tableau), other_tableau.signs());
                 LASTERR("failed to launch other step kernel");
                 SYNCALL;             
@@ -119,28 +119,28 @@ namespace QuaSARQ {
 
             LOGN2(1, "Partition %zd: Checking equivalence the %d-time step %s using grid(%d, %d) and block(%d, %d).. ", 
                 p, d, !options.sync ? "asynchronously" : "",
-                bestGridStep.x, bestGridStep.y, bestBlockStep.x, bestBlockStep.y);
+                bestgridstep.x, bestgridstep.y, bestblockstep.x, bestblockstep.y);
 
             if (options.sync) cutimer.start();
 
-            OPTIMIZESHARED(reduce_smem_size, bestBlockStep.y * bestBlockStep.x, shared_element_bytes);
+            OPTIMIZESHARED(reduce_smem_size, bestblockstep.y * bestblockstep.x, shared_element_bytes);
 
             if (p < num_partitions && d < depth) {
                 SYNC(copy_stream1);
                 SYNC(copy_stream2);
-                if (bestBlockStep.x > maxWarpSize)
-                    step_2D << < bestGridStep, bestBlockStep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs());
+                if (bestblockstep.x > maxWarpSize)
+                    step_2D << < bestgridstep, bestblockstep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs());
                 else
-                    step_2D_warped << < bestGridStep, bestBlockStep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs());
+                    step_2D_warped << < bestgridstep, bestblockstep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs());
             }
 
             if (p < other_num_partitions && d < other_depth) {
                 SYNC(other_copy_stream1);
                 SYNC(other_copy_stream2);
-                if (bestBlockStep.x > maxWarpSize)
-                    step_2D << < bestGridStep, bestBlockStep, reduce_smem_size, other_kernel_stream >> > (other_gpu_circuit.references(), other_gpu_circuit.gates(), other_num_gates_per_window, other_num_words_major, XZ_TABLE(other_tableau), other_tableau.signs());
+                if (bestblockstep.x > maxWarpSize)
+                    step_2D << < bestgridstep, bestblockstep, reduce_smem_size, other_kernel_stream >> > (other_gpu_circuit.references(), other_gpu_circuit.gates(), other_num_gates_per_window, other_num_words_major, XZ_TABLE(other_tableau), other_tableau.signs());
                 else
-                    step_2D_warped << < bestGridStep, bestBlockStep, reduce_smem_size, other_kernel_stream >> > (other_gpu_circuit.references(), other_gpu_circuit.gates(), other_num_gates_per_window, other_num_words_major, XZ_TABLE(other_tableau), other_tableau.signs());
+                    step_2D_warped << < bestgridstep, bestblockstep, reduce_smem_size, other_kernel_stream >> > (other_gpu_circuit.references(), other_gpu_circuit.gates(), other_num_gates_per_window, other_num_words_major, XZ_TABLE(other_tableau), other_tableau.signs());
             }
 
             if (options.sync) { 
@@ -165,7 +165,7 @@ namespace QuaSARQ {
         // Check equivalence of two tableaus.
         SYNCALL;
         equivalent = 1;
-        equivalence_1D << < bestGridIdentity, bestBlockIdentity >> > (XZ_TABLE(tableau), tableau.signs(), XZ_TABLE(other_tableau), other_tableau.signs(), MIN(tableau.num_words(), other_tableau.num_words()));
+        equivalence_1D << < bestgrididentity, bestblockidentity >> > (XZ_TABLE(tableau), tableau.signs(), XZ_TABLE(other_tableau), other_tableau.signs(), MIN(tableau.num_words(), other_tableau.num_words()));
         LASTERR("failed to launch equivalence kernel");
         SYNC(0);
         if (equivalent)
