@@ -4,21 +4,23 @@
 namespace QuaSARQ {
 
 	TableauState ts;
-
+	constexpr bool PRINT_PROGRESS_2D = 0;
 	constexpr size_t NSAMPLES = 2;
-	constexpr size_t TRIALS = size_t(1e3);
-	constexpr double PRECISION = 0.001;
 	constexpr int MIN_PRECISION_HITS = 2;
+	constexpr size_t TRIALS = size_t(0.5e3);
+	constexpr double PRECISION = 0.001;
 #if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
-	constexpr grid_t maxThreadsPerBlock = 256;
-	constexpr grid_t maxThreadsPerBlockY = 2;
-	constexpr grid_t maxThreadsPerBlockX = 64;
+	int64 maxThreadsPerBlock = 256;
+	int64 maxThreadsPerBlockY = 32;
+	int64 maxThreadsPerBlockX = 64;
 #else
-	constexpr grid_t maxThreadsPerBlock = 1024;
-	constexpr grid_t maxThreadsPerBlockY = 512;
-	constexpr grid_t maxThreadsPerBlockX = 256;
+	int64 maxThreadsPerBlock = 1024;
+	int64 maxThreadsPerBlockY = 512;
+	int64 maxThreadsPerBlockX = 512;
 #endif
-	constexpr grid_t initThreadsPerBlock = 2;
+	int64 initThreadsPerBlock1D = 2;
+	int64 initThreadsPerBlockX = 2;
+	int64 initThreadsPerBlockY = 2;
 
 	#define CONFIG2STRING(CONFIG) \
 		if (options.tune_ ## CONFIG) { \
@@ -100,133 +102,173 @@ namespace QuaSARQ {
 	// Given TIME and MIN, update BESTGRID and BESTBLOCK.
 	// Assume block and grid are defined.
 	#define BEST_CONFIG(TIME, MIN, BESTGRID, BESTBLOCK, BAILOUT) \
-	if (TIME < MIN) { \
-		if ((MIN - TIME) <= PRECISION && !--min_precision_hits) { \
-			LOG2(1, " Found slightly better GPU Time for block(x:%u, y:%u) and grid(x:%u, y:%u): %f ms", block.x, block.y, grid.x, grid.y, TIME); \
-			BAILOUT = true; \
+	do { \
+		if (TIME < MIN) { \
+			if ((MIN - TIME) <= PRECISION && !--min_precision_hits) { \
+				LOG2(1, " Found slightly better GPU Time for block(x:%u, y:%u) and grid(x:%u, y:%u): %f ms", block.x, block.y, grid.x, grid.y, TIME); \
+				BAILOUT = true; \
+			} \
+			MIN = TIME; \
+			BESTBLOCK = block; \
+			BESTGRID = grid; \
+			if (!BAILOUT) LOG2(1, " Found better GPU Time for block(x:%u, y:%u) and grid(x:%u, y:%u): %f ms", block.x, block.y, grid.x, grid.y, TIME); \
 		} \
-		MIN = TIME; \
-		BESTBLOCK = block; \
-		BESTGRID = grid; \
-		if (!BAILOUT) LOG2(1, " Found better GPU Time for block(x:%u, y:%u) and grid(x:%u, y:%u): %f ms", block.x, block.y, grid.x, grid.y, TIME); \
-	}
+	} while(0)
 
 	#define TUNE_1D(...) \
 	do { \
 		if (bestBlock.x > 1 || bestGrid.x > 1) { \
 			LOG2(2, "\nBest configuration: block(%d), grid(%d) will be used without tuning.", bestBlock.x, bestGrid.x); \
-			return; \
 		} \
-		LOG0(""); \
-		LOG2(1, "Tunning %s kernel with maximum of %zd trials and %-.5f milliseconds precision...", opname, TRIALS, PRECISION); \
-		int min_precision_hits = MIN_PRECISION_HITS;  \
-		const grid_t maxBlocksPerGrid = maxGPUBlocks << 1; \
-		OPTIMIZEBLOCKS(initBlocksPerGrid, size, initThreadsPerBlock); \
-		double minRuntime = double(UINTMAX_MAX); \
-		bool early_exit = false; \
-		size_t trials = 0; \
-		for (grid_t gridX = initBlocksPerGrid; gridX <= maxBlocksPerGrid && !early_exit && trials < TRIALS; gridX += 4, trials++) { \
-			for (grid_t blockX = initThreadsPerBlock; blockX <= maxThreadsPerBlock && !early_exit && trials < TRIALS; blockX <<= 1, trials++) { \
-				if (blockX > maxWarpSize && blockX % maxWarpSize != 0) \
-					continue; \
+		else { \
+			LOG0(""); \
+			LOG2(1, "Tunning %s kernel with maximum of %zd trials and %-.5f milliseconds precision...", opname, TRIALS, PRECISION); \
+			int min_precision_hits = MIN_PRECISION_HITS;  \
+			const int64 maxBlocksPerGrid = maxGPUBlocks << 1; \
+			OPTIMIZEBLOCKS(initBlocksPerGrid, size, maxThreadsPerBlock); \
+			double minRuntime = double(UINTMAX_MAX); \
+			bool early_exit = false; \
+			size_t trials = 0; \
+			for (int64 gridX = initBlocksPerGrid; gridX <= maxBlocksPerGrid && !early_exit && trials < TRIALS; gridX += 4, trials++) { \
+				for (int64 blockX = maxThreadsPerBlock; blockX >= initThreadsPerBlock1D && !early_exit && trials < TRIALS; blockX >>= 1, trials++) { \
+					if (blockX > maxWarpSize && blockX % maxWarpSize != 0) \
+						continue; \
+					dim3 block((uint32)blockX); \
+					dim3 grid((uint32)gridX); \
+					double avgRuntime = 0; \
+					BENCHMARK_KERNEL(avgRuntime, NSAMPLES, 0, ## __VA_ARGS__); \
+					BEST_CONFIG(avgRuntime, minRuntime, bestGrid, bestBlock, early_exit); \
+				} \
+			} \
+			LOG0(""); \
+			LOG2(1, "Best GPU time for %s operation using block(%d, 1), and grid(%d, 1): %f ms", opname, bestBlock.x, bestGrid.x, minRuntime); \
+			LOG0(""); \
+			fflush(stdout); \
+		} \
+	} while(0)
+
+	#define TUNE_1D_FIX_X(...) \
+	do { \
+		if (bestBlock.x > 1 || bestGrid.x > 1) { \
+			LOG2(2, "\nBest configuration: block(%d), grid(%d) will be used without tuning.", bestBlock.x, bestGrid.x); \
+		} \
+		else { \
+			LOG0(""); \
+			LOG2(1, "Tunning %s kernel with maximum of %zd trials and %-.5f milliseconds precision...", opname, TRIALS, PRECISION); \
+			int min_precision_hits = MIN_PRECISION_HITS;  \
+			const int64 maxBlocksPerGrid = maxGPUBlocks << 3; \
+			double minRuntime = double(UINTMAX_MAX); \
+			bool early_exit = false; \
+			size_t trials = 0; \
+			for (int64 blockX = maxThreadsPerBlock; blockX >= initThreadsPerBlock1D && !early_exit && trials < TRIALS; blockX >>= 1, trials++) { \
+				const size_t shared_size = shared_element_bytes * blockX; \
+				if (shared_size > maxGPUSharedMem) continue; \
+				if (blockX % maxWarpSize != 0) continue; \
+				const int64 gridX = ROUNDUPBLOCKS(size, blockX); \
+				if (gridX > maxBlocksPerGrid) continue; \
 				dim3 block((uint32)blockX); \
 				dim3 grid((uint32)gridX); \
 				double avgRuntime = 0; \
-				BENCHMARK_KERNEL(avgRuntime, NSAMPLES, 0, ## __VA_ARGS__); \
+				BENCHMARK_KERNEL(avgRuntime, NSAMPLES, shared_size, ## __VA_ARGS__); \
 				BEST_CONFIG(avgRuntime, minRuntime, bestGrid, bestBlock, early_exit); \
 			} \
+			LOG0(""); \
+			LOG2(1, "Best GPU time for %s operation using block(%d, 1), and grid(%d, 1): %f ms", opname, bestBlock.x, bestGrid.x, minRuntime); \
+			LOG0(""); \
+			fflush(stdout); \
 		} \
-		LOG0(""); \
-		LOG2(1, "Best GPU time for %s operation using block(%d, 1), and grid(%d, 1): %f ms", opname, bestBlock.x, bestGrid.x, minRuntime); \
-		LOG0(""); \
-		fflush(stdout); \
 	} while(0)
 
 	#define TUNE_2D(...) \
 	do { \
 		if (bestBlock.x > 1 || bestGrid.x > 1 || bestBlock.y > 1 || bestGrid.y > 1) { \
 			LOG2(2, "\nBest configuration: block(%d, %d), grid(%d, %d) will be used without tuning.", bestBlock.x, bestBlock.y, bestGrid.x, bestGrid.y); \
-			return; \
 		} \
-		LOG0(""); \
-		LOG2(1, "Tunning %s kernel with maximum of %zd trials and %-.5f milliseconds precision...", opname, TRIALS, PRECISION); \
-		int min_precision_hits = MIN_PRECISION_HITS; \
-		const bool x_warped = hasstr(opname, "warped"); \
-		OPTIMIZEBLOCKS2D(initBlocksPerGridY, data_size_in_y, initThreadsPerBlock); \
-		OPTIMIZEBLOCKS2D(initBlocksPerGridX, data_size_in_x, initThreadsPerBlock); \
-		double minRuntime = double(UINTMAX_MAX); \
-		bool early_exit = false; \
-		size_t trials = 0; \
-		initBlocksPerGridY = (grid_t) ceil(initBlocksPerGridY / 1.0); \
-		initBlocksPerGridX = (grid_t) ceil(initBlocksPerGridX / 1.0); \
-		const grid_t maxBlocksPerGridY = maxGPUBlocks2D; \
-		const grid_t maxBlocksPerGridX = maxGPUBlocks2D << 1; \
-		for (grid_t blocksY = initBlocksPerGridY; (blocksY <= maxBlocksPerGridY) && !early_exit && trials < TRIALS; blocksY += 8, trials++) { \
-			for (grid_t blocksX = initBlocksPerGridX; (blocksX <= maxBlocksPerGridX) && !early_exit && trials < TRIALS; blocksX += 8, trials++) { \
-				for (grid_t threadsY = initThreadsPerBlock; (threadsY <= maxThreadsPerBlockY) && !early_exit && trials < TRIALS; threadsY <<= 1) { \
-					for (grid_t threadsX = initThreadsPerBlock; (threadsX <= maxThreadsPerBlockX) && !early_exit && trials < TRIALS; threadsX <<= 1) { \
-						const grid_t threadsPerBlock = threadsX * threadsY; \
-						const size_t extended_shared_size = shared_size_yextend ? shared_element_bytes * threadsPerBlock : shared_element_bytes * threadsX; \
-						if (x_warped && threadsX > maxWarpSize) continue; \
-						if (extended_shared_size > maxGPUSharedMem || threadsPerBlock > maxThreadsPerBlock) continue; \
-						/* Avoid deadloack due to warp divergence. */ \
-						if ((threadsX > maxWarpSize && threadsX % maxWarpSize != 0) || (threadsY > maxWarpSize && threadsY % maxWarpSize != 0)) \
-							continue; \
-						dim3 block((uint32)threadsX, (uint32)threadsY); \
-						dim3 grid((uint32)blocksX, (uint32)blocksY); \
-						double avgRuntime = 0; \
-						BENCHMARK_KERNEL(avgRuntime, NSAMPLES, extended_shared_size, ## __VA_ARGS__); \
-						BEST_CONFIG(avgRuntime, minRuntime, bestGrid, bestBlock, early_exit); \
+		else { \
+			LOG0(""); \
+			LOG2(1, "Tunning %s kernel with maximum of %zd trials and %-.5f milliseconds precision...", opname, TRIALS, PRECISION); \
+			int min_precision_hits = MIN_PRECISION_HITS; \
+			const bool x_warped = hasstr(opname, "warped"); \
+			OPTIMIZEBLOCKS2D(initBlocksPerGridY, data_size_in_y, maxThreadsPerBlockY); \
+			OPTIMIZEBLOCKS2D(initBlocksPerGridX, data_size_in_x, maxThreadsPerBlockX); \
+			double minRuntime = double(UINTMAX_MAX); \
+			bool early_exit = false; \
+			size_t trials = 0; \
+			initBlocksPerGridY = (int64) ceil(initBlocksPerGridY / 1.0); \
+			initBlocksPerGridX = (int64) ceil(initBlocksPerGridX / 1.0); \
+			const int64 maxBlocksPerGridY = maxGPUBlocks2D << 1; \
+			const int64 maxBlocksPerGridX = maxGPUBlocks2D << 1; \
+			for (int64 blocksY = initBlocksPerGridY; (blocksY <= maxBlocksPerGridY) && !early_exit && trials < TRIALS; blocksY += 8, trials++) { \
+				for (int64 blocksX = initBlocksPerGridX; (blocksX <= maxBlocksPerGridX) && !early_exit && trials < TRIALS; blocksX += 8, trials++) { \
+					for (int64 threadsY = maxThreadsPerBlockY; (threadsY >= initThreadsPerBlockY) && !early_exit && trials < TRIALS; threadsY >>= 1) { \
+						for (int64 threadsX = maxThreadsPerBlockX; (threadsX >= initThreadsPerBlockX) && !early_exit && trials < TRIALS; threadsX >>= 1) { \
+							const int64 threadsPerBlock = threadsX * threadsY; \
+							const size_t extended_shared_size = shared_size_yextend ? shared_element_bytes * threadsPerBlock : shared_element_bytes * threadsX; \
+							if (x_warped && threadsX > maxWarpSize) continue; \
+							if (extended_shared_size > maxGPUSharedMem || threadsPerBlock > maxThreadsPerBlock) continue; \
+							/* Avoid deadloack due to warp divergence. */ \
+							if (threadsPerBlock % maxWarpSize != 0) continue; \
+							dim3 block((uint32)threadsX, (uint32)threadsY); \
+							dim3 grid((uint32)blocksX, (uint32)blocksY); \
+							double avgRuntime = 0; \
+							BENCHMARK_KERNEL(avgRuntime, NSAMPLES, extended_shared_size, ## __VA_ARGS__); \
+							if (PRINT_PROGRESS_2D) LOG2(1, "  GPU Time for block(x:%u, y:%u) and grid(x:%u, y:%u): %f ms", block.x, block.y, grid.x, grid.y, avgRuntime); fflush(stdout); fflush(stderr); \
+							BEST_CONFIG(avgRuntime, minRuntime, bestGrid, bestBlock, early_exit); \
+						} \
 					} \
 				} \
 			} \
+			LOG2(1, "Best %s configuration found after %zd trials:", opname, trials); \
+			LOG2(1, " Block (%-4u, %4u)", bestBlock.x, bestBlock.y); \
+			LOG2(1, " Grid  (%-4u, %4u)", bestGrid.x, bestGrid.y); \
+			LOG2(1, " Min time: %.4f ms", minRuntime); \
+			LOG0(""); \
+			fflush(stdout); \
 		} \
-		LOG2(1, "Best %s configuration found after %zd trials:", opname, trials); \
-		LOG2(1, " Block (%-4u, %4u)", bestBlock.x, bestBlock.y); \
-		LOG2(1, " Grid  (%-4u, %4u)", bestGrid.x, bestGrid.y); \
-		LOG2(1, " Min time: %.4f ms", minRuntime); \
-		LOG0(""); \
-		fflush(stdout); \
 	} while(0)
 
 	#define TUNE_2D_FIX_X(...) \
 	do { \
 		if (bestBlock.x > 1 || bestGrid.x > 1 || bestBlock.y > 1 || bestGrid.y > 1) { \
 			LOG2(2, "\nBest configuration: block(%d, %d), grid(%d, %d) will be used without tuning.", bestBlock.x, bestBlock.y, bestGrid.x, bestGrid.y); \
-			return; \
 		} \
-		LOG0(""); \
-		LOG2(1, "Tunning %s kernel with maximum of %zd trials and %-.5f milliseconds precision...", opname, TRIALS, PRECISION); \
-		int min_precision_hits = MIN_PRECISION_HITS; \
-		OPTIMIZEBLOCKS2D(initBlocksPerGridY, data_size_in_y, initThreadsPerBlock); \
-		double minRuntime = double(UINTMAX_MAX); \
-		bool early_exit = false; \
-		size_t trials = 0; \
-		initBlocksPerGridY = (grid_t) ceil(initBlocksPerGridY / 1.0); \
-		const grid_t maxBlocksPerGridY = maxGPUBlocks2D; \
-		for (grid_t blocksY = initBlocksPerGridY; (blocksY <= maxBlocksPerGridY) && !early_exit && trials < TRIALS; blocksY += 4, trials++) { \
-			for (grid_t threadsY = initThreadsPerBlock; (threadsY <= maxThreadsPerBlockY) && !early_exit && trials < TRIALS; threadsY <<= 1) { \
-				for (grid_t threadsX = initThreadsPerBlock; (threadsX <= maxThreadsPerBlockX) && !early_exit && trials < TRIALS; threadsX <<= 1) { \
-					const grid_t threadsPerBlock = threadsX * threadsY; \
-					const size_t extended_shared_size = shared_size_yextend ? shared_element_bytes * threadsPerBlock : shared_element_bytes * threadsX; \
-					if (extended_shared_size >= maxGPUSharedMem || threadsPerBlock > maxThreadsPerBlock) continue; \
-					/* Avoid deadloack due to warp divergence. */ \
-					if ((threadsX > maxWarpSize && threadsX % maxWarpSize != 0) || (threadsY > maxWarpSize && threadsY % maxWarpSize != 0)) \
-						continue; \
-					dim3 block((uint32)threadsX, (uint32)threadsY); \
-					dim3 grid((uint32)ROUNDUPBLOCKS(data_size_in_x, threadsX), (uint32)blocksY); \
-					double avgRuntime = 0; \
-					BENCHMARK_KERNEL(avgRuntime, NSAMPLES, extended_shared_size, ## __VA_ARGS__); \
-					BEST_CONFIG(avgRuntime, minRuntime, bestGrid, bestBlock, early_exit); \
+		else { \
+			LOG0(""); \
+			LOG2(1, "Tunning %s kernel with maximum of %zd trials and %-.5f milliseconds precision...", opname, TRIALS, PRECISION); \
+			int min_precision_hits = MIN_PRECISION_HITS; \
+			OPTIMIZEBLOCKS2D(initBlocksPerGridY, data_size_in_y, maxThreadsPerBlockY); \
+			double minRuntime = double(UINTMAX_MAX); \
+			bool early_exit = false; \
+			size_t trials = 0; \
+			initBlocksPerGridY = (int64) ceil(initBlocksPerGridY / 1.0); \
+			const int64 maxBlocksPerGridY = maxGPUBlocks2D << 1; \
+			const int64 maxBlocksPerGridX = maxGPUBlocks2D << 3; \
+			for (int64 blocksY = initBlocksPerGridY; (blocksY <= maxBlocksPerGridY) && !early_exit && trials < TRIALS; blocksY += 4, trials++) { \
+				for (int64 threadsY = maxThreadsPerBlockY; (threadsY >= initThreadsPerBlockY) && !early_exit && trials < TRIALS; threadsY >>= 1) { \
+					for (int64 threadsX = maxThreadsPerBlockX; (threadsX >= initThreadsPerBlockX) && !early_exit && trials < TRIALS; threadsX >>= 1) { \
+						const int64 threadsPerBlock = threadsX * threadsY; \
+						const size_t extended_shared_size = shared_size_yextend ? shared_element_bytes * threadsPerBlock : shared_element_bytes * threadsX; \
+						if (extended_shared_size >= maxGPUSharedMem || threadsPerBlock > maxThreadsPerBlock) continue; \
+						/* Avoid deadloack due to warp divergence. */ \
+						if (threadsPerBlock % maxWarpSize != 0) continue; \
+						const int64 blocksX = ROUNDUPBLOCKS(data_size_in_x, threadsX); \
+						if (blocksX > maxBlocksPerGridX) continue; \
+						dim3 block((uint32)threadsX, (uint32)threadsY); \
+						dim3 grid((uint32)blocksX, (uint32)blocksY); \
+						double avgRuntime = 0; \
+						BENCHMARK_KERNEL(avgRuntime, NSAMPLES, extended_shared_size, ## __VA_ARGS__); \
+						if (PRINT_PROGRESS_2D) LOG2(1, "  GPU Time for block(x:%u, y:%u) and grid(x:%u, y:%u): %f ms", block.x, block.y, grid.x, grid.y, avgRuntime); fflush(stdout); fflush(stderr); \
+						BEST_CONFIG(avgRuntime, minRuntime, bestGrid, bestBlock, early_exit); \
+					} \
 				} \
 			} \
+			LOG2(1, "Best %s configuration found after %zd trials:", opname, trials); \
+			LOG2(1, " Block (%-4u, %4u)", bestBlock.x, bestBlock.y); \
+			LOG2(1, " Grid  (%-4u, %4u)", bestGrid.x, bestGrid.y); \
+			LOG2(1, " Min time: %.4f ms", minRuntime); \
+			LOG0(""); \
+			fflush(stdout); \
 		} \
-		LOG2(1, "Best %s configuration found after %zd trials:", opname, trials); \
-		LOG2(1, " Block (%-4u, %4u)", bestBlock.x, bestBlock.y); \
-		LOG2(1, " Grid  (%-4u, %4u)", bestGrid.x, bestGrid.y); \
-		LOG2(1, " Min time: %.4f ms", minRuntime); \
-		LOG0(""); \
-		fflush(stdout); \
 	} while(0)
 
 	void tune_kernel(void (*kernel)(const size_t, const size_t, Table*),
@@ -302,30 +344,6 @@ namespace QuaSARQ {
 		TUNE_1D(pivots, size);
 	}
 
-		// With measurements.
-	void tune_kernel_m(void (*kernel)(const size_t, const size_t, Table*, Table*),
-		const char* opname, dim3& bestBlock, dim3& bestGrid,
-		const size_t& offset, const size_t& size, Table* xs, Table* zs);
-
-	void tune_kernel_m(void (*kernel)(Pivot*, const size_t),
-		const char* opname, dim3& bestBlock, dim3& bestGrid,
-		Pivot* pivots, const size_t size);
-
-	void tune_kernel_m(void (*kernel)(Table*, Table*, Signs*, const Table*, const Table*, const Signs*, const size_t, const size_t, const size_t),
-		const char* opname, 
-		dim3& bestBlock, dim3& bestGrid,
-		const size_t& shared_element_bytes, 
-		const bool& shared_size_yextend,
-		const size_t& data_size_in_x, 
-		const size_t& data_size_in_y,
-		Table* xs1, Table* zs1, Signs* ss1, 
-        const Table* xs2, const Table* zs2, const Signs* ss2, 
-        const size_t& num_words_major, const size_t& num_words_minor, const size_t& num_qubits) 
-	{
-		TUNE_2D(xs1, zs1, ss1, xs2, zs2, ss2, num_words_major, num_words_minor, num_qubits);
-	}
-
-
 	void tune_kernel_m(void (*kernel)(Pivot*, bucket_t*, const gate_ref_t*, const Table*, const size_t, const size_t, const size_t),
 		const char* opname, 
 		dim3& bestBlock, dim3& bestGrid,
@@ -339,6 +357,32 @@ namespace QuaSARQ {
 		TUNE_2D(pivots, measurements, refs, inv_xs, num_gates, num_qubits, num_words_minor);
 	}
 
+	void tune_kernel_m(void (*kernel)(Pivot*, bucket_t*, const gate_ref_t*, const Table*, const size_t, const size_t, const size_t),
+		const char* opname, dim3& bestBlock, dim3& bestGrid,
+		Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs, const Table* inv_xs, 
+        const size_t& gate_index, const size_t& num_qubits, const size_t& num_words_minor)
+	{
+		const size_t size = num_qubits;
+		TUNE_1D(pivots, measurements, refs, inv_xs, gate_index, num_qubits, num_words_minor);
+	}
+
+	void tune_transpose(void (*kernel)(Table*, Table*, Signs*, const Table*, const Table*, const Signs*, const size_t, const size_t, const size_t),
+		const char* opname, 
+		dim3& bestBlock, dim3& bestGrid,
+		const size_t& shared_element_bytes, 
+		const bool& shared_size_yextend,
+		const size_t& data_size_in_x, 
+		const size_t& data_size_in_y,
+		Table* xs1, Table* zs1, Signs* ss1, 
+        const Table* xs2, const Table* zs2, const Signs* ss2, 
+        const size_t& num_words_major, const size_t& num_words_minor, const size_t& num_qubits) 
+	{
+		const int64 _initThreadsPerBlockY = initThreadsPerBlockY;
+		initThreadsPerBlockY = 32;
+		TUNE_2D(xs1, zs1, ss1, xs2, zs2, ss2, num_words_major, num_words_minor, num_qubits);
+		initThreadsPerBlockY = _initThreadsPerBlockY;
+	}
+
 	void tune_determinate(void (*kernel)(const Pivot*, bucket_t*, const gate_ref_t*, const Table*, const Table*, const Signs*, const size_t, const size_t, const size_t),
 		const char* opname, 
 		dim3& bestBlock, dim3& bestGrid,
@@ -350,7 +394,20 @@ namespace QuaSARQ {
         const Table* inv_xs, const Table* inv_zs, const Signs* inv_ss, 
         const size_t num_gates, const size_t num_qubits, const size_t num_words_minor)
 	{
+		const int64 _initThreadsPerBlockX = initThreadsPerBlockX;
+		initThreadsPerBlockX = 32;
 		TUNE_2D_FIX_X(pivots, measurements, refs, inv_xs, inv_zs, inv_ss, num_gates, num_qubits, num_words_minor);
+		initThreadsPerBlockX = _initThreadsPerBlockX;
+	}
+
+	void tune_single_determinate(void (*kernel)(const Pivot*, bucket_t*, const gate_ref_t*, const Table*, const Table*, const Signs*, const size_t, const size_t, const size_t),
+		const char* opname, dim3& bestBlock, dim3& bestGrid, const size_t& shared_element_bytes, 
+		const Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs,
+        const Table* inv_xs, const Table* inv_zs, const Signs* inv_ss, 
+        const size_t gate_index, const size_t num_qubits, const size_t num_words_minor)
+	{
+		const size_t size = num_words_minor;
+		TUNE_1D_FIX_X(pivots, measurements, refs, inv_xs, inv_zs, inv_ss, gate_index, num_qubits, num_words_minor);
 	}
 
 	void tune_indeterminate(
@@ -366,10 +423,11 @@ namespace QuaSARQ {
         Table* inv_xs, Table* inv_zs, Signs *inv_ss,
         const size_t gate_index, const size_t num_qubits, const size_t num_words_minor)
 	{
-		dim3 bestBlock, bestGrid;
+		fflush(stdout), fflush(stderr);
 		void (*kernel)(const Pivot*, bucket_t*, const gate_ref_t*, Table*, Table*, Signs*, const size_t, const size_t, const size_t);
 		// Tune the copy kernel.
 		if (options.tune_copyindeterminate) {
+			dim3 bestBlock = bestBlockCopy, bestGrid = bestGridCopy;
 			kernel = copy_kernel;
 			size_t size = num_words_minor;
 			const char* opname = "Copy";
@@ -379,7 +437,7 @@ namespace QuaSARQ {
 		}
 		// Tune phase1 kernel.
 		if (options.tune_phase1indeterminate) {
-			bestBlock = dim3(), bestGrid = dim3();
+			dim3 bestBlock = bestBlockPhase1, bestGrid = bestGridPhase1;
 			kernel = phase1_kernel;
 			const size_t data_size_in_x = num_words_minor;
 			const size_t data_size_in_y = 2 * num_qubits;
@@ -390,7 +448,7 @@ namespace QuaSARQ {
 		}
 		// Tune phase2 kernel.
 		if (options.tune_phase2indeterminate) {
-			bestBlock = dim3(), bestGrid = dim3();
+			dim3 bestBlock = bestBlockPhase2, bestGrid = bestGridPhase2;
 			kernel = phase2_kernel;
 			size_t size = 2 * num_qubits;
 			const char* opname = "Phase2";

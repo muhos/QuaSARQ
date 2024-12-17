@@ -29,7 +29,7 @@ namespace QuaSARQ {
         CONFIG(allpivots, 2, 128, 103, 52) \
         CONFIG(newpivots, 2, 128, 103, 52) \
         CONFIG(multdeterminate, 0, 0, 0, 0) \
-        CONFIG(singdeterminate, 2, 128, 103, 52) \
+        CONFIG(singdeterminate, 0, 0, 0, 0) \
         CONFIG(copyindeterminate, 4, 1, 500, 1) \
         CONFIG(phase1indeterminate, 2, 128, 103, 52) \
         CONFIG(phase2indeterminate, 4, 1, 500, 1) \

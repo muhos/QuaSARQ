@@ -38,7 +38,7 @@ using namespace QuaSARQ;
 
 bool Simulator::open_config(arg_t file_mode) {
     if (configfile == nullptr) {
-        LOGN2(1, "Opening \"%s%s%s\" kernel configuration file..", CREPORTVAL, options.configpath, CNORMAL);
+        LOGN2(1, "Opening \"%s%s%s\" kernel configuration file for %s.. ", CREPORTVAL, options.configpath, CNORMAL, hasstr(file_mode, "r") ? "reading" : "writing");
         configfile = fopen(options.configpath, file_mode);
         if (configfile == nullptr) { 
 			LOG2(1, "does not exist."); 
