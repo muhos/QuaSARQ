@@ -5,11 +5,15 @@
 #include "datatypes.hpp"
 #include "constants.hpp"
 #include "kernelconfig.hpp"
+#include "gatetypes.hpp"
 
 namespace QuaSARQ {
 
     #define CONFIG2OPTION(CONFIG) \
         bool tune_ ## CONFIG;
+
+    #define GATE2OPTION(GATE) \
+        double GATE ## _p;
     
     struct Options {
         
@@ -47,7 +51,7 @@ namespace QuaSARQ {
         size_t num_qubits;
         size_t depth;
 
-        double I_p, H_p, S_p, CX_p, M_p;
+        FOREACH_GATE(GATE2OPTION);
 
         InitialState initialstate;
 

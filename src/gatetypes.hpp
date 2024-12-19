@@ -32,21 +32,6 @@ namespace QuaSARQ {
     constexpr uint32 NR_GATETYPES_1 = M + 1;
     constexpr uint32 NR_GATETYPES = ISWAP + 1;
 
-    // 2-input gates.
-    constexpr Gatetypes gatetypes_2[NR_GATETYPES - NR_GATETYPES_1] = { CX, CY, CZ, SWAP, ISWAP };
-
-    // Check if Clifford gate is 2-input gate by linear search. 
-    inline bool isGate2(const Gatetypes& c) {
-        assert(NR_GATETYPES > NR_GATETYPES_1);
-        for (const Gatetypes* g = gatetypes_2, *e = g + (NR_GATETYPES - NR_GATETYPES_1); g != e; g++) { 
-            if (c == *g) 
-                return true;
-        }
-        return false;
-    } 
-
-
-
 }
 
 #endif

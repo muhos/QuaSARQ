@@ -1,12 +1,20 @@
 
 #include "simulator.hpp"
-#include <queue>
-
-// namespace QuaSARQ {
-//     double probabilities[NR_GATETYPES] = {0};
-// }
 
 using namespace QuaSARQ;
+
+// 2-input gates.
+constexpr Gatetypes gatetypes_2[NR_GATETYPES - NR_GATETYPES_1] = { CX, CY, CZ, SWAP, ISWAP };
+
+// Check if Clifford gate is 2-input gate by linear search. 
+inline bool isGate2(const Gatetypes& c) {
+    assert(NR_GATETYPES > NR_GATETYPES_1);
+    for (const Gatetypes* g = gatetypes_2, *e = g + (NR_GATETYPES - NR_GATETYPES_1); g != e; g++) { 
+        if (c == *g) 
+            return true;
+    }
+    return false;
+} 
 
 // Gate probabilities.
 double probabilities[NR_GATETYPES];
@@ -92,15 +100,14 @@ void Simulator::generate() {
     // Initialize gate probabilities.
     if (options.write_rc == 2) { // CHP format
         FOREACH_GATE(RESET_PROB);
+        INIT_PROB(H);
+        INIT_PROB(S);
+        INIT_PROB(CX);
+        INIT_PROB(M);
     }
     else {
-        FOREACH_GATE(UNIFORM_PROB);
-        INIT_PROB(I);
+        FOREACH_GATE(INIT_PROB);
     }
-    INIT_PROB(H);
-    INIT_PROB(S);
-    INIT_PROB(CX);
-    INIT_PROB(M);
     NORMALIZE_PROBS();
     size_t* types = stats.circuit.gate_stats.types;
     size_t parallel_gates_per_window = 0;

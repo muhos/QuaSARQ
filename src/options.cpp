@@ -14,6 +14,13 @@ namespace QuaSARQ {
     #define ENABLE_TUNER(CONFIG) \
         tuner_en |= tune_ ## CONFIG;
 
+    // Default frequency of some gates will be changed later.
+    #define GATE2INPUT(GATE) \
+        DOUBLE_OPT opt_ ## GATE ## _prob(#GATE, "Frequency of " #GATE " gates in a generated random circuit", (1.0 / NR_GATETYPES), FP64R(0,1));
+
+    #define GATE2ASSIGN(GATE) \
+        GATE ## _p = opt_ ## GATE ## _prob;
+
     BOOL_OPT opt_quiet_en("q", "be quiet", false);
     BOOL_OPT opt_report_en("report", "report statistics", true);
     BOOL_OPT opt_progress_en("progress", "report progress", true);
@@ -42,11 +49,7 @@ namespace QuaSARQ {
     INT64_OPT opt_num_qubits("qubits", "set number of qubits for random generation (if no input file given)", 2000, INT64R(1, UINT32_MAX));
     INT64_OPT opt_depth("depth", "set circuit depth for random generation (if no input file given)", 2, INT64R(1, UINT32_MAX));
 
-    DOUBLE_OPT opt_I_prob("I", "Frequency of I gates in a generated random circuit", 0.05, FP64R(0,1));
-    DOUBLE_OPT opt_H_prob("H", "Frequency of H gates in a generated random circuit", 0.08, FP64R(0,1));
-    DOUBLE_OPT opt_S_prob("S", "Frequency of S gates in a generated random circuit", 0.08, FP64R(0,1));
-    DOUBLE_OPT opt_CX_prob("CX", "Frequency of CX gates in a generated random circuit", 0.09, FP64R(0,1));
-    DOUBLE_OPT opt_M_prob("M", "Frequency of Measurements in a generated random circuit", 0.09, FP64R(0,1));
+    FOREACH_GATE(GATE2INPUT);
 
     STRING_OPT opt_configpath("config-path", "Set the path of the kernel configuration file", "kernel.config");
 
@@ -94,11 +97,11 @@ namespace QuaSARQ {
         print_initial_tableau = opt_print_tableau_initial;
         write_rc = opt_write_rc;
 
-        I_p = opt_I_prob;
-        H_p = opt_H_prob;
-        S_p = opt_S_prob;
-        CX_p = opt_CX_prob;
-        M_p = opt_M_prob;
+        opt_H_prob = 0.08;
+        opt_S_prob = 0.08;
+        opt_CX_prob = 0.09;
+        opt_M_prob = 0.09;
+        FOREACH_GATE(GATE2ASSIGN);
 
         initialstate = InitialState(int(opt_initialstate));
         num_qubits = opt_num_qubits;
