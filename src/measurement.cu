@@ -1,49 +1,8 @@
 #include "simulator.hpp"
 #include "measurement.cuh"
 #include "tuner.cuh"
-#include "locker.cuh"
 #include "transpose.cuh"
-
 namespace QuaSARQ {;
-
-    // Let threads in x-dim find the minimum (de)stabilizer generator commuting.
-    INLINE_DEVICE void find_min_pivot(Pivot& p, const qubit_t& q, const Table& inv_xs, const size_t num_qubits, const size_t num_words_minor) {
-        const qubit_t q_w = WORD_OFFSET(q);
-        const word_std_t q_mask = BITMASK_GLOBAL(q);
-        const grid_t stab_offset = num_qubits * num_words_minor;
-        for_parallel_x(g, num_qubits) {
-            const grid_t word_idx = g * num_words_minor + q_w;
-            word_std_t qubit_word = inv_xs[stab_offset + word_idx];
-            if (qubit_word & q_mask)
-                atomicMin(&p.indeterminate, g);
-            else {
-                qubit_word = inv_xs[word_idx];
-                if (qubit_word & q_mask)   
-                    atomicMin(&p.determinate, g);
-            }
-        }
-    }
-
-    __global__ void reset_pivots(Pivot* pivots, const size_t num_gates) {
-        for_parallel_x(i, num_gates) {
-            pivots[i].reset();
-        }
-    }
-
-    __global__ void reset_pivot(Pivot* pivots, const size_t gate_index) {
-        pivots[gate_index].reset();
-    }
-
-    __global__ void find_pivots_initial(Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs, const Table* inv_xs, 
-                                        const size_t num_gates, const size_t num_qubits, const size_t num_words_minor) {
-        for_parallel_y(i, num_gates) {
-            const gate_ref_t r = refs[i];
-            assert(r < NO_REF);
-            Gate& m = (Gate&) measurements[r];
-            assert(m.size == 1);
-            find_min_pivot(pivots[i], m.wires[0], *inv_xs, num_qubits, num_words_minor);
-        }
-    }
 
     __global__ void initialize_determinate_measurements(Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs,
                                         const Table* inv_xs, const Signs* inv_ss,
@@ -106,7 +65,7 @@ namespace QuaSARQ {;
         }
     }
 
-    __global__ void measure_determinate(const Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs,
+    __global__ void measure_all_determinate(const Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs,
                                         const Table* inv_xs, const Table* inv_zs, const Signs* inv_ss, 
                                         const size_t num_gates, const size_t num_qubits, const size_t num_words_minor) {
         word_std_t* aux = SharedMemory<word_std_t>();
@@ -269,15 +228,6 @@ namespace QuaSARQ {;
         }
     }
 
-    __global__ void find_new_pivots(Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs, const Table* inv_xs, 
-                                const size_t gate_index, const size_t num_qubits, const size_t num_words_minor) {
-        const gate_ref_t r = refs[gate_index];
-        assert(r < NO_REF);
-        Gate& m = (Gate&) measurements[r];
-        assert(m.size == 1);
-        find_min_pivot(pivots[gate_index], m.wires[0], *inv_xs, num_qubits, num_words_minor);
-    }
-
     __global__ void initialize_single_determinate_measurement(const Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs,
                                         const Table* inv_xs, const Signs* inv_ss,
                                         const size_t gate_index, const size_t num_qubits, const size_t num_words_minor) {
@@ -304,45 +254,20 @@ namespace QuaSARQ {;
 
     void Simulator::measure(const size_t& p, const depth_t& depth_level, const bool& reversed) {
         assert(options.streams >= 4);
-        dim3 currentgrid = dim3(0, 0, 0);
         cudaStream_t copy_stream1 = copy_streams[0];
         cudaStream_t copy_stream2 = copy_streams[1];
         cudaStream_t kernel_stream1 = kernel_streams[0];
         cudaStream_t kernel_stream2 = kernel_streams[1];
 
-        if (!depth_level) locker.reset(kernel_stream1);
-
         const size_t num_words_minor = inv_tableau.num_words_minor();
         const size_t num_words_major = inv_tableau.num_words_major();
         const size_t num_gates_per_window = circuit[depth_level].size();
 
-        // Reset pivots.
-        if (options.tune_reset) {
-            SYNCALL;
-            tune_kernel_m(reset_pivots, "Resetting pivots", bestblockreset, bestgridreset, gpu_circuit.pivots(), num_gates_per_window);
-        }
-        currentgrid = bestgridreset;
-        if (depth_level > 1 && currentgrid.x > num_gates_per_window) {
-            printf("reducing grid size for resetting pivots.\n");
-            currentgrid.x = ROUNDUPBLOCKS(num_gates_per_window, bestblockreset.x);
-        }
-        reset_pivots <<<currentgrid, bestblockreset, 0, kernel_stream2>>> (gpu_circuit.pivots(), num_gates_per_window);
+        // Reset all pivots.
+        reset_pivots(num_gates_per_window, kernel_stream2);
 
         // Transpose the tableau into row-major format.
-        if (options.tune_transpose2r) {
-            SYNCALL;
-            tune_transpose(transpose_to_rowmajor, "Transposing to row-major", 
-            bestblocktranspose2r, bestgridtranspose2r, 
-            0, false,        // shared size, extend?
-            num_words_major, // x-dim
-            2 * num_qubits,  // y-dim 
-            XZ_TABLE(inv_tableau), inv_tableau.signs(), XZ_TABLE(tableau), tableau.signs(), num_words_major, num_words_minor, num_qubits);
-        }
-        transpose_to_rowmajor<<< bestgridtranspose2r, bestblocktranspose2r, 0, kernel_stream1 >>>(XZ_TABLE(inv_tableau), inv_tableau.signs(), XZ_TABLE(tableau), tableau.signs(), num_words_major, num_words_minor, num_qubits);
-        if (options.sync) {
-            LASTERR("failed to launch transpose_to_rowmajor kernel");
-            SYNC(kernel_stream1);
-        }
+        transpose(true, kernel_stream1);
 
         // Sync copying gates to device.
         SYNC(copy_stream1);
@@ -351,27 +276,7 @@ namespace QuaSARQ {;
         SYNC(kernel_stream2);
 
         // Find all pivots if exist.
-        if (options.tune_allpivots) {
-            SYNCALL;
-            tune_kernel_m(find_pivots_initial, "Find all pivots", 
-            bestblockallpivots, bestgridallpivots, 
-            0, false,        // shared size, extend?
-            num_qubits,      // x-dim
-            num_gates_per_window,  // y-dim 
-            gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), inv_tableau.xtable(), num_gates_per_window, num_qubits, num_words_minor);
-            reset_pivots <<<bestgridreset, bestblockreset>>> (gpu_circuit.pivots(), num_gates_per_window);
-            SYNCALL;
-        }
-        currentgrid = bestgridallpivots;
-        if (depth_level > 1 && currentgrid.y > num_gates_per_window) {
-            printf("reducing grid size for finding pivots from %d to %zd.\n", currentgrid.y, ROUNDUPBLOCKS(num_gates_per_window, bestblockallpivots.y));
-            currentgrid.y = ROUNDUPBLOCKS(num_gates_per_window, bestblockallpivots.y);
-        }
-        find_pivots_initial <<<currentgrid, bestblockallpivots, 0, kernel_stream1>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), inv_tableau.xtable(), num_gates_per_window, num_qubits, num_words_minor);
-        if (options.sync) {
-            LASTERR("failed to launch find_pivots_initial kernel");
-            SYNC(kernel_stream1);
-        }
+        find_pivots(num_gates_per_window, true, kernel_stream1);
 
         // Initialize determinate measurements with tableau signs.
         initialize_determinate_measurements <<<bestgridreset, bestblockreset, 0, kernel_stream1>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), inv_tableau.xtable(), inv_tableau.signs(), num_gates_per_window, num_qubits, num_words_minor);
@@ -380,7 +285,7 @@ namespace QuaSARQ {;
             SYNC(kernel_stream1);
         }
 
-        // Sync modifying pivots.
+        // Sync finding pivots.
         SYNC(kernel_stream1);
 
         // Copy pivots to host.
@@ -391,67 +296,87 @@ namespace QuaSARQ {;
         }
         
         // Measure all determinate.
-        if (options.tune_multdeterminate) {
-            SYNCALL;
-            const size_t shared_bytes = 2 * (sizeof(int) + sizeof(word_std_t));
-            tune_determinate(measure_determinate, "measure all determinate", 
-            bestblockmultdeterminate, bestgridmultdeterminate, 
-            shared_bytes, true,     // shared size, extend?
-            num_words_minor,        // x-dim
-            num_gates_per_window,   // y-dim 
-            gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), inv_tableau.signs(), num_gates_per_window, num_qubits, num_words_minor);
-            initialize_determinate_measurements <<<bestgridreset, bestblockreset>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), inv_tableau.xtable(), inv_tableau.signs(), num_gates_per_window, num_qubits, num_words_minor);
-            SYNCALL;
-        }
-        if (!bestgridmultdeterminate.x) {
-            bestblockmultdeterminate = dim3(32, 2);
-            bestgridmultdeterminate.x = ROUNDUPBLOCKS(num_words_minor, bestblockmultdeterminate.x);
-            OPTIMIZEBLOCKS2D(nBlocksY, num_gates_per_window, bestblockmultdeterminate.y);
-            bestgridmultdeterminate.y = nBlocksY;
-        }
-        currentgrid = bestgridmultdeterminate;
-        if (depth_level > 1 && currentgrid.y > num_gates_per_window) {
-            printf("reducing grid size for measuring all determinates from %d to %zd.\n", currentgrid.y, ROUNDUPBLOCKS(num_gates_per_window, bestblockmultdeterminate.y));
-            currentgrid.y = ROUNDUPBLOCKS(num_gates_per_window, bestblockmultdeterminate.y);
-        }
-        OPTIMIZESHARED(smem_multdeterminate, bestblockmultdeterminate.y * (bestblockmultdeterminate.x * 2), sizeof(int) + sizeof(word_std_t));
-        measure_determinate <<<currentgrid, bestblockmultdeterminate, smem_multdeterminate, kernel_stream1>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), inv_tableau.signs(), num_gates_per_window, num_qubits, num_words_minor);
-        if (options.sync) {
-            LASTERR("failed to launch measure_determinate kernel");
-            SYNC(kernel_stream1);
-        }
+        measure_determinate(num_gates_per_window, true, kernel_stream1);
 
         // Sync copying pivots.
         SYNC(copy_stream1);
 
-        measure_indeterminate(depth_level, kernel_stream1);
+        Measures& measure_stats = stats.circuit.measure_stats;
+        measure_stats.random_per_window = measure_indeterminate(depth_level, kernel_stream1);
+        measure_stats.random += measure_stats.random_per_window;
+        measure_stats.definite += num_gates_per_window - measure_stats.random_per_window;
 
         // Transpose the tableau back into column-major format.
-        if (options.tune_transpose2c) {
-            SYNCALL;
-            tune_transpose(transpose_to_colmajor, "Transposing to column-major", 
-            bestblocktranspose2c, bestgridtranspose2c, 
-            0, false,        // shared size, extend?
-            num_words_major, // x-dim
-            num_qubits,      // y-dim 
-            XZ_TABLE(tableau), tableau.signs(), XZ_TABLE(inv_tableau), inv_tableau.signs(), num_words_major, num_words_minor, num_qubits);
-        }
-        transpose_to_colmajor<<< bestgridtranspose2c, bestblocktranspose2c, 0, kernel_stream1 >>>(XZ_TABLE(tableau), tableau.signs(), XZ_TABLE(inv_tableau), inv_tableau.signs(), num_words_major, num_words_minor, num_qubits);
-        if (options.sync) {
-            LASTERR("failed to launch transpose_to_rowmajor kernel");
-            SYNC(kernel_stream1);
-        }
+        transpose(false, kernel_stream1);
+    }
 
-        //print_gates(gpu_circuit, num_gates_per_window, depth_level);
-        print_measurements(gpu_circuit, num_gates_per_window, depth_level);
-        //print_tableau(inv_tableau, depth_level, false);
-
-    } // End of function.
+    void Simulator::measure_determinate(const size_t& num_gates_or_index, const bool& bulky, const cudaStream_t& stream) {
+        const size_t num_words_minor = inv_tableau.num_words_minor();
+        const size_t num_words_major = inv_tableau.num_words_major();
+        dim3 currentblock, currentgrid;
+        if (bulky) {
+            if (options.tune_multdeterminate) {
+                SYNCALL;
+                const size_t shared_bytes = 2 * (sizeof(int) + sizeof(word_std_t));
+                tune_determinate(measure_all_determinate, "measure all determinate", 
+                bestblockmultdeterminate, bestgridmultdeterminate, 
+                shared_bytes, true,   // shared size, extend?
+                num_words_minor,      // x-dim
+                num_gates_or_index,   // y-dim 
+                gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), inv_tableau.signs(), num_gates_or_index, num_qubits, num_words_minor);
+                initialize_determinate_measurements <<<bestgridreset, bestblockreset>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), inv_tableau.xtable(), inv_tableau.signs(), num_gates_or_index, num_qubits, num_words_minor);
+                SYNCALL;
+            }
+            TRIM_BLOCK_IN_DEBUG_MODE(bestblockmultdeterminate, bestgridmultdeterminate, num_words_minor, num_gates_or_index);
+            // Make sure there are sufficient threads in x-dim.
+            // Grid-stride loop cannot be used here.
+            if (size_t(bestgridmultdeterminate.x) * size_t(bestblockmultdeterminate.x) < num_words_minor) {
+                bestblockmultdeterminate.x = 32;
+                bestgridmultdeterminate.x = ROUNDUPBLOCKS(num_words_minor, bestblockmultdeterminate.x);
+            }
+            currentblock = bestblockmultdeterminate, currentgrid = bestgridmultdeterminate;
+            TRIM_GRID_IN_2D(num_gates_or_index, y);
+            OPTIMIZESHARED(smem_multdeterminate, currentblock.y * (currentblock.x * 2), sizeof(int) + sizeof(word_std_t));
+            measure_all_determinate <<<currentgrid, currentblock, smem_multdeterminate, stream>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), inv_tableau.signs(), num_gates_or_index, num_qubits, num_words_minor);
+            if (options.sync) {
+                LASTERR("failed to launch measure_all_determinate kernel");
+                SYNC(stream);
+            }
+        }
+        else {
+            const size_t gate_index = num_gates_or_index;
+            initialize_single_determinate_measurement <<<1, 1, 0, stream>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), inv_tableau.xtable(), inv_tableau.signs(), gate_index, num_qubits, num_words_minor);
+            if (options.tune_singdeterminate) {
+                SYNCALL;
+                const size_t shared_bytes = 2 * (sizeof(int) + sizeof(word_std_t));
+                tune_single_determinate(measure_single_determinate, "Single determinate", 
+                    bestblocksingdeterminate, bestgridsingdeterminate, shared_bytes,
+                    gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), inv_tableau.signs(), gate_index, num_qubits, num_words_minor);
+                initialize_single_determinate_measurement <<<1, 1, 0, stream>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), inv_tableau.xtable(), inv_tableau.signs(), gate_index, num_qubits, num_words_minor);
+                SYNCALL;
+            }
+            TRIM_BLOCK_IN_DEBUG_MODE(bestblocksingdeterminate, bestgridsingdeterminate, num_words_minor, 0);
+            // Make sure there are sufficient threads in x-dim.
+            // Grid-stride loop cannot be used here.
+            if (size_t(bestgridsingdeterminate.x) * size_t(bestblocksingdeterminate.x) < num_words_minor) {
+                bestblocksingdeterminate.x = 256;
+                bestgridsingdeterminate.x = ROUNDUPBLOCKS(num_words_minor, bestblocksingdeterminate.x);
+            }
+            currentblock = bestblocksingdeterminate, currentgrid = bestgridsingdeterminate;
+            TRIM_GRID_IN_1D(num_words_minor, x);
+            OPTIMIZESHARED(smem_singdeterminate, (currentblock.x * 2), sizeof(int) + sizeof(word_std_t));
+            measure_single_determinate <<<currentgrid, currentblock, smem_singdeterminate, stream>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), inv_tableau.signs(), gate_index, num_qubits, num_words_minor);
+            if (options.sync) {
+                LASTERR("failed to launch measure_single_determinate kernel");
+                SYNC(stream);
+            }
+        }
+    }
 
     void Simulator::measure_indeterminate(const size_t& gate_index, const cudaStream_t& stream) {
         const size_t num_words_minor = inv_tableau.num_words_minor();
+        dim3 currentblock, currentgrid;
         if (options.tune_copyindeterminate || options.tune_phase1indeterminate || options.tune_phase2indeterminate) {
-            //printf("before tuning:\n"), print_tableau(inv_tableau, -1, false);
             SYNCALL;
             ts.recover = true;
             ts.set_original_pointers(inv_tableau.xdata(), inv_tableau.zdata(), inv_tableau.num_words());
@@ -465,90 +390,68 @@ namespace QuaSARQ {;
             ts.recover = false;
             inv_tableau.reset_signs();
             SYNCALL;
-            //printf("after tuning:\n"), print_tableau(inv_tableau, -1, false);
         }
-        measure_indeterminate_copy        <<<bestgridcopyindeterminate,   bestblockcopyindeterminate,   0, stream>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), inv_tableau.signs(), gate_index, num_qubits, num_words_minor);
+        TRIM_BLOCK_IN_DEBUG_MODE(bestblockcopyindeterminate, bestgridcopyindeterminate, num_words_minor, 0);
+        currentblock = bestblockcopyindeterminate, currentgrid = bestgridcopyindeterminate;
+        TRIM_GRID_IN_1D(num_words_minor, x);
+        measure_indeterminate_copy <<<currentgrid, currentblock, 0, stream>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), inv_tableau.signs(), gate_index, num_qubits, num_words_minor);
         if (options.sync) {
             LASTERR("failed to launch measure_indeterminate_copy kernel");
             SYNC(stream);
         }
-        OPTIMIZESHARED(smem_indeterminate, bestblockphase1indeterminate.y * (bestblockphase1indeterminate.x * 2), sizeof(int));
-        measure_indeterminate_mul_phase1  <<<bestgridphase1indeterminate, bestblockphase1indeterminate, smem_indeterminate, stream>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), inv_tableau.signs(), gate_index, num_qubits, num_words_minor);
+        //
+        TRIM_BLOCK_IN_DEBUG_MODE(bestblockphase1indeterminate, bestgridphase1indeterminate, num_words_minor, 2 * num_qubits);
+        currentblock = bestblockphase1indeterminate, currentgrid = bestgridphase1indeterminate;     
+        TRIM_GRID_IN_XY(num_words_minor, 2 * num_qubits);
+        OPTIMIZESHARED(smem_indeterminate, currentblock.y * (currentblock.x * 2), sizeof(int));
+        measure_indeterminate_mul_phase1  <<<currentgrid, currentblock, smem_indeterminate, stream>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), inv_tableau.signs(), gate_index, num_qubits, num_words_minor);
         if (options.sync) {
             LASTERR("failed to launch measure_indeterminate_mul_phase1 kernel");
             SYNC(stream);
         }
-        measure_indeterminate_mul_phase2  <<<bestgridphase2indeterminate, bestblockphase2indeterminate, 0, stream>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), inv_tableau.signs(), gate_index, num_qubits, num_words_minor);
+        //
+        TRIM_BLOCK_IN_DEBUG_MODE(bestblockphase2indeterminate, bestgridphase2indeterminate, 2 * num_qubits, 0);
+        currentblock = bestblockphase2indeterminate, currentgrid = bestgridphase2indeterminate;
+        TRIM_GRID_IN_1D(2 * num_qubits, x);
+        measure_indeterminate_mul_phase2  <<<currentgrid, currentblock, 0, stream>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), inv_tableau.signs(), gate_index, num_qubits, num_words_minor);
         if (options.sync) {
             LASTERR("failed to launch measure_indeterminate_mul_phase2 kernel");
             SYNC(stream);
         }    
     }
 
-    void Simulator::measure_indeterminate(const depth_t& depth_level, const cudaStream_t& stream) {
-        //printf("--> gates before indeterminate measuring\n"), print_gates(gpu_circuit, num_gates_per_window, depth_level);
+    int64 Simulator::measure_indeterminate(const depth_t& depth_level, const cudaStream_t& stream) {
         const size_t num_words_minor = inv_tableau.num_words_minor();
         const size_t num_gates_per_window = circuit[depth_level].size();
         Pivot* host_pivots = gpu_circuit.host_pivots();
         Pivot new_pivot;
+        int64 random_measures = 0;
         for(size_t i = 0; i < num_gates_per_window; i++) {
             Pivot curr_pivot = host_pivots[i];
             if (curr_pivot.indeterminate != INVALID_PIVOT) {
                 assert(curr_pivot.determinate == INVALID_PIVOT);
-                //printf("--> before measuring\n"), circuit.gateptr(depth_level, i)->print(true), printf(":\n"), print_tableau(inv_tableau, depth_level, false);
-                //measure_indeterminate_phase1 <<<nBlocks_indet, nThreads_indet, smem_size_indet, stream>>> (locker.deviceLocker(), gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), inv_tableau.signs(), i, num_qubits, num_words_minor);
                 const Gate& m = circuit.gate(depth_level, i);
                 if (inv_tableau.is_xstab_valid(m.wires[0], curr_pivot.indeterminate, stream)) {
                     measure_indeterminate(i, stream);
+                    random_measures++;
                 }
+                // Find new pivot.
                 else {
-                    // Put this in a function called fund_new_pivots.
-                    reset_pivot <<<1, 1, 0, stream>>> (gpu_circuit.pivots(), i);
-                    if (options.tune_newpivots) {
-                        SYNCALL;
-                        tune_kernel_m(find_new_pivots, "New pivots", bestblocknewpivots, bestgridnewpivots, gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), inv_tableau.xtable(), i, num_qubits, num_words_minor);
-                        reset_pivot <<<1, 1>>> (gpu_circuit.pivots(), i);
-                        SYNCALL;
-                    }
-                    find_new_pivots <<<bestgridnewpivots, bestblocknewpivots, 0, stream>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), inv_tableau.xtable(), i, num_qubits, num_words_minor);
-                    if (options.sync) {
-                        LASTERR("failed to launch find_new_pivots kernel");
-                        SYNC(stream);
-                    }
+                    find_pivots(i, false, stream);
                     gpu_circuit.copypivotto(new_pivot, i, stream);
                     SYNC(stream);
                     assert(new_pivot.indeterminate != curr_pivot.indeterminate);
-                    //printf("pivot %d changed to %d\n", curr_pivot.indeterminate, new_pivot.indeterminate);
                     if (new_pivot.indeterminate == INVALID_PIVOT) {
-                        initialize_single_determinate_measurement <<<1, 1, 0, stream>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), inv_tableau.xtable(), inv_tableau.signs(), i, num_qubits, num_words_minor);
-                        if (options.tune_singdeterminate) {
-                            SYNCALL;
-                            const size_t shared_bytes = 2 * (sizeof(int) + sizeof(word_std_t));
-                            tune_single_determinate(measure_single_determinate, "Single determinate", 
-                                bestblocksingdeterminate, bestgridsingdeterminate, shared_bytes,
-                                gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), inv_tableau.signs(), i, num_qubits, num_words_minor);
-                            initialize_single_determinate_measurement <<<1, 1, 0, stream>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), inv_tableau.xtable(), inv_tableau.signs(), i, num_qubits, num_words_minor);
-                            SYNCALL;
-                        }
-                        if (!bestgridsingdeterminate.x) {
-                            bestblocksingdeterminate = dim3(256, 1);
-                            bestgridsingdeterminate.x = ROUNDUPBLOCKS(num_words_minor, bestblocksingdeterminate.x);
-                            bestgridsingdeterminate.y = 1;
-                        }
-                        OPTIMIZESHARED(smem_singdeterminate, (bestblocksingdeterminate.x * 2), sizeof(int) + sizeof(word_std_t));
-                        measure_single_determinate <<<bestgridsingdeterminate, bestblocksingdeterminate, smem_singdeterminate, stream>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), inv_tableau.signs(), i, num_qubits, num_words_minor);
-                        if (options.sync) {
-                            LASTERR("failed to launch measure_single_determinate kernel");
-                            SYNC(stream);
-                        }
+                        measure_determinate(i, false, stream);
                     }
                     else {
                         measure_indeterminate(i, stream);
+                        random_measures++;
                     }
                 }
-                //printf("\n--> after measuring"), circuit.gateptr(depth_level, i)->print(true), printf(":\n"), print_tableau(inv_tableau, depth_level, false);
             }
         }
+        return random_measures;
     }
 }
 

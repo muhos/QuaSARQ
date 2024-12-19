@@ -278,18 +278,16 @@ namespace QuaSARQ {
 	}
 
 	__global__ void print_measurements_k(const gate_ref_t* refs, const bucket_t* measurements, const Pivot* pivots, const gate_ref_t num_gates) {
-		if (!global_tx) {
-			for (gate_ref_t i = 0; i < num_gates; i++) {
-				const gate_ref_t r = refs[i];
-				const Gate &m = (Gate &)measurements[r];
-				LOGGPU(" %8d     %10s    %2c\n", m.wires[0], 
-					pivots[i].indeterminate == INVALID_PIVOT ? "definite" : "random",  
-					m.measurement != UNMEASURED ? char(((m.measurement % 4 + 4) % 4 >> 1) + 48) : 'U');
-				// LOGGPU(" %8d     %10s    %2d\n", m.wires[0], 
-				// 	m.pivot == MAX_QUBITS ? "definite" : "random",  
-				// 	m.measurement != UNMEASURED ? m.measurement : -1);
-			}
-		}
+        for_parallel_x(i, num_gates) {
+            const gate_ref_t r = refs[i];
+            const Gate &m = (Gate &)measurements[r];
+            LOGGPU(" q%-10d: %c (%s)\n", m.wires[0], 
+                m.measurement != UNMEASURED ? char(((m.measurement % 4 + 4) % 4 >> 1) + 48) : 'U',
+                pivots[i].indeterminate == INVALID_PIVOT ? "definite" : "random");
+            // LOGGPU(" %8d     %10s    %2d\n", m.wires[0], 
+            // 	m.pivot == MAX_QUBITS ? "definite" : "random",  
+            // 	m.measurement != UNMEASURED ? m.measurement : -1);
+        }
 	}
 
 	void Simulator::print_paulis(const Tableau<DeviceAllocator>& tab, const depth_t& depth_level, const bool& reversed) {
@@ -305,7 +303,7 @@ namespace QuaSARQ {
 			fflush(stdout);
 		}
         print_paulis_k << <1, 1 >> > (XZ_TABLE(tab), tab.signs(), tab.num_words_major(), num_qubits, measuring);
-        LASTERR("failed to launch print-paulis kernel");
+        LASTERR("failed to launch print_paulis_k kernel");
         SYNCALL;
         fflush(stdout);
 	}
@@ -320,7 +318,7 @@ namespace QuaSARQ {
 		else
 			LOG2(0, "Tableau after %d-step", depth_level);
         print_tableau_k << <1, 1 >> > (XZ_TABLE(tab), tab.signs(), num_qubits, depth_level, measuring);
-        LASTERR("failed to launch print-tableau kernel");
+        LASTERR("failed to launch print_tableau_k kernel");
         SYNCALL;
         fflush(stdout);
 	}
@@ -330,7 +328,7 @@ namespace QuaSARQ {
 		if (!options.sync) SYNCALL;
 		LOG2(0, " Gates on GPU for %d-time step:", depth_level);
 		print_gates_k << <1, 1 >> > (gpu_circuit.references(), gpu_circuit.gates(), gpu_circuit.pivots(), num_gates);
-		LASTERR("failed to launch print-gates kernel");
+		LASTERR("failed to launch print_gates_k kernel");
 		SYNCALL;
 		fflush(stdout);
 	}
@@ -339,11 +337,14 @@ namespace QuaSARQ {
 		if (!options.print_measurements) return;
 		if (!circuit.is_measuring(depth_level)) return;
 		if (!options.sync) SYNCALL;
-		LOG2(0, " Measurements on GPU for %d-time step:", depth_level);
-		LOG2(0, "%10s   %10s     %5s", "Qubit", "Type", "Outcome");
-		print_measurements_k << <1, 1 >> > (gpu_circuit.references(), gpu_circuit.gates(), gpu_circuit.pivots(), num_gates);
-		LASTERR("failed to launch print-measurements kernel");
+		if (!options.progress_en) LOG2(0, " Measurements on GPU for %d-time step:", depth_level);
+        else SETCOLOR(CLBLUE, stdout);
+        uint32 currentblock = 256, currentgrid;
+        OPTIMIZEBLOCKS(currentgrid, num_gates, currentblock);
+		print_measurements_k <<< currentgrid, currentblock >>> (gpu_circuit.references(), gpu_circuit.gates(), gpu_circuit.pivots(), num_gates);
+		LASTERR("failed to launch print_measurements_k kernel");
 		SYNCALL;
+        SETCOLOR(CNORMAL, stdout);
 		fflush(stdout);
 	}
 

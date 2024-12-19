@@ -16,6 +16,7 @@ namespace QuaSARQ {
 
     BOOL_OPT opt_quiet_en("q", "be quiet", false);
     BOOL_OPT opt_report_en("report", "report statistics", true);
+    BOOL_OPT opt_progress_en("progress", "report progress", true);
     BOOL_OPT opt_equivalence_en("equivalence", "do equivalence checking", false);
     BOOL_OPT opt_checkparallelgates_en("check-parallel-gates", "check parallel gates independency", false);
     BOOL_OPT opt_checkintegrity_en("check-integrity", "check circuit integrity for possible logical errors", false);
@@ -64,6 +65,7 @@ namespace QuaSARQ {
     void Options::initialize() {
         quiet_en = opt_quiet_en;
         report_en = opt_report_en;
+        progress_en = opt_progress_en;
         verbose = opt_verbose;
         if (options.quiet_en) options.verbose = 0;
         else if (!options.verbose) options.quiet_en = true;
@@ -118,7 +120,7 @@ namespace QuaSARQ {
             tuner_en = false;
             checker_en = false;
         }
-        if (tuner_step_qubits > num_qubits) {
+        if (tuner_en && tuner_step_qubits > num_qubits) {
             LOG2(1, "%s  Stepwise qubits %s%zd%s is downsized to %s%zd%s maximum.%s", CARGDEFAULT, CARGVALUE, tuner_step_qubits, CARGDEFAULT, CARGVALUE, num_qubits, CARGDEFAULT, CNORMAL);
             depth = 1;
         }

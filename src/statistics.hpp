@@ -39,9 +39,15 @@ namespace QuaSARQ {
         }
     };
 
+    struct Measures {
+        size_t random, definite;
+        size_t random_per_window;
+    };
+
     struct Statistics {
         struct {
             Gate_stats gate_stats;
+            Measures measure_stats;
             size_t bytes;
             size_t num_gates;
             size_t num_parallel_gates;

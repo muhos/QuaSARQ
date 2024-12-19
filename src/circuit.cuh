@@ -108,7 +108,7 @@ namespace QuaSARQ {
 			const auto* buckets = circuit.data(buckets_offset);
 			double ttime = 0;
 			if (sync) cutimer.start(s1);
-			LOGN2(1, "Copying %lld references and %lld buckets (offset by %c%lld) per depth level %lld %ssynchroneously.. ", 
+			LOGN2(2, "Copying %lld references and %lld buckets (offset by %c%lld) per depth level %lld %ssynchroneously.. ", 
 				int64(curr_num_references), 
 				int64(curr_num_buckets), 
 				reversed ? '-' : '+' , 
@@ -128,7 +128,7 @@ namespace QuaSARQ {
 				cutimer.stop(s2);
 				ttime += cutimer.time();
 				stats.time.transfer += ttime;
-				LOG2(1, "done in %f ms.", ttime);
+				LOG2(2, "done in %f ms.", ttime);
 			}
 			if (reversed) {
 				const size_t num_buckets_prev = depth_level ? circuit.num_buckets(depth_level - 1) : 0;
@@ -138,7 +138,7 @@ namespace QuaSARQ {
 			else {
 				buckets_offset += (gate_ref_t) curr_num_buckets;
 			}
-			if (!sync) LOGDONE(1, 3);
+			if (!sync) LOGDONE(2, 3);
 		}
 
 		inline
@@ -147,16 +147,16 @@ namespace QuaSARQ {
 			const gate_ref_t prev_buckets_offset = buckets_offset - curr_num_buckets;
 			if (prev_buckets_offset >= circuit.num_buckets()) 
 				LOGERROR("buckets offset overflow during gates transfer to host.");
-			LOGN2(1, "Copying back %lld buckets to host per depth level %lld synchroneously.. ", int64(curr_num_buckets), int64(depth_level));
+			LOGN2(2, "Copying back %lld buckets to host per depth level %lld synchroneously.. ", int64(curr_num_buckets), int64(depth_level));
 			CHECK(cudaMemcpy(circuit.data(prev_buckets_offset), _buckets, BUCKETSIZE * curr_num_buckets, cudaMemcpyDeviceToHost));
-			LOGDONE(1, 3);
+			LOGDONE(2, 3);
 		}
 
 		inline
 		void 		copypivots		(const cudaStream_t& stream, const size_t& num_gates) {
-			LOGN2(1, "Copying back %lld pivots to host asynchroneously.. ", int64(num_gates));
+			LOGN2(2, "Copying back %lld pivots to host asynchroneously.. ", int64(num_gates));
 			CHECK(cudaMemcpyAsync(_pinned_pivots, _pivots, sizeof(Pivot) * num_gates, cudaMemcpyDeviceToHost, stream));
-			LOGDONE(1, 3);
+			LOGDONE(2, 3);
 		}
 
 		inline

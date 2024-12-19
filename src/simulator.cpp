@@ -30,8 +30,11 @@ Simulator::Simulator() :
     , locker(gpu_allocator)
     , tableau(gpu_allocator)
     , inv_tableau(gpu_allocator)
-	, configfile(nullptr)
+	, config_file(nullptr)
+    , config_qubits(0)
 	, custreams(nullptr)
+    , copy_streams{ 0, 0 }
+    , kernel_streams{ 0, 0 }
     , measuring(false)
 {
     initialize();
@@ -49,8 +52,11 @@ Simulator::Simulator(const string& path) :
     , locker(gpu_allocator)
     , tableau(gpu_allocator)
     , inv_tableau(gpu_allocator)
-    , configfile(nullptr)
+    , config_file(nullptr)
+    , config_qubits(0)
     , custreams(nullptr)
+    , copy_streams{ 0, 0 }
+    , kernel_streams{ 0, 0 }
     , measuring(false)
 {
     initialize();
@@ -104,23 +110,19 @@ void Simulator::simulate(const size_t& p, const bool& reversed) {
         LOGERRORN("cannot run simulation without allocating the tableau.");
         throw GPU_memory_exception();
     }
+    if (options.progress_en) print_progress_header();
     if (reversed) {
         gpu_circuit.reset_circuit_offset(circuit.reference(depth - 1, 0));
-        for (depth_t d = 0; d < depth; d++) {
-            const depth_t b = depth - d - 1;
-            step(p, b, true);
-        }
+        for (depth_t d = 0; d < depth; d++)
+            step(p, depth - d - 1, true);
     }
     else {
         gpu_circuit.reset_circuit_offset(0);
-        for (depth_t d = 0; d < depth; d++) {
+        for (depth_t d = 0; d < depth; d++)
             step(p, d);
-        }
     }
-    if (options.print_final_tableau)
-        print_tableau(tableau, depth, reversed);
-    if (options.print_final_state)
-        print_paulis(tableau, depth, reversed);
+    if (options.print_final_tableau) print_tableau(tableau, depth, reversed);
+    if (options.print_final_state) print_paulis(tableau, depth, reversed);
 }
 
 void Simulator::simulate() {

@@ -1,6 +1,8 @@
 
 #include "simulator.hpp"
+#include "transpose.cuh"
 #include "print.cuh"
+#include "tuner.cuh"
 
 namespace QuaSARQ {
 
@@ -89,6 +91,50 @@ namespace QuaSARQ {
                 const size_t dest_word_idx = q + w * num_words_major;
                 (*xs)[dest_word_idx] = inv_word_x;
                 (*zs)[dest_word_idx] = inv_word_z;
+            }
+        }
+    }
+
+    void Simulator::transpose(const bool& row_major, const cudaStream_t& stream) {
+        const size_t num_words_minor = inv_tableau.num_words_minor();
+        const size_t num_words_major = inv_tableau.num_words_major();
+        dim3 currentblock, currentgrid;
+        if (row_major) {
+            if (options.tune_transpose2r) {
+                SYNCALL;
+                tune_transpose(transpose_to_rowmajor, "Transposing to row-major", 
+                bestblocktranspose2r, bestgridtranspose2r, 
+                0, false,        // shared size, extend?
+                num_words_major, // x-dim
+                2 * num_qubits,  // y-dim 
+                XZ_TABLE(inv_tableau), inv_tableau.signs(), XZ_TABLE(tableau), tableau.signs(), num_words_major, num_words_minor, num_qubits);
+            }
+            TRIM_BLOCK_IN_DEBUG_MODE(bestblocktranspose2r, bestgridtranspose2r, num_words_major, 2 * num_qubits);
+            currentblock = bestblocktranspose2r, currentgrid = bestgridtranspose2r;
+            TRIM_GRID_IN_XY(num_words_major, 2 * num_qubits);
+            transpose_to_rowmajor <<< currentgrid, currentblock, 0, stream >>> (XZ_TABLE(inv_tableau), inv_tableau.signs(), XZ_TABLE(tableau), tableau.signs(), num_words_major, num_words_minor, num_qubits);
+            if (options.sync) {
+                LASTERR("failed to launch transpose_to_rowmajor kernel");
+                SYNC(stream);
+            }
+        }
+        else {
+            if (options.tune_transpose2c) {
+                SYNCALL;
+                tune_transpose(transpose_to_colmajor, "Transposing to column-major", 
+                bestblocktranspose2c, bestgridtranspose2c, 
+                0, false,        // shared size, extend?
+                num_words_major, // x-dim
+                num_qubits,      // y-dim 
+                XZ_TABLE(tableau), tableau.signs(), XZ_TABLE(inv_tableau), inv_tableau.signs(), num_words_major, num_words_minor, num_qubits);
+            }
+            TRIM_BLOCK_IN_DEBUG_MODE(bestblocktranspose2c, bestgridtranspose2c, num_words_major, num_qubits);
+            currentblock = bestblocktranspose2c, currentgrid = bestgridtranspose2c;     
+            TRIM_GRID_IN_XY(num_words_major, num_qubits);
+            transpose_to_colmajor <<< currentgrid, currentblock, 0, stream >>> (XZ_TABLE(tableau), tableau.signs(), XZ_TABLE(inv_tableau), inv_tableau.signs(), num_words_major, num_words_minor, num_qubits);
+            if (options.sync) {
+                LASTERR("failed to launch transpose_to_colmajor kernel");
+                SYNC(stream);
             }
         }
     }

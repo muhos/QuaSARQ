@@ -40,19 +40,19 @@ namespace QuaSARQ {
 	// macros for blocks calculation
 	#define ROUNDUPBLOCKS(DATALEN, NTHREADS) ((grid_t(DATALEN) + (NTHREADS) - 1) / (NTHREADS))
 
-	#define OPTIMIZEBLOCKS(NBLOCKS, DATALEN, NTHREADS)           \
-			assert(DATALEN);                                     \
-			assert(NTHREADS);                                    \
-			assert(maxGPUBlocks);                                \
-			grid_t NBLOCKS = ROUNDUPBLOCKS(DATALEN, NTHREADS); 	 \
-			NBLOCKS = MIN(NBLOCKS, maxGPUBlocks)  		 		 \
+	#define OPTIMIZEBLOCKS(NBLOCKS, DATALEN, NTHREADS)       \
+			assert(DATALEN);                                 \
+			assert(NTHREADS);                                \
+			assert(maxGPUBlocks);                            \
+			NBLOCKS = ROUNDUPBLOCKS(DATALEN, NTHREADS); 	 \
+			NBLOCKS = MIN(NBLOCKS, maxGPUBlocks)  		 	 \
 
-	#define OPTIMIZEBLOCKS2D(NBLOCKS, DATALEN, NTHREADS)         \
-			assert(DATALEN);                                     \
-			assert(NTHREADS);                                    \
-			assert(maxGPUBlocks2D);                              \
-			grid_t NBLOCKS = ROUNDUPBLOCKS(DATALEN, NTHREADS); 	 \
-			NBLOCKS = MIN(NBLOCKS, maxGPUBlocks2D)  		     \
+	#define OPTIMIZEBLOCKS2D(NBLOCKS, DATALEN, NTHREADS)     \
+			assert(DATALEN);                                 \
+			assert(NTHREADS);                                \
+			assert(maxGPUBlocks2D);                          \
+			NBLOCKS = ROUNDUPBLOCKS(DATALEN, NTHREADS); 	 \
+			NBLOCKS = MIN(NBLOCKS, maxGPUBlocks2D)  		 \
 
 	// macros for shared memory calculation
     #define OPTIMIZESHARED(SMEMSIZE, NTHREADS, MINCAP)       \
@@ -61,6 +61,50 @@ namespace QuaSARQ {
             assert(maxGPUSharedMem);                         \
             const size_t SMEMSIZE = (NTHREADS) * (MINCAP);   \
             assert(maxGPUSharedMem >= SMEMSIZE)              \
+
+	#if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
+        #define TRIM_BLOCK_IN_DEBUG_MODE(BLOCK, GRID, DATALEN_X, DATALEN_Y) \
+            if (BLOCK.x * BLOCK.y == 1024) { \
+				if (BLOCK.y == 1) { \
+					BLOCK.x = MIN(256, BLOCK.x); \
+					OPTIMIZEBLOCKS(GRID.x, DATALEN_X, BLOCK.x); \
+				} \
+				else if (BLOCK.x <= 2) \
+					BLOCK.y = MIN(256, BLOCK.y); \
+				else { \
+					BLOCK.x = MIN(32, BLOCK.x); \
+					BLOCK.y = MIN(16, BLOCK.y); \
+					OPTIMIZEBLOCKS2D(GRID.x, DATALEN_X, BLOCK.x); \
+					OPTIMIZEBLOCKS2D(GRID.y, DATALEN_Y, BLOCK.y); \
+				} \
+            }
+    #else
+        #define TRIM_BLOCK_IN_DEBUG_MODE(BLOCK)
+    #endif
+
+    #define TRIM_GRID_IN_1D(DATALEN, DIM) \
+        if (config_qubits > num_qubits) { \
+            if (size_t(currentgrid.DIM) * size_t(currentblock.DIM) > (DATALEN)) { \
+                OPTIMIZEBLOCKS(currentgrid.DIM, (DATALEN), currentblock.DIM); \
+            } \
+        }
+
+	#define TRIM_GRID_IN_2D(DATALEN, DIM) \
+        if (config_qubits > num_qubits) { \
+            if (size_t(currentgrid.DIM) * size_t(currentblock.DIM) > (DATALEN)) { \
+                OPTIMIZEBLOCKS2D(currentgrid.DIM, (DATALEN), currentblock.DIM); \
+            } \
+        }
+
+    #define TRIM_GRID_IN_XY(DATALEN_X, DATALEN_Y) \
+        if (config_qubits > num_qubits) { \
+            if (size_t(currentgrid.x) * size_t(currentblock.x) > (DATALEN_X)) { \
+                OPTIMIZEBLOCKS2D(currentgrid.x, (DATALEN_X), currentblock.x); \
+            } \
+            if (size_t(currentgrid.y) * size_t(currentblock.y) > (DATALEN_Y)) { \
+                OPTIMIZEBLOCKS2D(currentgrid.y, (DATALEN_Y), currentblock.y); \
+            } \
+        }
 
 }
 

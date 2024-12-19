@@ -60,7 +60,7 @@ inline void REPCH(const char& ch, const size_t& size, const size_t& off = 0) {
 	  if (RULELEN < len) LOGERROR("ruler length is smaller than header line (%zd)", len); \
       SETCOLOR(CNORMAL, stdout); \
 	  REPCH('-', STARTLEN); \
-	  PRINT("[ %s%s%s ]", CREPORT, HEAD, CNORMAL); \
+	  PRINT("[ %s%s%s ]", CHEADER, HEAD, CNORMAL); \
 	  REPCH('-', (RULELEN - len - STARTLEN)); \
 	  PUTCH('\n'); \
     } \

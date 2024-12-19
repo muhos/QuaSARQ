@@ -2,11 +2,28 @@
 #include "simulator.hpp"
 #include <queue>
 
-namespace QuaSARQ {
-    double probabilities[NR_GATETYPES] = {0};
-}
+// namespace QuaSARQ {
+//     double probabilities[NR_GATETYPES] = {0};
+// }
 
 using namespace QuaSARQ;
+
+// Gate probabilities.
+double probabilities[NR_GATETYPES];
+
+#define INIT_PROB(GATETYPE) probabilities[GATETYPE] = options.GATETYPE ## _p;
+#define RESET_PROB(GATETYPE) probabilities[GATETYPE] = 0;
+#define UNIFORM_PROB(GATETYPE) probabilities[GATETYPE] = 1.0 / double(NR_GATETYPES);
+
+inline void NORMALIZE_PROBS() {
+    double sum_probs = 0;
+    #define SUM_PROBS(GATETYPE) \
+        sum_probs += probabilities[uint32(GATETYPE)];
+    FOREACH_GATE(SUM_PROBS);
+    #define NORM_PROBS(GATETYPE) \
+        probabilities[uint32(GATETYPE)] /= sum_probs;
+    FOREACH_GATE(NORM_PROBS);
+}
 
 // Inside-out variant of Fisher-Yates algorithm.
 void Simulator::shuffle_qubits() {

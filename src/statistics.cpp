@@ -11,11 +11,11 @@ void Simulator::report()
 {
 	if (options.report_en) {
 		LOGHEADER(0, 3, "Statistics");
-		LOG1(" %sInitial time                   : %s%-12.3f  msec%s", CREPORT, CREPORTVAL, stats.time.initial, CNORMAL);
-		LOG1(" %sSchedule time                  : %s%-12.3f  msec%s", CREPORT, CREPORTVAL, stats.time.schedule, CNORMAL);
+		LOG1(" %sInitial time                   : %s%-12.3f  sec%s", CREPORT, CREPORTVAL, stats.time.initial / 1000.0, CNORMAL);
+		LOG1(" %sSchedule time                  : %s%-12.3f  sec%s", CREPORT, CREPORTVAL, stats.time.schedule / 1000.0, CNORMAL);
 		if (options.sync)
-			LOG1(" %sTransfer time                  : %s%-12.3f  msec%s", CREPORT, CREPORTVAL, stats.time.transfer, CNORMAL);
-		LOG1(" %sSimulation time                : %s%-12.3f  msec%s", CREPORT, CREPORTVAL, stats.time.simulation, CNORMAL);
+			LOG1(" %sTransfer time                  : %s%-12.3f  sec%s", CREPORT, CREPORTVAL, stats.time.transfer / 1000.0, CNORMAL);
+		LOG1(" %sSimulation time                : %s%-12.3f  sec%s", CREPORT, CREPORTVAL, stats.time.simulation / 1000.0, CNORMAL);
 		LOG1(" %sPower consumption              : %s%-12.3f  watt%s", CREPORT, CREPORTVAL, stats.power.wattage, CNORMAL);
 		LOG1(" %sEnergy consumption             : %s%-12.3f  joules%s", CREPORT, CREPORTVAL, stats.power.joules, CNORMAL);
 		string INTERLEAVING_STR = "disabled";
@@ -43,6 +43,8 @@ void Simulator::report()
 		double circuit_mb = ratio((double)stats.circuit.bytes, double(MB));
 		LOG1(" %sCircuit memory                 : %s%-12.3f  MB%s", CREPORT, CREPORTVAL, circuit_mb, CNORMAL);
 		LOG1(" %sMaximum parallel gates         : %s%-12zd%s", CREPORT, CREPORTVAL, stats.circuit.max_parallel_gates, CNORMAL);
+		LOG1(" %sRandom measurements            : %s%-12zd%s", CREPORT, CREPORTVAL, stats.circuit.measure_stats.random, CNORMAL);
+		LOG1(" %sDefinite measurements          : %s%-12zd%s", CREPORT, CREPORTVAL, stats.circuit.measure_stats.definite, CNORMAL);
 		LOG1(" %sClifford gates                 : %s%-12zd%s", CREPORT, CREPORTVAL, stats.circuit.num_gates, CNORMAL);
 		FOREACH_GATE(GATE2STATISTIC);
 	}

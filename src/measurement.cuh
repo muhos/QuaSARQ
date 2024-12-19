@@ -76,7 +76,7 @@ namespace QuaSARQ {
     __global__ void reset_pivots(Pivot* pivots, const size_t num_gates);
 
     // Find all generators commuting if exist.
-    __global__ void find_pivots_initial(Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs, const Table* inv_xs, 
+    __global__ void find_all_pivots(Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs, const Table* inv_xs, 
                                         const size_t num_gates, const size_t num_qubits, const size_t num_words_minor);
 
     // Initialize measurements with generator signs.
@@ -85,7 +85,7 @@ namespace QuaSARQ {
                                         const size_t num_gates, const size_t num_qubits, const size_t num_words_minor);
 
     // Measure all determinate qubits in parallel.
-    __global__ void measure_determinate(const Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs,
+    __global__ void measure_all_determinate(const Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs,
                                         const Table* inv_xs, const Table* inv_zs, const Signs *inv_ss,
                                         const size_t num_gates, const size_t num_qubits, const size_t num_words_minor);
 

@@ -30,17 +30,17 @@ namespace QuaSARQ {
 
 	#define CONFIG2PRINT(CONFIG) \
 		if (fetched ## CONFIG) { \
-			LOG2(1, " read " #CONFIG " configuration with %%%.1f accuracy: grid(%d, %d), block(%d, %d)", accuracy, bestgrid ## CONFIG.x, bestgrid ## CONFIG.y, bestblock ## CONFIG.x, bestblock ## CONFIG.y); \
+			LOG2(1, " read " #CONFIG " configuration with %lld distance: grid(%d, %d), block(%d, %d)", min_diff, bestgrid ## CONFIG.x, bestgrid ## CONFIG.y, bestblock ## CONFIG.x, bestblock ## CONFIG.y); \
 		}
 }
 
 using namespace QuaSARQ;
 
 bool Simulator::open_config(arg_t file_mode) {
-    if (configfile == nullptr) {
+    if (config_file == nullptr) {
         LOGN2(1, "Opening \"%s%s%s\" kernel configuration file for %s.. ", CREPORTVAL, options.configpath, CNORMAL, hasstr(file_mode, "r") ? "reading" : "writing");
-        configfile = fopen(options.configpath, file_mode);
-        if (configfile == nullptr) { 
+        config_file = fopen(options.configpath, file_mode);
+        if (config_file == nullptr) { 
 			LOG2(1, "does not exist."); 
 			return false; 
 		}
@@ -50,9 +50,9 @@ bool Simulator::open_config(arg_t file_mode) {
 }
 
 void Simulator::close_config() {
-    if (configfile != nullptr) {
-        fclose(configfile);
-        configfile = nullptr;
+    if (config_file != nullptr) {
+        fclose(config_file);
+        config_file = nullptr;
     }
 }
 
@@ -66,10 +66,10 @@ void Simulator::register_config() {
 	if (!st.st_size) return;
 	assert(st.st_size < UINT32_MAX);
     char* buffer = calloc<char>(st.st_size);
-	if (!fread(buffer, 1, st.st_size, configfile))
+	if (!fread(buffer, 1, st.st_size, config_file))
 		LOGERROR("cannot read kernel configuration file.");
 	int64 min_diff = UINT32_MAX;
-    int64 config_qubits = 0;
+    config_qubits = 0;
 	FOREACH_CONFIG(CONFIG2FETCHED);
 	FOREACH_CONFIG(CONFIG2BOOL);
 	char* line = buffer;
@@ -87,7 +87,6 @@ void Simulator::register_config() {
 			FOREACH_CONFIG(CONFIG2APPLY);
 		}
     }
-	double accuracy = 100.0 - percent(double(min_diff), double(num_qubits));
 	FOREACH_CONFIG(CONFIG2PRINT);
     close_config();
     std::free(buffer);

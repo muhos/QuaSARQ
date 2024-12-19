@@ -32,23 +32,6 @@ namespace QuaSARQ {
     constexpr uint32 NR_GATETYPES_1 = M + 1;
     constexpr uint32 NR_GATETYPES = ISWAP + 1;
 
-    // Gate probabilities.
-    extern double probabilities[NR_GATETYPES];
-
-    #define INIT_PROB(GATETYPE) probabilities[GATETYPE] = options.GATETYPE ## _p;
-    #define RESET_PROB(GATETYPE) probabilities[GATETYPE] = 0;
-    #define UNIFORM_PROB(GATETYPE) probabilities[GATETYPE] = 1.0 / double(NR_GATETYPES);
-
-    inline void NORMALIZE_PROBS() {
-        double sum_probs = 0;
-        #define SUM_PROBS(GATETYPE) \
-            sum_probs += probabilities[uint32(GATETYPE)];
-        FOREACH_GATE(SUM_PROBS);
-        #define NORM_PROBS(GATETYPE) \
-            probabilities[uint32(GATETYPE)] /= sum_probs;
-        FOREACH_GATE(NORM_PROBS);
-    }
-
     // 2-input gates.
     constexpr Gatetypes gatetypes_2[NR_GATETYPES - NR_GATETYPES_1] = { CX, CY, CZ, SWAP, ISWAP };
 

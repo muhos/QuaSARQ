@@ -8,7 +8,7 @@ namespace QuaSARQ {
 	constexpr size_t NSAMPLES = 2;
 	constexpr int MIN_PRECISION_HITS = 2;
 	constexpr size_t TRIALS = size_t(0.5e3);
-	constexpr double PRECISION = 0.001;
+	constexpr double PRECISION = 0.009;
 #if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
 	int64 maxThreadsPerBlock = 256;
 	int64 maxThreadsPerBlockY = 32;
@@ -35,7 +35,7 @@ namespace QuaSARQ {
 		FOREACH_CONFIG(CONFIG2STRING);
 		const char* str = config.c_str();
 		config += "\n";
-		fwrite(config.c_str(), 1, config.size(), configfile);
+		fwrite(config.c_str(), 1, config.size(), config_file);
 	}
 
 	void Tuner::reset() {
@@ -125,6 +125,7 @@ namespace QuaSARQ {
 			LOG2(1, "Tunning %s kernel with maximum of %zd trials and %-.5f milliseconds precision...", opname, TRIALS, PRECISION); \
 			int min_precision_hits = MIN_PRECISION_HITS;  \
 			const int64 maxBlocksPerGrid = maxGPUBlocks << 1; \
+			int64 initBlocksPerGrid = 0; \
 			OPTIMIZEBLOCKS(initBlocksPerGrid, size, maxThreadsPerBlock); \
 			double minRuntime = double(UINTMAX_MAX); \
 			bool early_exit = false; \
@@ -189,6 +190,7 @@ namespace QuaSARQ {
 			LOG2(1, "Tunning %s kernel with maximum of %zd trials and %-.5f milliseconds precision...", opname, TRIALS, PRECISION); \
 			int min_precision_hits = MIN_PRECISION_HITS; \
 			const bool x_warped = hasstr(opname, "warped"); \
+			int64 initBlocksPerGridX = 0, initBlocksPerGridY = 0; \
 			OPTIMIZEBLOCKS2D(initBlocksPerGridY, data_size_in_y, maxThreadsPerBlockY); \
 			OPTIMIZEBLOCKS2D(initBlocksPerGridX, data_size_in_x, maxThreadsPerBlockX); \
 			double minRuntime = double(UINTMAX_MAX); \
@@ -236,6 +238,7 @@ namespace QuaSARQ {
 			LOG0(""); \
 			LOG2(1, "Tunning %s kernel with maximum of %zd trials and %-.5f milliseconds precision...", opname, TRIALS, PRECISION); \
 			int min_precision_hits = MIN_PRECISION_HITS; \
+			int64 initBlocksPerGridY = 0; \
 			OPTIMIZEBLOCKS2D(initBlocksPerGridY, data_size_in_y, maxThreadsPerBlockY); \
 			double minRuntime = double(UINTMAX_MAX); \
 			bool early_exit = false; \

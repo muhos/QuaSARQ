@@ -22,6 +22,7 @@ namespace QuaSARQ {
 
 		inline void  start  () { _start = std::chrono::steady_clock::now(); }
 		inline void  stop   () { _end = std::chrono::steady_clock::now(); }
+		// Report time in milliseconds.
 		inline double time	() {
 			_time = double(std::chrono::duration_cast<std::chrono::microseconds>(_end - _start).count());
 			return _time / 1000.0;

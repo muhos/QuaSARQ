@@ -230,30 +230,28 @@ namespace QuaSARQ {
     }
 
     void Simulator::step(const size_t& p, const depth_t& depth_level, const bool& reversed) {
-
-        double stime = 0;
         assert(options.streams >= 3);
         const cudaStream_t copy_stream1 = copy_streams[0];
         const cudaStream_t copy_stream2 = copy_streams[1];
         const cudaStream_t kernel_stream = kernel_streams[0];
+        const size_t num_gates_per_window = circuit[depth_level].size();
+        const size_t num_words_major = tableau.num_words_major();
+        const size_t shared_element_bytes = sizeof(word_std_t);
 
         // Sync previous kernel streams before copying new gates.
-        if (depth_level) { 
+        if (options.progress_en)
+            progress_timer.start();
+        else if (depth_level) { 
             SYNC(kernel_streams[0]);
             SYNC(kernel_streams[1]);
         }
 
         // Copy current window to GPU memory.
-        LOGN2(1, "Partition %zd, step %d: ", p, depth_level);
         gpu_circuit.copyfrom(stats, circuit, depth_level, reversed, options.sync, copy_stream1, copy_stream2);
-
-        const size_t num_gates_per_window = circuit[depth_level].size();
-        const size_t num_words_major = tableau.num_words_major();
-        const size_t shared_element_bytes = sizeof(word_std_t);
+        
+        print_gates(gpu_circuit, num_gates_per_window, depth_level);
 
         if (!circuit.is_measuring(depth_level)) {
-
-            print_gates(gpu_circuit, num_gates_per_window, depth_level);
 
             #if DEBUG_STEP
 
@@ -283,17 +281,11 @@ namespace QuaSARQ {
                 );
             }
 
-            LOGN2(1, "Partition %zd, step %d: Simulating %s using grid(%d, %d) and block(%d, %d).. ", 
-                p, depth_level, !options.sync ? "asynchronously" : "",
-                bestgridstep.x, bestgridstep.y, bestblockstep.x, bestblockstep.y);
-
             OPTIMIZESHARED(reduce_smem_size, bestblockstep.y * bestblockstep.x, shared_element_bytes);
 
             // sync data transfer.
             SYNC(copy_stream1);
             SYNC(copy_stream2);
-
-            if (options.sync) cutimer.start();
 
             // Run simulation.
             if (bestblockstep.x > maxWarpSize)
@@ -303,15 +295,10 @@ namespace QuaSARQ {
 
             if (options.sync) { 
                 LASTERR("failed to launch step kernel");
-                cutimer.stop();
-                stime = cutimer.time();
+                SYNC(kernel_stream);
             }
-            if (options.sync) {
-                LOG2(1, "done in %f ms", stime);
-            }
-            else LOGDONE(1, 3);
 
-            #endif 
+            #endif // DEBUG MACRO.
 
             if (options.print_step_tableau)
                 print_tableau(tableau, depth_level, reversed);
@@ -321,6 +308,14 @@ namespace QuaSARQ {
         else {
             measure(p, depth_level, reversed);
         }
+
+        if (options.progress_en) {
+            SYNC(kernel_streams[0]);
+            SYNC(kernel_streams[1]);
+            print_progress(p, depth_level);
+        }
+
+        print_measurements(gpu_circuit, num_gates_per_window, depth_level);
 
     } // End of function.
 

@@ -40,7 +40,9 @@ namespace QuaSARQ {
         Tableau<DeviceAllocator>        tableau;
         Tableau<DeviceAllocator>        inv_tableau;
         Statistics                      stats;
-        FILE*                           configfile;
+        Timer                           progress_timer;
+        FILE*                           config_file;
+        size_t                          config_qubits;
         cudaStream_t*                   custreams;
         cudaStream_t                    copy_streams[2];
         cudaStream_t                    kernel_streams[2];
@@ -85,16 +87,44 @@ namespace QuaSARQ {
         void step(const size_t& p, const depth_t& depth_level, const bool& reversed = false);
         
         // Do measurements in a single simulation step.
-        void measure(const size_t& p, const depth_t& depth_level, const bool& reversed = false);
+        void transpose(const bool& row_major, const cudaStream_t& stream);
+        void reset_pivots(const size_t& num_pivots, const cudaStream_t& stream);
+        void find_pivots(const size_t& num_pivots_or_index, const bool& bulky, const cudaStream_t& stream);
+        void initialize_determinate(const size_t& num_gates, const cudaStream_t& stream);
+        void measure_determinate(const size_t& num_gates_or_index, const bool& bulku, const cudaStream_t& stream);
         void measure_indeterminate(const size_t& gate_index, const cudaStream_t& stream = 0);
-        void measure_indeterminate(const depth_t& depth_level, const cudaStream_t& stream = 0);
-        void tune_measurement(const size_t& p, const depth_t& depth_level, const bool& reversed = false);
+        int64 measure_indeterminate(const depth_t& depth_level, const cudaStream_t& stream = 0);
+        void measure(const size_t& p, const depth_t& depth_level, const bool& reversed = false);
 
         // Printers.
         void print_tableau(const Tableau<DeviceAllocator>& tab, const depth_t& depth_level, const bool& reverse);
         void print_paulis(const Tableau<DeviceAllocator>& tab, const depth_t& depth_level, const bool& reversed);
         void print_gates(const DeviceCircuit<DeviceAllocator>& gates, const gate_ref_t& num_gates, const depth_t& depth_level);
         void print_measurements(const DeviceCircuit<DeviceAllocator>& gates, const gate_ref_t& num_gates, const depth_t& depth_level);
+
+        // Progress report.
+        inline void print_progress_header() {
+            LOG2(1, "   %-10s    %-10s    %-10s    %15s          %-15s", 
+                    "Partition", "Step", "Gates", "Measurements", "Time (s)");
+            LOG2(1, "   %-10s    %-10s    %-10s    %-10s  %-10s    %-10s", 
+                    "", "", "", "definite", "random", "");
+        }
+        inline void print_progress(const size_t& p, const depth_t& depth_level) {
+            if (options.progress_en) {
+                progress_timer.stop();
+                const bool is_measuring = circuit.is_measuring(depth_level);
+                size_t random_measures = stats.circuit.measure_stats.random_per_window;
+                stats.circuit.measure_stats.random_per_window = 0;
+                size_t prev_num_gates = circuit[depth_level].size();
+                size_t definite_measures = is_measuring ? prev_num_gates - random_measures : 0;
+                if (is_measuring) SETCOLOR(CLBLUE, stdout);
+                else SETCOLOR(CORANGE1, stdout);
+                LOG2(1, "%c  %-10lld    %-10lld    %-10lld    %-10lld  %-10lld   %-7.3f", 
+                        is_measuring ? 'm' : 'u',
+                        p + 1, depth_level + 1, prev_num_gates, definite_measures, random_measures, progress_timer.time() / 1000.0);
+                SETCOLOR(CNORMAL, stdout);
+            }
+        }
 
     };
 

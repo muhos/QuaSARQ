@@ -31,10 +31,8 @@
 #define CVIOLET3	""
 #define CVIOLET4	""
 #define CVIOLET5	""
-
 #define CORANGE0	""
 #define CORANGE1	""
-#define CMDM		""
 #define CSIM		""
 #define CAUTHOR		""
 #define CRIGHTS		""
@@ -44,7 +42,6 @@
 #define CREPORT		""
 #define CREPORTVAL	""
 #define CLOGGING	""
-#define CCONFLICT	""
 #define CHELP		""
 #define CARGDEFAULT	""
 #define CARGVALUE	""
@@ -79,7 +76,6 @@
 #define CVIOLET5	"\x1B[38;5;125m"
 #define CORANGE0	"\x1B[38;5;203m"
 #define CORANGE1	"\x1B[38;5;202m"
-#define CMDM		"\x1B[38;5;221m"
 #define CSIM		"\x1B[38;5;117m"
 #define CAUTHOR		"\x1B[38;5;116m"
 #define CRIGHTS		"\x1B[38;5;1m"
@@ -89,7 +85,6 @@
 #define CREPORT		"\x1B[38;5;187m"
 #define CREPORTVAL	"\x1B[38;5;106m"
 #define CLOGGING	"\x1B[38;5;225m"
-#define CCONFLICT	"\x1B[38;5;198m"
 #define CHELP		"\x1B[38;5;108m"
 #define CARGDEFAULT	"\x1B[38;5;187m"
 #define CARGVALUE	"\x1B[38;5;34m"
@@ -100,6 +95,6 @@
 #endif
 
 
-#define SETCOLOR(COLOR, STD) fprintf(STD, "%s", COLOR); 
+#define SETCOLOR(COLOR, STD) fprintf(STD, "%s", COLOR)
 
 #endif

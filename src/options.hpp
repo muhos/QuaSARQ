@@ -19,10 +19,9 @@ namespace QuaSARQ {
 
         bool quiet_en;
         bool report_en;
-        bool sync;
+        bool progress_en;
 
         bool equivalence_en;
-        
         bool checker_en;
         bool check_parallel_gates;
         bool check_integrity;
@@ -41,6 +40,7 @@ namespace QuaSARQ {
 
         bool profile_equivalence;
         bool disable_concurrency;
+        bool sync;
 
         size_t tuner_initial_qubits;
         size_t tuner_step_qubits;
