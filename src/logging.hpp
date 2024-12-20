@@ -14,7 +14,7 @@
 #endif
 
 #define STARTLEN    10
-#define RULELEN     92
+#define RULERLEN     92
 #define PREFIX      ""
 #define UNDERLINE	"\u001b[4m"
 
@@ -57,11 +57,11 @@ inline void REPCH(const char& ch, const size_t& size, const size_t& off = 0) {
   do { \
     if (options.verbose >= VERBOSITY && options.verbose < MAXVERBOSITY) { \
 	  size_t len = strlen(HEAD) + 4; \
-	  if (RULELEN < len) LOGERROR("ruler length is smaller than header line (%zd)", len); \
+	  if (RULERLEN < len) LOGERROR("ruler length is smaller than header line (%zd)", len); \
       SETCOLOR(CNORMAL, stdout); \
 	  REPCH('-', STARTLEN); \
 	  PRINT("[ %s%s%s ]", CHEADER, HEAD, CNORMAL); \
-	  REPCH('-', (RULELEN - len - STARTLEN)); \
+	  REPCH('-', (RULERLEN - len - STARTLEN)); \
 	  PUTCH('\n'); \
     } \
   } while (0)

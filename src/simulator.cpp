@@ -102,13 +102,13 @@ void Simulator::create_streams(cudaStream_t*& streams) {
 // Simulate circuit by moving window
 // over parallel gates of each depth level.
 void Simulator::simulate(const size_t& p, const bool& reversed) {
-    if (!options.check_integrity) {
-        if (reversed) { LOGHEADER(1, 3, "Reversed Simulation"); }
-        else { LOGHEADER(1, 3, "Simulation"); }
-    }
     if (!tableau.size()) {
         LOGERRORN("cannot run simulation without allocating the tableau.");
         throw GPU_memory_exception();
+    }
+    if (!options.check_integrity) {
+        if (reversed) { LOGHEADER(1, 3, "Reversed Simulation"); }
+        else { LOGHEADER(1, 3, "Simulation"); }
     }
     if (options.progress_en) print_progress_header();
     if (reversed) {

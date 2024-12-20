@@ -1,11 +1,10 @@
 #include "simulator.hpp"
 #include "measurement.cuh"
 #include "tuner.cuh"
-#include "transpose.cuh"
 namespace QuaSARQ {;
 
-    __global__ void initialize_determinate_measurements(Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs,
-                                        const Table* inv_xs, const Signs* inv_ss,
+    __global__ void initialize_determinate_measurements(Pivot* pivots, bucket_t* measurements, ConstRefsPointer refs,
+                                        ConstTablePointer inv_xs, ConstSignsPointer inv_ss,
                                         const size_t num_gates, const size_t num_qubits, const size_t num_words_minor) {
         for_parallel_x(i, num_gates) {
             // Check if the current gate is determinate
@@ -65,8 +64,8 @@ namespace QuaSARQ {;
         }
     }
 
-    __global__ void measure_all_determinate(const Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs,
-                                        const Table* inv_xs, const Table* inv_zs, const Signs* inv_ss, 
+    __global__ void measure_all_determinate(ConstPivotsPointer pivots, bucket_t* measurements, ConstRefsPointer refs,
+                                        ConstTablePointer inv_xs, ConstTablePointer inv_zs, ConstSignsPointer inv_ss, 
                                         const size_t num_gates, const size_t num_qubits, const size_t num_words_minor) {
         word_std_t* aux = SharedMemory<word_std_t>();
         int* aux_power = reinterpret_cast<int*>(aux + blockDim.y * blockDim.x * 2);
@@ -83,70 +82,7 @@ namespace QuaSARQ {;
         }
     }
 
-    __global__ void measure_indeterminate_phase1(DeviceLocker* dlocker, Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs, 
-                                                Table* inv_xs, Table* inv_zs, Signs *inv_ss,
-                                                const size_t gate_index, const size_t num_qubits, const size_t num_words_minor) {
-        int* unpacked_ss = inv_ss->unpacked_data();
-        int* pos_is = SharedMemory<int>();
-        int* neg_is = pos_is + blockDim.x;
-        const grid_t destab_pivot = pivots[gate_index].indeterminate;
-        assert(pivots[gate_index].determinate == INVALID_PIVOT);
-        assert(destab_pivot != INVALID_PIVOT);
-        const grid_t tx = threadIdx.x, BX = blockDim.x;
-        const grid_t w = blockIdx.x * BX + tx;
-        const grid_t stab_pivot = destab_pivot + num_qubits;
-        const grid_t stab_row = stab_pivot * num_words_minor;
-        const gate_ref_t r = refs[gate_index];
-        const Gate& m = (Gate&) measurements[r];
-        const qubit_t q = m.wires[0], q_w = WORD_OFFSET(q);
-        const word_std_t q_mask = BITMASK_GLOBAL(q);
-        const word_std_t qubit_stab_word = (*inv_xs)[stab_row + q_w];
-        // If pivot is still valid in the current quantum state.
-        if (qubit_stab_word & q_mask) {
-            inv_xs->set_stab(true);
-            const grid_t shared_tid = threadIdx.y * BX * 2 + tx;
-            if (w < num_words_minor) {
-                const grid_t src_word_idx = stab_row + w;
-                const grid_t des_word_idx = destab_pivot * num_words_minor + w;
-                (*inv_xs)[des_word_idx] = (*inv_xs)[src_word_idx];
-                (*inv_zs)[des_word_idx] = (*inv_zs)[src_word_idx];
-                if (w != q_w) {
-                    (*inv_xs)[src_word_idx] = 0;
-                    (*inv_zs)[src_word_idx] = 0; 
-                }
-                else {
-                    (*inv_zs)[src_word_idx] = q_mask;
-                    unpacked_ss[destab_pivot] = unpacked_ss[stab_pivot];
-                }
-            }
-            for (grid_t des_idx = 0; des_idx < 2 * num_qubits; des_idx++) {
-                const word_std_t des_qubit_word = (*inv_xs)[des_idx * num_words_minor + q_w];
-                if ((des_idx != destab_pivot) && (des_idx != stab_pivot) && (des_qubit_word & q_mask)) {
-                    int pos_i = 0, neg_i = 0; 
-                    if (w < num_words_minor) {
-                        const grid_t src_word_idx = destab_pivot * num_words_minor + w;
-                        const grid_t des_word_idx = des_idx * num_words_minor + w;
-                        const word_std_t src_x = (*inv_xs)[src_word_idx], src_z = (*inv_zs)[src_word_idx];
-                        const word_std_t des_x = (*inv_xs)[des_word_idx], des_z = (*inv_zs)[des_word_idx];
-                        if (w != q_w) 
-                            (*inv_xs)[des_word_idx] = des_x ^ src_x;
-                        (*inv_zs)[des_word_idx] = des_z ^ src_z;
-                        COMPUTE_POWER_I(pos_i, neg_i, src_x, src_z, des_x, des_z);
-                    }
-                    ACCUMULATE_POWER_I(unpacked_ss[des_idx]);
-                }
-            }
-        }
-        // Pivot changed due to previous indeterminate measurement.
-        else if (!w) { 
-            // Reset pivot.
-            inv_xs->set_stab(false);
-            pivots[gate_index].reset();
-        }
-    }
-
-
-    __global__ void measure_indeterminate_copy(const Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs, 
+    __global__ void measure_indeterminate_copy(ConstPivotsPointer pivots, bucket_t* measurements, ConstRefsPointer refs, 
                                             Table* inv_xs, Table* inv_zs, Signs *inv_ss,
                                             const size_t gate_index, const size_t num_qubits, const size_t num_words_minor) {
         const grid_t destab_pivot = pivots[gate_index].indeterminate;
@@ -174,7 +110,7 @@ namespace QuaSARQ {;
         }
     }
 
-    __global__ void measure_indeterminate_mul_phase1(const Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs, 
+    __global__ void measure_indeterminate_mul_phase1(ConstPivotsPointer pivots, bucket_t* measurements, ConstRefsPointer refs, 
                                                 Table* inv_xs, Table* inv_zs, Signs *inv_ss,
                                                 const size_t gate_index, const size_t num_qubits, const size_t num_words_minor) {
         const grid_t destab_pivot = pivots[gate_index].indeterminate;
@@ -207,7 +143,7 @@ namespace QuaSARQ {;
         }
     }
 
-    __global__ void measure_indeterminate_mul_phase2(const Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs, 
+    __global__ void measure_indeterminate_mul_phase2(ConstPivotsPointer pivots, bucket_t* measurements, ConstRefsPointer refs, 
                                                 Table* inv_xs, Table* inv_zs, Signs *inv_ss,
                                                 const size_t gate_index, const size_t num_qubits, const size_t num_words_minor) {
         const gate_ref_t r = refs[gate_index];
@@ -228,8 +164,8 @@ namespace QuaSARQ {;
         }
     }
 
-    __global__ void initialize_single_determinate_measurement(const Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs,
-                                        const Table* inv_xs, const Signs* inv_ss,
+    __global__ void initialize_single_determinate_measurement(ConstPivotsPointer pivots, bucket_t* measurements, ConstRefsPointer refs,
+                                        ConstTablePointer inv_xs, ConstSignsPointer inv_ss,
                                         const size_t gate_index, const size_t num_qubits, const size_t num_words_minor) {
         assert(pivots[gate_index].indeterminate == INVALID_PIVOT);
         assert(pivots[gate_index].determinate < num_qubits);
@@ -239,8 +175,8 @@ namespace QuaSARQ {;
         m.measurement = inv_ss->get_unpacked_sign(pivots[gate_index].determinate + num_qubits);
     }
 
-    __global__ void measure_single_determinate(const Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs,
-                                        const Table* inv_xs, const Table* inv_zs, const Signs* inv_ss, 
+    __global__ void measure_single_determinate(ConstPivotsPointer pivots, bucket_t* measurements, ConstRefsPointer refs,
+                                        ConstTablePointer inv_xs, ConstTablePointer inv_zs, ConstSignsPointer inv_ss, 
                                         const size_t gate_index, const size_t num_qubits, const size_t num_words_minor) {
         assert(pivots[gate_index].determinate != INVALID_PIVOT);
         word_std_t* aux = SharedMemory<word_std_t>();

@@ -1,7 +1,5 @@
 #include "simulator.hpp"
 #include "step.cuh"
-#include "transpose.cuh"
-#include "measurement.cuh"
 #include "tuner.cuh"
 #include "operators.cuh"
 #include "macros.cuh"
@@ -11,7 +9,7 @@
 
 namespace QuaSARQ {
 
-    __global__ void step_2D(const gate_ref_t* refs, const bucket_t* gates, const size_t num_gates, const size_t num_words_major, 
+    __global__ void step_2D(ConstRefsPointer refs, ConstBucketsPointer gates, const size_t num_gates, const size_t num_words_major, 
     #ifdef INTERLEAVE_XZ
     Table* ps, 
     #else
@@ -122,7 +120,7 @@ namespace QuaSARQ {
 
     }
 
-    __global__ void step_2D_warped(const gate_ref_t* refs, const bucket_t* gates, const size_t num_gates, const size_t num_words_major, 
+    __global__ void step_2D_warped(ConstRefsPointer refs, ConstBucketsPointer gates, const size_t num_gates, const size_t num_words_major, 
     #ifdef INTERLEAVE_XZ
     Table* ps, 
     #else

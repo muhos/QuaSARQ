@@ -1,13 +1,15 @@
 
 #include "simulator.hpp"
-#include "transpose.cuh"
+#include "datatypes.cuh"
 #include "print.cuh"
 #include "tuner.cuh"
+#include "grid.cuh"
+
 
 namespace QuaSARQ {
 
     __global__ void transpose_to_rowmajor(Table *inv_xs, Table *inv_zs, Signs *inv_ss,
-                              const Table * __restrict__ xs, const Table * __restrict__ zs, const Signs * __restrict__ ss,
+                              const Table *  xs, const Table *  zs, const Signs *  ss,
                               const size_t num_words_major, const size_t num_words_minor,
                               const size_t num_qubits) {
         if (!global_ty) {
@@ -49,7 +51,7 @@ namespace QuaSARQ {
     }
 
     __global__ void transpose_to_colmajor(Table* xs, Table* zs, Signs* ss, 
-                        const Table* __restrict__ inv_xs, const Table* __restrict__ inv_zs, const Signs* __restrict__ inv_ss, 
+                        ConstTablePointer inv_xs, ConstTablePointer inv_zs, ConstSignsPointer  inv_ss, 
                         const size_t num_words_major, const size_t num_words_minor, 
                         const size_t num_qubits) {
 

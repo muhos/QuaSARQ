@@ -1,8 +1,7 @@
 #include "equivalence.hpp"
-#include "step.cuh"
-#include "collapse.cuh"
 #include "operators.cuh"
 #include "macros.cuh"
+#include "step.cuh"
 #include <cuda_profiler_api.h>
 
 namespace QuaSARQ {
@@ -11,7 +10,7 @@ namespace QuaSARQ {
 
     #ifdef INTERLEAVE_XZ
 
-    __global__ void equivalence_1D(const Table* ps, const Signs* ss, const Table* other_ps, const Signs* other_ss, const size_t min_num_words) {
+    __global__ void equivalence_1D(ConstTablePointer ps, ConstSignsPointer ss, ConstTablePointer other_ps, ConstSignsPointer other_ss, const size_t min_num_words) {
         for_parallel_x(w, min_num_words) {
             if (equivalent && ((*ps)[w] != (*other_ps)[w])) {
                 equivalent = 0;
@@ -30,7 +29,7 @@ namespace QuaSARQ {
 
 #else
 
-    __global__ void equivalence_1D(const Table* xs, const Table* zs, const Signs* ss, const Table* other_xs, const Table* other_zs, const Signs* other_ss, const size_t min_num_words) {
+    __global__ void equivalence_1D(ConstTablePointer xs, ConstTablePointer zs, ConstSignsPointer ss, ConstTablePointer other_xs, ConstTablePointer other_zs, ConstSignsPointer other_ss, const size_t min_num_words) {
         for_parallel_x(w, min_num_words) {
             if (equivalent && ((*xs)[w] != (*other_xs)[w])) {
                 equivalent = 0;

@@ -108,6 +108,7 @@ namespace QuaSARQ {
                     "Partition", "Step", "Gates", "Measurements", "Time (s)");
             LOG2(1, "   %-10s    %-10s    %-10s    %-10s  %-10s    %-10s", 
                     "", "", "", "definite", "random", "");
+            LOGRULER('-', RULERLEN);
         }
         inline void print_progress(const size_t& p, const depth_t& depth_level) {
             if (options.progress_en) {

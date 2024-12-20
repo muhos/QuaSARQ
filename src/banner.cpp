@@ -16,8 +16,8 @@ void LOGFANCYBANNER(const char* VER)
     const char* title8 = u8"   ░░░░░░ ░░   ░░░░░░░░  ░░░░░░░░  ░░░░░░░░░  ░░░░░   ░░░░░ ░░░░░   ░░░░░    ░░░░░░ ░░ ";
     const char* name_version = u8"   Copyright\u00A9 Muhammad Osama Mahmoud                                            ";
     size_t len = 85 + 1;
-    if (RULELEN < (len - 3)) LOGERROR("ruler length is smaller than the title (%zd)", len);
-    size_t gap = (RULELEN - len - 3) / 2;
+    if (RULERLEN < (len - 3)) LOGERROR("ruler length is smaller than the title (%zd)", len);
+    size_t gap = (RULERLEN - len - 3) / 2;
     PRINT(PREFIX);
     PUTCH('\n');
     PRINT(PREFIX);

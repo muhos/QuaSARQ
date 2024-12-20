@@ -1,6 +1,7 @@
 #include "simulator.hpp"
 #include "pivot.cuh"
 #include "tuner.cuh"
+#include "datatypes.cuh"
 
 namespace QuaSARQ {;
 
@@ -32,7 +33,7 @@ namespace QuaSARQ {;
         pivots[gate_index].reset();
     }
 
-    __global__ void find_all_pivots(Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs, const Table* inv_xs, 
+    __global__ void find_all_pivots(Pivot* pivots, bucket_t* measurements, ConstRefsPointer refs, ConstTablePointer inv_xs, 
                                         const size_t num_gates, const size_t num_qubits, const size_t num_words_minor) {
         for_parallel_y(i, num_gates) {
             const gate_ref_t r = refs[i];
@@ -43,7 +44,7 @@ namespace QuaSARQ {;
         }
     }
 
-    __global__ void find_new_pivot(Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs, const Table* inv_xs, 
+    __global__ void find_new_pivot(Pivot* pivots, bucket_t* measurements, ConstRefsPointer refs, ConstTablePointer inv_xs, 
                                 const size_t gate_index, const size_t num_qubits, const size_t num_words_minor) {
         const gate_ref_t r = refs[gate_index];
         assert(r < NO_REF);

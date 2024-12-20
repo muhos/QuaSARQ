@@ -79,7 +79,7 @@ namespace QuaSARQ {
 				} \
             }
     #else
-        #define TRIM_BLOCK_IN_DEBUG_MODE(BLOCK)
+        #define TRIM_BLOCK_IN_DEBUG_MODE(BLOCK, GRID, DATALEN_X, DATALEN_Y)
     #endif
 
     #define TRIM_GRID_IN_1D(DATALEN, DIM) \

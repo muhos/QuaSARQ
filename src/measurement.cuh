@@ -1,15 +1,14 @@
 #ifndef __CU_MEASUREMENT_H
 #define __CU_MEASUREMENT_H
 
-#include "timer.hpp"
-#include "table.cuh"
-#include "signs.cuh"
+#include "datatypes.cuh"
 #include "circuit.cuh"
+#include "locker.cuh"
 #include "print.cuh"
-#include "timer.cuh"
 #include "grid.cuh"
 #include "sum.cuh"
-#include "locker.cuh"
+#include "timer.cuh"
+#include "timer.hpp"
 
 namespace QuaSARQ {
 
@@ -70,33 +69,6 @@ namespace QuaSARQ {
             int old_value = atomicAdd(&(GLOBAL_POWER), block_value); \
             CHECK_SIGN_OVERFLOW(des_idx, old_value, block_value); \
         }
-
-
-    // Reset pivots.
-    __global__ void reset_pivots(Pivot* pivots, const size_t num_gates);
-
-    // Find all generators commuting if exist.
-    __global__ void find_all_pivots(Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs, const Table* inv_xs, 
-                                        const size_t num_gates, const size_t num_qubits, const size_t num_words_minor);
-
-    // Initialize measurements with generator signs.
-    __global__ void initialize_determinate_measurements(Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs,
-                                        const Table* inv_xs, const Signs* inv_ss,
-                                        const size_t num_gates, const size_t num_qubits, const size_t num_words_minor);
-
-    // Measure all determinate qubits in parallel.
-    __global__ void measure_all_determinate(const Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs,
-                                        const Table* inv_xs, const Table* inv_zs, const Signs *inv_ss,
-                                        const size_t num_gates, const size_t num_qubits, const size_t num_words_minor);
-
-    // For single measurements.
-    __global__ void measure_indeterminate_phase1(DeviceLocker* dlocker, Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs, 
-                                                Table* inv_xs, Table* inv_zs, Signs *inv_ss,
-                                                const size_t gate_index, const size_t num_qubits, const size_t num_words_minor);
-
-    __global__ void measure_indeterminate_phase2(DeviceLocker* dlocker, Pivot* pivots, bucket_t* measurements, const gate_ref_t* refs, 
-                                                Table* inv_xs, Table* inv_zs, Signs *inv_ss,
-                                                const size_t gate_index, const size_t num_qubits, const size_t num_words_minor);
 
 }
 

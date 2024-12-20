@@ -50,7 +50,7 @@ int main(int argc, char** argv) {
 			delete sim;
         }
 
-        if (options.verbose) LOGRULER('-', RULELEN);
+        if (options.verbose) LOGRULER('-', RULERLEN);
 		return EXIT_SUCCESS;
 	}
 	catch (std::bad_alloc&) {

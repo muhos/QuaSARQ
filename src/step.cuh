@@ -1,21 +1,20 @@
 #ifndef __CU_STEP_H
 #define __CU_STEP_H
 
-#include "timer.hpp"
-#include "table.cuh"
-#include "signs.cuh"
-#include "vector.cuh"
-#include "circuit.cuh"
-#include "print.cuh"
-#include "timer.cuh"
-#include "grid.cuh"
+#include "datatypes.cuh"
 #include "collapse.cuh"
+#include "circuit.cuh"
+#include "vector.cuh"
 #include "atomic.cuh"
+#include "print.cuh"
+#include "grid.cuh"
+#include "timer.cuh"
+#include "timer.hpp"
 
 namespace QuaSARQ {
 
     // Simulate a single window per circuit.
-    __global__ void step_2D(const gate_ref_t* refs, const bucket_t* gates, const size_t num_gates, const size_t num_words_major, 
+    __global__ void step_2D(ConstRefsPointer refs, ConstBucketsPointer gates, const size_t num_gates, const size_t num_words_major, 
     #ifdef INTERLEAVE_XZ
     Table* ps, 
     #else
@@ -23,7 +22,7 @@ namespace QuaSARQ {
     #endif
     Signs* ss);
 
-    __global__ void step_2D_warped(const gate_ref_t* refs, const bucket_t* gates, const size_t num_gates, const size_t num_words_major, 
+    __global__ void step_2D_warped(ConstRefsPointer refs, ConstBucketsPointer gates, const size_t num_gates, const size_t num_words_major, 
     #ifdef INTERLEAVE_XZ
     Table* ps, 
     #else
