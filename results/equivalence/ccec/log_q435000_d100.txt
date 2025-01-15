@@ -1,3 +1,0 @@
-Random line: 9147190
-Random gate: CY
-Original gate: CY

@@ -1,3 +1,0 @@
-Random line: 3583351
-Random gate: Y
-Original gate: S_DAG

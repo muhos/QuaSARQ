@@ -1,3 +1,0 @@
-Random line: 20102706
-Random gate: CY
-Original gate: ISWAP

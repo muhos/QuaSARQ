@@ -1,3 +1,0 @@
-Random line: 11886786
-Random gate: CY
-Original gate: SWAP

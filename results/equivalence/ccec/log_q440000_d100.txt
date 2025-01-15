@@ -1,3 +1,0 @@
-Random line: 25859764
-Random gate: S
-Original gate: S

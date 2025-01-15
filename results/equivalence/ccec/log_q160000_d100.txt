@@ -1,9 +1,0 @@
-Random line: 8626674
-Random gate: CZ
-Original gate: ISWAP
-Run 0: 297.29125081095845
-Run 1: 296.7553620780818
-297.02 seconds
-25098.47 joules
-NOT EQUIVALENT
-0

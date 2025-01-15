@@ -1,9 +1,0 @@
-Random line: 9036595
-Random gate: SWAP
-Original gate: CY
-Run 0: 411.5754538308829
-Run 1: 410.5415628401097
-411.06 seconds
-34734.44 joules
-NOT EQUIVALENT
-0

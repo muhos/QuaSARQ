@@ -1,9 +1,0 @@
-Random line: 2718049
-Random gate: CX
-Original gate: CX
-Run 0: 331.1862489609048
-Run 1: 329.7144711050205
-330.45 seconds
-27923.06 joules
-EQUIVALENT
-None

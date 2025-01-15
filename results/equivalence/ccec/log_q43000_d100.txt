@@ -1,9 +1,0 @@
-Random line: 1262528
-Random gate: SWAP
-Original gate: SWAP
-Run 0: 46.854359155055135
-Run 1: 39.91821890603751
-43.39 seconds
-3666.14 joules
-EQUIVALENT
-None

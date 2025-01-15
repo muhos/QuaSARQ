@@ -1,4 +1,0 @@
-Random line: 16673590
-Random gate: CY
-Original gate: SWAP
-Run 0: 1187.3588400082663

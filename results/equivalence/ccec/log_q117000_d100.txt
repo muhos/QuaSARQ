@@ -1,9 +1,0 @@
-Random line: 5680374
-Random gate: Z
-Original gate: S_DAG
-Run 0: 160.70292663760483
-Run 1: 160.2613866222091
-160.48 seconds
-13560.74 joules
-NOT EQUIVALENT
-0

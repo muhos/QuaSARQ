@@ -1,3 +1,0 @@
-Random line: 4096225
-Random gate: ISWAP
-Original gate: SWAP

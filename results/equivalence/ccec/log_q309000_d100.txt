@@ -1,4 +1,0 @@
-Random line: 4387296
-Random gate: S
-Original gate: Y
-Run 0: 1125.3576184341218

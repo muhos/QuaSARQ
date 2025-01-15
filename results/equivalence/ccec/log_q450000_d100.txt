@@ -1,3 +1,0 @@
-Random line: 26285430
-Random gate: CY
-Original gate: CZ

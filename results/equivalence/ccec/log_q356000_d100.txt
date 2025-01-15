@@ -1,3 +1,0 @@
-Random line: 10826653
-Random gate: H
-Original gate: S

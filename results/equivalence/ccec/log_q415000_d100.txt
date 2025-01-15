@@ -1,3 +1,0 @@
-Random line: 17287711
-Random gate: CX
-Original gate: ISWAP

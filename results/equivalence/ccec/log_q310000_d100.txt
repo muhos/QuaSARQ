@@ -1,3 +1,0 @@
-Random line: 13633555
-Random gate: ISWAP
-Original gate: CY

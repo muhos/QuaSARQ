@@ -1,3 +1,0 @@
-Random line: 348538
-Random gate: CZ
-Original gate: ISWAP

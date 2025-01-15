@@ -1,3 +1,0 @@
-Random line: 21550472
-Random gate: CX
-Original gate: SWAP

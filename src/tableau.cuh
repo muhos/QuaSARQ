@@ -19,13 +19,15 @@ namespace QuaSARQ {
         size_t num_qubits_padded = get_num_padded_bits(num_qubits);
         size_t num_words = get_num_words(num_qubits_padded * num_qubits_padded);
         size_t num_words_major = get_num_words(num_qubits);
+        size_t num_sign_words = num_words_major;
         size_t max_padded_bits_two_tables = 2 * num_qubits_padded;
         assert(num_words_major * max_padded_bits_two_tables == 2 * num_words);
-        size_t expected_capacity_required = num_tableaus * 2 * num_words * sizeof(word_std_t) + extra_bytes;
+        size_t expected_capacity_required = num_tableaus * 2 * num_words * sizeof(word_std_t) + num_sign_words * sizeof(sign_t) + extra_bytes;
         size_t num_partitions = 1;
         while (expected_capacity_required >= corrected_free_memory && num_words_major > 1) {
             num_words_major = (num_words_major + 0.5) / 1.5;
-            expected_capacity_required = num_tableaus * num_words_major * max_padded_bits_two_tables * sizeof(word_std_t) + extra_bytes;
+            num_sign_words = num_words_major;
+            expected_capacity_required = num_tableaus * num_words_major * max_padded_bits_two_tables * sizeof(word_std_t) + num_sign_words * sizeof(sign_t) + extra_bytes;
             num_partitions++;
         }
         return num_partitions;
@@ -278,6 +280,7 @@ namespace QuaSARQ {
 			while ((_num_partitions * _num_words_major) < num_words_major_whole_tableau)
 				_num_words_major++;
             // Update number of words.
+            _num_sign_words = _unpacked_signs ? _num_words_major * WORD_BITS : _num_words_major;
 			_num_words = _num_words_major * _num_qubits_padded;
 			expected_capacity_required = 2 * _num_words * sizeof(word_std_t) + _num_sign_words * sign_word_size + max_window_bytes;       
             if (expected_capacity_required > cap_before) {

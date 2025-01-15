@@ -1,9 +1,0 @@
-Random line: 1191116
-Random gate: CY
-Original gate: ISWAP
-Run 0: 25.46955120493658
-Run 1: 25.4525846040342
-25.46 seconds
-2151.46 joules
-NOT EQUIVALENT
-0
