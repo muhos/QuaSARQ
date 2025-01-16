@@ -112,7 +112,7 @@ namespace QuaSARQ {
             collapse_warp(shared_signs, signs_word, collapse_tid, BX, tx);
 
             // Atomically collapse all blocks.
-            if (!tx && global_offset < num_gates) {
+            if (!tx && global_offset < num_gates && signs_word) {
                 atomicXOR(signs + w, signs_word);
             }
 
@@ -219,7 +219,7 @@ namespace QuaSARQ {
             collapse_warp_only(signs_word);
 
             // Atomically collapse all blocks.
-            if (!tx && global_offset < num_gates) {
+            if (!tx && global_offset < num_gates && signs_word) {
                 atomicXOR(signs + w, signs_word);
             }
 
