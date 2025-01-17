@@ -53,7 +53,7 @@ namespace QuaSARQ {
                 LOGGPU("  Unknown(");
             }
             for (input_size_t i = 0; i < size; i++) { 
-                LOGGPU("%3d", wires[i]);
+                LOGGPU("%6d", wires[i]);
                 if (i < size - 1)
                     LOGGPU(" , ");
             }

@@ -75,11 +75,13 @@ Gatetypes Simulator::get_rand_gate(const bool& multi_input, const bool& force_mu
 
 // Add measurements to circuit.
 void add_measurements(Circuit& circuit, Vec<qubit_t, size_t>& measurements, WindowInfo& winfo, const depth_t& depth_level) {
-    size_t num_gate_buckets_per_window = circuit.num_buckets();
+    const size_t num_gate_buckets_per_window = circuit.num_buckets();
     for (size_t i = 0; i < measurements.size(); i++)
-        circuit.addGate(depth_level, M, measurements[i]);
+        circuit.addGate(depth_level, M, 1, measurements[i]);
     measurements.clear();
     circuit.markMeasure(depth_level);
+    assert(circuit.num_buckets() >= num_gate_buckets_per_window);
+    assert(depth_level <= circuit.depth());
     winfo.max(circuit[depth_level].size(), (circuit.num_buckets() - num_gate_buckets_per_window));
 }
 
@@ -203,13 +205,11 @@ size_t Simulator::parse(Statistics& stats, const char* path) {
     while (str < circuit_io.eof) {
         eatWS(str);
         if (*str == '\0') break;
-        if (*str == '#') {
-            if (*++str == 'q' && !max_qubits) {
-                uint32 sign = 0;
-                max_qubits = toInteger(++str, sign);
-                if (sign) LOGERROR("number of qubits in header is negative.");
-                LOG2(1, "Found header %s%zd%s.", CREPORTVAL, max_qubits, CNORMAL);   
-            }        
+        if (*str == '#' && !max_qubits) {
+            uint32 sign = 0;
+            max_qubits = toInteger(++str, sign);
+            if (sign) LOGERROR("number of qubits in header is negative.");
+            LOG2(1, "Found header %s%zd%s.", CREPORTVAL, max_qubits, CNORMAL);
         }
         circuit_io.read_gate(str);  
     }
@@ -233,89 +233,97 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
     locked.resize(num_qubits, 0);
     Vec<qubit_t, qubit_t> locked_qubits;
     locked_qubits.reserve(num_qubits);
-    circuit.init_depth(stats.circuit.num_gates / 2);
-    size_t max_depth = 0;
-    size_t parallel_gates_per_window = 0;
     // To prevent stagnation if empty wires exist per depth level.
     // In that scenario, locked qubits will never reach a fixpoint.
     qubit_t last_num_locked_qubits = 0;
     qubit_t max_locked_qubits = 0;
-    for (; max_depth < MAX_DEPTH && !circuit_io.circuit_queue.empty(); max_depth++) {
-
-        size_t num_gate_buckets_per_window = circuit.num_buckets();
+    size_t parallel_gates_per_window = 0;
+    size_t max_depth = 0;
+    while (max_depth < MAX_DEPTH && !circuit_io.circuit_queue.empty()) {
 
         // Add measurements to circuit if exist.
         if (measurements.size()) {
-            for (size_t i = 0; i < measurements.size(); i++)
-                circuit.addGate(max_depth, M, measurements[i]);
-            measurements.clear();
-            circuit.markMeasure(max_depth);
-            winfo.max(circuit[max_depth].size(), (circuit.num_buckets() - num_gate_buckets_per_window));
+            add_measurements(circuit, measurements, winfo, max_depth);
+            max_depth++;
+            assert(max_depth == circuit.depth());
             continue;
         }
 
+        const size_t num_gate_buckets_per_window = circuit.num_buckets();
+
         // Forall gates in order find an independent gate.
         while (!circuit_io.circuit_queue.empty()) {
-                const ParsedGate gate = circuit_io.circuit_queue.front();
-                const qubit_t c = gate.c;
-                const qubit_t t = gate.t;
-                const bool is_c_unlocked = !locked[c];
-                if (c == t) {
-                    if (is_c_unlocked) {
-                        circuit_io.circuit_queue.pop_front();
-                        if (gate.type == M) {
-                            measurements.push(c);
-                            measuring = true;
-                        }
-                        else     
-                            circuit.addGate(max_depth, gate.type, c);
-                        locked_qubits.push(c);
-                        locked[c] = 1;
-                        if (gate.type != I) {
-                            stats.circuit.num_parallel_gates++;
-                            parallel_gates_per_window++;
-                        }
+            const ParsedGate gate = circuit_io.circuit_queue.front();
+            const qubit_t c = gate.c;
+            const qubit_t t = gate.t;
+            const bool is_c_unlocked = !locked[c];
+            if (gate.type == M) {
+                circuit_io.circuit_queue.pop_front();
+                measurements.push(c);
+                measuring = true;
+                if (is_c_unlocked) {
+                    locked_qubits.push(c);
+                    locked[c] = 1;
+                }
+                stats.circuit.num_parallel_gates++;
+                parallel_gates_per_window++;
+                continue;
+            }
+            if (c == t) {
+                if (is_c_unlocked) {
+                    circuit_io.circuit_queue.pop_front();
+                    // if (gate.type == M) {
+                    //     measurements.push(c);
+                    //     measuring = true;
+                    // }
+                    // else     
+                        circuit.addGate(max_depth, gate.type, 1, c);
+                    locked_qubits.push(c);
+                    locked[c] = 1;
+                    if (gate.type != I) {
+                        stats.circuit.num_parallel_gates++;
+                        parallel_gates_per_window++;
                     }
                 }
-                else {
-                    const bool is_t_unlocked = !locked[t];
-                    if (is_c_unlocked && is_t_unlocked) {
-                        circuit_io.circuit_queue.pop_front();
-                        assert(gate.type != M);
-                        circuit.addGate(max_depth, gate.type, c, t);
-                        locked_qubits.push(c);
-                        locked_qubits.push(t);
-                        locked[c] = 1;
-                        locked[t] = 1;
-                        if (gate.type != I) {
-                            stats.circuit.num_parallel_gates++;
-                            parallel_gates_per_window++;
-                        }
-                    }
-                    // Either one of them may not be locked.
-                    // Thus, make sure the other is locked.
-                    // This prevent bypassing a locked 2-gate
-                    // and not preserving the order.
-                    else if (is_c_unlocked) {
-                        locked_qubits.push(c);
-                        locked[c] = 1;                         
-                    }
-                    else if (is_t_unlocked) {
-                        locked_qubits.push(t);
-                        locked[t] = 1;
+            }
+            else {
+                const bool is_t_unlocked = !locked[t];
+                if (is_c_unlocked && is_t_unlocked) {
+                    circuit_io.circuit_queue.pop_front();
+                    assert(gate.type != M);
+                    circuit.addGate(max_depth, gate.type, 2, c, t);
+                    locked_qubits.push(c);
+                    locked_qubits.push(t);
+                    locked[c] = 1;
+                    locked[t] = 1;
+                    if (gate.type != I) {
+                        stats.circuit.num_parallel_gates++;
+                        parallel_gates_per_window++;
                     }
                 }
-                // If this is true, we know that no more gates
-                // can be scheduled at themax_depth++; same depth. Thus, 
-                // we have to start a new depth level.
-                // In other words, all gates in between 0 and n - 1
-                // have been already scheduled if they are not locked.
-                max_locked_qubits = locked_qubits.size();
-                if (last_num_locked_qubits == max_locked_qubits || max_locked_qubits == num_qubits)
-                    break;
-                last_num_locked_qubits = max_locked_qubits;
+                // Either one of them may not be locked.
+                // Thus, make sure the other is locked.
+                // This prevent bypassing a locked 2-gate
+                // and not preserving the order.
+                else if (is_c_unlocked) {
+                    locked_qubits.push(c);
+                    locked[c] = 1;                         
+                }
+                else if (is_t_unlocked) {
+                    locked_qubits.push(t);
+                    locked[t] = 1;
+                }
+            }
+            // If this is true, we know that no more gates
+            // can be scheduled at the same depth. Thus, 
+            // we have to start a new depth level.
+            // In other words, all gates in between 0 and n - 1
+            // have been already scheduled if they are not locked.
+            max_locked_qubits = locked_qubits.size();
+            if (last_num_locked_qubits == max_locked_qubits || max_locked_qubits == num_qubits)
+                break;
+            last_num_locked_qubits = max_locked_qubits;
         }
-        max_depth++;
 
         stats.circuit.max_parallel_gates = MAX(stats.circuit.max_parallel_gates, parallel_gates_per_window);
 
@@ -329,11 +337,24 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
         }
     
         assert(circuit.num_buckets() >= num_gate_buckets_per_window);
-        winfo.max(circuit[max_depth].size(), (circuit.num_buckets() - num_gate_buckets_per_window));
+        if (max_depth < circuit.depth()) {
+            winfo.max(circuit[max_depth].size(), (circuit.num_buckets() - num_gate_buckets_per_window));
+            max_depth++;
+        }
     }
+
+    assert(max_depth <= circuit.depth());
+
+    // Add last measurements if exist.
+    if (measurements.size()) {
+        add_measurements(circuit, measurements, winfo, max_depth);
+        max_depth++;
+        assert(max_depth == circuit.depth());
+    }
+    
     timer.stop();
     stats.time.schedule = timer.time();
-    assert(max_depth <= circuit.depth());
+    assert(max_depth == circuit.depth());
     assert(circuit.num_gates() == stats.circuit.num_gates);
     stats.circuit.num_gates = MAX(stats.circuit.num_gates, circuit.num_gates());
     stats.circuit.bytes = stats.circuit.num_gates * sizeof(gate_ref_t) + circuit.num_buckets() * BUCKETSIZE;
@@ -341,10 +362,13 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
     locked_qubits.clear(true);
     circuit_io.destroy();
     LOGDONE(1, 2);
-    LOG2(1, "Scheduled %s%zd%s gates with a maximum of %s%zd%s parallel gates in %s%.3f%s ms.",
+    LOG2(1, "Scheduled %s%zd%s gates with a maximum of %s%zd%s parallel gates and %s%zd%s depth levels in %s%.3f%s ms.",
         CREPORTVAL, stats.circuit.num_gates, CNORMAL,
         CREPORTVAL, stats.circuit.max_parallel_gates, CNORMAL, 
+        CREPORTVAL, size_t(circuit.depth()), CNORMAL, 
         CREPORTVAL, stats.time.schedule, CNORMAL);
+    if (options.verbose > 1)
+        circuit.print();
     return max_depth;
 }
 
@@ -358,4 +382,5 @@ void Simulator::parse() {
         num_qubits = parse(stats, circuit_path.c_str());
         depth = schedule(stats, circuit);
     }
+    fflush(stdout), fflush(stderr);
 }

@@ -142,6 +142,16 @@ namespace QuaSARQ {
             return windows[depth_level];
         }
 
+        inline
+        Window&     back        () { 
+            return windows.back();
+        }
+
+        inline const
+        Window&     back        () const { 
+            return windows.back();
+        }
+
         inline 
         Gate&       gate        (const gate_ref_t& gate_ref) {
             assert(gate_ref < NO_REF);
@@ -231,12 +241,12 @@ namespace QuaSARQ {
         }
 
         inline
-        Gate*       addGate     (const depth_t& depth_level, const byte_t& type, const qubit_t& c, const qubit_t& t = MAX_QUBITS) {
+        Gate*       addGate     (const depth_t& depth_level, const byte_t& type, const input_size_t size, const qubit_t& c, const qubit_t& t = MAX_QUBITS) {
             assert(depth_level < MAX_DEPTH);
-            const input_size_t& size = input_size_t(t != MAX_QUBITS) + 1;
             const size_t buckets = NBUCKETS(size);
             gate_ref_t r = (gate_ref_t)buckets_container::alloc(buckets);
-            Gate* gate = new GATE_PTR(r) Gate();
+            Gate* gate = new GATE_PTR(r) Gate(size);
+            assert(gate->size == size);
             assert(gate->capacity() == buckets * sizeof(bucket_t));
             gate->type = type;
             gate->wires[0] = c;
@@ -290,10 +300,7 @@ namespace QuaSARQ {
             for (size_t i = 0; i < windows[depth_level].size(); i++) {
                 const gate_ref_t& r = windows[depth_level][i];
                 const Gate& g = gate(r);
-                LOGN1("  Gate(r = %d", r);
-                if (g.type == M)
-                    PRINT(", m = %d", g.measurement);
-                PRINT("): ");
+                LOGN1("  Gate(r = %8d): ", r);
                 gate(r).print();
             }
             fflush(stdout);
