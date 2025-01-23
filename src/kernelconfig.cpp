@@ -57,11 +57,12 @@ void Simulator::close_config() {
 }
 
 void Simulator::register_config() {
-    if (!open_config()) return;
+    if (!open_config()) {
+		LOGERROR("cannot proceed without registering kernel configuration.");
+	}
     struct stat st;
 	if (!canAccess(options.configpath, st)) {
-		LOG2(1, "kernel configuration file is inaccessible.");
-		return;
+		LOGERROR("kernel configuration file is inaccessible.");
 	}
 	if (!st.st_size) return;
 	assert(st.st_size < UINT32_MAX);

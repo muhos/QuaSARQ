@@ -122,7 +122,9 @@ namespace QuaSARQ {
         inline
         bool       is_measuring (const depth_t& depth_level) const { 
             assert(depth_level < MAX_DEPTH);
-            return measuring_windows[depth_level]; 
+            if (depth_level < measuring_windows.size())
+                return measuring_windows[depth_level]; 
+            return false;
         }
 
         inline
@@ -296,7 +298,7 @@ namespace QuaSARQ {
 
         inline
         void        print_window(const depth_t& depth_level) {
-            LOG1(" Depth %d%s:", depth_level, measuring_windows[depth_level] ? " (measuring window)" : "");
+            LOG1(" Depth %d%s:", depth_level, is_measuring(depth_level) ? " (measuring window)" : "");
             for (size_t i = 0; i < windows[depth_level].size(); i++) {
                 const gate_ref_t& r = windows[depth_level][i];
                 const Gate& g = gate(r);
@@ -309,7 +311,7 @@ namespace QuaSARQ {
         inline
         void        print       (const bool& only_measurements = false) {
             for (depth_t d = 0; d < windows.size(); d++) {
-                if (only_measurements && !measuring_windows[d]) continue;
+                if (only_measurements && !is_measuring(d)) continue;
                 print_window(d);
             }
         } 

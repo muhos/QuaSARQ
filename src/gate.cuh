@@ -25,7 +25,7 @@ namespace QuaSARQ {
     constexpr int UNMEASURED = INT_MAX;
 
     // Must follow the same order of 'Gatetypes'.
-    __constant__ constexpr const arg_t G2S[NR_GATETYPES] = { 
+    __constant__ constexpr arg_t G2S[NR_GATETYPES] = { 
         FOREACH_GATE(GATE2STR)
     };
 

@@ -55,7 +55,7 @@ namespace QuaSARQ {
 	inline uint32 toInteger			(char*& str)
 	{
 		eatWS(str);
-		if (!isDigit(*str)) LOGERROR("expected a digit but (%c) is found", *str);
+		if (!isDigit(*str)) LOGERROR("expected a digit but %c is found", *str);
 		uint32 n = 0;
 		while (isDigit(*str)) n = n * 10 + (*str++ - '0');
 		return n;
@@ -66,7 +66,7 @@ namespace QuaSARQ {
 		sign = 0;
 		if (*str == '-') sign = 1, str++;
 		else if (*str == '+') str++;
-		if (!isDigit(*str)) LOGERROR("expected a digit but (%c) is found", *str);
+		if (!isDigit(*str)) LOGERROR("expected a digit but %c is found", *str);
 		size_t n = 0;
 		while (isDigit(*str)) n = n * 10ULL + (*str++ - '0');
 		return n;
