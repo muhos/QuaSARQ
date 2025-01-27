@@ -25,6 +25,7 @@ namespace QuaSARQ {
 
 		size_t max_references;
 		size_t max_buckets;
+		size_t num_gates;
 
 		gate_ref_t num_buckets_prev;
 		gate_ref_t buckets_offset;
@@ -54,6 +55,7 @@ namespace QuaSARQ {
 		,	_pinned_references(nullptr)
 		,	max_references(0)
 		,	max_buckets(0)
+		,	num_gates(0)
 		,	buckets_offset(0)
 		{ }
 
@@ -100,23 +102,23 @@ namespace QuaSARQ {
                 LOGERROR("cannot copy empty gates to device.");
 			if (buckets_offset >= circuit.num_buckets()) 
 				LOGERROR("buckets offset overflow during gates transfer to GPU.");
-			const auto curr_num_references = circuit[depth_level].size();
+			num_gates = circuit[depth_level].size();
 			const auto curr_num_buckets = circuit.num_buckets(depth_level);
-			assert(curr_num_references <= max_references);
+			assert(num_gates <= max_references);
 			assert(curr_num_buckets <= max_buckets);
 			const auto* window = circuit[depth_level].data();
 			const auto* buckets = circuit.data(buckets_offset);
 			double ttime = 0;
 			if (sync) cutimer.start(s1);
 			LOGN2(2, "Copying %lld references and %lld buckets (offset by %c%lld) per depth level %lld %ssynchroneously.. ", 
-				int64(curr_num_references), 
+				int64(num_gates), 
 				int64(curr_num_buckets), 
 				reversed ? '-' : '+' , 
 				int64(buckets_offset), 
 				int64(depth_level), 
 				sync ? "" : "a");
-			copyhost(_pinned_references, window, curr_num_references, buckets_offset);
-			CHECK(cudaMemcpyAsync(_references, _pinned_references, sizeof(gate_ref_t) * curr_num_references, cudaMemcpyHostToDevice, s1));
+			copyhost(_pinned_references, window, num_gates, buckets_offset);
+			CHECK(cudaMemcpyAsync(_references, _pinned_references, sizeof(gate_ref_t) * num_gates, cudaMemcpyHostToDevice, s1));
 			if (sync) { 
 				cutimer.stop(s1); 
 				ttime += cutimer.time();
@@ -153,9 +155,10 @@ namespace QuaSARQ {
 		}
 
 		inline
-		void 		copypivots		(const cudaStream_t& stream, const size_t& num_gates) {
-			LOGN2(2, "Copying back %lld pivots to host asynchroneously.. ", int64(num_gates));
-			CHECK(cudaMemcpyAsync(_pinned_pivots, _pivots, sizeof(Pivot) * num_gates, cudaMemcpyDeviceToHost, stream));
+		void 		copypivots		(const cudaStream_t& stream, const size_t& num_pivots) {
+			assert(num_pivots <= num_gates);
+			LOGN2(2, "Copying back %lld pivots to host asynchroneously.. ", int64(num_pivots));
+			CHECK(cudaMemcpyAsync(_pinned_pivots, _pivots, sizeof(Pivot) * num_pivots, cudaMemcpyDeviceToHost, stream));
 			LOGDONE(2, 3);
 		}
 
@@ -205,8 +208,16 @@ namespace QuaSARQ {
 		inline const
 		gate_ref_t*  references		() const { return _references; }
 
+		inline gate_ref_t 	
+				get_buckets_offset	() const { return buckets_offset; }
+
 		inline 
-		gate_ref_t 	get_buckets_offset() const { return buckets_offset; }
+		void 		print_pivots	() const {
+			if (_pinned_pivots == nullptr) 
+				return;
+			for (auto i = 0; i < num_gates; i++)
+				_pinned_pivots[i].print();
+		}
 
 	};
 }

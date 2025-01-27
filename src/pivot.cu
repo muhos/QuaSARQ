@@ -3,7 +3,24 @@
 #include "tuner.cuh"
 #include "datatypes.cuh"
 
-namespace QuaSARQ {;
+namespace QuaSARQ {
+
+    // Find first stabilizer generator that anti-commutes with the obeservable qubit.
+
+    // Try parallel reduction here to reduce atomicMin. 
+
+    INLINE_DEVICE void find_min_pivot_indet(Pivot& p, const qubit_t& q, const Table& inv_xs, const size_t num_qubits, const size_t num_words_minor) {
+        const qubit_t q_w = WORD_OFFSET(q);
+        const word_std_t q_mask = BITMASK_GLOBAL(q);
+        const grid_t stab_offset = num_qubits * num_words_minor;
+        for_parallel_x(g, num_qubits) {
+            const grid_t word_idx = g * num_words_minor + q_w;
+            word_std_t qubit_word = inv_xs[stab_offset + word_idx];
+            if (qubit_word & q_mask)
+                atomicMin(&p.indeterminate, g);
+        }
+    }
+
 
     // Let threads in x-dim find the minimum (de)stabilizer generator commuting.
     INLINE_DEVICE void find_min_pivot(Pivot& p, const qubit_t& q, const Table& inv_xs, const size_t num_qubits, const size_t num_words_minor) {
@@ -44,6 +61,17 @@ namespace QuaSARQ {;
         }
     }
 
+    __global__ void find_all_pivots_indet(Pivot* pivots, bucket_t* measurements, ConstRefsPointer refs, ConstTablePointer inv_xs, 
+                                        const size_t num_gates, const size_t num_qubits, const size_t num_words_minor) {
+        for_parallel_y(i, num_gates) {
+            const gate_ref_t r = refs[i];
+            assert(r < NO_REF);
+            Gate& m = (Gate&) measurements[r];
+            assert(m.size == 1);
+            find_min_pivot_indet(pivots[i], m.wires[0], *inv_xs, num_qubits, num_words_minor);
+        }
+    }
+
     __global__ void find_new_pivot(Pivot* pivots, bucket_t* measurements, ConstRefsPointer refs, ConstTablePointer inv_xs, 
                                 const size_t gate_index, const size_t num_qubits, const size_t num_words_minor) {
         const gate_ref_t r = refs[gate_index];
@@ -51,6 +79,15 @@ namespace QuaSARQ {;
         Gate& m = (Gate&) measurements[r];
         assert(m.size == 1);
         find_min_pivot(pivots[gate_index], m.wires[0], *inv_xs, num_qubits, num_words_minor);
+    }
+
+    __global__ void find_new_pivot_indet(Pivot* pivots, bucket_t* measurements, ConstRefsPointer refs, ConstTablePointer inv_xs, 
+                                const size_t gate_index, const size_t num_qubits, const size_t num_words_minor) {
+        const gate_ref_t r = refs[gate_index];
+        assert(r < NO_REF);
+        Gate& m = (Gate&) measurements[r];
+        assert(m.size == 1);
+        find_min_pivot_indet(pivots[gate_index], m.wires[0], *inv_xs, num_qubits, num_words_minor);
     }
 
     void Simulator::reset_pivots(const size_t& num_pivots, const cudaStream_t& stream) {
@@ -86,9 +123,9 @@ namespace QuaSARQ {;
             TRIM_BLOCK_IN_DEBUG_MODE(bestblockallpivots, bestgridallpivots, num_qubits, num_pivots_or_index);
             currentblock = bestblockallpivots, currentgrid = bestgridallpivots;
             TRIM_GRID_IN_XY(num_qubits, num_pivots_or_index);
-            find_all_pivots <<<currentgrid, currentblock, 0, stream>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), inv_tableau.xtable(), num_pivots_or_index, num_qubits, num_words_minor);
+            find_all_pivots_indet <<<currentgrid, currentblock, 0, stream>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), inv_tableau.xtable(), num_pivots_or_index, num_qubits, num_words_minor);
             if (options.sync) {
-                LASTERR("failed to launch find_all_pivots kernel");
+                LASTERR("failed to launch find_min_pivot_indet kernel");
                 SYNC(stream);
             }
         }
@@ -104,7 +141,7 @@ namespace QuaSARQ {;
             TRIM_BLOCK_IN_DEBUG_MODE(bestblocknewpivots, bestgridnewpivots, num_qubits, 0);
             currentblock = bestblocknewpivots, currentgrid = bestgridnewpivots;
             TRIM_GRID_IN_1D(num_qubits, x);
-            find_new_pivot <<<currentgrid, currentblock, 0, stream>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), inv_tableau.xtable(), pivot_index, num_qubits, num_words_minor);
+            find_new_pivot_indet <<<currentgrid, currentblock, 0, stream>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), inv_tableau.xtable(), pivot_index, num_qubits, num_words_minor);
             if (options.sync) {
                 LASTERR("failed to launch find_new_pivot kernel");
                 SYNC(stream);
