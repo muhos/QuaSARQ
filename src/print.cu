@@ -50,7 +50,7 @@ namespace QuaSARQ {
             bits = num_words_major * WORD_BITS;
             rows = num_qubits, cols = num_words_major;
         }
-        for (size_t q = 0; q < bits; q++) {
+        /*for (size_t q = 0; q < bits; q++) {
             if (q > 0 && q % WORD_BITS == 0)
                 LOGGPU("  ");
             LOGGPU("%-3lld", q);
@@ -68,7 +68,7 @@ namespace QuaSARQ {
                 #endif
             }
             LOGGPU("\n");
-        }
+        }*/
     }
 
     NOINLINE_ALL void print_table_signs(const Signs& ss, const size_t& offset) {

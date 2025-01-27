@@ -164,6 +164,14 @@ namespace QuaSARQ {
 
         INLINE_ALL const word_t* data() const { return _data; }
 
+        INLINE_ALL word_t* destab() { return _destab; }
+
+        INLINE_ALL const word_t* destab() const { return _destab; }
+
+        INLINE_ALL word_t* stab() { return _stab; }
+
+        INLINE_ALL const word_t* stab() const { return _stab; }
+
         INLINE_ALL void set_destab_to_identity(const qubit_t& q, const qubit_t& column_offset = 0) {
             const size_t idx = (X_OFFSET(q) + column_offset) * _num_words_major + X_WORD_OFFSET(WORD_OFFSET(q));
             assert(idx < _num_words);
@@ -202,11 +210,18 @@ namespace QuaSARQ {
         }
 
         // 'idx' is a matrix index.
-       // Return table word.
+        // Return table word.
         INLINE_ALL word_t& operator[] (const size_t& idx) {
             assert(idx < _num_words);
             return _data[idx];
         }
+
+
+       /* INLINE_ALL const bool bit(const size_t& q) const {
+            const size_t idx = q * _num_words_major;
+            assert(idx < _num_words);
+            return _data[idx];
+        }*/
 
         INLINE_ALL bool check_z_word_is_identity(const qubit_t& q, const qubit_t& column_offset) const {
             const size_t idx = (Z_OFFSET(q) + column_offset) * _num_words_major + WORD_OFFSET(q);

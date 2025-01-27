@@ -61,6 +61,10 @@ namespace QuaSARQ {
         INLINE_ALL operator uint32() const { return uint32(word); }
         #endif
 
+        INLINE_ALL const bool operator[] (const size_t& q) const {
+            return bool(word & BITMASK_GLOBAL(q));
+        }
+
         INLINE_ALL bool operator==(const word_t& other) const {
             return word == other.word;
         }
@@ -97,6 +101,10 @@ namespace QuaSARQ {
         INLINE_ALL word_t& operator^=(const word_std_t& other) {
             word ^= other;
             return *this;
+        }
+
+        INLINE_ALL bool operator!() const {
+            return !word;
         }
 
         INLINE_ALL word_t operator~() const {
