@@ -50,22 +50,22 @@ namespace QuaSARQ {
 
     __global__ void identity_extended_1D(const size_t column_offset, const size_t num_qubits, Table* xs, Table* zs) {
         for_parallel_x(q, num_qubits) {
-            xs->set_word_to_identity(q, column_offset, num_qubits);
-            zs->set_word_to_identity(q, column_offset, num_qubits);
+            xs->set_stab_to_identity(q, column_offset);
+            zs->set_stab_to_identity(q, column_offset);
         }
     }
 
     __global__ void identity_Z_extended_1D(const size_t column_offset, const size_t num_qubits, Table* xs, Table* zs) {
         for_parallel_x(q, num_qubits) {
-            xs->set_word_to_identity(q, column_offset);
-            zs->set_word_to_identity(q, column_offset, num_qubits);
+            xs->set_destab_to_identity(q, column_offset);
+            zs->set_stab_to_identity(q, column_offset);
         }
     }
 
     __global__ void identity_X_extended_1D(const size_t column_offset, const size_t num_qubits, Table* xs, Table* zs) {
         for_parallel_x(q, num_qubits) {
-            zs->set_word_to_identity(q, column_offset);
-            xs->set_word_to_identity(q, column_offset, num_qubits);
+            zs->set_destab_to_identity(q, column_offset);
+            xs->set_stab_to_identity(q, column_offset);
         }
     }
 

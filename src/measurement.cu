@@ -205,42 +205,42 @@ namespace QuaSARQ {;
         // Transpose the tableau into row-major format.
         transpose(true, kernel_stream1);
 
-        // Sync copying gates to device.
-        SYNC(copy_stream1);
-        SYNC(copy_stream2);
-        // Sync resetting pivots.
-        SYNC(kernel_stream2);
+        //// Sync copying gates to device.
+        //SYNC(copy_stream1);
+        //SYNC(copy_stream2);
+        //// Sync resetting pivots.
+        //SYNC(kernel_stream2);
 
-        // Find all pivots if exist.
-        find_pivots(num_gates_per_window, true, kernel_stream1);
+        //// Find all pivots if exist.
+        //find_pivots(num_gates_per_window, true, kernel_stream1);
 
-        // Initialize determinate measurements with tableau signs.
-        initialize_determinate_measurements <<<bestgridreset, bestblockreset, 0, kernel_stream1>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), inv_tableau.xtable(), inv_tableau.signs(), num_gates_per_window, num_qubits, num_words_minor);
-        if (options.sync) {
-            LASTERR("failed to launch initialize_determinate_measurements kernel");
-            SYNC(kernel_stream1);
-        }
+        //// Initialize determinate measurements with tableau signs.
+        //initialize_determinate_measurements <<<bestgridreset, bestblockreset, 0, kernel_stream1>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), inv_tableau.xtable(), inv_tableau.signs(), num_gates_per_window, num_qubits, num_words_minor);
+        //if (options.sync) {
+        //    LASTERR("failed to launch initialize_determinate_measurements kernel");
+        //    SYNC(kernel_stream1);
+        //}
 
-        // Sync finding pivots.
-        SYNC(kernel_stream1);
+        //// Sync finding pivots.
+        //SYNC(kernel_stream1);
 
-        // Copy pivots to host.
-        gpu_circuit.copypivots(copy_stream1, num_gates_per_window);
-        if (options.sync) {
-            LASTERR("failed to copy pivots");
-            SYNC(copy_stream1);
-        }
-        
-        // Measure all determinate.
-        measure_determinate(num_gates_per_window, true, kernel_stream1);
+        //// Copy pivots to host.
+        //gpu_circuit.copypivots(copy_stream1, num_gates_per_window);
+        //if (options.sync) {
+        //    LASTERR("failed to copy pivots");
+        //    SYNC(copy_stream1);
+        //}
+        //
+        //// Measure all determinate.
+        //measure_determinate(num_gates_per_window, true, kernel_stream1);
 
-        // Sync copying pivots.
-        SYNC(copy_stream1);
+        //// Sync copying pivots.
+        //SYNC(copy_stream1);
 
-        Measures& measure_stats = stats.circuit.measure_stats;
-        measure_stats.random_per_window = measure_indeterminate(depth_level, kernel_stream1);
-        measure_stats.random += measure_stats.random_per_window;
-        measure_stats.definite += num_gates_per_window - measure_stats.random_per_window;
+        //Measures& measure_stats = stats.circuit.measure_stats;
+        //measure_stats.random_per_window = measure_indeterminate(depth_level, kernel_stream1);
+        //measure_stats.random += measure_stats.random_per_window;
+        //measure_stats.definite += num_gates_per_window - measure_stats.random_per_window;
 
         // Transpose the tableau back into column-major format.
         transpose(false, kernel_stream1);

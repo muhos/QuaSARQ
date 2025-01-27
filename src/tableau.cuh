@@ -209,9 +209,6 @@ namespace QuaSARQ {
         // Number of partitions spliting tableau generators' words.
         size_t _num_partitions;
 
-        // Tableau extension to (2n) for measurements.
-        size_t _ext_num_qubits;
-
         // Are signs unpacked?
         bool _unpacked_signs;
 
@@ -236,7 +233,6 @@ namespace QuaSARQ {
         ,   _num_words_minor(0)
         ,   _num_sign_words(0)
         ,   _num_partitions(1)
-        ,   _ext_num_qubits(0)
         ,   _unpacked_signs(false)
         { }
 
@@ -255,11 +251,9 @@ namespace QuaSARQ {
             size_t sign_word_size = _unpacked_signs ? sizeof(int) : sizeof(sign_t);
             // Partition the tableau if needed.
             _num_qubits = num_qubits;
-            _ext_num_qubits = measuring ? (2 * num_qubits) : num_qubits;
-            const size_t num_words_major_whole_tableau = get_num_words(_ext_num_qubits);
+            const size_t num_words_major_whole_tableau = get_num_words(_num_qubits);
             _num_qubits_padded = get_num_padded_bits(num_qubits);
             _num_words_major = num_words_major_whole_tableau;
-            _num_words_minor = get_num_words(num_qubits);
             _num_sign_words = _unpacked_signs ? _num_words_major * WORD_BITS : _num_words_major;
             _num_words = _num_words_major * _num_qubits_padded;
             const size_t max_padded_bits_two_tables = 2 * _num_qubits_padded;
@@ -280,6 +274,8 @@ namespace QuaSARQ {
 			while ((_num_partitions * _num_words_major) < num_words_major_whole_tableau)
 				_num_words_major++;
             // Update number of words.
+            _num_words_minor = _num_words_major;
+            if (measuring) _num_words_major <<= 1;
             _num_sign_words = _unpacked_signs ? _num_words_major * WORD_BITS : _num_words_major;
 			_num_words = _num_words_major * _num_qubits_padded;
 			expected_capacity_required = 2 * _num_words * sizeof(word_std_t) + _num_sign_words * sign_word_size + max_window_bytes;       
@@ -287,7 +283,8 @@ namespace QuaSARQ {
                 LOGERRORN("insufficient memory during tableau allocation.");
                 throw GPU_memory_exception();
             }
-            assert(_num_partitions == 1 && _num_words_major == get_num_words(_ext_num_qubits)
+
+            assert(_num_partitions == 1 && _num_words_major >= get_num_words(measuring ? 2 * _num_qubits : _num_qubits)
                 || _num_partitions > 1 && _num_partitions * _num_words_major >= num_words_major_whole_tableau);
             
             // Create host pinned-memory objects to hold GPU pointers.
@@ -312,8 +309,10 @@ namespace QuaSARQ {
 
             // Bind the allocated GPU pointers to the host object,
             // then transfer it to the GPU.
-            h_xs->alloc(_xs_data, _num_words, _num_words_major, _num_words_minor);
-            h_zs->alloc(_zs_data, _num_words, _num_words_major, _num_words_minor);
+            h_xs->alloc(_xs_data, _num_qubits_padded, _num_words_major, _num_words_minor);
+            h_zs->alloc(_zs_data, _num_qubits_padded, _num_words_major, _num_words_minor);
+            assert(h_xs->size() == _num_words);
+            assert(h_zs->size() == _num_words);
             if (_unpacked_signs) {
                 _unpacked_ss_data = allocator.template allocate<int>(_num_sign_words);    
                 assert(_unpacked_ss_data != nullptr);
@@ -352,11 +351,9 @@ namespace QuaSARQ {
             size_t cap_before = 2 * _num_words * sizeof(word_std_t) + _num_sign_words * sign_word_size + max_window_bytes;
             // Partition the tableau if needed.
             _num_qubits = num_qubits;
-            _ext_num_qubits = measuring ? (2 * num_qubits) : num_qubits;
-            const size_t num_words_major_whole_tableau = get_num_words(_ext_num_qubits);
+            const size_t num_words_major_whole_tableau = get_num_words(_num_qubits);
             _num_qubits_padded = get_num_padded_bits(num_qubits);
             _num_words_major = num_words_major_whole_tableau;
-            _num_words_minor = get_num_words(num_qubits);
             _num_sign_words = _unpacked_signs ? _num_words_major * WORD_BITS : _num_words_major;
             _num_words = _num_words_major * _num_qubits_padded;
             const size_t max_padded_bits_two_tables = 2 * _num_qubits_padded;
@@ -377,22 +374,27 @@ namespace QuaSARQ {
 			while ((_num_partitions * _num_words_major) < num_words_major_whole_tableau)
 				_num_words_major++;
             // Update number of words.
+            _num_words_minor = _num_words_major;
+            if (measuring) _num_words_major <<= 1;
 			_num_words = _num_words_major * _num_qubits_padded;
 			expected_capacity_required = 2 * _num_words * sizeof(word_std_t) + _num_sign_words * sign_word_size + max_window_bytes;       
             if (expected_capacity_required > cap_before) {
                 LOGERRORN("insufficient memory during resizing.");
                 throw GPU_memory_exception();
             }
-            assert(_num_partitions == 1 && _num_words_major == get_num_words(_ext_num_qubits)
+            
+            assert(_num_partitions == 1 && _num_words_major >= get_num_words(measuring ? 2 * _num_qubits : _num_qubits)
                 || _num_partitions > 1 && _num_partitions * _num_words_major >= num_words_major_whole_tableau);
             
             // Bind the allocated GPU pointers to the host object,
             // then transfer it to the GPU.
             assert(h_xs != nullptr && h_zs != nullptr && h_ss != nullptr);
             assert(_xs_data != nullptr);
-            h_xs->alloc(_xs_data, _num_words, _num_words_major, _num_words_minor);
+            h_xs->alloc(_xs_data, _num_qubits_padded, _num_words_major, _num_words_minor);
             assert(_zs_data != nullptr);
-            h_zs->alloc(_zs_data, _num_words, _num_words_major, _num_words_minor);
+            h_zs->alloc(_zs_data, _num_qubits_padded, _num_words_major, _num_words_minor);
+            assert(h_xs->size() == _num_words);
+            assert(h_zs->size() == _num_words);
             if (_unpacked_signs) {    
                 assert(_unpacked_ss_data != nullptr);
                 h_ss->alloc(_unpacked_ss_data, _num_sign_words, true);
@@ -451,11 +453,35 @@ namespace QuaSARQ {
 
         INLINE_ALL Table* ztable() const { assert(_zs != nullptr); return _zs; }
 
-        INLINE_ALL sign_t* sdata() const { assert(_ss_data != nullptr); return _ss_data; }
+        INLINE_ALL sign_t* sdata() { assert(_ss_data != nullptr); return _ss_data; }
 
-        INLINE_ALL word_t* xdata() const { assert(_xs_data != nullptr); return _xs_data; }
+        INLINE_ALL word_std_t* xdata(const size_t& offset = 0) { 
+            assert(_xs_data != nullptr);
+            assert(offset < _num_words);
+            return reinterpret_cast<word_std_t*>(_xs_data) + offset;
+        }
 
-        INLINE_ALL word_t* zdata() const { assert(_zs_data != nullptr); return _zs_data; }
+        INLINE_ALL word_std_t* zdata(const size_t& offset = 0) { 
+            assert(_zs_data != nullptr); 
+            assert(offset < _num_words);
+            return reinterpret_cast<word_std_t*>(_zs_data) + offset;
+        }
+
+        INLINE_ALL word_std_t* xdestab() { return xdata(); }
+
+        INLINE_ALL word_std_t* zdestab() { return zdata(); }
+
+        INLINE_ALL word_std_t* xstab() {
+            assert(_num_words_major == 2 * _num_words_minor || _num_words_major == _num_words_minor);
+            const size_t offset = (_num_words_major - _num_words_minor)  * _num_qubits_padded;
+            return xdata(offset);
+        }
+
+        INLINE_ALL word_std_t* zstab() { 
+            assert(_num_words_major == 2 * _num_words_minor || _num_words_major == _num_words_minor);
+            const size_t offset = (_num_words_major - _num_words_minor) * _num_qubits_padded;
+            return zdata(offset);
+        }
 
         bool is_table_identity() const {
             Table tmp_zs, tmp_xs;
