@@ -55,8 +55,8 @@ namespace QuaSARQ {
 	// With measurements.
 	struct TableauState
 	{
-		word_t* saving_xs, *saving_zs;
-		word_t* org_xs, *org_zs;
+		word_std_t* saving_xs, *saving_zs;
+		word_std_t* org_xs, *org_zs;
 		size_t num_words;
 		bool recover;
 
@@ -64,12 +64,12 @@ namespace QuaSARQ {
 			saving_xs(nullptr), saving_zs(nullptr), org_xs(nullptr), org_zs(nullptr),
 			num_words(0), recover(false) {}
 
-		void set_original_pointers(word_t* org_xdata, word_t* org_zdata, const size_t& num_words) {
+		void set_original_pointers(word_std_t* org_xdata, word_std_t* org_zdata, const size_t& num_words) {
 			org_xs = org_xdata, org_zs, org_zdata;
 			this->num_words = num_words;
 		}
 
-		void set_saving_pointers(word_t* saving_xdata, word_t* saving_zdata) {
+		void set_saving_pointers(word_std_t* saving_xdata, word_std_t* saving_zdata) {
 			saving_xs = saving_xdata, saving_zs, saving_zdata;
 		}
 
@@ -77,16 +77,16 @@ namespace QuaSARQ {
 			if (!recover) return;
 			SYNCALL;
 			assert(num_words);
-			if (saving_xs != nullptr) CHECK(cudaMemcpy(saving_xs, org_xs, num_words * sizeof(word_t), cudaMemcpyDeviceToDevice));
-			if (saving_zs != nullptr) CHECK(cudaMemcpy(saving_zs, org_zs, num_words * sizeof(word_t), cudaMemcpyDeviceToDevice));
+			if (saving_xs != nullptr) CHECK(cudaMemcpy(saving_xs, org_xs, num_words * sizeof(word_std_t), cudaMemcpyDeviceToDevice));
+			if (saving_zs != nullptr) CHECK(cudaMemcpy(saving_zs, org_zs, num_words * sizeof(word_std_t), cudaMemcpyDeviceToDevice));
 		}
 
 		void recover_state() {
 			if (!recover) return;
 			SYNCALL;
 			assert(num_words);
-			if (org_xs != nullptr) CHECK(cudaMemcpy(org_xs, saving_xs, num_words * sizeof(word_t), cudaMemcpyDeviceToDevice));
-			if (org_zs != nullptr) CHECK(cudaMemcpy(org_zs, saving_zs, num_words * sizeof(word_t), cudaMemcpyDeviceToDevice));
+			if (org_xs != nullptr) CHECK(cudaMemcpy(org_xs, saving_xs, num_words * sizeof(word_std_t), cudaMemcpyDeviceToDevice));
+			if (org_zs != nullptr) CHECK(cudaMemcpy(org_zs, saving_zs, num_words * sizeof(word_std_t), cudaMemcpyDeviceToDevice));
 		}
 	};
 	extern TableauState ts; 

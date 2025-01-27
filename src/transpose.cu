@@ -8,6 +8,133 @@
 
 namespace QuaSARQ {
 
+
+    __device__ inline size_t compute_block_index(const size_t& i, const size_t& j, const size_t& w, const size_t& num_words_major) {
+        return ((i << WORD_POWER) + j) * num_words_major + w;
+    }
+
+    __device__ void shared_inplace_transpose(word_std_t* data, size_t stride)
+    {
+
+        assert(blockDim.x == WORD_BITS);
+
+        static const word_std_t  masks[WORD_POWER] = {
+#if defined(WORD_SIZE_8)
+            0x55U,  // separate odds/evens
+            0x33U,  // separate bit pairs
+            0x0FU
+#elif defined(WORD_SIZE_32)
+            0x55555555ULL,  // separate odds/evens
+            0x33333333ULL,  // separate bit pairs
+            0x0F0F0F0FULL,
+            0x00FF00FFULL,
+            0x0000FFFFULL
+#elif defined(WORD_SIZE_64)
+            0x5555555555555555ULL,  // separate odds/evens
+            0x3333333333333333ULL,  // separate bit pairs
+            0x0F0F0F0F0F0F0F0FULL,
+            0x00FF00FF00FF00FFULL,
+            0x0000FFFF0000FFFFULL,
+            0x00000000FFFFFFFFULL
+#endif
+        };
+
+        static const unsigned shifts[WORD_POWER] = { 
+#if defined(WORD_SIZE_8)
+            1, 2, 4
+#elif defined(WORD_SIZE_32)
+            1, 2, 4, 8, 16
+#elif defined(WORD_SIZE_64)
+            1, 2, 4, 8, 16, 32
+#endif
+        };
+
+        // We'll store all WORD_BITS lines in shared memory
+        // tile[k] will hold the row k (one WORD_BITS-bit word)
+        __shared__ word_std_t tile[WORD_BITS];
+
+        // 1) Load from global to shared
+        size_t tid = threadIdx.x;
+
+        tile[tid] = data[tid * stride];
+
+        __syncthreads();
+
+#pragma unroll
+        for (int pass = 0; pass < WORD_POWER; pass++) {
+            word_std_t mask = masks[pass];
+            word_std_t imask = ~mask;
+            unsigned shift = shifts[pass];
+
+            if ((tid & shift) == 0) {
+                word_std_t& x = tile[tid];
+                word_std_t& y = tile[tid + shift];
+
+                word_std_t a = x & mask;
+                word_std_t b = x & imask;
+                word_std_t c = y & mask;
+                word_std_t d = y & imask;
+
+                x = a | (c << shift);
+                y = (b >> shift) | d;
+            }
+
+            __syncthreads(); // ensure all threads see the updated tile before next pass
+        }
+
+        // 3) Write back from shared to global
+        data[tid * stride] = tile[tid];
+    }
+
+    __global__ void transpose_kernel(word_std_t* data, size_t num_words_major)
+    {
+        for (size_t major = blockIdx.y; major < num_words_major; major += gridDim.y)
+        {
+            for (size_t minor = blockIdx.x; minor < num_words_major; minor += gridDim.x)
+            {
+                // Inline transpose a tile of WORD_BITS words, each word has WORD_BITS bits.
+                // Transposition is done in shared memory.
+                const size_t tile_index = (major << WORD_POWER) * num_words_major + minor;
+                shared_inplace_transpose(data + tile_index, num_words_major);
+            }
+        }
+    }
+
+    __global__ void swap_kernel(word_std_t* data, size_t num_words_major)
+    {
+        assert(blockDim.x == WORD_BITS);
+
+        // Shared memory to hold rows for sub-block (a,b) and (b,a).
+        __shared__ word_std_t tileA[WORD_BITS];
+        __shared__ word_std_t tileB[WORD_BITS];
+
+        for (size_t a = blockIdx.y; a < num_words_major; a += gridDim.y)
+        {
+            // Only swap if b > a (above-diagonal)
+            for (size_t b = blockIdx.x; b < num_words_major && b > a; b += gridDim.x)
+            {
+                // We have WORD_BITS threads in x, each tid handles one 'maj_low' in [0..63].
+                int tid = threadIdx.x;
+
+                // 1) Load WORD_BITS words from global memory into tileA and tileB
+                size_t a_idx = compute_block_index(a, tid, b, num_words_major);
+                size_t b_idx = compute_block_index(b, tid, a, num_words_major);
+
+                tileA[tid] = data[a_idx];
+                tileB[tid] = data[b_idx];
+
+                __syncthreads();
+
+                // 2) Swap: the data from (a, tid, b) should go to (b, tid, a), and vice versa.
+                //    Actually we've already loaded them, so we just need to write them back swapped.
+
+                // 3) Write swapped data back to global memory
+                data[a_idx] = tileB[tid];
+                data[b_idx] = tileA[tid];
+            }
+        }
+    }
+
     __global__ void transpose_to_rowmajor(Table *inv_xs, Table *inv_zs, Signs *inv_ss,
                               const Table *  xs, const Table *  zs, const Signs *  ss,
                               const size_t num_words_major, const size_t num_words_minor,
@@ -101,7 +228,11 @@ namespace QuaSARQ {
         const size_t num_words_minor = inv_tableau.num_words_minor();
         const size_t num_words_major = inv_tableau.num_words_major();
         dim3 currentblock, currentgrid;
+
         if (row_major) {
+
+            print_tableau(tableau, -1, false);
+
             if (options.tune_transpose2r) {
                 SYNCALL;
                 tune_transpose(transpose_to_rowmajor, "Transposing to row-major", 
@@ -119,6 +250,42 @@ namespace QuaSARQ {
                 LASTERR("failed to launch transpose_to_rowmajor kernel");
                 SYNC(stream);
             }
+
+            print_tableau(inv_tableau, -1, false);
+
+            cudaEvent_t start, stop;
+            float elapsedTime;
+
+            cudaEventCreate(&start);
+            cudaEventCreate(&stop);
+
+            CHECK(cudaEventRecord(start, 0));
+
+            dim3 threadsPerBlock_transpose(WORD_BITS, 1);
+            dim3 blocksPerGrid_transpose(num_words_minor, num_words_minor);
+
+            transpose_kernel << <blocksPerGrid_transpose, threadsPerBlock_transpose >> > (inv_tableau.xdestab(), num_words_minor);
+            LASTERR("transpose failed");
+            CHECK(cudaDeviceSynchronize());
+
+            dim3 threadsPerBlock_swap(WORD_BITS, 1);
+            dim3 blocksPerGrid_swap(num_words_minor, num_words_minor);
+
+            swap_kernel << <blocksPerGrid_swap, threadsPerBlock_swap >> > (inv_tableau.xdestab(), num_words_minor);
+            LASTERR("swap failed");
+
+            CHECK(cudaEventRecord(stop, 0));
+            CHECK(cudaEventSynchronize(stop));
+            CHECK(cudaEventElapsedTime(&elapsedTime, start, stop));
+            printf("GPU Transpose Time: %f ms\n", elapsedTime);
+
+            cudaEventDestroy(start);
+            cudaEventDestroy(stop);
+
+            print_tableau(inv_tableau, -1, false);
+
+            //cudaDeviceReset();
+            //exit(0);
         }
         else {
             if (options.tune_transpose2c) {
