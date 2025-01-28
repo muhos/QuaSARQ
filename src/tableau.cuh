@@ -185,8 +185,8 @@ namespace QuaSARQ {
         Table* _xs, * _zs;
         Signs* _ss;
 
-        Table* h_xs, * h_zs;
-        Signs* h_ss;
+        Table* _h_xs, * _h_zs;
+        Signs* _h_ss;
 
         word_t* _xs_data;
         word_t* _zs_data;
@@ -219,9 +219,9 @@ namespace QuaSARQ {
         ,   _xs(nullptr)
         ,   _zs(nullptr)
         ,   _ss(nullptr)
-        ,   h_xs(nullptr)
-        ,   h_zs(nullptr)
-        ,   h_ss(nullptr)
+        ,   _h_xs(nullptr)
+        ,   _h_zs(nullptr)
+        ,   _h_ss(nullptr)
         ,   _xs_data(nullptr)
         ,   _zs_data(nullptr)
         ,   _ss_data(nullptr)
@@ -288,12 +288,12 @@ namespace QuaSARQ {
                 || _num_partitions > 1 && _num_partitions * _num_words_major >= num_words_major_whole_tableau);
             
             // Create host pinned-memory objects to hold GPU pointers.
-            h_xs = new (allocator.template allocate_pinned<Table>(1)) Table();
-            assert(h_xs != nullptr);
-            h_zs = new (allocator.template allocate_pinned<Table>(1)) Table();
-            assert(h_zs != nullptr);
-            h_ss = new (allocator.template allocate_pinned<Signs>(1)) Signs();
-            assert(h_ss != nullptr);
+            _h_xs = new (allocator.template allocate_pinned<Table>(1)) Table();
+            assert(_h_xs != nullptr);
+            _h_zs = new (allocator.template allocate_pinned<Table>(1)) Table();
+            assert(_h_zs != nullptr);
+            _h_ss = new (allocator.template allocate_pinned<Signs>(1)) Signs();
+            assert(_h_ss != nullptr);
 
             // Create CUDA memory for GPU pointers.
             _xs = allocator.template allocate<Table>(1);
@@ -309,23 +309,23 @@ namespace QuaSARQ {
 
             // Bind the allocated GPU pointers to the host object,
             // then transfer it to the GPU.
-            h_xs->alloc(_xs_data, _num_qubits_padded, _num_words_major, _num_words_minor);
-            h_zs->alloc(_zs_data, _num_qubits_padded, _num_words_major, _num_words_minor);
-            assert(h_xs->size() == _num_words);
-            assert(h_zs->size() == _num_words);
+            _h_xs->alloc(_xs_data, _num_qubits_padded, _num_words_major, _num_words_minor);
+            _h_zs->alloc(_zs_data, _num_qubits_padded, _num_words_major, _num_words_minor);
+            assert(_h_xs->size() == _num_words);
+            assert(_h_zs->size() == _num_words);
             if (_unpacked_signs) {
                 _unpacked_ss_data = allocator.template allocate<int>(_num_sign_words);    
                 assert(_unpacked_ss_data != nullptr);
-                h_ss->alloc(_unpacked_ss_data, _num_sign_words, true);
+                _h_ss->alloc(_unpacked_ss_data, _num_sign_words, true);
             }
             else {
                 _ss_data = allocator.template allocate<sign_t>(_num_sign_words);        
                 assert(_ss_data != nullptr);
-                h_ss->alloc(_ss_data, _num_sign_words, false);
+                _h_ss->alloc(_ss_data, _num_sign_words, false);
             }
-            CHECK(cudaMemcpyAsync(_xs, h_xs, sizeof(Table), cudaMemcpyHostToDevice));
-            CHECK(cudaMemcpyAsync(_zs, h_zs, sizeof(Table), cudaMemcpyHostToDevice));
-            CHECK(cudaMemcpyAsync(_ss, h_ss, sizeof(Signs), cudaMemcpyHostToDevice));
+            CHECK(cudaMemcpyAsync(_xs, _h_xs, sizeof(Table), cudaMemcpyHostToDevice));
+            CHECK(cudaMemcpyAsync(_zs, _h_zs, sizeof(Table), cudaMemcpyHostToDevice));
+            CHECK(cudaMemcpyAsync(_ss, _h_ss, sizeof(Signs), cudaMemcpyHostToDevice));
 
             size_t cap_after = allocator.gpu_capacity();
             assert(cap_before > cap_after);
@@ -389,24 +389,24 @@ namespace QuaSARQ {
             
             // Bind the allocated GPU pointers to the host object,
             // then transfer it to the GPU.
-            assert(h_xs != nullptr && h_zs != nullptr && h_ss != nullptr);
+            assert(_h_xs != nullptr && _h_zs != nullptr && _h_ss != nullptr);
             assert(_xs_data != nullptr);
-            h_xs->alloc(_xs_data, _num_qubits_padded, _num_words_major, _num_words_minor);
+            _h_xs->alloc(_xs_data, _num_qubits_padded, _num_words_major, _num_words_minor);
             assert(_zs_data != nullptr);
-            h_zs->alloc(_zs_data, _num_qubits_padded, _num_words_major, _num_words_minor);
-            assert(h_xs->size() == _num_words);
-            assert(h_zs->size() == _num_words);
+            _h_zs->alloc(_zs_data, _num_qubits_padded, _num_words_major, _num_words_minor);
+            assert(_h_xs->size() == _num_words);
+            assert(_h_zs->size() == _num_words);
             if (_unpacked_signs) {    
                 assert(_unpacked_ss_data != nullptr);
-                h_ss->alloc(_unpacked_ss_data, _num_sign_words, true);
+                _h_ss->alloc(_unpacked_ss_data, _num_sign_words, true);
             }
             else {      
                 assert(_ss_data != nullptr);
-                h_ss->alloc(_ss_data, _num_sign_words, false);
+                _h_ss->alloc(_ss_data, _num_sign_words, false);
             }
-            CHECK(cudaMemcpyAsync(_xs, h_xs, sizeof(Table), cudaMemcpyHostToDevice));
-            CHECK(cudaMemcpyAsync(_zs, h_zs, sizeof(Table), cudaMemcpyHostToDevice));
-            CHECK(cudaMemcpyAsync(_ss, h_ss, sizeof(Signs), cudaMemcpyHostToDevice));
+            CHECK(cudaMemcpyAsync(_xs, _h_xs, sizeof(Table), cudaMemcpyHostToDevice));
+            CHECK(cudaMemcpyAsync(_zs, _h_zs, sizeof(Table), cudaMemcpyHostToDevice));
+            CHECK(cudaMemcpyAsync(_ss, _h_ss, sizeof(Signs), cudaMemcpyHostToDevice));
             
             size_t cap_after = 2 * _num_words * sizeof(word_std_t) + _num_sign_words * sign_word_size + max_window_bytes;
             assert(cap_before >= cap_after);
@@ -473,6 +473,18 @@ namespace QuaSARQ {
             CHECK(cudaMemcpy(&tmp_xs, _xs, sizeof(Table), cudaMemcpyDeviceToHost));
             CHECK(cudaMemcpy(&tmp_zs, _zs, sizeof(Table), cudaMemcpyDeviceToHost));
             return tmp_xs.is_identity() && tmp_zs.is_identity();
+        }
+
+        void copy_to_host(Table* h_xs, Table* h_zs, Signs* h_ss) {
+            h_xs->alloc_host(_num_qubits_padded, _num_words_major, _num_words_minor);
+            CHECK(cudaMemcpy(h_xs->data(), _xs_data, sizeof(word_t) * _num_words, cudaMemcpyDeviceToHost));
+            h_zs->alloc_host(_num_qubits_padded, _num_words_major, _num_words_minor);
+            CHECK(cudaMemcpy(h_zs->data(), _zs_data, sizeof(word_t) * _num_words, cudaMemcpyDeviceToHost));
+            h_ss->alloc_host(_num_sign_words, _unpacked_signs);
+            if (_unpacked_signs)
+                CHECK(cudaMemcpy(h_ss->unpacked_data(), _unpacked_ss_data, sizeof(int) * _num_words, cudaMemcpyDeviceToHost));
+            else
+                CHECK(cudaMemcpy(h_ss->data(), _ss_data, sizeof(sign_t) * _num_words, cudaMemcpyDeviceToHost));
         }
 
         bool is_xstab_valid(const cudaStream_t& stream = 0) const { 

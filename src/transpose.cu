@@ -115,11 +115,11 @@ namespace QuaSARQ {
         if (!blockIdx.x && !blockIdx.y && !threadIdx.x)
             zs->flag_rowmajor();
         for (size_t a = blockIdx.y; a < num_words_minor; a += gridDim.y) {
-            for (size_t b = blockIdx.x; b < num_words_minor; b += gridDim.x) {
+            for (size_t b = blockIdx.x; b < num_words_major; b += gridDim.x) {
                 // Inline transpose a tile of WORD_BITS words, each word has WORD_BITS bits.
                 // Transposition is done in shared memory.
-                // tile_index = (a << WORD_POWER) * num_words_major + b + num_words_minor;
-                const size_t tile_index = compute_block_index(a, 0, b + num_words_minor, num_words_major);
+                // tile_index = (a << WORD_POWER) * num_words_major + b;
+                const size_t tile_index = compute_block_index(a, 0, b, num_words_major);
                 shared_inplace_transpose(data + tile_index, num_words_major);
                 //inplace_transpose_8x8(data + tile_index, num_words_major);
                 //print_table(*xs, true);
@@ -319,7 +319,9 @@ namespace QuaSARQ {
             CHECK(cudaEventRecord(start, 0));
 
             dim3 threadsPerBlock_transpose(WORD_BITS, 1);
-            dim3 blocksPerGrid_transpose(num_words_minor, num_words_minor);
+            dim3 blocksPerGrid_transpose(num_words_major, num_words_minor);
+
+            // to do xs and zs at once, we need z-dim.
 
             transpose_kernel << <blocksPerGrid_transpose, threadsPerBlock_transpose >> > (XZ_TABLE(tableau), num_words_major, num_words_minor);
             //transpose_kernel << <1, 1 >> > (XZ_TABLE(tableau), num_words_major, num_words_minor);
@@ -331,6 +333,8 @@ namespace QuaSARQ {
 
             dim3 threadsPerBlock_swap(WORD_BITS, 1);
             dim3 blocksPerGrid_swap(num_words_minor, num_words_minor);
+
+            // To do destab and stab at once we need two blocks or threads in z-dim.
 
             swap_kernel << <blocksPerGrid_swap, threadsPerBlock_swap >> > (tableau.zdata(), num_words_major, num_words_minor);
             //swap_kernel << <1, 1 >> > (tableau.zdata(), num_words_major, num_words_minor);
@@ -347,6 +351,10 @@ namespace QuaSARQ {
             printf("after swap:\n");
             print_tableau(tableau, -1, false);
 
+            Table h_xs, h_zs; Signs h_ss;
+            tableau.copy_to_host(&h_xs, &h_zs, &h_ss);
+
+            print_tables(h_xs, h_zs, h_ss, -1);
             //cudaDeviceReset();
             exit(0);
         }
