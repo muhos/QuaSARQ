@@ -211,6 +211,10 @@ size_t Simulator::parse(Statistics& stats, const char* path) {
             if (sign) LOGERROR("number of qubits in header is negative.");
             LOG2(1, "Found header %s%zd%s.", CREPORTVAL, max_qubits, CNORMAL);
         }
+        else if (*str == '#') {
+            eatLine(str);
+            continue;
+        }
         circuit_io.read_gate(str);  
     }
     if (!max_qubits)

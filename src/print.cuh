@@ -11,9 +11,9 @@ namespace QuaSARQ {
 
     NOINLINE_DEVICE void REPCH_GPU(const char* ch, const size_t& size, const size_t& off = 0);
 
-    NOINLINE_ALL void print_table(const Table& t);
+    NOINLINE_ALL void print_table_interleave(const Table& t);
 
-    NOINLINE_ALL void print_table(const Table& t, const size_t& num_qubits, const size_t& num_words_major, const size_t& num_words_minor);
+    NOINLINE_ALL void print_table(const Table& t, const bool& extended = false);
 
     NOINLINE_ALL void print_table_signs(const Signs& ss, const size_t& offset = 0);
 

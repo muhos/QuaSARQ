@@ -7,7 +7,7 @@ namespace QuaSARQ {
         for (size_t i = off; i < size; i++) LOGGPU("%s", ch);
     }
 
-        NOINLINE_ALL void print_table(const Table& t) {
+        NOINLINE_ALL void print_table_interleave(const Table& t) {
         const bool is_rowmajor = t.is_rowmajor();
         const size_t size = t.size();
         const size_t major_end = t.num_words_major();
@@ -39,36 +39,66 @@ namespace QuaSARQ {
         LOGGPU("\n");
     }
 
-    NOINLINE_ALL void print_table(const Table& t, const size_t& num_qubits, const size_t& num_words_major, const size_t& num_words_minor) {
+    NOINLINE_ALL void print_table(const Table& t, const bool& extended) {
         LOGGPU("%-3s ", "g\\q ");
-        size_t bits, rows, cols;
         if (t.is_rowmajor()) {
-            bits = num_words_minor * WORD_BITS;
-            rows = 2 * num_qubits, cols = num_words_minor;
+            size_t bits = t.num_words_minor() * WORD_BITS;
+            for (size_t q = 0; q < bits; q++) {
+                if (q > 0 && q % WORD_BITS == 0)
+                    LOGGPU("  ");
+                LOGGPU("%-3lld", q);
+            }
+            LOGGPU("\n\nDestab:\n");
+            for (size_t q = 0; q < t.num_qubits_padded(); q++) {
+                LOGGPU("%-3lld  ", q);
+                for (size_t w = 0; w < t.num_words_minor(); w++) {
+                    const size_t word_idx = q * t.num_words_major() + w;
+                    #if defined(WORD_SIZE_64)
+                    LOGGPU(B2B_STR, RB2B(uint32(word_std_t(t[word_idx]) & 0xFFFFFFFFUL)));
+                    LOGGPU(B2B_STR "  ", RB2B(uint32((word_std_t(t[word_idx]) >> 32) & 0xFFFFFFFFUL)));
+                    #else
+                    LOGGPU(B2B_STR "  ", RB2B(word_std_t(t[word_idx])));
+                    #endif
+                }
+                LOGGPU("\n");
+            }
+            LOGGPU("Stab:\n");
+            for (size_t q = 0; q < t.num_qubits_padded(); q++) {
+                LOGGPU("%-3lld  ", q + t.num_qubits_padded());
+                for (size_t w = 0; w < t.num_words_minor(); w++) {
+                    const size_t word_idx = q * t.num_words_major() + w + t.num_words_minor();
+                    #if defined(WORD_SIZE_64)
+                    LOGGPU(B2B_STR, RB2B(uint32(word_std_t(t[word_idx]) & 0xFFFFFFFFUL)));
+                    LOGGPU(B2B_STR "  ", RB2B(uint32((word_std_t(t[word_idx]) >> 32) & 0xFFFFFFFFUL)));
+                    #else
+                    LOGGPU(B2B_STR "  ", RB2B(word_std_t(t[word_idx])));
+                    #endif
+                }
+                LOGGPU("\n");
+            }
         }
         else {
-            bits = num_words_major * WORD_BITS;
-            rows = num_qubits, cols = num_words_major;
-        }
-        /*for (size_t q = 0; q < bits; q++) {
-            if (q > 0 && q % WORD_BITS == 0)
-                LOGGPU("  ");
-            LOGGPU("%-3lld", q);
-        }
-        LOGGPU("\n\n");
-        for (size_t q = 0; q < rows; q++) {
-            LOGGPU("%-3lld  ", q);
-            for (size_t w = 0; w < cols; w++) {
-                const size_t word_idx = q * cols + w;
-                #if defined(WORD_SIZE_64)
-                LOGGPU(B2B_STR, RB2B(uint32(word_std_t(t[word_idx]) & 0xFFFFFFFFUL)));
-                LOGGPU(B2B_STR "  ", RB2B(uint32((word_std_t(t[word_idx]) >> 32) & 0xFFFFFFFFUL)));
-                #else
-                LOGGPU(B2B_STR "  ", RB2B(word_std_t(t[word_idx])));
-                #endif
+            size_t bits = t.num_words_major() * WORD_BITS;
+            for (size_t q = 0; q < bits; q++) {
+                if (q > 0 && q % WORD_BITS == 0)
+                    LOGGPU("  ");
+                LOGGPU("%-3lld", q);
             }
-            LOGGPU("\n");
-        }*/
+            LOGGPU("\n\n");
+            for (size_t q = 0; q < t.num_qubits_padded(); q++) {
+                LOGGPU("%-3lld  ", q);
+                for (size_t w = 0; w < t.num_words_major(); w++) {
+                    const size_t word_idx = q * t.num_words_major() + w;
+                    #if defined(WORD_SIZE_64)
+                    LOGGPU(B2B_STR, RB2B(uint32(word_std_t(t[word_idx]) & 0xFFFFFFFFUL)));
+                    LOGGPU(B2B_STR "  ", RB2B(uint32((word_std_t(t[word_idx]) >> 32) & 0xFFFFFFFFUL)));
+                    #else
+                    LOGGPU(B2B_STR "  ", RB2B(word_std_t(t[word_idx])));
+                    #endif
+                }
+                LOGGPU("\n");
+            }
+        }
     }
 
     NOINLINE_ALL void print_table_signs(const Signs& ss, const size_t& offset) {
@@ -99,19 +129,19 @@ namespace QuaSARQ {
             LOGGPU(" ---[ Destab/stab X-Table at (%-2lld)-step ]---------------------\n", level);
         else 
             LOGGPU(" ---[ X-Table at (%-2lld)-step ]---------------------\n", level);
-        print_table(xs, num_qubits, xs.num_words_major(), xs.num_words_minor());
+        print_table(xs, measuring);
         if (measuring) 
             LOGGPU(" ---[ Destab/stab Z-Table at (%-2lld)-step ]---------------------\n", level);
         else 
             LOGGPU(" ---[ Z-Table at (%-2lld)-step ]---------------------\n", level);
-        print_table(zs, num_qubits, zs.num_words_major(), zs.num_words_minor());
+        print_table(zs, measuring);
         LOGGPU(" ---[ Signs at (%-2lld)-step ]-----------------------\n", level);
         print_table_signs(ss);
     }
 
     NOINLINE_ALL void print_tables(const Table& ps, const Signs& ss, const size_t& num_qubits, const int64& level, const bool& measuring) {
         LOGGPU(" ---[ XZ bits at (%-2lld)-step ]---------------------\n", level);
-        print_table(ps);
+        print_table_interleave(ps);
         LOGGPU(" ---[ Signs at (%-2lld)-step   ]---------------------\n", level);
         print_table_signs(ss);
     }

@@ -373,6 +373,7 @@ namespace QuaSARQ {
             // Fix number of words per column for last partition.
 			while ((_num_partitions * _num_words_major) < num_words_major_whole_tableau)
 				_num_words_major++;
+                
             // Update number of words.
             _num_words_minor = _num_words_major;
             if (measuring) _num_words_major <<= 1;
@@ -465,22 +466,6 @@ namespace QuaSARQ {
             assert(_zs_data != nullptr); 
             assert(offset < _num_words);
             return reinterpret_cast<word_std_t*>(_zs_data) + offset;
-        }
-
-        INLINE_ALL word_std_t* xdestab() { return xdata(); }
-
-        INLINE_ALL word_std_t* zdestab() { return zdata(); }
-
-        INLINE_ALL word_std_t* xstab() {
-            assert(_num_words_major == 2 * _num_words_minor || _num_words_major == _num_words_minor);
-            const size_t offset = (_num_words_major - _num_words_minor)  * _num_qubits_padded;
-            return xdata(offset);
-        }
-
-        INLINE_ALL word_std_t* zstab() { 
-            assert(_num_words_major == 2 * _num_words_minor || _num_words_major == _num_words_minor);
-            const size_t offset = (_num_words_major - _num_words_minor) * _num_qubits_padded;
-            return zdata(offset);
         }
 
         bool is_table_identity() const {

@@ -104,6 +104,7 @@ namespace QuaSARQ {
         }
         if (options.sync) {
             LASTERR("failed to launch identity kernel");
+            CHECK(cudaDeviceSynchronize());
             cutimer.stop();
             double itime = cutimer.time();
             LOG2(1, "done in %f ms.", itime);

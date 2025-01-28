@@ -76,7 +76,6 @@ namespace QuaSARQ {
     class Table {
 
         word_t* _data;
-        word_t* _destab, *_stab;
         size_t _num_qubits_padded;
         size_t _num_words;
         size_t _num_words_minor;
@@ -90,8 +89,6 @@ namespace QuaSARQ {
 
         Table() :
             _data(nullptr)
-            , _destab(nullptr)
-            , _stab(nullptr)
             , _num_qubits_padded(0)
             , _num_words(0)
             , _num_words_minor(0)
@@ -128,10 +125,7 @@ namespace QuaSARQ {
             _num_words_major = num_words_major;
             _num_words_minor = num_words_minor;
             _num_words = _num_words_major * _num_qubits_padded;
-            _data = _destab = data_ptr;
-            assert(_num_words_major == 2 * _num_words_minor || _num_words_major == _num_words_minor);
-            const size_t offset = (_num_words_major - _num_words_minor) * _num_qubits_padded;
-            _stab = _data + offset;
+            _data = data_ptr;
             assert(_is_identity == true);
             _context = GPU;
         }
@@ -147,12 +141,11 @@ namespace QuaSARQ {
             _num_words_major = num_words_major;
             _num_words_minor = num_words_minor;
             _num_words = _num_words_major * _num_qubits_padded;
-            _data = _destab = calloc<word_t>(_num_words);;
-            assert(_num_words_major == 2 * _num_words_minor || _num_words_major == _num_words_minor);
-            const size_t offset = (_num_words_major - _num_words_minor) * _num_qubits_padded;
-            _stab = _data + offset;
+            _data = calloc<word_t>(_num_words);;
             _context = CPU;
         }
+
+        INLINE_ALL size_t num_qubits_padded() const { return _num_qubits_padded; }
 
         INLINE_ALL size_t size() const { return _num_words; }
 
@@ -164,30 +157,22 @@ namespace QuaSARQ {
 
         INLINE_ALL const word_t* data() const { return _data; }
 
-        INLINE_ALL word_t* destab() { return _destab; }
-
-        INLINE_ALL const word_t* destab() const { return _destab; }
-
-        INLINE_ALL word_t* stab() { return _stab; }
-
-        INLINE_ALL const word_t* stab() const { return _stab; }
-
         INLINE_ALL void set_destab_to_identity(const qubit_t& q, const qubit_t& column_offset = 0) {
             const size_t idx = (X_OFFSET(q) + column_offset) * _num_words_major + X_WORD_OFFSET(WORD_OFFSET(q));
             assert(idx < _num_words);
-            _destab[idx].identity(q);
+            _data[idx].identity(q);
         }
 
         INLINE_ALL void set_stab_to_identity(const qubit_t& q, const qubit_t& column_offset = 0) {
-            const size_t idx = (X_OFFSET(q) + column_offset) * _num_words_major + X_WORD_OFFSET(WORD_OFFSET(q));
+            const size_t idx = (X_OFFSET(q) + column_offset) * _num_words_major + X_WORD_OFFSET(WORD_OFFSET(q + _num_qubits_padded));
             assert(idx < _num_words);
-            _stab[idx].identity(q);
+            _data[idx].identity(q + _num_qubits_padded);
         }
 
-        INLINE_ALL void set_word_to_identity(const qubit_t& q, const qubit_t& column_offset = 0, const qubit_t& word_offset = 0) {
-            const size_t idx = (q + column_offset) * _num_words_major + WORD_OFFSET(q + word_offset);
+        INLINE_ALL void set_word_to_identity(const qubit_t& q, const qubit_t& column_offset = 0) {
+            const size_t idx = (q + column_offset) * _num_words_major + WORD_OFFSET(q);
             assert(idx < _num_words);
-            _data[idx].identity(q + word_offset);
+            _data[idx].identity(q);
         }
 
         INLINE_ALL word_t* words(const qubit_t& q) {          
@@ -215,13 +200,6 @@ namespace QuaSARQ {
             assert(idx < _num_words);
             return _data[idx];
         }
-
-
-       /* INLINE_ALL const bool bit(const size_t& q) const {
-            const size_t idx = q * _num_words_major;
-            assert(idx < _num_words);
-            return _data[idx];
-        }*/
 
         INLINE_ALL bool check_z_word_is_identity(const qubit_t& q, const qubit_t& column_offset) const {
             const size_t idx = (Z_OFFSET(q) + column_offset) * _num_words_major + WORD_OFFSET(q);
