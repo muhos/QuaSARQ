@@ -40,7 +40,6 @@ namespace QuaSARQ {
     }
 
     NOINLINE_ALL void print_table(const Table& t) {
-        LOGGPU("%c\\%c  ", t.is_rowmajor() ? 'g' : 'q', t.is_rowmajor() ? 'q' : 'g');
         size_t bits = t.num_words_minor() * WORD_BITS;
         for (size_t q = 0; q < bits; q++) {
             if (q > 0 && q % WORD_BITS == 0)
@@ -79,13 +78,11 @@ namespace QuaSARQ {
         }
     }
 
-    NOINLINE_ALL void print_table_signs(const Signs& ss, const size_t& offset) {
-        LOGGPU("g     s\n");
+    NOINLINE_ALL void print_table_signs(const Signs& ss, const size_t& start, const size_t& end) {
         const size_t size = ss.is_unpacked() ? ss.size() : ss.size() * WORD_BITS;
-        for (size_t i = offset; i < size; i++) {
-                LOGGPU("%-3lld   %-2d\n", i,  ss.is_unpacked() ? ss.unpacked_data()[i] : bool(ss[WORD_OFFSET(i)] & sign_t(BITMASK_GLOBAL(i))));
+        for (size_t i = start; i < end; i++) {
+            LOGGPU("g%-3lld   %-2d\n", i >= ss.num_qubits_padded() ? (i - ss.num_qubits_padded()) : i,  ss.is_unpacked() ? ss.unpacked_data()[i] : bool(ss[WORD_OFFSET(i)] & sign_t(BITMASK_GLOBAL(i))));
         }
-        LOGGPU("\n");
     }
 
     NOINLINE_ALL void print_tables(const Table& xs, const Table& zs, const Signs& ss, const int64& level) {
@@ -94,14 +91,17 @@ namespace QuaSARQ {
         LOGGPU(" ---[ %s Z-Table at (%-2lld)-step ]---------------------\n", zs.is_rowmajor() ? "Transposed" : "", level);
         print_table(zs);
         LOGGPU(" ---[ Signs at (%-2lld)-step ]-----------------------\n", level);
-        print_table_signs(ss);
-    }
-
-    NOINLINE_ALL void print_tables(const Table& ps, const Signs& ss, const int64& level) {
-        LOGGPU(" ---[ XZ bits at (%-2lld)-step ]---------------------\n", level);
-        print_table_interleave(ps);
-        LOGGPU(" ---[ Signs at (%-2lld)-step   ]---------------------\n", level);
-        print_table_signs(ss);
+        const size_t unfolded_size = ss.is_unpacked() ? ss.size() : ss.size() * WORD_BITS;
+        if (ss.num_qubits_padded() == unfolded_size)
+            print_table_signs(ss, 0, ss.num_qubits_padded());
+        else {
+            assert(2 * ss.num_qubits_padded() == unfolded_size);
+            LOGGPU("Destabilizers:\n");
+            print_table_signs(ss, 0, ss.num_qubits_padded());
+            LOGGPU("Stabilizers:\n");
+            print_table_signs(ss, ss.num_qubits_padded(), 2 * ss.num_qubits_padded());
+        }
+        LOGGPU("\n");
     }
 
     NOINLINE_ALL void print_state(const Table& xs, const Table& zs, const Signs& ss, 
@@ -173,12 +173,6 @@ namespace QuaSARQ {
         LOGGPU("\n S(%lld): %d\n", gen_idx, inv_ss[gen_idx]);
         dlocker.unlock();
     }
-
-	__global__ void print_tableau_k(ConstTablePointer ps, ConstSignsPointer ss, const depth_t level) {
-		if (!global_tx) {
-			print_tables(*ps, *ss, level == MAX_DEPTH ? -1 : int64(level));
-		}
-	}
 
 	__global__ void print_tableau_k(ConstTablePointer xs, ConstTablePointer zs, ConstSignsPointer ss, const depth_t level) {
 		if (!global_tx) {

@@ -108,9 +108,9 @@ namespace QuaSARQ {
                 if (_data != nullptr)
                     std::free(_data);
             }
-            _num_words = 0;
-            _num_words_major = 0;
-            _data = nullptr;
+            RESETSTRUCT(this);
+            _is_identity = true;
+            _context = UNKNOWN;
         }
 
         void alloc(word_t* data_ptr, const size_t& num_qubits_padded, const size_t& num_words_major, const size_t& num_words_minor) {

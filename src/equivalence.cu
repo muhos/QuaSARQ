@@ -164,7 +164,7 @@ namespace QuaSARQ {
         // Check equivalence of two tableaus.
         SYNCALL;
         equivalent = 1;
-        equivalence_1D << < bestgrididentity, bestblockidentity >> > (XZ_TABLE(tableau), tableau.signs(), XZ_TABLE(other_tableau), other_tableau.signs(), MIN(tableau.num_words(), other_tableau.num_words()));
+        equivalence_1D << < bestgrididentity, bestblockidentity >> > (XZ_TABLE(tableau), tableau.signs(), XZ_TABLE(other_tableau), other_tableau.signs(), MIN(tableau.num_words_per_table(), other_tableau.num_words_per_table()));
         LASTERR("failed to launch equivalence kernel");
         SYNC(0);
         if (equivalent)

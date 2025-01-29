@@ -203,7 +203,36 @@ namespace QuaSARQ {;
         reset_pivots(num_gates_per_window, kernel_stream2);
 
         // Transpose the tableau into row-major format.
+        Table in_xs, in_zs;
+        tableau.copy_to_host(&in_xs, &in_zs);
+
+        // printf("Before:\n");
+        // print_tableau(tableau, -1, false);
+
         transpose(true, kernel_stream1);
+        transpose(true, kernel_stream1);
+
+        // printf("After:\n");
+        // print_tableau(tableau, -1, false);
+
+        Table h_xs, h_zs;
+        tableau.copy_to_host(&h_xs, &h_zs);
+
+        bool incorrect = false;
+        for (auto i = 0; i < tableau.num_words_per_table(); i++) {
+            if (h_xs[i] != in_xs[i]) {
+                incorrect = true;
+                printf("Incorrect transpose of xs\n");
+                break;
+            }
+            if (h_zs[i] != in_zs[i]) {
+                incorrect = true;
+                printf("Incorrect transpose of zs\n");
+                break;
+            }
+        }
+
+        exit(0);
 
         //// Sync copying gates to device.
         //SYNC(copy_stream1);
@@ -315,7 +344,7 @@ namespace QuaSARQ {;
         if (options.tune_copyindeterminate || options.tune_phase1indeterminate || options.tune_phase2indeterminate) {
             SYNCALL;
             ts.recover = true;
-            ts.set_original_pointers(inv_tableau.xdata(), inv_tableau.zdata(), inv_tableau.num_words());
+            ts.set_original_pointers(inv_tableau.xdata(), inv_tableau.zdata(), inv_tableau.num_words_per_table());
             ts.set_saving_pointers(tableau.xdata(), tableau.zdata());
             tune_indeterminate(measure_indeterminate_copy, measure_indeterminate_mul_phase1, measure_indeterminate_mul_phase2,
                 bestblockcopyindeterminate, bestgridcopyindeterminate, 

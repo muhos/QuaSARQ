@@ -157,7 +157,7 @@ namespace QuaSARQ {
 
         INLINE_ALL size_t size() const { return 2 * _num_words + _num_words_major; }
 
-        INLINE_ALL size_t num_words() const { return _num_words; }
+        INLINE_ALL size_t num_words_per_table() const { return _num_words; }
 
         INLINE_ALL size_t num_qubits_padded() const { return _num_qubits_padded; }
 
@@ -316,12 +316,12 @@ namespace QuaSARQ {
             if (_unpacked_signs) {
                 _unpacked_ss_data = allocator.template allocate<int>(_num_sign_words);    
                 assert(_unpacked_ss_data != nullptr);
-                _h_ss->alloc(_unpacked_ss_data, _num_sign_words, true);
+                _h_ss->alloc(_unpacked_ss_data, _num_qubits_padded, _num_sign_words, true);
             }
             else {
                 _ss_data = allocator.template allocate<sign_t>(_num_sign_words);        
                 assert(_ss_data != nullptr);
-                _h_ss->alloc(_ss_data, _num_sign_words, false);
+                _h_ss->alloc(_ss_data, _num_qubits_padded, _num_sign_words, false);
             }
             CHECK(cudaMemcpyAsync(_xs, _h_xs, sizeof(Table), cudaMemcpyHostToDevice));
             CHECK(cudaMemcpyAsync(_zs, _h_zs, sizeof(Table), cudaMemcpyHostToDevice));
@@ -396,13 +396,13 @@ namespace QuaSARQ {
             _h_zs->alloc(_zs_data, _num_qubits_padded, _num_words_major, _num_words_minor);
             assert(_h_xs->size() == _num_words);
             assert(_h_zs->size() == _num_words);
-            if (_unpacked_signs) {    
+            if (_unpacked_signs) {
                 assert(_unpacked_ss_data != nullptr);
-                _h_ss->alloc(_unpacked_ss_data, _num_sign_words, true);
+                _h_ss->alloc(_unpacked_ss_data, _num_qubits_padded, _num_sign_words, true);
             }
             else {      
                 assert(_ss_data != nullptr);
-                _h_ss->alloc(_ss_data, _num_sign_words, false);
+                _h_ss->alloc(_ss_data, _num_qubits_padded, _num_sign_words, false);
             }
             CHECK(cudaMemcpyAsync(_xs, _h_xs, sizeof(Table), cudaMemcpyHostToDevice));
             CHECK(cudaMemcpyAsync(_zs, _h_zs, sizeof(Table), cudaMemcpyHostToDevice));
@@ -440,7 +440,7 @@ namespace QuaSARQ {
 
         INLINE_ALL size_t num_qubits() const { return _num_qubits; }
 
-        INLINE_ALL size_t num_words() const { return _num_words; }
+        INLINE_ALL size_t num_words_per_table() const { return _num_words; }
 
         INLINE_ALL size_t num_qubits_padded() const { return _num_qubits_padded; }
 
@@ -475,16 +475,22 @@ namespace QuaSARQ {
             return tmp_xs.is_identity() && tmp_zs.is_identity();
         }
 
-        void copy_to_host(Table* h_xs, Table* h_zs, Signs* h_ss) {
-            h_xs->alloc_host(_num_qubits_padded, _num_words_major, _num_words_minor);
-            CHECK(cudaMemcpy(h_xs->data(), _xs_data, sizeof(word_t) * _num_words, cudaMemcpyDeviceToHost));
-            h_zs->alloc_host(_num_qubits_padded, _num_words_major, _num_words_minor);
-            CHECK(cudaMemcpy(h_zs->data(), _zs_data, sizeof(word_t) * _num_words, cudaMemcpyDeviceToHost));
-            h_ss->alloc_host(_num_sign_words, _unpacked_signs);
-            if (_unpacked_signs)
-                CHECK(cudaMemcpy(h_ss->unpacked_data(), _unpacked_ss_data, sizeof(int) * _num_words, cudaMemcpyDeviceToHost));
-            else
-                CHECK(cudaMemcpy(h_ss->data(), _ss_data, sizeof(sign_t) * _num_words, cudaMemcpyDeviceToHost));
+        void copy_to_host(Table* h_xs, Table* h_zs, Signs* h_ss = nullptr) {
+            if (h_xs != nullptr) {
+                h_xs->alloc_host(_num_qubits_padded, _num_words_major, _num_words_minor);
+                CHECK(cudaMemcpy(h_xs->data(), _xs_data, sizeof(word_t) * _num_words, cudaMemcpyDeviceToHost));
+            }
+            if (h_zs != nullptr) { 
+                h_zs->alloc_host(_num_qubits_padded, _num_words_major, _num_words_minor);
+                CHECK(cudaMemcpy(h_zs->data(), _zs_data, sizeof(word_t) * _num_words, cudaMemcpyDeviceToHost));
+            }
+            if (h_ss != nullptr) {
+                h_ss->alloc_host(_num_qubits_padded, _num_sign_words, _unpacked_signs);
+                if (_unpacked_signs)
+                    CHECK(cudaMemcpy(h_ss->unpacked_data(), _unpacked_ss_data, sizeof(int) * _num_words, cudaMemcpyDeviceToHost));
+                else
+                    CHECK(cudaMemcpy(h_ss->data(), _ss_data, sizeof(sign_t) * _num_words, cudaMemcpyDeviceToHost));
+            }
         }
 
         bool is_xstab_valid(const cudaStream_t& stream = 0) const { 

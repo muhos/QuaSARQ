@@ -14,6 +14,7 @@ namespace QuaSARQ {
 
         sign_t* _data;
         int* _unpacked_data;
+        size_t _num_qubits_padded;
         size_t _num_words;
         bool _is_unpacked;
         Context _context;
@@ -23,6 +24,7 @@ namespace QuaSARQ {
         Signs() :
             _data(nullptr)
             , _unpacked_data(nullptr)
+            , _num_qubits_padded(0)
             , _num_words(0)
             , _is_unpacked(false)
             , _context(UNKNOWN)
@@ -30,6 +32,8 @@ namespace QuaSARQ {
 
         ~Signs() {
             destroy();
+            RESETSTRUCT(this);
+            _context = UNKNOWN;
         }
 
         void destroy() {
@@ -44,12 +48,13 @@ namespace QuaSARQ {
 
         // Doesn't allocate memory by itself. Memory should
         // be allocated and assigned to 'data_ptr'.
-        void alloc(void* data_ptr, const size_t& num_words, const bool& unpacked = false) {
+        void alloc(void* data_ptr, const size_t& num_qubits_padded, const size_t& num_words, const bool& unpacked = false) {
             if (_context == CPU) {
                 LOGGPUERROR("cannot assign GPU pointer to a pre-allocated CPU pointer.");
                 return;
             }
             assert(data_ptr != nullptr);
+            _num_qubits_padded = num_qubits_padded;
             _num_words = num_words;
             _context = GPU;
             _is_unpacked = unpacked;
@@ -59,11 +64,12 @@ namespace QuaSARQ {
                 _data = static_cast<sign_t*> (data_ptr);
         }
 
-        void alloc_host(const size_t& num_words, const bool& unpacked = false) {
+        void alloc_host(const size_t& num_qubits_padded, const size_t& num_words, const bool& unpacked = false) {
             if (_context == GPU) {
                 LOGERRORN("cannot allocate CPU pointer to a pre-allocated GPU pointer.");
                 return;
             }
+            _num_qubits_padded = num_qubits_padded;
             _num_words = num_words;
             _context = CPU;
             _is_unpacked = unpacked;
@@ -74,6 +80,8 @@ namespace QuaSARQ {
         }
 
         INLINE_ALL bool is_unpacked() const { return _is_unpacked; }
+
+        INLINE_ALL size_t num_qubits_padded() const { return _num_qubits_padded; }
 
         INLINE_ALL size_t size() const { return _num_words; }
 

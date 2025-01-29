@@ -15,11 +15,9 @@ namespace QuaSARQ {
 
     NOINLINE_ALL void print_table(const Table& t);
 
-    NOINLINE_ALL void print_table_signs(const Signs& ss, const size_t& offset = 0);
+    NOINLINE_ALL void print_table_signs(const Signs& ss, const size_t& start, const size_t& end);
 
     NOINLINE_ALL void print_tables(const Table& xs, const Table& zs, const Signs& ss, const int64& level);
-
-    NOINLINE_ALL void print_tables(const Table& ps, const Signs& ss, const int64& level);
 
     NOINLINE_ALL void print_state(const Table& xs, const Table& zs, const Signs& ss, const size_t& start, const size_t& end, const size_t& num_qubits, const size_t& num_words_major);
 
@@ -29,7 +27,6 @@ namespace QuaSARQ {
 
     // Print the tableau in binary format (generators are columns).
     __global__ void print_tableau_k(ConstTablePointer xs, ConstTablePointer zs, ConstSignsPointer ss, const depth_t level);
-    __global__ void print_tableau_k(ConstTablePointer ps, ConstSignsPointer ss, const depth_t level);
 
     // Print the tableau's Pauli strings.
     __global__ void print_paulis_k(ConstTablePointer xs, ConstTablePointer zs, ConstSignsPointer ss, const size_t num_words_major, const size_t num_qubits, const bool extended);
