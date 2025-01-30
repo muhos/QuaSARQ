@@ -7,8 +7,8 @@ namespace QuaSARQ {
 	constexpr bool PRINT_PROGRESS_2D = 0;
 	constexpr size_t NSAMPLES = 2;
 	constexpr int MIN_PRECISION_HITS = 2;
-	constexpr size_t TRIALS = size_t(0.5e3);
-	constexpr double PRECISION = 0.009;
+	constexpr size_t TRIALS = size_t(1e3);
+	constexpr double PRECISION = 0.005;
 #if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
 	int64 maxThreadsPerBlock = 256;
 	int64 maxThreadsPerBlockY = 32;
@@ -229,7 +229,52 @@ namespace QuaSARQ {
 		} \
 	} while(0)
 
-	#define TUNE_2D_FIX_X(...) \
+	#define TUNE_2D_FIX_BLOCK_X(...) \
+	do { \
+		if (bestBlock.x > 1 || bestGrid.x > 1 || bestBlock.y > 1 || bestGrid.y > 1) { \
+			LOG2(2, "\nBest configuration: block(%d, %d), grid(%d, %d) will be used without tuning.", bestBlock.x, bestBlock.y, bestGrid.x, bestGrid.y); \
+		} \
+		else { \
+			LOG0(""); \
+			LOG2(1, "Tunning %s kernel with maximum of %zd trials and %-.5f milliseconds precision...", opname, TRIALS, PRECISION); \
+			int min_precision_hits = MIN_PRECISION_HITS; \
+			int64 initBlocksPerGridX = 0, initBlocksPerGridY = 0; \
+			OPTIMIZEBLOCKS2D(initBlocksPerGridY, data_size_in_y, maxThreadsPerBlockY); \
+			OPTIMIZEBLOCKS2D(initBlocksPerGridX, data_size_in_x, maxThreadsPerBlockX); \
+			double minRuntime = double(UINTMAX_MAX); \
+			bool early_exit = false; \
+			size_t trials = 0; \
+			initBlocksPerGridY = (int64) ceil(initBlocksPerGridY / 1.0); \
+			initBlocksPerGridX = (int64) ceil(initBlocksPerGridX / 1.0); \
+			const int64 maxBlocksPerGridY = maxGPUBlocks2D << 1; \
+			const int64 maxBlocksPerGridX = maxGPUBlocks2D << 1; \
+			for (int64 blocksY = initBlocksPerGridY; (blocksY <= maxBlocksPerGridY) && !early_exit && trials < TRIALS; blocksY += 8, trials++) { \
+				for (int64 blocksX = initBlocksPerGridX; (blocksX <= maxBlocksPerGridX) && !early_exit && trials < TRIALS; blocksX += 8, trials++) { \
+					for (int64 threadsY = maxThreadsPerBlockY; (threadsY >= initThreadsPerBlockY) && !early_exit && trials < TRIALS; threadsY >>= 1) { \
+						const int64 threadsPerBlock = threadsX * threadsY; \
+						const size_t extended_shared_size = shared_size_yextend ? shared_element_bytes * threadsPerBlock : shared_element_bytes * threadsX; \
+						if (extended_shared_size > maxGPUSharedMem || threadsPerBlock > maxThreadsPerBlock) continue; \
+						/* Avoid deadloack due to warp divergence. */ \
+						if (threadsPerBlock % maxWarpSize != 0) continue; \
+						dim3 block((uint32)threadsX, (uint32)threadsY); \
+						dim3 grid((uint32)blocksX, (uint32)blocksY); \
+						double avgRuntime = 0; \
+						BENCHMARK_KERNEL(avgRuntime, NSAMPLES, extended_shared_size, ## __VA_ARGS__); \
+						if (PRINT_PROGRESS_2D) LOG2(1, "  GPU Time for block(x:%u, y:%u) and grid(x:%u, y:%u): %f ms", block.x, block.y, grid.x, grid.y, avgRuntime); fflush(stdout); fflush(stderr); \
+						BEST_CONFIG(avgRuntime, minRuntime, bestGrid, bestBlock, early_exit); \
+					} \
+				} \
+			} \
+			LOG2(1, "Best %s configuration found after %zd trials:", opname, trials); \
+			LOG2(1, " Block (%-4u, %4u)", bestBlock.x, bestBlock.y); \
+			LOG2(1, " Grid  (%-4u, %4u)", bestGrid.x, bestGrid.y); \
+			LOG2(1, " Min time: %.4f ms", minRuntime); \
+			LOG0(""); \
+			fflush(stdout); \
+		} \
+	} while(0)
+
+	#define TUNE_2D_FIX_GRID_X(...) \
 	do { \
 		if (bestBlock.x > 1 || bestGrid.x > 1 || bestBlock.y > 1 || bestGrid.y > 1) { \
 			LOG2(2, "\nBest configuration: block(%d, %d), grid(%d, %d) will be used without tuning.", bestBlock.x, bestBlock.y, bestGrid.x, bestGrid.y); \
@@ -369,7 +414,7 @@ namespace QuaSARQ {
 		TUNE_1D(pivots, measurements, refs, inv_xs, gate_index, num_qubits, num_words_minor);
 	}
 
-	void tune_transpose(void (*kernel)(Table*, Table*, Signs*, ConstTablePointer, ConstTablePointer, ConstSignsPointer, const size_t, const size_t, const size_t),
+	void tune_outplace_transpose(void (*kernel)(Table*, Table*, Signs*, ConstTablePointer, ConstTablePointer, ConstSignsPointer, const size_t, const size_t, const size_t),
 		const char* opname, 
 		dim3& bestBlock, dim3& bestGrid,
 		const size_t& shared_element_bytes, 
@@ -386,6 +431,39 @@ namespace QuaSARQ {
 		initThreadsPerBlockY = _initThreadsPerBlockY;
 	}
 
+	void tune_inplace_transpose(
+		void (*transpose_tiles_kernel)(Table*, Table*, const size_t, const size_t),
+		void (*swap_tiles_kernel)(Table*, Table*, const size_t, const size_t),
+		dim3& bestBlockTransposeBits, dim3& bestGridTransposeBits,
+		dim3& bestBlockTransposeSwap, dim3& bestGridTransposeSwap,
+		Table* xs, Table* zs,
+        const size_t& num_words_major, const size_t& num_words_minor) 
+	{
+		void (*kernel)(Table*, Table*, const size_t, const size_t);
+		int64 threadsX = WORD_BITS;
+		bool shared_size_yextend = true;
+		if (options.tune_transposebits) {
+			kernel = transpose_tiles_kernel;
+			dim3 bestBlock = bestBlockTransposeBits, bestGrid = bestGridTransposeBits;
+			const size_t shared_element_bytes = sizeof(word_std_t);
+			const size_t data_size_in_x = num_words_major;
+			const size_t data_size_in_y = num_words_minor;
+			const char* opname = "Transpose-tiles";
+			TUNE_2D_FIX_BLOCK_X(xs, zs, num_words_major, num_words_minor);
+			bestBlockTransposeBits = bestBlock, bestGridTransposeBits = bestGrid;
+		}
+		if (options.tune_transposeswap) {
+			kernel = swap_tiles_kernel;
+			dim3 bestBlock = bestBlockTransposeSwap, bestGrid = bestGridTransposeSwap;
+			const size_t shared_element_bytes = 2 * sizeof(word_std_t);
+			const size_t data_size_in_x = num_words_minor;
+			const size_t data_size_in_y = num_words_minor;
+			const char* opname = "Swap-tiles";
+			TUNE_2D_FIX_BLOCK_X(xs, zs, num_words_major, num_words_minor);
+			bestBlockTransposeSwap = bestBlock, bestGridTransposeSwap = bestGrid;
+		}
+	}
+
 	void tune_determinate(void (*kernel)(ConstPivotsPointer, bucket_t*, ConstRefsPointer, ConstTablePointer, ConstTablePointer, ConstSignsPointer, const size_t, const size_t, const size_t),
 		const char* opname, 
 		dim3& bestBlock, dim3& bestGrid,
@@ -399,7 +477,7 @@ namespace QuaSARQ {
 	{
 		const int64 _initThreadsPerBlockX = initThreadsPerBlockX;
 		initThreadsPerBlockX = 32;
-		TUNE_2D_FIX_X(pivots, measurements, refs, inv_xs, inv_zs, inv_ss, num_gates, num_qubits, num_words_minor);
+		TUNE_2D_FIX_GRID_X(pivots, measurements, refs, inv_xs, inv_zs, inv_ss, num_gates, num_qubits, num_words_minor);
 		initThreadsPerBlockX = _initThreadsPerBlockX;
 	}
 

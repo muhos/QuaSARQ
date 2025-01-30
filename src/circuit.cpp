@@ -192,7 +192,7 @@ void Simulator::generate() {
     CREPORTVAL, stats.circuit.max_parallel_gates, CNORMAL);
     if (options.write_rc)
         circuit_io.write(circuit, num_qubits, options.write_rc, stats);
-    if (options.verbose > 1)
+    if (options.verbose > 2)
         circuit.print();
 }
 
@@ -371,7 +371,7 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
         CREPORTVAL, stats.circuit.max_parallel_gates, CNORMAL, 
         CREPORTVAL, size_t(circuit.depth()), CNORMAL, 
         CREPORTVAL, stats.time.schedule, CNORMAL);
-    if (options.verbose > 1)
+    if (options.verbose > 2)
         circuit.print();
     return max_depth;
 }

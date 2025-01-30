@@ -12,6 +12,8 @@ namespace QuaSARQ {
 		CONFIG(step) \
         CONFIG(transpose2r) \
         CONFIG(transpose2c) \
+        CONFIG(transposebits) \
+        CONFIG(transposeswap) \
         CONFIG(allpivots) \
         CONFIG(newpivots) \
         CONFIG(multdeterminate) \
@@ -26,6 +28,8 @@ namespace QuaSARQ {
         CONFIG(step, 2, 128, 103, 52) \
         CONFIG(transpose2r, 2, 128, 103, 52) \
         CONFIG(transpose2c, 2, 128, 103, 52) \
+        CONFIG(transposebits, 0, 0, 0, 0) \
+        CONFIG(transposeswap, 0, 0, 0, 0) \
         CONFIG(allpivots, 2, 128, 103, 52) \
         CONFIG(newpivots, 2, 128, 103, 52) \
         CONFIG(multdeterminate, 0, 0, 0, 0) \

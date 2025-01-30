@@ -78,8 +78,14 @@ namespace QuaSARQ {
 					OPTIMIZEBLOCKS2D(GRID.y, DATALEN_Y, BLOCK.y); \
 				} \
             }
+		#define TRIM_Y_BLOCK_IN_DEBUG_MODE(BLOCK, GRID, DATALEN_Y) \
+            if (BLOCK.x * BLOCK.y == 1024) { \
+				BLOCK.y = (1024 / BLOCK.x) / 2; \
+				OPTIMIZEBLOCKS2D(GRID.y, DATALEN_Y, BLOCK.y); \
+            }
     #else
         #define TRIM_BLOCK_IN_DEBUG_MODE(BLOCK, GRID, DATALEN_X, DATALEN_Y)
+		#define TRIM_Y_BLOCK_IN_DEBUG_MODE(BLOCK, GRID, DATALEN_Y)
     #endif
 
     #define TRIM_GRID_IN_1D(DATALEN, DIM) \

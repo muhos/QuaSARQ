@@ -14,7 +14,7 @@ namespace QuaSARQ {
         return ((i << WORD_POWER) + j) * num_words_major + w;
     }
 
-    __device__ void transpose_tile(word_std_t* data, word_std_t* tile, size_t stride) {
+    __device__ void transpose_tile(word_std_t* data, word_std_t* tile, const size_t& tile_offset) {
         assert(blockDim.x == WORD_BITS);
 
         static const word_std_t masks[WORD_POWER] = {
@@ -49,7 +49,8 @@ namespace QuaSARQ {
         };
 
         uint32 tid = threadIdx.x;
-        tile[tid] = data[tid * stride];
+        uint32 shared_tid = threadIdx.y * blockDim.x + tid;
+        tile[shared_tid] = data[tid * tile_offset];
         __syncthreads();
 
         #pragma unroll
@@ -58,8 +59,8 @@ namespace QuaSARQ {
             const word_std_t imask = ~mask;
             const uint32 offset = offsets[pairs];
             if (!(tid & offset)) {
-                word_std_t& x = tile[tid];
-                word_std_t& y = tile[tid + offset];
+                word_std_t& x = tile[shared_tid];
+                word_std_t& y = tile[shared_tid + offset];
                 word_std_t a = x & mask;
                 word_std_t b = x & imask;
                 word_std_t c = y & mask;
@@ -70,46 +71,23 @@ namespace QuaSARQ {
             __syncthreads(); // ensure all threads see the updated tile before next pairs
         }
 
-        data[tid * stride] = tile[tid];
+        data[tid * tile_offset] = tile[shared_tid];
     }
 
-    template <word_std_t mask, word_std_t shift>
-    INLINE_DEVICE void inplace_transpose_8x8_pass(word_std_t* data, size_t stride) {
-        for (size_t k = 0; k < WORD_BITS; k++) {
-            if (k & shift) {
-                continue;
-            }
-            word_std_t& x = data[stride * k];
-            word_std_t& y = data[stride * (k + shift)];
-            word_std_t a = x & mask;
-            word_std_t b = x & ~mask;
-            word_std_t c = y & mask;
-            word_std_t d = y & ~mask;
-            x = a | (c << shift);
-            y = (b >> shift) | d;
-        }
-    }
-
-    INLINE_DEVICE void inplace_transpose_8x8(word_std_t* data, size_t stride) {
-        inplace_transpose_8x8_pass<0x55UL, 1>(data, stride);
-        inplace_transpose_8x8_pass<0x33UL, 2>(data, stride);
-        inplace_transpose_8x8_pass<0x0FUL, 4>(data, stride);
-    }
-
-    __global__ void transpose_kernel(Table* xs, Table* zs, const size_t num_words_major, const size_t num_words_minor) {
+    __global__ void transpose_tiles_kernel(Table* xs, Table* zs, const size_t num_words_major, const size_t num_words_minor) {
         word_std_t* shared = SharedMemory<word_std_t>();
         if (blockIdx.z == 0) {
             word_std_t* xdata = reinterpret_cast<word_std_t*>(xs->data());
             if (!blockIdx.x && !blockIdx.y && !threadIdx.x) {
                 xs->flag_rowmajor();
             }
-            for (size_t a = blockIdx.y; a < num_words_minor; a += gridDim.y) {
+            //for (size_t a = blockIdx.y; a < num_words_minor; a += gridDim.y) {
+            for_parallel_y(a, num_words_minor) {
                 for (size_t b = blockIdx.x; b < num_words_major; b += gridDim.x) {
                     // Inline transpose a tile of WORD_BITS words, each word has WORD_BITS bits.
                     // Transposition is done in shared memory.
                     const size_t tile_index = compute_block_index(a, 0, b, num_words_major);
                     transpose_tile(xdata + tile_index, shared, num_words_major);
-                    //inplace_transpose_8x8(data + tile_index, num_words_major);
                 }
             }
         }
@@ -118,65 +96,68 @@ namespace QuaSARQ {
             if (!blockIdx.x && !blockIdx.y && !threadIdx.x) {
                 zs->flag_rowmajor();
             }
-            for (size_t a = blockIdx.y; a < num_words_minor; a += gridDim.y) {
+            //for (size_t a = blockIdx.y; a < num_words_minor; a += gridDim.y) {
+            for_parallel_y(a, num_words_minor) {
                 for (size_t b = blockIdx.x; b < num_words_major; b += gridDim.x) {
                     // Inline transpose a tile of WORD_BITS words, each word has WORD_BITS bits.
                     // Transposition is done in shared memory.
                     const size_t tile_index = compute_block_index(a, 0, b, num_words_major);
                     transpose_tile(zdata + tile_index, shared, num_words_major);
-                    //inplace_transpose_8x8(data + tile_index, num_words_major);
                 }
             }
         }
         
     }
 
-    INLINE_DEVICE void swap_tiles(word_std_t* data, word_std_t* shared, const size_t& a, const size_t& b, const size_t& num_words_major, const size_t& offset) {
+    INLINE_DEVICE void swap_tile(word_std_t* data, word_std_t* shared, const size_t& a, const size_t& b, const size_t& num_words_major, const size_t& offset) {
         word_std_t* above_diagonal = shared;
-        word_std_t* below_diagonal = shared + WORD_BITS;
+        word_std_t* below_diagonal = shared + blockDim.y * blockDim.x;
         int tid = threadIdx.x;
+        int shared_tid = threadIdx.y * blockDim.x + threadIdx.x;
         const size_t a_idx = compute_block_index(a, tid, b + offset, num_words_major);
         const size_t b_idx = compute_block_index(b, tid, a + offset, num_words_major);
-        above_diagonal[tid] = data[a_idx];
-        below_diagonal[tid] = data[b_idx];
+        above_diagonal[shared_tid] = data[a_idx];
+        below_diagonal[shared_tid] = data[b_idx];
         __syncthreads();
-        data[a_idx] = below_diagonal[tid];
-        data[b_idx] = above_diagonal[tid];
+        data[a_idx] = below_diagonal[shared_tid];
+        data[b_idx] = above_diagonal[shared_tid];
     }
 
-    __global__ void swap_kernel(Table* xs, Table* zs, const size_t num_words_major, const size_t num_words_minor) {
+    __global__ void swap_tiles_kernel(Table* xs, Table* zs, const size_t num_words_major, const size_t num_words_minor) {
         word_std_t* shared = SharedMemory<word_std_t>();
         if (blockIdx.z == 0) {
             word_std_t* xdata = reinterpret_cast<word_std_t*>(xs->data());
-            for (size_t a = blockIdx.y; a < num_words_minor; a += gridDim.y) {
+            //for (size_t a = blockIdx.y; a < num_words_minor; a += gridDim.y) {
+            for_parallel_y(a, num_words_minor) {
                 for (size_t b = blockIdx.x; b < num_words_minor; b += gridDim.x) {
                     // Only swap words above diagonal
                     if (b > a) {
                         // Do the destabilizers.
-                        swap_tiles(xdata, shared, a, b, num_words_major, 0);
+                        swap_tile(xdata, shared, a, b, num_words_major, 0);
                         // Do the stabilizers.
-                        swap_tiles(xdata, shared, a, b, num_words_major, num_words_minor);
+                        swap_tile(xdata, shared, a, b, num_words_major, num_words_minor);
                     }
                 }
             }
         }
         if (blockIdx.z == 1) {      
             word_std_t* zdata = reinterpret_cast<word_std_t*>(zs->data());
-            for (size_t a = blockIdx.y; a < num_words_minor; a += gridDim.y) {
+            //for (size_t a = blockIdx.y; a < num_words_minor; a += gridDim.y) {
+            for_parallel_y(a, num_words_minor) {
                 for (size_t b = blockIdx.x; b < num_words_minor; b += gridDim.x) {
                     // Only swap words above diagonal
                     if (b > a) {
                         // Do the destabilizers.
-                        swap_tiles(zdata, shared, a, b, num_words_major, 0);
+                        swap_tile(zdata, shared, a, b, num_words_major, 0);
                         // Do the stabilizers.
-                        swap_tiles(zdata, shared, a, b, num_words_major, num_words_minor);
+                        swap_tile(zdata, shared, a, b, num_words_major, num_words_minor);
                     }
                 }
             }
         }
     }
 
-    __global__ void transpose_to_rowmajor(Table *inv_xs, Table *inv_zs, Signs *inv_ss,
+    __global__ void outplace_transpose_to_rowmajor(Table *inv_xs, Table *inv_zs, Signs *inv_ss,
                               const Table *  xs, const Table *  zs, const Signs *  ss,
                               const size_t num_words_major, const size_t num_words_minor,
                               const size_t num_qubits) {
@@ -218,7 +199,7 @@ namespace QuaSARQ {
         }
     }
 
-    __global__ void transpose_to_colmajor(Table* xs, Table* zs, Signs* ss, 
+    __global__ void outplace_transpose_to_colmajor(Table* xs, Table* zs, Signs* ss, 
                         ConstTablePointer inv_xs, ConstTablePointer inv_zs, ConstSignsPointer  inv_ss, 
                         const size_t num_words_major, const size_t num_words_minor, 
                         const size_t num_qubits) {
@@ -271,70 +252,77 @@ namespace QuaSARQ {
         dim3 currentblock, currentgrid;
 
         if (row_major) {
-            // if (options.tune_transpose2r) {
-            //     SYNCALL;
-            //     tune_transpose(transpose_to_rowmajor, "Transposing to row-major", 
-            //     bestblocktranspose2r, bestgridtranspose2r, 
-            //     0, false,        // shared size, extend?
-            //     num_words_major, // x-dim
-            //     2 * num_qubits,  // y-dim 
-            //     XZ_TABLE(inv_tableau), inv_tableau.signs(), XZ_TABLE(tableau), tableau.signs(), num_words_major, num_words_minor, num_qubits);
-            // }
-            // TRIM_BLOCK_IN_DEBUG_MODE(bestblocktranspose2r, bestgridtranspose2r, num_words_major, 2 * num_qubits);
-            // currentblock = bestblocktranspose2r, currentgrid = bestgridtranspose2r;
-            // TRIM_GRID_IN_XY(num_words_major, 2 * num_qubits);
-            // transpose_to_rowmajor <<< currentgrid, currentblock, 0, stream >>> (XZ_TABLE(inv_tableau), inv_tableau.signs(), XZ_TABLE(tableau), tableau.signs(), num_words_major, num_words_minor, num_qubits);
-            // if (options.sync) {
-            //     LASTERR("failed to launch transpose_to_rowmajor kernel");
-            //     SYNC(stream);
-            // }
 
-            //print_tableau(inv_tableau, -1, false);
+            cutimer.start(stream);
 
-            cudaEvent_t start, stop;
-            float elapsedTime;
+            if (options.tune_transpose2r) {
+                SYNCALL;
+                tune_outplace_transpose(outplace_transpose_to_rowmajor, "Transposing to row-major", 
+                bestblocktranspose2r, bestgridtranspose2r, 
+                0, false,        // shared size, extend?
+                num_words_major, // x-dim
+                2 * num_qubits,  // y-dim 
+                XZ_TABLE(inv_tableau), inv_tableau.signs(), XZ_TABLE(tableau), tableau.signs(), num_words_major, num_words_minor, num_qubits);
+            }
+            TRIM_BLOCK_IN_DEBUG_MODE(bestblocktranspose2r, bestgridtranspose2r, num_words_major, 2 * num_qubits);
+            currentblock = bestblocktranspose2r, currentgrid = bestgridtranspose2r;
+            TRIM_GRID_IN_XY(num_words_major, 2 * num_qubits);
+            outplace_transpose_to_rowmajor <<< currentgrid, currentblock, 0, stream >>> (XZ_TABLE(inv_tableau), inv_tableau.signs(), XZ_TABLE(tableau), tableau.signs(), num_words_major, num_words_minor, num_qubits);
+            if (options.sync) {
+                LASTERR("failed to launch outplace_transpose_to_rowmajor kernel");
+                SYNC(stream);
+            }
 
-            cudaEventCreate(&start);
-            cudaEventCreate(&stop);
+            cutimer.stop(stream);
+            printf("GPU Old Transpose Time: %f ms\n", cutimer.time());
 
-            CHECK(cudaEventRecord(start, 0));
+            cutimer.start(stream);
 
-            dim3 threadsPerBlock_transpose(WORD_BITS, 1, 1);
-            dim3 blocksPerGrid_transpose(num_words_major, num_words_minor, 2);
+            if (options.tune_transposebits || options.tune_transposeswap) {
+                SYNCALL;
+                tune_inplace_transpose(transpose_tiles_kernel, swap_tiles_kernel, 
+                bestblocktransposebits, bestgridtransposebits, 
+                bestblocktransposeswap, bestgridtransposeswap, 
+                XZ_TABLE(tableau), num_words_major, num_words_minor);
+            }
 
-            // to do xs and zs at once, we need z-dim.
+            // dim3 threadsPerBlock_transpose(WORD_BITS, 4, 1);
+            // dim3 blocksPerGrid_transpose(num_words_major, (num_words_minor + threadsPerBlock_transpose.y - 1) / threadsPerBlock_transpose.y, 2);
+            if (bestblocktransposebits.x != WORD_BITS) bestblocktransposebits.x = WORD_BITS;
+            TRIM_Y_BLOCK_IN_DEBUG_MODE(bestblocktransposebits, bestgridtransposebits, num_words_minor);
+            currentblock = bestblocktransposebits, currentgrid = bestgridtransposebits;
+            TRIM_GRID_IN_2D(num_words_minor, y);
+            OPTIMIZESHARED(transpose_smem_size, currentblock.y * currentblock.x, sizeof(word_std_t));
 
-            OPTIMIZESHARED(transpose_smem_size, WORD_BITS, sizeof(word_std_t));
-            transpose_kernel << <blocksPerGrid_transpose, threadsPerBlock_transpose, transpose_smem_size, stream >> > (XZ_TABLE(tableau), num_words_major, num_words_minor);
-            //transpose_kernel << <1, 1 >> > (XZ_TABLE(tableau), num_words_major, num_words_minor);
-            LASTERR("transpose failed");
-            CHECK(cudaDeviceSynchronize());
+            LOGN2(2, "Running transpose-tiles with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", 
+                bestblocktransposebits.x, bestblocktransposebits.y, bestgridtransposebits.x, bestgridtransposebits.y);
 
-            // printf("after transpose:\n");
-            // print_tableau(tableau, -1, false);
+            transpose_tiles_kernel << <currentgrid, currentblock, transpose_smem_size, stream >> > (XZ_TABLE(tableau), num_words_major, num_words_minor);
 
-            dim3 threadsPerBlock_swap(WORD_BITS, 1, 1);
-            dim3 blocksPerGrid_swap(num_words_minor, num_words_minor, 2);
+            LOGDONE(2, 4);
 
-            // To do destab and stab at once we need two blocks or threads in z-dim.
+            //dim3 threadsPerBlock_swap(WORD_BITS, 16, 1);
+            //dim3 blocksPerGrid_swap(num_words_minor, (num_words_minor + threadsPerBlock_swap.y - 1) / threadsPerBlock_swap.y, 2);
+            if (bestblocktransposeswap.x != WORD_BITS) bestblocktransposeswap.x = WORD_BITS;
+            TRIM_Y_BLOCK_IN_DEBUG_MODE(bestblocktransposeswap, bestgridtransposeswap, num_words_minor);
+            currentblock = bestblocktransposeswap, currentgrid = bestblocktransposeswap;
+            TRIM_GRID_IN_2D(num_words_minor, y);
+            OPTIMIZESHARED(swap_smem_size, currentblock.y * currentblock.x, 2 * sizeof(word_std_t));
 
-            OPTIMIZESHARED(swap_smem_size, WORD_BITS, 2 * sizeof(word_std_t));
-            swap_kernel << <blocksPerGrid_swap, threadsPerBlock_swap, swap_smem_size, stream >> > (XZ_TABLE(tableau), num_words_major, num_words_minor);
-            //swap_kernel << <1, 1 >> > (tableau.zdata(), num_words_major, num_words_minor);
+            LOGN2(2, "Running swap-tiles with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", 
+                bestblocktransposeswap.x, bestblocktransposeswap.y, bestgridtransposeswap.x, bestgridtransposeswap.y);
+
+            swap_tiles_kernel << <currentgrid, currentblock, swap_smem_size, stream >> > (XZ_TABLE(tableau), num_words_major, num_words_minor);
             LASTERR("swap failed");
 
-            CHECK(cudaEventRecord(stop, 0));
-            CHECK(cudaEventSynchronize(stop));
-            CHECK(cudaEventElapsedTime(&elapsedTime, start, stop));
-            printf("GPU Transpose Time: %f ms\n", elapsedTime);
-
-            cudaEventDestroy(start);
-            cudaEventDestroy(stop);
+            LOGDONE(2, 4);
+            cutimer.stop(stream);
+            printf("GPU New Transpose Time: %f ms\n", cutimer.time());
         }
         else {
             if (options.tune_transpose2c) {
                 SYNCALL;
-                tune_transpose(transpose_to_colmajor, "Transposing to column-major", 
+                tune_outplace_transpose(outplace_transpose_to_colmajor, "Transposing to column-major", 
                 bestblocktranspose2c, bestgridtranspose2c, 
                 0, false,        // shared size, extend?
                 num_words_major, // x-dim
@@ -344,9 +332,9 @@ namespace QuaSARQ {
             TRIM_BLOCK_IN_DEBUG_MODE(bestblocktranspose2c, bestgridtranspose2c, num_words_major, num_qubits);
             currentblock = bestblocktranspose2c, currentgrid = bestgridtranspose2c;     
             TRIM_GRID_IN_XY(num_words_major, num_qubits);
-            transpose_to_colmajor <<< currentgrid, currentblock, 0, stream >>> (XZ_TABLE(tableau), tableau.signs(), XZ_TABLE(inv_tableau), inv_tableau.signs(), num_words_major, num_words_minor, num_qubits);
+            outplace_transpose_to_colmajor <<< currentgrid, currentblock, 0, stream >>> (XZ_TABLE(tableau), tableau.signs(), XZ_TABLE(inv_tableau), inv_tableau.signs(), num_words_major, num_words_minor, num_qubits);
             if (options.sync) {
-                LASTERR("failed to launch transpose_to_colmajor kernel");
+                LASTERR("failed to launch outplace_transpose_to_colmajor kernel");
                 SYNC(stream);
             }
         }

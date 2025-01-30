@@ -285,6 +285,8 @@ namespace QuaSARQ {
             SYNC(copy_stream1);
             SYNC(copy_stream2);
 
+            LOGN2(2, "Running step with block(x:%u, y:%u) and grid(x:%u, y:%u) per depth level %d %s.. ", bestblockstep.x, bestblockstep.y, bestgridstep.x, bestgridstep.y, depth_level, sync ? "synchroneously" : "asynchroneously");
+
             // Run simulation.
             if (bestblockstep.x > maxWarpSize)
                 step_2D << < bestgridstep, bestblockstep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs());
@@ -295,6 +297,8 @@ namespace QuaSARQ {
                 LASTERR("failed to launch step kernel");
                 SYNC(kernel_stream);
             }
+
+            LOGDONE(2, 4);
 
             #endif // DEBUG MACRO.
 
