@@ -13,14 +13,18 @@ namespace QuaSARQ {
 		dim3 bestgrid ## CONFIG ## Fetched;
 
 	#define CONFIG2FETCHED_LOGIC(NAME) \
-		if (eq(line, #NAME)) { \
+	{ \
+		size_t count = 0; \
+		if (count = hasstr(line, #NAME)) { \
+			line += count; \
 			bestgrid ## NAME ## Fetched.x = toInteger(line); \
 			bestgrid ## NAME ## Fetched.y = toInteger(line); \
 			bestblock ## NAME ## Fetched.x = toInteger(line); \
 			bestblock ## NAME ## Fetched.y = toInteger(line); \
 			fetched ## NAME = true; \
 			eatWS(line); \
-		}
+		} \
+	}
 
 	#define CONFIG2APPLY(CONFIG) \
 		if (fetched ## CONFIG) { \
@@ -75,7 +79,10 @@ void Simulator::register_config() {
 	FOREACH_CONFIG(CONFIG2BOOL);
 	char* line = buffer;
     while (line[0] != '\0') {
-        //printf("%s\n", line);
+		if (line[0] == '\001' || line[0] == '\003') {
+			eatLine(line);
+			continue;
+		} 
         config_qubits = toInteger(line);
         if (!config_qubits)
             LOGERROR("Expected non-zero number of qubits."); 

@@ -56,7 +56,7 @@ namespace QuaSARQ {
         };
 
         void register_config();
-        bool open_config(arg_t file_mode = "r");
+        bool open_config(arg_t file_mode = "rb");
         void close_config();
         void create_streams(cudaStream_t*& streams);
 
@@ -89,7 +89,7 @@ namespace QuaSARQ {
         // Do measurements in a single simulation step.
         void transpose(const bool& row_major, const cudaStream_t& stream);
         void reset_pivots(const size_t& num_pivots, const cudaStream_t& stream);
-        void find_pivots(const size_t& num_pivots_or_index, const bool& bulky, const cudaStream_t& stream);
+        void find_pivots(Tableau<DeviceAllocator>& tab, const size_t& num_pivots_or_index, const bool& bulky, const cudaStream_t& stream);
         void initialize_determinate(const size_t& num_gates, const cudaStream_t& stream);
         void measure_determinate(const size_t& num_gates_or_index, const bool& bulku, const cudaStream_t& stream);
         void measure_indeterminate(const size_t& gate_index, const cudaStream_t& stream = 0);

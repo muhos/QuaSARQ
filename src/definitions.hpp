@@ -55,7 +55,7 @@ namespace QuaSARQ {
 	inline uint32 toInteger			(char*& str)
 	{
 		eatWS(str);
-		if (!isDigit(*str)) LOGERROR("expected a digit but %c is found", *str);
+		if (!isDigit(*str)) LOGERROR("expected a digit but 0x%0X is found", *str);
 		uint32 n = 0;
 		while (isDigit(*str)) n = n * 10 + (*str++ - '0');
 		return n;
@@ -90,7 +90,7 @@ namespace QuaSARQ {
 		}
 		return true;
 	}
-	inline bool		hasstr			(const char* in, const char* ref)
+	inline size_t	hasstr			(const char* in, const char* ref)
 	{
 		size_t count = 0;
 		const size_t reflen = strlen(ref);
@@ -101,9 +101,9 @@ namespace QuaSARQ {
 				count++;
 			in++;
 			if (count == reflen)
-				return true;
+				return count;
 		}
-		return false;
+		return 0;
 	}
 	inline bool canAccess(const char* path, struct stat& st)
 	{

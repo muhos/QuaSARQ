@@ -237,6 +237,10 @@ namespace QuaSARQ {
             }
         }
 
+        INLINE_ALL void flag_orientation(const bool& row_major) {
+            _is_rowmajor = row_major;
+        }
+
         INLINE_ALL void set_stab(const bool& val) { _is_stab_valid = val; }
 
         INLINE_ALL bool is_stab_valid() const { return _is_stab_valid; }

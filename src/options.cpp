@@ -46,7 +46,7 @@ namespace QuaSARQ {
 
     INT64_OPT opt_tuneinitial_qubits("tune-initial-qubits", "set the initial number of qubits to start with in the tuner", 1000, INT64R(1, UINT32_MAX));
     INT64_OPT opt_tunestep_qubits("tune-step-qubits", "set the increase of qubits", 1000, INT64R(1, UINT32_MAX));
-    INT64_OPT opt_num_qubits("qubits", "set number of qubits for random generation (if no input file given)", 2000, INT64R(1, UINT32_MAX));
+    INT64_OPT opt_num_qubits("qubits", "set number of qubits for random generation (if no input file given)", 1000, INT64R(1, UINT32_MAX));
     INT64_OPT opt_depth("depth", "set circuit depth for random generation (if no input file given)", 2, INT64R(1, UINT32_MAX));
 
     FOREACH_GATE(GATE2INPUT);

@@ -39,9 +39,10 @@ int main(int argc, char** argv) {
 			delete equivalence;
 		}
 		else if (options.tuner_en) {
-			Tuner tuner;
-			tuner.run();
+			Tuner* tuner = has_input_file ? new Tuner(string(argv[1])) : new Tuner();
+			tuner->run();
 			LOGHEADER(0, 3, "Exit");
+			delete tuner;
 		}
         else {
 			Simulator* sim = has_input_file ? new Simulator(string(argv[1])) : new Simulator();

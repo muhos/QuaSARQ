@@ -476,6 +476,7 @@ namespace QuaSARQ {
         }
 
         void copy_to_host(Table* h_xs, Table* h_zs, Signs* h_ss = nullptr) {
+            SYNCALL;
             if (h_xs != nullptr) {
                 h_xs->alloc_host(_num_qubits_padded, _num_words_major, _num_words_minor);
                 CHECK(cudaMemcpy(h_xs->data(), _xs_data, sizeof(word_t) * _num_words, cudaMemcpyDeviceToHost));

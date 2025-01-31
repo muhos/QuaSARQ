@@ -123,12 +123,12 @@ namespace QuaSARQ {
         const size_t& num_words_major, const size_t& num_words_minor, const size_t& num_qubits);
 
 	void tune_inplace_transpose(
-		void (*transpose_tiles_kernel)(Table*, Table*, const size_t, const size_t),
+		void (*transpose_tiles_kernel)(Table*, Table*, const size_t, const size_t, const bool),
 		void (*swap_tiles_kernel)(Table*, Table*, const size_t, const size_t),
 		dim3& bestBlockTransposeBits, dim3& bestGridTransposeBits,
 		dim3& bestBlockTransposeSwap, dim3& bestGridTransposeSwap,
 		Table* xs, Table* zs,
-        const size_t& num_words_major, const size_t& num_words_minor);
+        const size_t& num_words_major, const size_t& num_words_minor, const bool& row_major);
 
 	void tune_determinate(void (*kernel)(ConstPivotsPointer, bucket_t*, ConstRefsPointer, ConstTablePointer, ConstTablePointer, ConstSignsPointer, const size_t, const size_t, const size_t),
 		const char* opname, dim3& bestBlock, dim3& bestGrid, const size_t& shared_element_bytes, const bool& shared_size_yextend,
@@ -163,6 +163,8 @@ namespace QuaSARQ {
 	public:
 
 		Tuner() : Simulator() { ts.recover = false; }
+
+		Tuner(const string& path) : Simulator(path) { ts.recover = false; }
 		
 		void write();
 		void run();

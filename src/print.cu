@@ -41,6 +41,7 @@ namespace QuaSARQ {
 
     NOINLINE_ALL void print_table(const Table& t) {
         size_t bits = t.num_words_minor() * WORD_BITS;
+        LOGGPU("     ");
         for (size_t q = 0; q < bits; q++) {
             if (q > 0 && q % WORD_BITS == 0)
                 LOGGPU("  ");

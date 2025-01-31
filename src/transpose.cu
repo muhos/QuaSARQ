@@ -74,12 +74,12 @@ namespace QuaSARQ {
         data[tid * tile_offset] = tile[shared_tid];
     }
 
-    __global__ void transpose_tiles_kernel(Table* xs, Table* zs, const size_t num_words_major, const size_t num_words_minor) {
+    __global__ void transpose_tiles_kernel(Table* xs, Table* zs, const size_t num_words_major, const size_t num_words_minor, const bool row_major) {
         word_std_t* shared = SharedMemory<word_std_t>();
         if (blockIdx.z == 0) {
             word_std_t* xdata = reinterpret_cast<word_std_t*>(xs->data());
             if (!blockIdx.x && !blockIdx.y && !threadIdx.x) {
-                xs->flag_rowmajor();
+                xs->flag_orientation(row_major);
             }
             //for (size_t a = blockIdx.y; a < num_words_minor; a += gridDim.y) {
             for_parallel_y(a, num_words_minor) {
@@ -94,7 +94,7 @@ namespace QuaSARQ {
         if (blockIdx.z == 1) {
             word_std_t* zdata = reinterpret_cast<word_std_t*>(zs->data());
             if (!blockIdx.x && !blockIdx.y && !threadIdx.x) {
-                zs->flag_rowmajor();
+                zs->flag_orientation(row_major);
             }
             //for (size_t a = blockIdx.y; a < num_words_minor; a += gridDim.y) {
             for_parallel_y(a, num_words_minor) {
@@ -251,93 +251,77 @@ namespace QuaSARQ {
         const size_t num_words_major = inv_tableau.num_words_major();
         dim3 currentblock, currentgrid;
 
-        if (row_major) {
-
-            cutimer.start(stream);
-
-            if (options.tune_transpose2r) {
-                SYNCALL;
-                tune_outplace_transpose(outplace_transpose_to_rowmajor, "Transposing to row-major", 
-                bestblocktranspose2r, bestgridtranspose2r, 
-                0, false,        // shared size, extend?
-                num_words_major, // x-dim
-                2 * num_qubits,  // y-dim 
-                XZ_TABLE(inv_tableau), inv_tableau.signs(), XZ_TABLE(tableau), tableau.signs(), num_words_major, num_words_minor, num_qubits);
-            }
-            TRIM_BLOCK_IN_DEBUG_MODE(bestblocktranspose2r, bestgridtranspose2r, num_words_major, 2 * num_qubits);
-            currentblock = bestblocktranspose2r, currentgrid = bestgridtranspose2r;
-            TRIM_GRID_IN_XY(num_words_major, 2 * num_qubits);
-            outplace_transpose_to_rowmajor <<< currentgrid, currentblock, 0, stream >>> (XZ_TABLE(inv_tableau), inv_tableau.signs(), XZ_TABLE(tableau), tableau.signs(), num_words_major, num_words_minor, num_qubits);
-            if (options.sync) {
-                LASTERR("failed to launch outplace_transpose_to_rowmajor kernel");
-                SYNC(stream);
-            }
-
-            cutimer.stop(stream);
-            printf("GPU Old Transpose Time: %f ms\n", cutimer.time());
-
-            cutimer.start(stream);
-
-            if (options.tune_transposebits || options.tune_transposeswap) {
-                SYNCALL;
-                tune_inplace_transpose(transpose_tiles_kernel, swap_tiles_kernel, 
-                bestblocktransposebits, bestgridtransposebits, 
-                bestblocktransposeswap, bestgridtransposeswap, 
-                XZ_TABLE(tableau), num_words_major, num_words_minor);
-            }
-
-            // dim3 threadsPerBlock_transpose(WORD_BITS, 4, 1);
-            // dim3 blocksPerGrid_transpose(num_words_major, (num_words_minor + threadsPerBlock_transpose.y - 1) / threadsPerBlock_transpose.y, 2);
-            if (bestblocktransposebits.x != WORD_BITS) bestblocktransposebits.x = WORD_BITS;
-            TRIM_Y_BLOCK_IN_DEBUG_MODE(bestblocktransposebits, bestgridtransposebits, num_words_minor);
-            currentblock = bestblocktransposebits, currentgrid = bestgridtransposebits;
-            TRIM_GRID_IN_2D(num_words_minor, y);
-            OPTIMIZESHARED(transpose_smem_size, currentblock.y * currentblock.x, sizeof(word_std_t));
-
-            LOGN2(2, "Running transpose-tiles with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", 
-                bestblocktransposebits.x, bestblocktransposebits.y, bestgridtransposebits.x, bestgridtransposebits.y);
-
-            transpose_tiles_kernel << <currentgrid, currentblock, transpose_smem_size, stream >> > (XZ_TABLE(tableau), num_words_major, num_words_minor);
-
-            LOGDONE(2, 4);
-
-            //dim3 threadsPerBlock_swap(WORD_BITS, 16, 1);
-            //dim3 blocksPerGrid_swap(num_words_minor, (num_words_minor + threadsPerBlock_swap.y - 1) / threadsPerBlock_swap.y, 2);
-            if (bestblocktransposeswap.x != WORD_BITS) bestblocktransposeswap.x = WORD_BITS;
-            TRIM_Y_BLOCK_IN_DEBUG_MODE(bestblocktransposeswap, bestgridtransposeswap, num_words_minor);
-            currentblock = bestblocktransposeswap, currentgrid = bestblocktransposeswap;
-            TRIM_GRID_IN_2D(num_words_minor, y);
-            OPTIMIZESHARED(swap_smem_size, currentblock.y * currentblock.x, 2 * sizeof(word_std_t));
-
-            LOGN2(2, "Running swap-tiles with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", 
-                bestblocktransposeswap.x, bestblocktransposeswap.y, bestgridtransposeswap.x, bestgridtransposeswap.y);
-
-            swap_tiles_kernel << <currentgrid, currentblock, swap_smem_size, stream >> > (XZ_TABLE(tableau), num_words_major, num_words_minor);
-            LASTERR("swap failed");
-
-            LOGDONE(2, 4);
-            cutimer.stop(stream);
-            printf("GPU New Transpose Time: %f ms\n", cutimer.time());
+        if (options.tune_transposebits || options.tune_transposeswap) {
+            SYNCALL;
+            tune_inplace_transpose(transpose_tiles_kernel, swap_tiles_kernel, 
+            bestblocktransposebits, bestgridtransposebits, 
+            bestblocktransposeswap, bestgridtransposeswap, 
+            XZ_TABLE(tableau), num_words_major, num_words_minor, row_major);
         }
-        else {
-            if (options.tune_transpose2c) {
-                SYNCALL;
-                tune_outplace_transpose(outplace_transpose_to_colmajor, "Transposing to column-major", 
-                bestblocktranspose2c, bestgridtranspose2c, 
-                0, false,        // shared size, extend?
-                num_words_major, // x-dim
-                num_qubits,      // y-dim 
-                XZ_TABLE(tableau), tableau.signs(), XZ_TABLE(inv_tableau), inv_tableau.signs(), num_words_major, num_words_minor, num_qubits);
-            }
-            TRIM_BLOCK_IN_DEBUG_MODE(bestblocktranspose2c, bestgridtranspose2c, num_words_major, num_qubits);
-            currentblock = bestblocktranspose2c, currentgrid = bestgridtranspose2c;     
-            TRIM_GRID_IN_XY(num_words_major, num_qubits);
-            outplace_transpose_to_colmajor <<< currentgrid, currentblock, 0, stream >>> (XZ_TABLE(tableau), tableau.signs(), XZ_TABLE(inv_tableau), inv_tableau.signs(), num_words_major, num_words_minor, num_qubits);
-            if (options.sync) {
-                LASTERR("failed to launch outplace_transpose_to_colmajor kernel");
-                SYNC(stream);
-            }
+        bestgridtransposebits.z = 2;
+        if (bestblocktransposebits.x != WORD_BITS) bestblocktransposebits.x = WORD_BITS;
+        TRIM_Y_BLOCK_IN_DEBUG_MODE(bestblocktransposebits, bestgridtransposebits, num_words_minor);
+        currentblock = bestblocktransposebits, currentgrid = bestgridtransposebits;
+        TRIM_GRID_IN_2D(num_words_minor, y);
+        OPTIMIZESHARED(transpose_smem_size, currentblock.y * currentblock.x, sizeof(word_std_t));
+        LOGN2(2, "Running transpose-tiles with block(x:%u, y:%u) and grid(x:%u, y:%u, z:%u).. ", 
+            bestblocktransposebits.x, bestblocktransposebits.y, bestgridtransposebits.x, bestgridtransposebits.y, bestgridtransposebits.z);
+        transpose_tiles_kernel << <currentgrid, currentblock, transpose_smem_size, stream >> > (XZ_TABLE(tableau), num_words_major, num_words_minor, row_major);
+        LOGDONE(2, 4);
+        
+        bestgridtransposeswap.z = 2;
+        if (bestblocktransposeswap.x != WORD_BITS) bestblocktransposeswap.x = WORD_BITS;
+        TRIM_Y_BLOCK_IN_DEBUG_MODE(bestblocktransposeswap, bestgridtransposeswap, num_words_minor);
+        currentblock = bestblocktransposeswap, currentgrid = bestblocktransposeswap;
+        TRIM_GRID_IN_2D(num_words_minor, y);
+        OPTIMIZESHARED(swap_smem_size, currentblock.y * currentblock.x, 2 * sizeof(word_std_t));
+        LOGN2(2, "Running swap-tiles with block(x:%u, y:%u) and grid(x:%u, y:%u, z:%u).. ", 
+            bestblocktransposeswap.x, bestblocktransposeswap.y, bestgridtransposeswap.x, bestgridtransposeswap.y, bestgridtransposeswap.z);
+        swap_tiles_kernel << <currentgrid, currentblock, swap_smem_size, stream >> > (XZ_TABLE(tableau), num_words_major, num_words_minor);
+        LOGDONE(2, 4);
+        if (options.sync) {
+            LASTERR("failed to launch inline transpose kernels");
+            SYNC(stream);
         }
+
+        // if (row_major) {
+        //     if (options.tune_transpose2r) {
+        //         SYNCALL;
+        //         tune_outplace_transpose(outplace_transpose_to_rowmajor, "Transposing to row-major", 
+        //         bestblocktranspose2r, bestgridtranspose2r, 
+        //         0, false,        // shared size, extend?
+        //         num_words_major, // x-dim
+        //         2 * num_qubits,  // y-dim 
+        //         XZ_TABLE(inv_tableau), inv_tableau.signs(), XZ_TABLE(tableau), tableau.signs(), num_words_major, num_words_minor, num_qubits);
+        //     }
+        //     TRIM_BLOCK_IN_DEBUG_MODE(bestblocktranspose2r, bestgridtranspose2r, num_words_major, 2 * num_qubits);
+        //     currentblock = bestblocktranspose2r, currentgrid = bestgridtranspose2r;
+        //     TRIM_GRID_IN_XY(num_words_major, 2 * num_qubits);
+        //     outplace_transpose_to_rowmajor <<< currentgrid, currentblock, 0, stream >>> (XZ_TABLE(inv_tableau), inv_tableau.signs(), XZ_TABLE(tableau), tableau.signs(), num_words_major, num_words_minor, num_qubits);
+        //     if (options.sync) {
+        //         LASTERR("failed to launch outplace_transpose_to_rowmajor kernel");
+        //         SYNC(stream);
+        //     }
+        // }
+        // else {
+        //     if (options.tune_transpose2c) {
+        //         SYNCALL;
+        //         tune_outplace_transpose(outplace_transpose_to_colmajor, "Transposing to column-major", 
+        //         bestblocktranspose2c, bestgridtranspose2c, 
+        //         0, false,        // shared size, extend?
+        //         num_words_major, // x-dim
+        //         num_qubits,      // y-dim 
+        //         XZ_TABLE(tableau), tableau.signs(), XZ_TABLE(inv_tableau), inv_tableau.signs(), num_words_major, num_words_minor, num_qubits);
+        //     }
+        //     TRIM_BLOCK_IN_DEBUG_MODE(bestblocktranspose2c, bestgridtranspose2c, num_words_major, num_qubits);
+        //     currentblock = bestblocktranspose2c, currentgrid = bestgridtranspose2c;     
+        //     TRIM_GRID_IN_XY(num_words_major, num_qubits);
+        //     outplace_transpose_to_colmajor <<< currentgrid, currentblock, 0, stream >>> (XZ_TABLE(tableau), tableau.signs(), XZ_TABLE(inv_tableau), inv_tableau.signs(), num_words_major, num_words_minor, num_qubits);
+        //     if (options.sync) {
+        //         LASTERR("failed to launch outplace_transpose_to_colmajor kernel");
+        //         SYNC(stream);
+        //     }
+        // }
     }
 
 }

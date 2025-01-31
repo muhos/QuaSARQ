@@ -45,6 +45,42 @@ void Checker::check_random_circuit() {
     LOG2(1, "%sVERIFIED%s", CGREEN, CNORMAL);
 }
 
+inline bool verify_inline_transpose(const Table& x1, const Table& z1, const Table& x2, const Table& z2) {
+    if (x1.size() != x2.size()) return false;
+    if (z1.size() != z2.size()) return false;
+    for (auto i = 0; i < x1.size(); i++) {
+        if (x1[i] != x2[i]) {
+            LOGERRORN("incorrect transpose of x1 or x2.");
+            return false;
+        }
+    }
+    for (auto i = 0; i < z1.size(); i++) {
+        if (z1[i] != z2[i]) {
+            LOGERRORN("incorrect transpose of z1 or z2.");
+            return false;
+        }
+    }
+    return true;
+}
+
+void Checker::check_transpose() {
+    Table in_xs, in_zs;
+    tableau.copy_to_host(&in_xs, &in_zs);
+
+    // printf("Before:\n");
+    // print_tableau(tableau, -1, false);
+
+    transpose(true, 0);
+    transpose(true, 0);
+
+    // printf("After:\n");
+    // print_tableau(tableau, -1, false);
+
+    Table out_xs, out_zs;
+    tableau.copy_to_host(&out_xs, &out_zs);
+    verify_inline_transpose(in_xs, out_xs, in_zs, out_zs);
+}
+
 void Checker::check_integrity() {
     if (!options.check_integrity) return;
     LOG2(1, "");

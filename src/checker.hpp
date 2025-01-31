@@ -22,6 +22,7 @@ namespace QuaSARQ {
         bool check_identity(const size_t& offset_per_partition, const size_t& num_qubits_per_partition);
 		void check_parallel_gates();
 		void check_random_circuit();
+		void check_transpose();
 		void check_integrity();
 		void run();
 

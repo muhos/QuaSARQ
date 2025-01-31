@@ -24,16 +24,17 @@ namespace QuaSARQ {
 
 	#define CONFIG2STRING(CONFIG) \
 		if (options.tune_ ## CONFIG) { \
+			config += " "; \
 			config += #CONFIG; \
 			config += " "; \
-			config += std::to_string(bestgrid ## CONFIG.x) + " " + std::to_string(bestgrid ## CONFIG.y) + " "; \
-			config += std::to_string(bestblock ## CONFIG.x) + " " + std::to_string(bestblock ## CONFIG.y) + " "; \
+			config += std::to_string(bestgrid ## CONFIG.x) + " " + std::to_string(bestgrid ## CONFIG.y); \
+			config += " "; \
+			config += std::to_string(bestblock ## CONFIG.x) + " " + std::to_string(bestblock ## CONFIG.y); \
 		}
 
 	void Tuner::write() {
-		string config = std::to_string(num_qubits) + " ";
+		string config = std::to_string(num_qubits);
 		FOREACH_CONFIG(CONFIG2STRING);
-		const char* str = config.c_str();
 		config += "\n";
 		fwrite(config.c_str(), 1, config.size(), config_file);
 	}
@@ -51,7 +52,7 @@ namespace QuaSARQ {
 	}
 
 	void Tuner::run() {
-		if (!open_config("w"))
+		if (!open_config("wb"))
 			LOGERROR("cannot tune without opening a configuration file");
 		// Create a tableau in GPU memory for the maximum qubits.
 		const size_t max_num_qubits = num_qubits;
@@ -75,6 +76,8 @@ namespace QuaSARQ {
 			write();
 			// Clean old circuit.
 			circuit.destroy();
+			if (!circuit_path.empty()) 
+				break;
 			// Decrease qubits.
 			num_qubits = num_qubits >= options.tuner_step_qubits ? num_qubits - options.tuner_step_qubits : 0;
 		} while (num_qubits >= options.tuner_initial_qubits);
@@ -189,7 +192,7 @@ namespace QuaSARQ {
 			LOG0(""); \
 			LOG2(1, "Tunning %s kernel with maximum of %zd trials and %-.5f milliseconds precision...", opname, TRIALS, PRECISION); \
 			int min_precision_hits = MIN_PRECISION_HITS; \
-			const bool x_warped = hasstr(opname, "warped"); \
+			const bool x_warped = (bool) hasstr(opname, "warped"); \
 			int64 initBlocksPerGridX = 0, initBlocksPerGridY = 0; \
 			OPTIMIZEBLOCKS2D(initBlocksPerGridY, data_size_in_y, maxThreadsPerBlockY); \
 			OPTIMIZEBLOCKS2D(initBlocksPerGridX, data_size_in_x, maxThreadsPerBlockX); \
@@ -229,7 +232,7 @@ namespace QuaSARQ {
 		} \
 	} while(0)
 
-	#define TUNE_2D_FIX_BLOCK_X(...) \
+	#define TUNE_2D_FIX_BLOCK_X(GRID_Z, ...) \
 	do { \
 		if (bestBlock.x > 1 || bestGrid.x > 1 || bestBlock.y > 1 || bestGrid.y > 1) { \
 			LOG2(2, "\nBest configuration: block(%d, %d), grid(%d, %d) will be used without tuning.", bestBlock.x, bestBlock.y, bestGrid.x, bestGrid.y); \
@@ -257,7 +260,7 @@ namespace QuaSARQ {
 						/* Avoid deadloack due to warp divergence. */ \
 						if (threadsPerBlock % maxWarpSize != 0) continue; \
 						dim3 block((uint32)threadsX, (uint32)threadsY); \
-						dim3 grid((uint32)blocksX, (uint32)blocksY); \
+						dim3 grid((uint32)blocksX, (uint32)blocksY, (uint32)GRID_Z); \
 						double avgRuntime = 0; \
 						BENCHMARK_KERNEL(avgRuntime, NSAMPLES, extended_shared_size, ## __VA_ARGS__); \
 						if (PRINT_PROGRESS_2D) LOG2(1, "  GPU Time for block(x:%u, y:%u) and grid(x:%u, y:%u): %f ms", block.x, block.y, grid.x, grid.y, avgRuntime); fflush(stdout); fflush(stderr); \
@@ -432,34 +435,33 @@ namespace QuaSARQ {
 	}
 
 	void tune_inplace_transpose(
-		void (*transpose_tiles_kernel)(Table*, Table*, const size_t, const size_t),
+		void (*transpose_tiles_kernel)(Table*, Table*, const size_t, const size_t, const bool),
 		void (*swap_tiles_kernel)(Table*, Table*, const size_t, const size_t),
 		dim3& bestBlockTransposeBits, dim3& bestGridTransposeBits,
 		dim3& bestBlockTransposeSwap, dim3& bestGridTransposeSwap,
 		Table* xs, Table* zs,
-        const size_t& num_words_major, const size_t& num_words_minor) 
+        const size_t& num_words_major, const size_t& num_words_minor, const bool& row_major) 
 	{
-		void (*kernel)(Table*, Table*, const size_t, const size_t);
 		int64 threadsX = WORD_BITS;
 		bool shared_size_yextend = true;
 		if (options.tune_transposebits) {
-			kernel = transpose_tiles_kernel;
+			void (*kernel)(Table*, Table*, const size_t, const size_t, const bool) = transpose_tiles_kernel;
 			dim3 bestBlock = bestBlockTransposeBits, bestGrid = bestGridTransposeBits;
 			const size_t shared_element_bytes = sizeof(word_std_t);
 			const size_t data_size_in_x = num_words_major;
-			const size_t data_size_in_y = num_words_minor;
+			const size_t data_size_in_y = 1;
 			const char* opname = "Transpose-tiles";
-			TUNE_2D_FIX_BLOCK_X(xs, zs, num_words_major, num_words_minor);
+			TUNE_2D_FIX_BLOCK_X(2, xs, zs, num_words_major, num_words_minor, row_major);
 			bestBlockTransposeBits = bestBlock, bestGridTransposeBits = bestGrid;
 		}
 		if (options.tune_transposeswap) {
-			kernel = swap_tiles_kernel;
+			void (*kernel)(Table*, Table*, const size_t, const size_t) = swap_tiles_kernel;
 			dim3 bestBlock = bestBlockTransposeSwap, bestGrid = bestGridTransposeSwap;
 			const size_t shared_element_bytes = 2 * sizeof(word_std_t);
 			const size_t data_size_in_x = num_words_minor;
-			const size_t data_size_in_y = num_words_minor;
+			const size_t data_size_in_y = 1;
 			const char* opname = "Swap-tiles";
-			TUNE_2D_FIX_BLOCK_X(xs, zs, num_words_major, num_words_minor);
+			TUNE_2D_FIX_BLOCK_X(2, xs, zs, num_words_major, num_words_minor);
 			bestBlockTransposeSwap = bestBlock, bestGridTransposeSwap = bestGrid;
 		}
 	}

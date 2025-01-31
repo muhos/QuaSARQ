@@ -202,46 +202,18 @@ namespace QuaSARQ {;
         // Reset all pivots.
         reset_pivots(num_gates_per_window, kernel_stream2);
 
-        // Transpose the tableau into row-major format.
-        Table in_xs, in_zs;
-        tableau.copy_to_host(&in_xs, &in_zs);
-
-        // printf("Before:\n");
-        // print_tableau(tableau, -1, false);
-
-        transpose(true, kernel_stream1);
         transpose(true, kernel_stream1);
 
-        // printf("After:\n");
-        // print_tableau(tableau, -1, false);
+        // Sync copying gates to device.
+        SYNC(copy_stream1);
+        SYNC(copy_stream2);
+        // Sync resetting pivots.
+        SYNC(kernel_stream2);
 
-        Table h_xs, h_zs;
-        tableau.copy_to_host(&h_xs, &h_zs);
-
-        bool incorrect = false;
-        for (auto i = 0; i < tableau.num_words_per_table(); i++) {
-            if (h_xs[i] != in_xs[i]) {
-                incorrect = true;
-                printf("Incorrect transpose of xs\n");
-                break;
-            }
-            if (h_zs[i] != in_zs[i]) {
-                incorrect = true;
-                printf("Incorrect transpose of zs\n");
-                break;
-            }
-        }
-
-        exit(0);
-
-        //// Sync copying gates to device.
-        //SYNC(copy_stream1);
-        //SYNC(copy_stream2);
-        //// Sync resetting pivots.
-        //SYNC(kernel_stream2);
-
-        //// Find all pivots if exist.
-        //find_pivots(num_gates_per_window, true, kernel_stream1);
+        // Find all pivots if exist.
+        bestblockallpivots.x = 32;
+        bestblockallpivots.y = 16;
+        find_pivots(tableau, num_gates_per_window, true, kernel_stream1);
 
         //// Initialize determinate measurements with tableau signs.
         //initialize_determinate_measurements <<<bestgridreset, bestblockreset, 0, kernel_stream1>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), inv_tableau.xtable(), inv_tableau.signs(), num_gates_per_window, num_qubits, num_words_minor);
@@ -250,15 +222,20 @@ namespace QuaSARQ {;
         //    SYNC(kernel_stream1);
         //}
 
-        //// Sync finding pivots.
-        //SYNC(kernel_stream1);
+        // Sync finding pivots.
+        SYNC(kernel_stream1);
 
-        //// Copy pivots to host.
-        //gpu_circuit.copypivots(copy_stream1, num_gates_per_window);
-        //if (options.sync) {
-        //    LASTERR("failed to copy pivots");
-        //    SYNC(copy_stream1);
-        //}
+        print_tableau(tableau, depth_level, false);
+
+        // Copy pivots to host.
+        gpu_circuit.copypivots(copy_stream1, num_gates_per_window);
+        if (options.sync) {
+           LASTERR("failed to copy pivots");
+           SYNC(copy_stream1);
+        }
+
+
+        SYNC(copy_stream1); gpu_circuit.print_pivots();
         //
         //// Measure all determinate.
         //measure_determinate(num_gates_per_window, true, kernel_stream1);
@@ -402,7 +379,7 @@ namespace QuaSARQ {;
                 }
                 // Find new pivot.
                 else {
-                    find_pivots(i, false, stream);
+                    find_pivots(inv_tableau, i, false, stream);
                     gpu_circuit.copypivotto(new_pivot, i, stream);
                     SYNC(stream);
                     assert(new_pivot.indeterminate != curr_pivot.indeterminate);

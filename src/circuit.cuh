@@ -215,8 +215,10 @@ namespace QuaSARQ {
 		void 		print_pivots	() const {
 			if (_pinned_pivots == nullptr) 
 				return;
-			for (auto i = 0; i < num_gates; i++)
+			for (auto i = 0; i < num_gates; i++) {
+				PRINT("qubit(%d)->", i);
 				_pinned_pivots[i].print();
+			}
 		}
 
 	};
