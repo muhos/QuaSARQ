@@ -2,6 +2,7 @@
 #include "pivot.cuh"
 #include "tuner.cuh"
 #include "datatypes.cuh"
+#include "shared.cuh"
 
 namespace QuaSARQ {
 
@@ -16,7 +17,7 @@ namespace QuaSARQ {
             const size_t word_idx = g * num_words_major + q_w + num_words_minor;
             word_std_t qubit_word = inv_xs[word_idx];       
             if (qubit_word & q_mask) {
-                printf("qubit(%d): g(%lld):" B2B_STR "\n", q, g, RB2B(qubit_word));
+                //printf("qubit(%d): g(%lld):" B2B_STR "\n", q, g, RB2B(qubit_word));
                 atomicMin(&p.indeterminate, g);
             }
         }
@@ -25,59 +26,31 @@ namespace QuaSARQ {
     #define BLOCK_SIZE 64
 
     INLINE_DEVICE void find_min_pivot_indet_shared(Pivot& p, const qubit_t& q, const Table& inv_xs, const size_t num_qubits, const size_t num_words_major, const size_t num_words_minor) {
+        grid_t tx = threadIdx.x;
+        grid_t BX = blockDim.x;
+        grid_t shared_tid = threadIdx.y * BX + tx;
 
         const qubit_t q_w = WORD_OFFSET(q);
         const word_std_t q_mask = BITMASK_GLOBAL(q);
 
-        // 1) Compute thread's global index
-        int tid = blockIdx.x * blockDim.x + threadIdx.x;
-        int stride = blockDim.x * gridDim.x; // if we want to handle multiple passes
+        uint32 local_min = INVALID_PIVOT;
 
-        // 2) We’ll hold a local min in a register
-        int local_min_g = INT_MAX;
-
-        // 3) Loop over all g values in a stride pattern
-        for (int g = tid; g < num_qubits; g += stride)
-        {
-            // Same logic as before:
+        for_parallel_x(g, num_qubits) {
             const size_t word_idx = g * num_words_major + q_w + num_words_minor;
-            word_std_t qubit_word = inv_xs[word_idx];
-            if (qubit_word & q_mask)
-            {
-                // If set, keep track of the min index
-                if (g < local_min_g)
-                {
-                    local_min_g = g;
-                }
+            const word_std_t qubit_word = inv_xs[word_idx];
+            if (qubit_word & q_mask) {
+                local_min = MIN(uint32(g), local_min);
             }
         }
 
-        // 4) Now we do a block-level reduction of local_min_g in shared memory
-        __shared__ int shmem[BLOCK_SIZE][BLOCK_SIZE];
+        uint32* shared_mins = SharedMemory<uint32>();
 
-        shmem[threadIdx.y][threadIdx.x] = local_min_g;
-        __syncthreads();
+        min_pivot_load_shared(shared_mins, local_min, INVALID_PIVOT, shared_tid, tx, num_qubits);
+        min_pivot_shared(shared_mins, local_min, shared_tid, BX, tx);
+        min_pivot_warp(shared_mins, local_min, shared_tid, BX, tx);
 
-        // Basic binary reduction
-        for (int offset = blockDim.x >> 1; offset > 0; offset >>= 1)
-        {
-            if (threadIdx.x < offset)
-            {
-                int other = shmem[threadIdx.y][threadIdx.x + offset];
-                // minimum ignoring sentinel if one is INT_MAX
-                if (other < shmem[threadIdx.y][threadIdx.x])
-                {
-                    shmem[threadIdx.y][threadIdx.x] = other;
-                }
-            }
-            __syncthreads();
-        }
-
-        // 5) The first thread in the block writes out the result
-        if (threadIdx.x == 0)
-        {
-            //block_mins[blockIdx.x] = shmem[0];
-            atomicMin(&p.indeterminate, shmem[threadIdx.y][0]);
+        if (threadIdx.x == 0 && local_min != INVALID_PIVOT) {
+            atomicMin(&p.indeterminate, local_min);
         }
     }
 
@@ -128,7 +101,7 @@ namespace QuaSARQ {
             assert(r < NO_REF);
             Gate& m = (Gate&) measurements[r];
             assert(m.size == 1);
-            find_min_pivot_indet_shared(pivots[i], m.wires[0], *inv_xs, num_qubits, num_words_major, num_words_minor);
+            find_min_pivot_indet(pivots[i], m.wires[0], *inv_xs, num_qubits, num_words_major, num_words_minor);
         }
     }
 
@@ -174,7 +147,7 @@ namespace QuaSARQ {
                 SYNCALL;
                 tune_kernel_m(find_all_pivots, "Find all pivots", 
                                 bestblockallpivots, bestgridallpivots, 
-                                0, false,               // shared size, extend?
+                                sizeof(uint32), true,   // shared size, extend?
                                 num_qubits,             // x-dim
                                 num_pivots_or_index,    // y-dim 
                                 gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), tab.xtable(), num_pivots_or_index, num_qubits, num_words_minor);
@@ -184,17 +157,23 @@ namespace QuaSARQ {
             TRIM_BLOCK_IN_DEBUG_MODE(bestblockallpivots, bestgridallpivots, num_qubits, num_pivots_or_index);
             currentblock = bestblockallpivots, currentgrid = bestgridallpivots;
             TRIM_GRID_IN_XY(num_qubits, num_pivots_or_index);
-            find_all_pivots_indet <<<currentgrid, currentblock, 0, stream>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), tab.xtable(), num_pivots_or_index, num_qubits, num_words_major, num_words_minor);
+            OPTIMIZESHARED(smem_size, currentblock.y * currentblock.x, sizeof(uint32));
+            LOGN2(2, "Finding all pivots with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
+            find_all_pivots_indet <<<currentgrid, currentblock, smem_size, stream>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), tab.xtable(), num_pivots_or_index, num_qubits, num_words_major, num_words_minor);
             if (options.sync) {
-                LASTERR("failed to launch find_min_pivot_indet kernel");
+                LASTERR("failed to launch find_all_pivots_indet kernel");
                 SYNC(stream);
             }
+            LOGDONE(2, 4);
         }
         else {
             const size_t pivot_index = num_pivots_or_index;
             reset_single_pivot <<<1, 1, 0, stream>>> (gpu_circuit.pivots(), pivot_index);
             if (options.tune_newpivots) {
                 SYNCALL;
+
+                // add shared memory here.
+
                 tune_kernel_m(find_new_pivot, "New pivots", bestblocknewpivots, bestgridnewpivots, gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), tab.xtable(), pivot_index, num_qubits, num_words_minor);
                 reset_single_pivot <<<1, 1>>> (gpu_circuit.pivots(), pivot_index);
                 SYNCALL;
@@ -202,9 +181,10 @@ namespace QuaSARQ {
             TRIM_BLOCK_IN_DEBUG_MODE(bestblocknewpivots, bestgridnewpivots, num_qubits, 0);
             currentblock = bestblocknewpivots, currentgrid = bestgridnewpivots;
             TRIM_GRID_IN_1D(num_qubits, x);
-            find_new_pivot_indet <<<currentgrid, currentblock, 0, stream>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), tab.xtable(), pivot_index, num_qubits, num_words_major, num_words_minor);
+            OPTIMIZESHARED(smem_size, currentblock.x, sizeof(uint32));
+            find_new_pivot_indet <<<currentgrid, currentblock, smem_size, stream>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), tab.xtable(), pivot_index, num_qubits, num_words_major, num_words_minor);
             if (options.sync) {
-                LASTERR("failed to launch find_new_pivot kernel");
+                LASTERR("failed to launch find_new_pivot_indet kernel");
                 SYNC(stream);
             }
         }

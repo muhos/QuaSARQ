@@ -188,6 +188,26 @@ namespace QuaSARQ {;
         measure_determinate_qubit(m, aux, aux_power, *inv_xs, *inv_zs, *inv_ss, pivots[gate_index].determinate, num_qubits, num_words_minor);
     }
 
+    __global__ void inject_CX(Pivot& p, const qubit_t& target, Table& inv_xs, Table& inv_zs, Signs& inv_ss, const size_t num_qubits, const size_t num_words_major, const size_t num_words_minor) {
+        const qubit_t q_w = WORD_OFFSET(target);
+        const word_std_t q_mask = BITMASK_GLOBAL(target);
+        const uint32 pivot = p.indeterminate;
+        assert(p.indeterminate != INVALID_PIVOT);
+        for (size_t k = pivot + 1; k < num_qubits; k++)
+        {
+            const size_t word_idx = k * num_words_major + q_w + num_words_minor;
+            const word_std_t qubit_word = inv_xs[word_idx];
+            if (qubit_word & q_mask) {
+                //transposed_raii.append_ZCX(pivot, k):
+                // s ^= (cz ^ tx).andnot(cx & tz);
+                // cz ^= tz;
+                // tx ^= cx;
+
+                inv_ss[k] ^= 
+            }
+        }
+    }
+
     void Simulator::measure(const size_t& p, const depth_t& depth_level, const bool& reversed) {
         assert(options.streams >= 4);
         cudaStream_t copy_stream1 = copy_streams[0];
@@ -210,6 +230,8 @@ namespace QuaSARQ {;
         // Sync resetting pivots.
         SYNC(kernel_stream2);
 
+        cutimer.start(kernel_stream1);
+
         // Find all pivots if exist.
         bestblockallpivots.x = 32;
         bestblockallpivots.y = 16;
@@ -225,9 +247,13 @@ namespace QuaSARQ {;
         // Sync finding pivots.
         SYNC(kernel_stream1);
 
-        print_tableau(tableau, depth_level, false);
+        cutimer.stop(kernel_stream1);
 
-        // Copy pivots to host.
+        printf("Finding pviots time = %.3f\n", cutimer.time());
+
+        // print_tableau(tableau, depth_level, false);
+
+        // // Copy pivots to host.
         gpu_circuit.copypivots(copy_stream1, num_gates_per_window);
         if (options.sync) {
            LASTERR("failed to copy pivots");
@@ -236,6 +262,8 @@ namespace QuaSARQ {;
 
 
         SYNC(copy_stream1); gpu_circuit.print_pivots();
+
+
         //
         //// Measure all determinate.
         //measure_determinate(num_gates_per_window, true, kernel_stream1);
@@ -277,7 +305,7 @@ namespace QuaSARQ {;
                 bestgridmultdeterminate.x = ROUNDUPBLOCKS(num_words_minor, bestblockmultdeterminate.x);
             }
             currentblock = bestblockmultdeterminate, currentgrid = bestgridmultdeterminate;
-            TRIM_GRID_IN_2D(num_gates_or_index, y);
+            TRIM_GRID_IN_2D(currentblock, currentgrid, num_gates_or_index, y);
             OPTIMIZESHARED(smem_multdeterminate, currentblock.y * (currentblock.x * 2), sizeof(int) + sizeof(word_std_t));
             measure_all_determinate <<<currentgrid, currentblock, smem_multdeterminate, stream>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), XZ_TABLE(inv_tableau), inv_tableau.signs(), num_gates_or_index, num_qubits, num_words_minor);
             if (options.sync) {

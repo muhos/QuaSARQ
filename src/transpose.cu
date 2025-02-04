@@ -258,31 +258,34 @@ namespace QuaSARQ {
             bestblocktransposeswap, bestgridtransposeswap, 
             XZ_TABLE(tableau), num_words_major, num_words_minor, row_major);
         }
+        bestblocktransposebits.x = MIN(WORD_BITS, bestblocktransposebits.x);
+        bestgridtransposebits.x = MIN(num_words_major, bestgridtransposebits.x); 
         bestgridtransposebits.z = 2;
-        if (bestblocktransposebits.x != WORD_BITS) bestblocktransposebits.x = WORD_BITS;
         TRIM_Y_BLOCK_IN_DEBUG_MODE(bestblocktransposebits, bestgridtransposebits, num_words_minor);
+        TRIM_GRID_IN_2D(bestblocktransposebits, bestgridtransposebits, num_words_minor, y);
         currentblock = bestblocktransposebits, currentgrid = bestgridtransposebits;
-        TRIM_GRID_IN_2D(num_words_minor, y);
         OPTIMIZESHARED(transpose_smem_size, currentblock.y * currentblock.x, sizeof(word_std_t));
-        LOGN2(2, "Running transpose-tiles with block(x:%u, y:%u) and grid(x:%u, y:%u, z:%u).. ", 
-            bestblocktransposebits.x, bestblocktransposebits.y, bestgridtransposebits.x, bestgridtransposebits.y, bestgridtransposebits.z);
+        LOGN2(2, "Running transpose-tiles with block(x:%u, y:%u) and grid(x:%u, y:%u, z:%u).. ", currentblock.x, currentblock.y, currentgrid.x, currentgrid.y, currentgrid.z);
         transpose_tiles_kernel << <currentgrid, currentblock, transpose_smem_size, stream >> > (XZ_TABLE(tableau), num_words_major, num_words_minor, row_major);
-        LOGDONE(2, 4);
-        
-        bestgridtransposeswap.z = 2;
-        if (bestblocktransposeswap.x != WORD_BITS) bestblocktransposeswap.x = WORD_BITS;
-        TRIM_Y_BLOCK_IN_DEBUG_MODE(bestblocktransposeswap, bestgridtransposeswap, num_words_minor);
-        currentblock = bestblocktransposeswap, currentgrid = bestblocktransposeswap;
-        TRIM_GRID_IN_2D(num_words_minor, y);
-        OPTIMIZESHARED(swap_smem_size, currentblock.y * currentblock.x, 2 * sizeof(word_std_t));
-        LOGN2(2, "Running swap-tiles with block(x:%u, y:%u) and grid(x:%u, y:%u, z:%u).. ", 
-            bestblocktransposeswap.x, bestblocktransposeswap.y, bestgridtransposeswap.x, bestgridtransposeswap.y, bestgridtransposeswap.z);
-        swap_tiles_kernel << <currentgrid, currentblock, swap_smem_size, stream >> > (XZ_TABLE(tableau), num_words_major, num_words_minor);
-        LOGDONE(2, 4);
         if (options.sync) {
-            LASTERR("failed to launch inline transpose kernels");
+            LASTERR("failed to launch transpose-tiles kernel");
             SYNC(stream);
         }
+        LOGDONE(2, 4);
+        bestblocktransposeswap.x = MIN(WORD_BITS, bestblocktransposeswap.x);
+        bestgridtransposeswap.x = MIN(num_words_minor, bestgridtransposeswap.x); 
+        bestgridtransposeswap.z = 2;
+        TRIM_Y_BLOCK_IN_DEBUG_MODE(bestblocktransposeswap, bestgridtransposeswap, num_words_minor);
+        TRIM_GRID_IN_2D(bestblocktransposeswap, bestgridtransposeswap, num_words_minor, y);
+        currentblock = bestblocktransposeswap, currentgrid = bestgridtransposeswap;
+        OPTIMIZESHARED(swap_smem_size, currentblock.y * currentblock.x, 2 * sizeof(word_std_t));
+        LOGN2(2, "Running swap-tiles with block(x:%u, y:%u) and grid(x:%u, y:%u, z:%u).. ", currentblock.x, currentblock.y, currentgrid.x, currentgrid.y, currentgrid.z);
+        swap_tiles_kernel << <currentgrid, currentblock, swap_smem_size, stream >> > (XZ_TABLE(tableau), num_words_major, num_words_minor);
+        if (options.sync) {
+            LASTERR("failed to launch swap-tiles kernel");
+            SYNC(stream);
+        }
+        LOGDONE(2, 4);
 
         // if (row_major) {
         //     if (options.tune_transpose2r) {

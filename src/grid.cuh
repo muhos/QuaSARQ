@@ -95,10 +95,10 @@ namespace QuaSARQ {
             } \
         }
 
-	#define TRIM_GRID_IN_2D(DATALEN, DIM) \
+	#define TRIM_GRID_IN_2D(BLOCK, GRID, DATALEN, DIM) \
         if (config_qubits > num_qubits) { \
-            if (size_t(currentgrid.DIM) * size_t(currentblock.DIM) > (DATALEN)) { \
-                OPTIMIZEBLOCKS2D(currentgrid.DIM, (DATALEN), currentblock.DIM); \
+            if (size_t(GRID.DIM) * size_t(BLOCK.DIM) > (DATALEN)) { \
+                OPTIMIZEBLOCKS2D(GRID.DIM, (DATALEN), BLOCK.DIM); \
             } \
         }
 
