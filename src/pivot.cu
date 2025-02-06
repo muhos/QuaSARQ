@@ -23,9 +23,9 @@ namespace QuaSARQ {
         }
     }
 
-    #define BLOCK_SIZE 64
-
     INLINE_DEVICE void find_min_pivot_indet_shared(Pivot& p, const qubit_t& q, const Table& inv_xs, const size_t num_qubits, const size_t num_words_major, const size_t num_words_minor) {
+        uint32* shared_mins = SharedMemory<uint32>();
+        
         grid_t tx = threadIdx.x;
         grid_t BX = blockDim.x;
         grid_t shared_tid = threadIdx.y * BX + tx;
@@ -42,8 +42,6 @@ namespace QuaSARQ {
                 local_min = MIN(uint32(g), local_min);
             }
         }
-
-        uint32* shared_mins = SharedMemory<uint32>();
 
         min_pivot_load_shared(shared_mins, local_min, INVALID_PIVOT, shared_tid, tx, num_qubits);
         min_pivot_shared(shared_mins, local_min, shared_tid, BX, tx);

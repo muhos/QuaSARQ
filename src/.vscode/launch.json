@@ -9,7 +9,7 @@
             "type": "cuda-gdb",
             "request": "launch",
             "program": "${workspaceFolder}/quasarq",
-            "args": "/home/muhos/quantum/github/QuaSARQ/src/circuits/q10_d4.stim -sync -print-initial-tableau --verbose=2 --config-path=\"$HOME/quantum/github/QuaSARQ/src/kernel.config\""
+            "args": "/home/muhos/quantum/github/QuaSARQ/src/circuits/q10_d4.stim -sync --verbose=2 --config-path=\"$HOME/quantum/github/QuaSARQ/src/kernel.config\""
             //"args": "/home/muhos/quantum/github/QuaSARQ/src/circuits/q1000_d2.stim -sync --verbose=2 -tune-transposebits -tune-transposeswap"
             //"args": "--qubits=16 --M=0.2 --depth=15 -print-gates --write-circuit=2"
             //"args": "-tune-identity -tune-step -tune-reset -tune-transpose2r -tune-transpose2c -tune-allpivots -tune-multdeterminate -tune-copyindeterminate -tune-phase1indeterminate -tune-phase2indeterminate -tune-singdeterminate -tune-newpivots  --qubits=5000 --depth=50 > output.txt --tune-step-qubits=900"

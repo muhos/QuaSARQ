@@ -69,7 +69,7 @@ namespace QuaSARQ {
             int old_value = atomicAdd(&(GLOBAL_POWER), block_value); \
             CHECK_SIGN_OVERFLOW(des_idx, old_value, block_value); \
         }
-
+    
 }
 
 #endif

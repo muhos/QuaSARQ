@@ -10,6 +10,7 @@ namespace QuaSARQ {
     constexpr uint32 INVALID_PIVOT = UINT32_MAX;
 
     struct Pivot {
+        bool destab;
         uint32 determinate;
         uint32 indeterminate;
 

@@ -185,10 +185,10 @@ namespace QuaSARQ {
 		}
 
 		inline
-		Pivot*    	 pivots			() { return _pivots; }
+		Pivot*    	 pivots			(const size_t& idx = 0) { return _pivots + idx; }
 
 		inline const
-		Pivot*    	 pivots			() const { return _pivots; }
+		Pivot*    	 pivots			(const size_t& idx = 0) const { return _pivots + idx; }
 
 		inline
 		Pivot*    	 host_pivots	() { return _pinned_pivots; }
@@ -219,6 +219,7 @@ namespace QuaSARQ {
 				PRINT("qubit(%d)->", i);
 				_pinned_pivots[i].print();
 			}
+			fflush(stdout);
 		}
 
 	};

@@ -39,6 +39,7 @@ namespace QuaSARQ {
         Locker<DeviceAllocator>         locker;
         Tableau<DeviceAllocator>        tableau;
         Tableau<DeviceAllocator>        inv_tableau;
+        Tableau<DeviceAllocator>        prefix_tableau;
         Statistics                      stats;
         Timer                           progress_timer;
         FILE*                           config_file;
@@ -97,7 +98,7 @@ namespace QuaSARQ {
         void measure(const size_t& p, const depth_t& depth_level, const bool& reversed = false);
 
         // Printers.
-        void print_tableau(const Tableau<DeviceAllocator>& tab, const depth_t& depth_level, const bool& reverse);
+        void print_tableau(const Tableau<DeviceAllocator>& tab, const depth_t& depth_level, const bool& reverse, const bool& prefix = false);
         void print_paulis(const Tableau<DeviceAllocator>& tab, const depth_t& depth_level, const bool& reversed);
         void print_gates(const DeviceCircuit<DeviceAllocator>& gates, const gate_ref_t& num_gates, const depth_t& depth_level);
         void print_measurements(const DeviceCircuit<DeviceAllocator>& gates, const gate_ref_t& num_gates, const depth_t& depth_level);

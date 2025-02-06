@@ -41,6 +41,7 @@ namespace QuaSARQ {
 
     NOINLINE_ALL void print_table(const Table& t) {
         size_t bits = t.num_words_minor() * WORD_BITS;
+        size_t stab_offset = 0;
         LOGGPU("     ");
         for (size_t q = 0; q < bits; q++) {
             if (q > 0 && q % WORD_BITS == 0)
@@ -48,6 +49,7 @@ namespace QuaSARQ {
             LOGGPU("%-3lld", q);
         }
         if (t.num_words_major() == 2 * t.num_words_minor()) {
+            stab_offset = t.num_words_minor();
             LOGGPU("\n\nDestabilizers:\n");
             for (size_t q = 0; q < t.num_qubits_padded(); q++) {
                 LOGGPU("%-3lld  ", q);
@@ -67,7 +69,7 @@ namespace QuaSARQ {
         for (size_t q = 0; q < t.num_qubits_padded(); q++) {
             LOGGPU("%-3lld  ", q);
             for (size_t w = 0; w < t.num_words_minor(); w++) {
-                const size_t word_idx = q * t.num_words_major() + w + t.num_words_minor();
+                const size_t word_idx = q * t.num_words_major() + w + stab_offset;
                 #if defined(WORD_SIZE_64)
                 LOGGPU(B2B_STR, RB2B(uint32(word_std_t(t[word_idx]) & 0xFFFFFFFFUL)));
                 LOGGPU(B2B_STR "  ", RB2B(uint32((word_std_t(t[word_idx]) >> 32) & 0xFFFFFFFFUL)));
@@ -86,21 +88,23 @@ namespace QuaSARQ {
         }
     }
 
-    NOINLINE_ALL void print_tables(const Table& xs, const Table& zs, const Signs& ss, const int64& level) {
+    NOINLINE_ALL void print_tables(const Table& xs, const Table& zs, const Signs* ss, const int64& level) {
         LOGGPU(" ---[ %s X-Table at (%-2lld)-step ]---------------------\n", xs.is_rowmajor() ? "Transposed" : "", level);
         print_table(xs);
         LOGGPU(" ---[ %s Z-Table at (%-2lld)-step ]---------------------\n", zs.is_rowmajor() ? "Transposed" : "", level);
         print_table(zs);
-        LOGGPU(" ---[ Signs at (%-2lld)-step ]-----------------------\n", level);
-        const size_t unfolded_size = ss.is_unpacked() ? ss.size() : ss.size() * WORD_BITS;
-        if (ss.num_qubits_padded() == unfolded_size)
-            print_table_signs(ss, 0, ss.num_qubits_padded());
-        else {
-            assert(2 * ss.num_qubits_padded() == unfolded_size);
-            LOGGPU("Destabilizers:\n");
-            print_table_signs(ss, 0, ss.num_qubits_padded());
-            LOGGPU("Stabilizers:\n");
-            print_table_signs(ss, ss.num_qubits_padded(), 2 * ss.num_qubits_padded());
+        if (ss != nullptr) {
+            LOGGPU(" ---[ Signs at (%-2lld)-step ]-----------------------\n", level);
+            const size_t unfolded_size = ss->is_unpacked() ? ss->size() : ss->size() * WORD_BITS;
+            if (ss->num_qubits_padded() == unfolded_size)
+                print_table_signs(*ss, 0, ss->num_qubits_padded());
+            else {
+                assert(2 * ss->num_qubits_padded() == unfolded_size);
+                LOGGPU("Destabilizers:\n");
+                print_table_signs(*ss, 0, ss->num_qubits_padded());
+                LOGGPU("Stabilizers:\n");
+                print_table_signs(*ss, ss->num_qubits_padded(), 2 * ss->num_qubits_padded());
+            }
         }
         LOGGPU("\n");
     }
@@ -177,7 +181,7 @@ namespace QuaSARQ {
 
 	__global__ void print_tableau_k(ConstTablePointer xs, ConstTablePointer zs, ConstSignsPointer ss, const depth_t level) {
 		if (!global_tx) {
-			print_tables(*xs, *zs, *ss, level == MAX_DEPTH ? -1 : int64(level));
+			print_tables(*xs, *zs, ss, level == MAX_DEPTH ? -1 : int64(level));
 		}
 	}
 
@@ -268,7 +272,7 @@ namespace QuaSARQ {
         fflush(stdout);
 	}
 
-	void Simulator::print_tableau(const Tableau<DeviceAllocator>& tab, const depth_t& depth_level, const bool& reversed) {
+	void Simulator::print_tableau(const Tableau<DeviceAllocator>& tab, const depth_t& depth_level, const bool& reversed, const bool& prefix) {
 		if (!options.sync) SYNCALL;
 		LOG2(0, "");
 		if (depth_level == -1)
@@ -277,7 +281,7 @@ namespace QuaSARQ {
 			LOG2(0, "Final tableau after %d %ssimulation steps", depth, reversed ? "reversed " : "");
 		else
 			LOG2(0, "Tableau after %d-step", depth_level);
-        print_tableau_k << <1, 1 >> > (XZ_TABLE(tab), tab.signs(), depth_level);
+        print_tableau_k << <1, 1 >> > (XZ_TABLE(tab), prefix ? nullptr : tab.signs(), depth_level);
         LASTERR("failed to launch print_tableau_k kernel");
         SYNCALL;
         fflush(stdout);

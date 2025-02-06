@@ -247,8 +247,8 @@ namespace QuaSARQ {
     }
 
     void Simulator::transpose(const bool& row_major, const cudaStream_t& stream) {
-        const size_t num_words_minor = inv_tableau.num_words_minor();
-        const size_t num_words_major = inv_tableau.num_words_major();
+        const size_t num_words_minor = tableau.num_words_minor();
+        const size_t num_words_major = tableau.num_words_major();
         dim3 currentblock, currentgrid;
 
         if (options.tune_transposebits || options.tune_transposeswap) {

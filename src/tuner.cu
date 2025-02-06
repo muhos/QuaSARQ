@@ -47,7 +47,7 @@ namespace QuaSARQ {
 		// Resize tableaux.
 		if (num_qubits < tableau.num_qubits()) {
 			tableau.resize(num_qubits, winfo.max_window_bytes, measuring);
-			inv_tableau.resize(num_qubits, winfo.max_window_bytes, measuring, true);
+			//inv_tableau.resize(num_qubits, winfo.max_window_bytes, measuring, true);
 		}
 	}
 
@@ -57,8 +57,8 @@ namespace QuaSARQ {
 		// Create a tableau in GPU memory for the maximum qubits.
 		const size_t max_num_qubits = num_qubits;
 		num_partitions = 1;
-		tableau.alloc(max_num_qubits, winfo.max_window_bytes, measuring);
-		inv_tableau.alloc(max_num_qubits, winfo.max_window_bytes, measuring, true);
+		tableau.alloc(max_num_qubits, winfo.max_window_bytes, false, measuring);
+		//inv_tableau.alloc(max_num_qubits, winfo.max_window_bytes, measuring, true);
 		gpu_circuit.initiate(winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
 		// Start tuning simulation with max qubits.
 		do {
