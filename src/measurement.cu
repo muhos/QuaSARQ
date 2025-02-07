@@ -190,16 +190,27 @@ namespace QuaSARQ {;
         measure_determinate_qubit(m, aux, aux_power, *inv_xs, *inv_zs, *inv_ss, pivots[gate_index].determinate, num_qubits, num_words_minor);
     }
 
-    INLINE_DEVICE void do_CX_sharing_control(word_t& Xc, word_t& Zc, word_t& Xt, word_t& Zt, sign_t& s) {
+    INLINE_DEVICE void do_CX_sharing_control(word_t& Xc, word_t& Zc, word_t& Xt, word_t& Zt, sign_t& s, size_t w, size_t t) {
         const word_std_t xc = Xc, zc = Zc, xt = Xt, zt = Zt;
         // Update X and Z words.
         Xt = xt ^ xc;
         Zc = zc ^ zt;
         // Update Sign words.
-        const word_std_t xc_and_zt = xc & zt;
-        const word_std_t not_xt_xor_zc = ~(xt ^ zc);
-        //s ^= (xc_and_zt & not_xt_xor_zc);
-        s ^= (xt ^ zc);
+        word_std_t xc_and_zt = xc & zt;
+        word_std_t not_zc_xor_xt = ~(zc ^ xt);
+        if (w == 0) {
+            // printf("w(%lld), t(%lld):   zs[c_stab  ]:" B2B_STR " & zs[t_destab]:" B2B_STR "  = " B2B_STR "\n", w, t, 
+            //             RB2B(xc), RB2B(zt), RB2B((xc & zt)));
+            // printf("w(%lld), t(%lld): ~(zs[c_destab]:" B2B_STR " ^ zs[t_stab  ]:" B2B_STR ") = " B2B_STR "\n", w, t, 
+            //             RB2B(zc), RB2B(xt), RB2B(~(xt ^ zc)));
+            xc_and_zt = not_zc_xor_xt;
+            printf("w(%lld), t(%lld): not_zc_xor_xt:" B2B_STR " & not_zc_xor_xt:" B2B_STR " = " B2B_STR "\n", w, t, 
+                        RB2B(xc_and_zt), RB2B(not_zc_xor_xt), RB2B((xc_and_zt & not_zc_xor_xt)));
+            printf("w(%lld), t(%lld):             s:" B2B_STR " & (-----------):" B2B_STR " = " B2B_STR "\n", w, t, 
+                        RB2B(s), RB2B((xc_and_zt & not_zc_xor_xt)), RB2B(s ^ (xc_and_zt & not_zc_xor_xt)));
+        }
+        //s ^= (xt ^ zc);
+        s ^= (xc_and_zt & not_zc_xor_xt);
     }
 
     INLINE_DEVICE void do_YZ_Swap(word_t& X, word_t& Z, sign_t& s) {
@@ -249,12 +260,12 @@ namespace QuaSARQ {;
                         assert(t_destab < inv_zs->size());
                         assert(c_stab < inv_zs->size());
                         assert(t_stab < inv_zs->size());
-                        do_CX_sharing_control(zs[c_stab], zs[c_destab], zs[t_stab], zs[t_destab], ss[w]);
+                        do_CX_sharing_control(zs[c_stab], zs[c_destab], zs[t_stab], zs[t_destab], ss[w], w, t);
                         assert(c_destab < inv_xs->size());
                         assert(t_destab < inv_xs->size());
                         assert(c_stab < inv_xs->size());
                         assert(t_stab < inv_xs->size());
-                        do_CX_sharing_control(xs[c_stab], xs[c_destab], xs[t_stab], xs[t_destab], ss[w + num_words_minor]);
+                        //do_CX_sharing_control(xs[c_stab], xs[c_destab], xs[t_stab], xs[t_destab], ss[w + num_words_minor], w, t);
                     }
                 //}
 
@@ -378,8 +389,8 @@ namespace QuaSARQ {;
                     const size_t t_stab = t_destab + num_words_minor;
                     assert(c_destab < inv_zs->size());
                     assert(t_destab < inv_zs->size());
-                    printf("w(%lld), t(%lld): Zc(" B2B_STR ") ^ Zt(" B2B_STR ") = " B2B_STR "\n", w, t, 
-                    RB2B((word_std_t)zs[c_destab]), RB2B((word_std_t)zs[t_destab]), RB2B((word_std_t)(zs[t_destab] ^ zs[c_destab])));   
+                    // printf("w(%lld), t(%lld): Zc(" B2B_STR ") ^ Zt(" B2B_STR ") = " B2B_STR "\n", w, t, 
+                    // RB2B((word_std_t)zs[c_destab]), RB2B((word_std_t)zs[t_destab]), RB2B((word_std_t)(zs[t_destab] ^ zs[c_destab])));   
                     // We need to compute prefix-xor of t-th destabilizer in X,Z for t = c+1, c+2, ... c+n-1
                     // so that later we can xor every prefix-xor with controlled destabilizer.
                     // However, with Xt, we don't need prefix-xor as Xt is keept in 'tableau' untouched untill we compute the signs.
@@ -401,12 +412,78 @@ namespace QuaSARQ {;
 
             // Write each thread's final prefix-scan value to output
             if (t < num_qubits) {
-                printf("w(%lld), t(%lld): prefix-xor (tz) = " B2B_STR "\n", w, tid_x, RB2B(t_prefix_z[prefix_tid]));
-                printf("w(%lld), t(%lld): prefix-xor (tx) = " B2B_STR "\n", w, tid_x, RB2B(t_prefix_x[prefix_tid]));
-                (*prefix_zs)[tid_x * num_words_minor + w] = t_prefix_z[prefix_tid];
-                (*prefix_xs)[tid_x * num_words_minor + w] = t_prefix_x[prefix_tid];
+                // printf("w(%lld), t(%lld): zc = " B2B_STR " ^ prefix-xor (tz) ( " B2B_STR ") = " B2B_STR "\n", w, tid_x, 
+                //     RB2B(word_std_t(zs[c_destab])), RB2B(t_prefix_z[prefix_tid]), RB2B(word_std_t(zs[c_destab]) ^ t_prefix_z[prefix_tid]));
+                //printf("w(%lld), t(%lld): prefix-xor (tx) = " B2B_STR "\n", w, tid_x, RB2B(t_prefix_x[prefix_tid]));
+                // Load and compute the final zc = zc ^ zt, where zt = t_prefix.
+                // This has to be done in the final stage of prefix-xor though.
+                // first place should be empty.
+                (*prefix_zs)[(tid_x + 1) * num_words_minor + w] = t_prefix_z[prefix_tid];
+                (*prefix_xs)[(tid_x + 1) * num_words_minor + w] = t_prefix_x[prefix_tid];
             }
             
+        }
+    }
+
+    __global__ void update_signs(Table* prefix_xs, Table* prefix_zs, Table* inv_xs, Table* inv_zs, Signs* inv_ss,
+                            ConstPivotsPointer pivots, ConstBucketsPointer measurements, ConstRefsPointer refs, 
+                            const size_t gate_index, 
+                            const size_t num_qubits, 
+                            const size_t num_words_major, const size_t num_words_minor) {
+        const uint32 c = pivots[gate_index].indeterminate; // control = pivot
+        assert(c != INVALID_PIVOT);
+        const size_t c_row = c * num_words_major;
+        word_t* xs = inv_xs->data();
+        word_t* zs = inv_zs->data();
+        sign_t* ss = inv_ss->data();
+
+
+        //for_parallel_y(w, num_words_minor) { // Will be parallel in y-dim later.
+        for (size_t w = 0; w < num_words_minor; w++) { // Update all words in both destabs and stabs.
+            const size_t c_destab = c_row + w;
+            const size_t c_stab = c_destab + num_words_minor;
+
+            grid_t tid_x = blockIdx.x * blockDim.x + threadIdx.x; 
+            size_t t = tid_x + c + 1; 
+
+            if (t < num_qubits) { // targets: pivot + 1, ..., num_qubits - 1.
+                assert(t > c);
+                const gate_ref_t r = refs[gate_index];
+                assert(r < NO_REF);
+                Gate& m = (Gate&) measurements[r];
+                const qubit_t q = m.wires[0], q_w = WORD_OFFSET(q);
+                const word_std_t q_mask = BITMASK_GLOBAL(q);
+                const size_t t_row = t * num_words_major;
+                // create a boolean array for all qubits ana initial them to q's position in stabilizers.
+                const size_t q_word_idx = t_row + q_w + num_words_minor;
+                const word_std_t qubit_word = xs[q_word_idx];
+                //if (qubit_word & q_mask) {
+                    const size_t t_destab = t_row + w;              
+                    const size_t t_stab = t_destab + num_words_minor;
+                    assert(c_destab < inv_zs->size());
+                    assert(t_destab < inv_zs->size());
+                   
+                    // We need to compute prefix-xor of t-th destabilizer in X,Z for t = c+1, c+2, ... c+n-1
+                    // so that later we can xor every prefix-xor with controlled destabilizer.
+                    // However, with Xt, we don't need prefix-xor as Xt is keept in 'tableau' untouched untill we compute the signs.
+                    word_std_t zt_prefix = (*prefix_zs)[tid_x * num_words_minor + w];            
+                    word_std_t xt_prefix = (*prefix_xs)[tid_x * num_words_minor + w];
+                    //do_CX_sharing_control(zs[c_stab], zs[c_destab], zs[t_stab], zs[t_destab], ss[w]);
+                    //atomicXOR((word_std_t*)&ss[w], word_std_t(zs[t_stab]) ^ zc);
+                    // printf("w(%lld), t(%lld): Zc(" B2B_STR ") ^ Xt(" B2B_STR ") ^ s(" B2B_STR ") = " B2B_STR "\n", w, t, 
+                    //         RB2B(zc), RB2B((word_std_t)zs[t_stab]), RB2B((word_std_t)ss[w]), RB2B(((word_std_t)(zs[t_stab]) ^ zc) ^ (word_std_t)ss[w]));   
+                    // printf("w(%lld), t(%lld): zc_destab(" B2B_STR ") ^ prefix(" B2B_STR ") ^ Xt(" B2B_STR ") = " B2B_STR "\n", w, t, 
+                    //         RB2B((word_std_t)zs[c_destab]), RB2B(zt_prefix), RB2B((word_std_t)zs[t_stab]), RB2B(word_std_t(zs[c_destab]) ^ (word_std_t(zs[t_stab]) ^ zt_prefix)));   
+                    word_std_t xc_and_zt = ((word_std_t)zs[c_stab] & (word_std_t)zs[t_destab]);
+                    word_std_t not_zc_xor_xt = ~(((word_std_t)zs[c_destab] ^ zt_prefix) ^ (word_std_t)zs[t_stab]);
+                    //printf("w(%lld), t(%lld):   zs[c_stab  ]:" B2B_STR " & zs[t_destab]:" B2B_STR "  = " B2B_STR "\n", w, t, RB2B((word_std_t)zs[c_stab]), RB2B((word_std_t)zs[t_destab]), RB2B(((word_std_t)zs[c_stab] & (word_std_t)zs[t_destab])));
+                    //printf("w(%lld), t(%lld): ~(zs[c_destab]:" B2B_STR " ^ zs[t_stab  ]:" B2B_STR ") = " B2B_STR "\n", w, t, RB2B((word_std_t)zs[c_destab] ^ zt_prefix), RB2B((word_std_t)zs[t_stab]), RB2B(not_zc_xor_xt));
+                    xc_and_zt = not_zc_xor_xt;
+                    printf("w(%lld), t(%lld): xc_and_zt:" B2B_STR " & not_zc_xor_xt:" B2B_STR " = " B2B_STR "\n", w, t, RB2B(xc_and_zt), RB2B(not_zc_xor_xt), RB2B((xc_and_zt & not_zc_xor_xt)));
+                //}
+
+            }
+
         }
     }
 
@@ -478,14 +555,22 @@ namespace QuaSARQ {;
                             i, num_qubits, num_words_major, num_words_minor);
                 LASTERR("failed to inject_CX_p1");
                 SYNC(kernel_stream1);
-                // inject_CX <<<8, 2, smem_size, kernel_stream1>>> (XZ_TABLE(tableau), tableau.signs(), 
+                update_signs <<<1, blocksize, smem_size, kernel_stream1>>> (XZ_TABLE(prefix_tableau), XZ_TABLE(tableau), tableau.signs(), 
+                            gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(),
+                            i, num_qubits, num_words_major, num_words_minor);
+                LASTERR("failed to inject_CX_p1");
+                SYNC(kernel_stream1);
+                // inject_CX <<<1, 4, 0, kernel_stream1>>> (XZ_TABLE(tableau), tableau.signs(), 
                 //             gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(),
                 //             i, num_qubits, num_words_major, num_words_minor);
+                // LASTERR("failed to inject_CX");
+                SYNC(kernel_stream1);
                 // printf("qubit(%d), pivot(%d):\n", circuit.gate(depth_level, i).wires[0], curr_pivot.indeterminate), print_tableau(tableau, depth_level, false);
                 // check_x_destab<<<1, 1, 0, kernel_stream1>>>(tableau.xtable(), gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), i, num_words_major);
                 // inject_Swap<<<1, 1, 0, kernel_stream1>>>(XZ_TABLE(tableau), tableau.signs(), gpu_circuit.pivots(), i, num_words_major, num_words_minor);
             
-                printf("After inject_CX:\n"), print_tableau(prefix_tableau, depth_level, false, true);
+                // printf("After inject_CX:\n"), print_tableau(prefix_tableau, depth_level, false, true);
+                // printf("After signs update:\n"), print_tableau(tableau, depth_level, false, false);
             }
         }
 
