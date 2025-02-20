@@ -59,7 +59,7 @@ namespace QuaSARQ {
 		num_partitions = 1;
 		tableau.alloc(max_num_qubits, winfo.max_window_bytes, false, measuring);
 		//inv_tableau.alloc(max_num_qubits, winfo.max_window_bytes, measuring, true);
-		gpu_circuit.initiate(winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
+		gpu_circuit.initiate(num_qubits, winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
 		// Start tuning simulation with max qubits.
 		do {
 			LOG2(1, "Tuning all kernels for %s%zd qubits%s, %zd partition..", CREPORTVAL, num_qubits, CNORMAL, num_partitions);

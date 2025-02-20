@@ -4,6 +4,7 @@
 
 #include "table.cuh"
 #include "signs.cuh"
+#include "commutation.cuh"
 
 namespace QuaSARQ {
 
@@ -155,17 +156,17 @@ namespace QuaSARQ {
             CHECK(cudaMemsetAsync(_ps_data, 0, 2 * _num_words * sizeof(word_t)));
         }
 
-        INLINE_ALL size_t size() const { return 2 * _num_words + _num_words_major; }
+        inline size_t size() const { return 2 * _num_words + _num_words_major; }
 
-        INLINE_ALL size_t num_words_per_table() const { return _num_words; }
+        inline size_t num_words_per_table() const { return _num_words; }
 
-        INLINE_ALL size_t num_qubits_padded() const { return _num_qubits_padded; }
+        inline size_t num_qubits_padded() const { return _num_qubits_padded; }
 
-        INLINE_ALL size_t num_words_major() const { return _num_words_major; }
+        inline size_t num_words_major() const { return _num_words_major; }
 
-        INLINE_ALL Signs* signs() const { assert(_ss != nullptr); return _ss; }
+        inline Signs* signs() const { assert(_ss != nullptr); return _ss; }
 
-        INLINE_ALL Table* ptable() const { assert(_ps != nullptr); return _ps; }
+        inline Table* ptable() const { assert(_ps != nullptr); return _ps; }
 
         bool is_table_identity() const {
             Table tmp;
@@ -192,6 +193,8 @@ namespace QuaSARQ {
         word_t* _zs_data;
         sign_t* _ss_data;
         int* _unpacked_ss_data;
+
+        Commutation* _commutations;
 
         size_t _num_qubits;
         size_t _num_qubits_padded;
@@ -226,6 +229,7 @@ namespace QuaSARQ {
         ,   _zs_data(nullptr)
         ,   _ss_data(nullptr)
         ,   _unpacked_ss_data(nullptr)
+        ,   _commutations(nullptr)
         ,   _num_qubits(0)
         ,   _num_qubits_padded(0)
         ,   _num_words(0)
@@ -307,6 +311,7 @@ namespace QuaSARQ {
             _zs_data = allocator.template allocate<word_t>(_num_words);
             assert(_zs_data != nullptr);
             if (!prefix) {
+                _commutations = allocator.template allocate<Commutation>(_num_qubits);
                 _ss = allocator.template allocate<Signs>(1);
                 assert(_ss != nullptr);
             }
@@ -442,33 +447,35 @@ namespace QuaSARQ {
             CHECK(cudaMemsetAsync(_zs_data, 0, _num_words * sizeof(word_t)));
         }
 
-        INLINE_ALL size_t size() const { return 2 * _num_words + _num_sign_words; }
+        inline size_t size() const { return 2 * _num_words + _num_sign_words; }
 
-        INLINE_ALL size_t num_qubits() const { return _num_qubits; }
+        inline size_t num_qubits() const { return _num_qubits; }
 
-        INLINE_ALL size_t num_words_per_table() const { return _num_words; }
+        inline size_t num_words_per_table() const { return _num_words; }
 
-        INLINE_ALL size_t num_qubits_padded() const { return _num_qubits_padded; }
+        inline size_t num_qubits_padded() const { return _num_qubits_padded; }
 
-        INLINE_ALL size_t num_words_major() const { return _num_words_major; }
+        inline size_t num_words_major() const { return _num_words_major; }
 
-        INLINE_ALL size_t num_words_minor() const { return _num_words_minor; }
+        inline size_t num_words_minor() const { return _num_words_minor; }
 
-        INLINE_ALL Signs* signs() const { assert(_ss != nullptr); return _ss; }
+        inline Commutation* commutations() const { assert(_commutations != nullptr); return _commutations; }
 
-        INLINE_ALL Table* xtable() const { assert(_xs != nullptr); return _xs; }
+        inline Signs* signs() const { assert(_ss != nullptr); return _ss; }
 
-        INLINE_ALL Table* ztable() const { assert(_zs != nullptr); return _zs; }
+        inline Table* xtable() const { assert(_xs != nullptr); return _xs; }
 
-        INLINE_ALL sign_t* sdata() { assert(_ss_data != nullptr); return _ss_data; }
+        inline Table* ztable() const { assert(_zs != nullptr); return _zs; }
 
-        INLINE_ALL word_std_t* xdata(const size_t& offset = 0) { 
+        inline sign_t* sdata() { assert(_ss_data != nullptr); return _ss_data; }
+
+        inline word_std_t* xdata(const size_t& offset = 0) { 
             assert(_xs_data != nullptr);
             assert(offset < _num_words);
             return reinterpret_cast<word_std_t*>(_xs_data) + offset;
         }
 
-        INLINE_ALL word_std_t* zdata(const size_t& offset = 0) { 
+        inline word_std_t* zdata(const size_t& offset = 0) { 
             assert(_zs_data != nullptr); 
             assert(offset < _num_words);
             return reinterpret_cast<word_std_t*>(_zs_data) + offset;

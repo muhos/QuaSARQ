@@ -5,6 +5,7 @@
 #include "locker.cuh"
 #include "tableau.cuh"
 #include "circuit.cuh"
+#include "prefix.cuh"
 #include "timer.cuh"
 #include "timer.hpp"
 #include "vector.hpp"
@@ -39,7 +40,7 @@ namespace QuaSARQ {
         Locker<DeviceAllocator>         locker;
         Tableau<DeviceAllocator>        tableau;
         Tableau<DeviceAllocator>        inv_tableau;
-        Tableau<DeviceAllocator>        prefix_tableau;
+        Prefix                          prefix;
         Statistics                      stats;
         Timer                           progress_timer;
         FILE*                           config_file;

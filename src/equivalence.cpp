@@ -130,8 +130,8 @@ void Equivalence::check() {
     assert(num_partitions == other_num_partitions);
     const size_t num_qubits_per_partition = num_partitions > 1 ? tableau.num_words_major() * WORD_BITS : num_qubits;
     const size_t other_num_qubits_per_partition = other_num_partitions > 1 ? other_tableau.num_words_major() * WORD_BITS : other_num_qubits;
-    gpu_circuit.initiate(winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
-    other_gpu_circuit.initiate(other_wininfo.max_parallel_gates, other_wininfo.max_parallel_gates_buckets);
+    gpu_circuit.initiate(num_qubits, winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
+    other_gpu_circuit.initiate(num_qubits, other_wininfo.max_parallel_gates, other_wininfo.max_parallel_gates_buckets);
     timer.stop();
     stats.time.initial += timer.time();
     // Start step-wise equivalence.

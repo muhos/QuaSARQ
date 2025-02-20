@@ -107,9 +107,9 @@ namespace QuaSARQ {
 			    __syncthreads();
 		    }
 
-            collapse_load_shared(shared_signs, signs_word, collapse_tid, tx, num_gates);
-            collapse_shared(shared_signs, signs_word, collapse_tid, BX, tx);
-            collapse_warp(shared_signs, signs_word, collapse_tid, BX, tx);
+            collapse_load_shared(shared_signs, signs_word, collapse_tid, num_gates);
+            collapse_shared(shared_signs, signs_word, collapse_tid);
+            collapse_warp(shared_signs, signs_word, collapse_tid);
 
             // Atomically collapse all blocks.
             if (!tx && global_offset < num_gates && signs_word) {

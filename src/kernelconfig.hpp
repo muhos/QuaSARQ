@@ -30,8 +30,8 @@ namespace QuaSARQ {
         CONFIG(transpose2c, 2, 128, 103, 52) \
         CONFIG(transposebits, 64, 16, 33, 1) \
         CONFIG(transposeswap, 64, 16, 33, 1) \
-        CONFIG(allpivots, 2, 128, 103, 52) \
-        CONFIG(newpivots, 2, 128, 103, 52) \
+        CONFIG(allpivots, 32, 1, 2, 1) \
+        CONFIG(newpivots, 32, 1, 2, 1) \
         CONFIG(multdeterminate, 0, 0, 0, 0) \
         CONFIG(singdeterminate, 0, 0, 0, 0) \
         CONFIG(copyindeterminate, 4, 1, 500, 1) \

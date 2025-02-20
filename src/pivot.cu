@@ -3,26 +3,11 @@
 #include "tuner.cuh"
 #include "datatypes.cuh"
 #include "shared.cuh"
+#include "commutation.cuh"
 
 namespace QuaSARQ {
 
     // Find first stabilizer generator that anti-commutes with the obeservable qubit.
-
-    // Try parallel reduction here to reduce atomicMin. 
-
-    INLINE_DEVICE void find_min_pivot_indet(Pivot& p, const qubit_t& q, const Table& inv_xs, const size_t num_qubits, const size_t num_words_major, const size_t num_words_minor) {
-        const qubit_t q_w = WORD_OFFSET(q);
-        const word_std_t q_mask = BITMASK_GLOBAL(q);
-        for_parallel_x(g, num_qubits) {
-            const size_t word_idx = g * num_words_major + q_w + num_words_minor;
-            word_std_t qubit_word = inv_xs[word_idx];       
-            if (qubit_word & q_mask) {
-                //printf("qubit(%d): g(%lld):" B2B_STR "\n", q, g, RB2B(qubit_word));
-                atomicMin(&p.indeterminate, g);
-            }
-        }
-    }
-
     INLINE_DEVICE void find_min_pivot_indet_shared(Pivot& p, const qubit_t& q, const Table& inv_xs, const size_t num_qubits, const size_t num_words_major, const size_t num_words_minor) {
         uint32* shared_mins = SharedMemory<uint32>();
         
@@ -43,12 +28,11 @@ namespace QuaSARQ {
             }
         }
 
-        min_pivot_load_shared(shared_mins, local_min, INVALID_PIVOT, shared_tid, tx, num_qubits);
-        min_pivot_shared(shared_mins, local_min, shared_tid, BX, tx);
-        min_pivot_warp(shared_mins, local_min, shared_tid, BX, tx);
+        min_pivot_load_shared(shared_mins, local_min, INVALID_PIVOT, shared_tid, num_qubits);
+        min_pivot_shared(shared_mins, local_min, shared_tid);
 
-        if (threadIdx.x == 0 && local_min != INVALID_PIVOT) {
-            atomicMin(&p.indeterminate, local_min);
+        if (!threadIdx.x && local_min != INVALID_PIVOT) { 
+            atomicMin(&(p.indeterminate), local_min);
         }
     }
 
@@ -99,7 +83,7 @@ namespace QuaSARQ {
             assert(r < NO_REF);
             Gate& m = (Gate&) measurements[r];
             assert(m.size == 1);
-            find_min_pivot_indet(pivots[i], m.wires[0], *inv_xs, num_qubits, num_words_major, num_words_minor);
+            find_min_pivot_indet_shared(pivots[i], m.wires[0], *inv_xs, num_qubits, num_words_major, num_words_minor);
         }
     }
 
@@ -112,13 +96,43 @@ namespace QuaSARQ {
         find_min_pivot(pivots[gate_index], m.wires[0], *inv_xs, num_qubits, num_words_minor);
     }
 
-    __global__ void find_new_pivot_indet(Pivot* pivots, bucket_t* measurements, ConstRefsPointer refs, ConstTablePointer inv_xs, 
-                                const size_t gate_index, const size_t num_qubits, const size_t num_words_major, const size_t num_words_minor) {
+    __global__ void find_new_pivot_and_mark(Commutation* commutations, Pivot* pivots, bucket_t* measurements, ConstRefsPointer refs, ConstTablePointer inv_xs, 
+                                            const size_t gate_index, const size_t num_qubits, const size_t num_words_major, const size_t num_words_minor) {
         const gate_ref_t r = refs[gate_index];
         assert(r < NO_REF);
         Gate& m = (Gate&) measurements[r];
         assert(m.size == 1);
-        find_min_pivot_indet(pivots[gate_index], m.wires[0], *inv_xs, num_qubits, num_words_major, num_words_minor);
+
+        uint32* shared_mins = SharedMemory<uint32>();
+        
+        grid_t tx = threadIdx.x;
+        grid_t BX = blockDim.x;
+        grid_t shared_tid = threadIdx.y * BX + tx;
+
+        const qubit_t q = m.wires[0], q_w = WORD_OFFSET(q);
+        const word_std_t q_mask = BITMASK_GLOBAL(q);
+
+        uint32 local_min = INVALID_PIVOT;
+
+        for_parallel_x(g, num_qubits) {
+            const size_t word_idx = g * num_words_major + q_w + num_words_minor;
+            const word_std_t qubit_word = (*inv_xs)[word_idx];
+            if (qubit_word & q_mask) {
+                commutations[g].anti_commuting = true;
+                //printf("qubit(%d), w(%d), t(%lld): " B2B_STR "\n", q, q_w, g, RB2B(qubit_word));
+                local_min = MIN(uint32(g), local_min);
+            }
+            else {
+                commutations[g].reset();
+            }
+        }
+
+        min_pivot_load_shared(shared_mins, local_min, INVALID_PIVOT, shared_tid, num_qubits);
+        min_pivot_shared(shared_mins, local_min, shared_tid);
+
+        if (!threadIdx.x && local_min != INVALID_PIVOT) { 
+            atomicMin(&(pivots[gate_index].indeterminate), local_min);
+        }
     }
 
     void Simulator::reset_pivots(const size_t& num_pivots, const cudaStream_t& stream) {
@@ -166,23 +180,21 @@ namespace QuaSARQ {
         }
         else {
             const size_t pivot_index = num_pivots_or_index;
-            reset_single_pivot <<<1, 1, 0, stream>>> (gpu_circuit.pivots(), pivot_index);
             if (options.tune_newpivots) {
                 SYNCALL;
 
                 // add shared memory here.
 
                 tune_kernel_m(find_new_pivot, "New pivots", bestblocknewpivots, bestgridnewpivots, gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), tab.xtable(), pivot_index, num_qubits, num_words_minor);
-                reset_single_pivot <<<1, 1>>> (gpu_circuit.pivots(), pivot_index);
                 SYNCALL;
             }
             TRIM_BLOCK_IN_DEBUG_MODE(bestblocknewpivots, bestgridnewpivots, num_qubits, 0);
             currentblock = bestblocknewpivots, currentgrid = bestgridnewpivots;
             TRIM_GRID_IN_1D(num_qubits, x);
             OPTIMIZESHARED(smem_size, currentblock.x, sizeof(uint32));
-            find_new_pivot_indet <<<currentgrid, currentblock, smem_size, stream>>> (gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), tab.xtable(), pivot_index, num_qubits, num_words_major, num_words_minor);
+            find_new_pivot_and_mark <<<currentgrid, currentblock, smem_size, stream>>> (tab.commutations(), gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), tab.xtable(), pivot_index, num_qubits, num_words_major, num_words_minor);
             if (options.sync) {
-                LASTERR("failed to launch find_new_pivot_indet kernel");
+                LASTERR("failed to launch find_new_pivot_and_mark kernel");
                 SYNC(stream);
             }
         }

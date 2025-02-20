@@ -26,8 +26,8 @@ namespace QuaSARQ {
 		size_t max_references;
 		size_t max_buckets;
 		size_t num_gates;
+		size_t max_qubits;
 
-		gate_ref_t num_buckets_prev;
 		gate_ref_t buckets_offset;
 
 		template <class T>
@@ -56,6 +56,7 @@ namespace QuaSARQ {
 		,	max_references(0)
 		,	max_buckets(0)
 		,	num_gates(0)
+		,	max_qubits(0)
 		,	buckets_offset(0)
 		{ }
 
@@ -70,11 +71,13 @@ namespace QuaSARQ {
 		} 
 
 		inline
-		void 		initiate			(const size_t& max_references, const size_t& max_buckets) {
+		void 		initiate			(const size_t& max_qubits, const size_t& max_references, const size_t& max_buckets) {
+			if (!max_qubits || max_qubits > MAX_QUBITS)
+				LOGERROR("maximum number of qubits per window is invalid.");
 			if (!max_references || max_references > MAX_QUBITS)
 				LOGERROR("maximum number of references per window is invalid.");
 			if (!max_buckets || max_buckets > NO_REF)
-				LOGERROR("maximum number of buckets per window is invalid.");
+				LOGERROR("maximum number of buckets per window is invalid.");		
 			if (this->max_references < max_references) {
 				LOGN2(2, "Resizing a (pinned) window for %lld references.. ", int64(max_references));
 				this->max_references = max_references;
@@ -91,6 +94,7 @@ namespace QuaSARQ {
 				allocator.template resize_pinned<bucket_t>(_pinned_buckets, max_buckets);
 				LOGDONE(2, 3);
 			}
+			this->max_qubits = max_qubits;
 		}
 
 		inline
@@ -103,6 +107,7 @@ namespace QuaSARQ {
 			if (buckets_offset >= circuit.num_buckets()) 
 				LOGERROR("buckets offset overflow during gates transfer to GPU.");
 			num_gates = circuit[depth_level].size();
+			assert(num_gates <= max_qubits);
 			const auto curr_num_buckets = circuit.num_buckets(depth_level);
 			assert(num_gates <= max_references);
 			assert(curr_num_buckets <= max_buckets);
@@ -157,6 +162,7 @@ namespace QuaSARQ {
 		inline
 		void 		copypivots		(const cudaStream_t& stream, const size_t& num_pivots) {
 			assert(num_pivots <= num_gates);
+			assert(num_pivots <= max_qubits);
 			LOGN2(2, "Copying back %lld pivots to host asynchroneously.. ", int64(num_pivots));
 			CHECK(cudaMemcpyAsync(_pinned_pivots, _pivots, sizeof(Pivot) * num_pivots, cudaMemcpyDeviceToHost, stream));
 			LOGDONE(2, 3);
@@ -179,7 +185,6 @@ namespace QuaSARQ {
 		inline
 		void 		copypivotto 	(Pivot& pivot, const uint32& gate_index, const cudaStream_t& stream) {
 			LOGN2(2, "Copying gate pivot to host asynchroneously.. ");
-			
 			CHECK(cudaMemcpyAsync(&(pivot), _pivots + gate_index, sizeof(Pivot), cudaMemcpyDeviceToHost, stream));
 			LOGDONE(2, 3);
 		}

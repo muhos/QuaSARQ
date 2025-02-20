@@ -71,6 +71,33 @@ namespace QuaSARQ {
 		while (isDigit(*str)) n = n * 10ULL + (*str++ - '0');
 		return n;
 	}
+	inline void nextPow2(uint32& x) {
+		if (x == 0) {
+			x = 1;
+			return;
+		}
+		x--;
+		x |= x >> 1;
+		x |= x >> 2;
+		x |= x >> 4;
+		x |= x >> 8;
+		x |= x >> 16;
+		x++;
+	}
+	inline void nextPow2(size_t& x) {
+		if (x == 0) {
+			x = 1;
+			return;
+		}
+		x--;
+		x |= x >> 1;
+		x |= x >> 2;
+		x |= x >> 4;
+		x |= x >> 8;
+		x |= x >> 16;
+		x |= x >> 32;
+		x++;
+	}
 	template<class T>
 	inline bool		eq				(T& in, const char* ref) {
 		while (*ref) { if (*ref != *in) return false; ref++; in++; }

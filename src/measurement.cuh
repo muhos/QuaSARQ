@@ -47,9 +47,9 @@ namespace QuaSARQ {
 
     // Accumulate thread-local values in shared memory.
     #define ACCUMULATE_POWER_I(GLOBAL_POWER) \
-        load_shared(pos_is, pos_i, neg_is, neg_i, shared_tid, tx, num_words_minor); \
-        sum_shared(pos_is, pos_i, neg_is, neg_i, shared_tid, BX, tx); \
-        sum_warp(pos_is, pos_i, neg_is, neg_i, shared_tid, BX, tx); \
+        load_shared(pos_is, pos_i, neg_is, neg_i, shared_tid, num_words_minor); \
+        sum_shared(pos_is, pos_i, neg_is, neg_i, shared_tid); \
+        sum_warp(pos_is, pos_i, neg_is, neg_i, shared_tid); \
         if (!tx) { \
             assert(pos_i >= 0 && pos_i < UNMEASURED); \
             assert(neg_i >= 0 && neg_i < UNMEASURED); \
@@ -58,9 +58,9 @@ namespace QuaSARQ {
         }
 
     #define ACCUMULATE_POWER_I_OFFSET(GLOBAL_POWER, OFFSET) \
-        load_shared(pos_is, pos_i, neg_is, neg_i, shared_tid, tx, num_words_minor); \
-        sum_shared(pos_is, pos_i, neg_is, neg_i, shared_tid, BX, tx); \
-        sum_warp(pos_is, pos_i, neg_is, neg_i, shared_tid, BX, tx); \
+        load_shared(pos_is, pos_i, neg_is, neg_i, shared_tid, num_words_minor); \
+        sum_shared(pos_is, pos_i, neg_is, neg_i, shared_tid); \
+        sum_warp(pos_is, pos_i, neg_is, neg_i, shared_tid); \
         if (!tx) { \
             assert(pos_i >= 0 && pos_i < UNMEASURED); \
             assert(neg_i >= 0 && neg_i < UNMEASURED); \

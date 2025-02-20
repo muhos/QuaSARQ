@@ -56,11 +56,11 @@ namespace QuaSARQ {
 
             word_std_t xored = xored_x ^ xored_z;
 
-            collapse_load_shared(shared_xored, xored, collapse_tid, tx, num_qubits);
+            collapse_load_shared(shared_xored, xored, collapse_tid, num_qubits);
 
-            collapse_shared(shared_xored, xored, collapse_tid, BX, tx);
+            collapse_shared(shared_xored, xored, collapse_tid);
 
-            collapse_warp(shared_xored, xored, collapse_tid, BX, tx);
+            collapse_warp(shared_xored, xored, collapse_tid);
 
             if (!tx && global_offset < num_qubits) {     
                 atomicAdd(&checksum, __popcll(uint64(xored)));
@@ -114,11 +114,11 @@ namespace QuaSARQ {
 
             word_std_t xored = xored_x ^ xored_z;
 
-            collapse_load_shared(shared_xored, xored, collapse_tid, tx, num_qubits);
+            collapse_load_shared(shared_xored, xored, collapse_tid, num_qubits);
 
-            collapse_shared(shared_xored, xored, collapse_tid, BX, tx);
+            collapse_shared(shared_xored, xored, collapse_tid);
 
-            collapse_warp(shared_xored, xored, collapse_tid, BX, tx);
+            collapse_warp(shared_xored, xored, collapse_tid);
 
             if (!tx && global_offset < num_qubits) {
                 atomicAdd(&checksum, __popcll(uint64(xored)));
@@ -176,11 +176,11 @@ namespace QuaSARQ {
     #endif
             word_std_t xored = xored_x ^ xored_z;
 
-            collapse_load_shared(shared_xored, xored, collapse_tid, tx, num_qubits);
+            collapse_load_shared(shared_xored, xored, collapse_tid, num_qubits);
 
-            collapse_shared(shared_xored, xored, collapse_tid, BX, tx);
+            collapse_shared(shared_xored, xored, collapse_tid);
 
-            collapse_warp(shared_xored, xored, collapse_tid, BX, tx);
+            collapse_warp(shared_xored, xored, collapse_tid);
 
             if (!tx && global_offset < num_qubits) {
                 atomicAdd(&checksum, __popcll(uint64(xored)));

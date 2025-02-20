@@ -175,27 +175,25 @@ namespace QuaSARQ {
             _data[idx].identity(q);
         }
 
-        INLINE_ALL word_t* words(const qubit_t& q) {          
-            const size_t idx = q * _num_words_major;
+        // Same as data() but returns 'word_std_t' value at index 'idx'.
+        INLINE_ALL word_std_t* words(const size_t& idx = 0) {          
             assert(idx < _num_words);
-            return _data + idx;
+            return reinterpret_cast<word_std_t*>(_data) + idx;
         }
 
-        INLINE_ALL const word_t* words(const qubit_t& q) const { 
-            const size_t idx = q * _num_words_major;
+        // Same as data() but returns 'word_std_t' value at index 'idx'.
+        INLINE_ALL const word_std_t* words(const size_t& idx = 0) const { 
             assert(idx < _num_words);
-            return _data + idx;
+            return reinterpret_cast<word_std_t*>(_data) + idx;
         }
 
-        // 'idx' is a matrix index.
-        // Return table word.
+        // Return table 'word_t' type.
         INLINE_ALL const word_t operator[] (const size_t& idx) const {
             assert(idx < _num_words);
             return _data[idx];
         }
 
-        // 'idx' is a matrix index.
-        // Return table word.
+        // Return table 'word_t' type.
         INLINE_ALL word_t& operator[] (const size_t& idx) {
             assert(idx < _num_words);
             return _data[idx];
