@@ -234,8 +234,7 @@ namespace QuaSARQ {
 				gate.print();
                 if (gate.type == M) {
                     REPCH_GPU(" ", 25);
-                    LOGGPU("pivot");
-                    pivots[i].print();
+                    LOGGPU("pivot: %d", pivots[i]);
                 }
 			}
 		}
@@ -247,7 +246,7 @@ namespace QuaSARQ {
             const Gate &m = (Gate &)measurements[r];
             LOGGPU(" q%-10d: %c (%s)\n", m.wires[0], 
                 m.measurement != UNMEASURED ? char(((m.measurement % 4 + 4) % 4 >> 1) + 48) : 'U',
-                pivots[i].indeterminate == INVALID_PIVOT ? "definite" : "random");
+                pivots[i] == INVALID_PIVOT ? "definite" : "random");
             // LOGGPU(" %8d     %10s    %2d\n", m.wires[0], 
             // 	m.pivot == MAX_QUBITS ? "definite" : "random",  
             // 	m.measurement != UNMEASURED ? m.measurement : -1);

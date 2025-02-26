@@ -95,20 +95,20 @@ namespace QuaSARQ {
 		const char* opname, dim3& bestBlock, dim3& bestGrid,
 		const size_t& offset, const size_t& size, Table* xs, Table* zs);
 
-	void tune_kernel_m(void (*kernel)(Pivot*, const size_t),
+	void tune_kernel_m(void (*kernel)(pivot_t*, const size_t),
 		const char* opname, dim3& bestBlock, dim3& bestGrid,
-		Pivot* pivots, const size_t size);
+		pivot_t* pivots, const size_t size);
 
-	void tune_kernel_m(void (*kernel)(Pivot*, bucket_t*, ConstRefsPointer, ConstTablePointer, const size_t, const size_t, const size_t),
+	void tune_kernel_m(void (*kernel)(pivot_t*, bucket_t*, ConstRefsPointer, ConstTablePointer, const size_t, const size_t, const size_t),
 		const char* opname, dim3& bestBlock, dim3& bestGrid, const size_t& shared_element_bytes, const bool& shared_size_yextend,
 		const size_t& data_size_in_x, const size_t& data_size_in_y,
-		Pivot* pivots, bucket_t* measurements, ConstRefsPointer refs, ConstTablePointer inv_xs, 
+		pivot_t* pivots, bucket_t* measurements, ConstRefsPointer refs, ConstTablePointer inv_xs, 
         const size_t num_gates, const size_t num_qubits, const size_t num_words_minor);
 
-	void tune_kernel_m(void (*kernel)(Pivot*, bucket_t*, ConstRefsPointer, ConstTablePointer, 
+	void tune_kernel_m(void (*kernel)(pivot_t*, bucket_t*, ConstRefsPointer, ConstTablePointer, 
         const size_t, const size_t, const size_t),
 		const char* opname, dim3& bestBlock, dim3& bestGrid, 
-		Pivot* pivots, bucket_t* measurements, ConstRefsPointer refs, ConstTablePointer inv_xs, 
+		pivot_t* pivots, bucket_t* measurements, ConstRefsPointer refs, ConstTablePointer inv_xs, 
         const size_t& gate_index, const size_t& num_qubits, const size_t& num_words_minor);
 
 	void tune_outplace_transpose(void (*kernel)(Table*, Table*, Signs*, ConstTablePointer, ConstTablePointer, ConstSignsPointer, const size_t, const size_t, const size_t),

@@ -74,7 +74,7 @@ void Simulator::initialize() {
     // degradation to CPU performance.
     // The KB extra space is used for tableau allocations.
     gpu_allocator.create_cpu_pool(winfo.max_window_bytes 
-                                + winfo.max_parallel_gates * sizeof(Pivot)
+                                + winfo.max_parallel_gates * sizeof(pivot_t)
                                 + KB);
     if (!options.tuner_en) register_config();
     create_streams(custreams);

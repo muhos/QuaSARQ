@@ -15,11 +15,11 @@ namespace QuaSARQ {
 
 		ALLOCATOR& allocator;
 
-		Pivot* _pivots;
+		pivot_t* _pivots;
 		bucket_t* _buckets;
 		gate_ref_t* _references;
 
-		Pivot* _pinned_pivots;
+		pivot_t* _pinned_pivots;
 		bucket_t* _pinned_buckets;
 		gate_ref_t* _pinned_references;
 
@@ -81,8 +81,8 @@ namespace QuaSARQ {
 			if (this->max_references < max_references) {
 				LOGN2(2, "Resizing a (pinned) window for %lld references.. ", int64(max_references));
 				this->max_references = max_references;
-				_pivots = allocator.template allocate<Pivot>(max_references);
-				allocator.template resize_pinned<Pivot>(_pinned_pivots, max_references);
+				_pivots = allocator.template allocate<pivot_t>(max_references);
+				allocator.template resize_pinned<pivot_t>(_pinned_pivots, max_references);
 				_references = allocator.template allocate<gate_ref_t>(max_references);
 				allocator.template resize_pinned<gate_ref_t>(_pinned_references, max_references);
 				LOGDONE(2, 3);
@@ -164,7 +164,7 @@ namespace QuaSARQ {
 			assert(num_pivots <= num_gates);
 			assert(num_pivots <= max_qubits);
 			LOGN2(2, "Copying back %lld pivots to host asynchroneously.. ", int64(num_pivots));
-			CHECK(cudaMemcpyAsync(_pinned_pivots, _pivots, sizeof(Pivot) * num_pivots, cudaMemcpyDeviceToHost, stream));
+			CHECK(cudaMemcpyAsync(_pinned_pivots, _pivots, sizeof(pivot_t) * num_pivots, cudaMemcpyDeviceToHost, stream));
 			LOGDONE(2, 3);
 		}
 
@@ -183,21 +183,21 @@ namespace QuaSARQ {
 		}
 
 		inline
-		void 		copypivotto 	(Pivot& pivot, const uint32& gate_index, const cudaStream_t& stream) {
-			CHECK(cudaMemcpyAsync(&(pivot), _pivots + gate_index, sizeof(Pivot), cudaMemcpyDeviceToHost, stream));
+		void 		copypivotto 	(pivot_t& pivot, const uint32& gate_index, const cudaStream_t& stream) {
+			CHECK(cudaMemcpyAsync(&(pivot), _pivots + gate_index, sizeof(pivot_t), cudaMemcpyDeviceToHost, stream));
 		}
 
 		inline
-		Pivot*    	 pivots			(const size_t& idx = 0) { return _pivots + idx; }
+		pivot_t*    	 pivots			(const size_t& idx = 0) { return _pivots + idx; }
 
 		inline const
-		Pivot*    	 pivots			(const size_t& idx = 0) const { return _pivots + idx; }
+		pivot_t*    	 pivots			(const size_t& idx = 0) const { return _pivots + idx; }
 
 		inline
-		Pivot*    	 host_pivots	() { return _pinned_pivots; }
+		pivot_t*    	 host_pivots	() { return _pinned_pivots; }
 
 		inline const
-		Pivot*    	 host_pivots	() const { return _pinned_pivots; }
+		pivot_t*    	 host_pivots	() const { return _pinned_pivots; }
 
 		inline
 		bucket_t*    gates			() { return _buckets; }
@@ -213,17 +213,6 @@ namespace QuaSARQ {
 
 		inline gate_ref_t 	
 				get_buckets_offset	() const { return buckets_offset; }
-
-		inline 
-		void 		print_pivots	() const {
-			if (_pinned_pivots == nullptr) 
-				return;
-			for (auto i = 0; i < num_gates; i++) {
-				PRINT("qubit(%d)->", i);
-				_pinned_pivots[i].print();
-			}
-			fflush(stdout);
-		}
 
 	};
 }

@@ -11,7 +11,7 @@ namespace QuaSARQ {
 
 	typedef const Table* __restrict__ ConstTablePointer;
     typedef const Signs* __restrict__ ConstSignsPointer;
-    typedef const Pivot* __restrict__ ConstPivotsPointer;
+    typedef const pivot_t* __restrict__ ConstPivotsPointer;
 	typedef const bucket_t* __restrict__ ConstBucketsPointer;
     typedef const gate_ref_t* __restrict__ ConstRefsPointer;
 

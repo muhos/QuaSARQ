@@ -168,20 +168,18 @@ namespace QuaSARQ {;
         reset_pivots(num_gates_per_window, kernel_stream1);
 
         // Sync pivots wth host.
-        SYNC(kernel_stream1); 
-        
-        gpu_circuit.print_pivots();
+        SYNC(kernel_stream1);
 
-        Pivot* host_pivots = gpu_circuit.host_pivots();
+        pivot_t* host_pivots = gpu_circuit.host_pivots();
         int64 random_measures = 0;
 
         bool initial_pivot = true;
         for(size_t i = 0; i < num_gates_per_window; i++) {
-            const Pivot curr_pivot = host_pivots[i];
+            const pivot_t curr_pivot = host_pivots[i];
             const Gate& curr_gate = circuit.gate(depth_level, i);
             const qubit_t qubit = curr_gate.wires[0];
-            Pivot new_pivot;
-            if (curr_pivot.indeterminate != INVALID_PIVOT) {
+            pivot_t new_pivot = INVALID_PIVOT;
+            if (curr_pivot != INVALID_PIVOT) {
                 if (initial_pivot) {
                     new_pivot = curr_pivot;
                     uint32 mark_blocksize = 4, mark_gridsize = 1;
@@ -196,11 +194,11 @@ namespace QuaSARQ {;
                     gpu_circuit.copypivotto(new_pivot, i, kernel_stream1);
                     SYNC(kernel_stream1);                
                 }
-                if (new_pivot.indeterminate != INVALID_PIVOT) {
-                    LOGN2(2, "Meauring qubit %d using pivot %d.. ", qubit, new_pivot.indeterminate);
+                if (new_pivot != INVALID_PIVOT) {
+                    LOGN2(2, "Meauring qubit %d using pivot %d.. ", qubit, new_pivot);
                     cutimer.start();
                     #if !DEBUG_INJECT_CX
-                    prefix.inject_CX(tableau, new_pivot.indeterminate, qubit, kernel_stream1);
+                    prefix.inject_CX(tableau, new_pivot, qubit, kernel_stream1);
                     #else
                     const uint32 blocksize = 8;
                     const uint32 gridsize = ROUNDUP(num_words_minor, blocksize);
@@ -217,7 +215,7 @@ namespace QuaSARQ {;
                     check_x_destab <<<1, 1, 0, kernel_stream1>>> (
                                 tableau.commutations(), 
                                 tableau.xtable(), 
-                                new_pivot.indeterminate, 
+                                new_pivot, 
                                 qubit, 
                                 num_words_major);
 
@@ -228,14 +226,14 @@ namespace QuaSARQ {;
                         XZ_TABLE(tableau), 
                         tableau.signs(), 
                         tableau.commutations(), 
-                        new_pivot.indeterminate, 
+                        new_pivot, 
                         num_words_major, 
                         num_words_minor);
                     
                     LOGDONE(2, 4);
                     
                     //printf("After inject_CX:\n"), print_tableau(prefix_tableau, depth_level, false, true);
-                    SYNC(kernel_stream1); printf("After signs update for pivot %d:\n", new_pivot.indeterminate);//, print_tableau(tableau, depth_level, false, false);
+                    SYNC(kernel_stream1); printf("After signs update for pivot %d:\n", new_pivot);//, print_tableau(tableau, depth_level, false, false);
                 }
             }
         }
@@ -261,8 +259,8 @@ namespace QuaSARQ {;
     int64 Simulator::measure_indeterminate(const depth_t& depth_level, const cudaStream_t& stream) {
         const size_t num_words_minor = tableau.num_words_minor();
         const size_t num_gates_per_window = circuit[depth_level].size();
-        Pivot* host_pivots = gpu_circuit.host_pivots();
-        Pivot new_pivot;
+        pivot_t* host_pivots = gpu_circuit.host_pivots();
+        pivot_t new_pivot;
         int64 random_measures = 0;
         
 
