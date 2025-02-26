@@ -81,7 +81,6 @@ namespace QuaSARQ {
             if (!blockIdx.x && !blockIdx.y && !threadIdx.x) {
                 xs->flag_orientation(row_major);
             }
-            //for (size_t a = blockIdx.y; a < num_words_minor; a += gridDim.y) {
             for_parallel_y(a, num_words_minor) {
                 for (size_t b = blockIdx.x; b < num_words_major; b += gridDim.x) {
                     // Inline transpose a tile of WORD_BITS words, each word has WORD_BITS bits.
@@ -96,7 +95,6 @@ namespace QuaSARQ {
             if (!blockIdx.x && !blockIdx.y && !threadIdx.x) {
                 zs->flag_orientation(row_major);
             }
-            //for (size_t a = blockIdx.y; a < num_words_minor; a += gridDim.y) {
             for_parallel_y(a, num_words_minor) {
                 for (size_t b = blockIdx.x; b < num_words_major; b += gridDim.x) {
                     // Inline transpose a tile of WORD_BITS words, each word has WORD_BITS bits.
@@ -106,7 +104,6 @@ namespace QuaSARQ {
                 }
             }
         }
-        
     }
 
     INLINE_DEVICE void swap_tile(word_std_t* data, word_std_t* shared, const size_t& a, const size_t& b, const size_t& num_words_major, const size_t& offset) {
@@ -127,7 +124,6 @@ namespace QuaSARQ {
         word_std_t* shared = SharedMemory<word_std_t>();
         if (blockIdx.z == 0) {
             word_std_t* xdata = reinterpret_cast<word_std_t*>(xs->data());
-            //for (size_t a = blockIdx.y; a < num_words_minor; a += gridDim.y) {
             for_parallel_y(a, num_words_minor) {
                 for (size_t b = blockIdx.x; b < num_words_minor; b += gridDim.x) {
                     // Only swap words above diagonal
@@ -142,7 +138,6 @@ namespace QuaSARQ {
         }
         if (blockIdx.z == 1) {      
             word_std_t* zdata = reinterpret_cast<word_std_t*>(zs->data());
-            //for (size_t a = blockIdx.y; a < num_words_minor; a += gridDim.y) {
             for_parallel_y(a, num_words_minor) {
                 for (size_t b = blockIdx.x; b < num_words_minor; b += gridDim.x) {
                     // Only swap words above diagonal
@@ -286,45 +281,6 @@ namespace QuaSARQ {
             SYNC(stream);
         }
         LOGDONE(2, 4);
-
-        // if (row_major) {
-        //     if (options.tune_transpose2r) {
-        //         SYNCALL;
-        //         tune_outplace_transpose(outplace_transpose_to_rowmajor, "Transposing to row-major", 
-        //         bestblocktranspose2r, bestgridtranspose2r, 
-        //         0, false,        // shared size, extend?
-        //         num_words_major, // x-dim
-        //         2 * num_qubits,  // y-dim 
-        //         XZ_TABLE(inv_tableau), inv_tableau.signs(), XZ_TABLE(tableau), tableau.signs(), num_words_major, num_words_minor, num_qubits);
-        //     }
-        //     TRIM_BLOCK_IN_DEBUG_MODE(bestblocktranspose2r, bestgridtranspose2r, num_words_major, 2 * num_qubits);
-        //     currentblock = bestblocktranspose2r, currentgrid = bestgridtranspose2r;
-        //     TRIM_GRID_IN_XY(num_words_major, 2 * num_qubits);
-        //     outplace_transpose_to_rowmajor <<< currentgrid, currentblock, 0, stream >>> (XZ_TABLE(inv_tableau), inv_tableau.signs(), XZ_TABLE(tableau), tableau.signs(), num_words_major, num_words_minor, num_qubits);
-        //     if (options.sync) {
-        //         LASTERR("failed to launch outplace_transpose_to_rowmajor kernel");
-        //         SYNC(stream);
-        //     }
-        // }
-        // else {
-        //     if (options.tune_transpose2c) {
-        //         SYNCALL;
-        //         tune_outplace_transpose(outplace_transpose_to_colmajor, "Transposing to column-major", 
-        //         bestblocktranspose2c, bestgridtranspose2c, 
-        //         0, false,        // shared size, extend?
-        //         num_words_major, // x-dim
-        //         num_qubits,      // y-dim 
-        //         XZ_TABLE(tableau), tableau.signs(), XZ_TABLE(inv_tableau), inv_tableau.signs(), num_words_major, num_words_minor, num_qubits);
-        //     }
-        //     TRIM_BLOCK_IN_DEBUG_MODE(bestblocktranspose2c, bestgridtranspose2c, num_words_major, num_qubits);
-        //     currentblock = bestblocktranspose2c, currentgrid = bestgridtranspose2c;     
-        //     TRIM_GRID_IN_XY(num_words_major, num_qubits);
-        //     outplace_transpose_to_colmajor <<< currentgrid, currentblock, 0, stream >>> (XZ_TABLE(tableau), tableau.signs(), XZ_TABLE(inv_tableau), inv_tableau.signs(), num_words_major, num_words_minor, num_qubits);
-        //     if (options.sync) {
-        //         LASTERR("failed to launch outplace_transpose_to_colmajor kernel");
-        //         SYNC(stream);
-        //     }
-        // }
     }
 
 }

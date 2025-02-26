@@ -29,7 +29,6 @@ Simulator::Simulator() :
 	, gpu_circuit(gpu_allocator)
     , locker(gpu_allocator)
     , tableau(gpu_allocator)
-    , inv_tableau(gpu_allocator)
     , prefix(gpu_allocator)
 	, config_file(nullptr)
     , config_qubits(0)
@@ -52,7 +51,6 @@ Simulator::Simulator(const string& path) :
     , gpu_circuit(gpu_allocator)
     , locker(gpu_allocator)
     , tableau(gpu_allocator)
-    , inv_tableau(gpu_allocator)
     , prefix(gpu_allocator)
     , config_file(nullptr)
     , config_qubits(0)
@@ -132,7 +130,6 @@ void Simulator::simulate() {
     Power power;
     timer.start();
     num_partitions = tableau.alloc(num_qubits, winfo.max_window_bytes, false, measuring);
-    //inv_tableau.alloc(num_qubits, winfo.max_window_bytes, measuring, true);
     if (measuring) {
         prefix.alloc(tableau, winfo.max_window_bytes);
     }

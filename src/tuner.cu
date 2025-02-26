@@ -47,7 +47,6 @@ namespace QuaSARQ {
 		// Resize tableaux.
 		if (num_qubits < tableau.num_qubits()) {
 			tableau.resize(num_qubits, winfo.max_window_bytes, measuring);
-			//inv_tableau.resize(num_qubits, winfo.max_window_bytes, measuring, true);
 		}
 	}
 
@@ -58,7 +57,6 @@ namespace QuaSARQ {
 		const size_t max_num_qubits = num_qubits;
 		num_partitions = 1;
 		tableau.alloc(max_num_qubits, winfo.max_window_bytes, false, measuring);
-		//inv_tableau.alloc(max_num_qubits, winfo.max_window_bytes, measuring, true);
 		gpu_circuit.initiate(num_qubits, winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
 		// Start tuning simulation with max qubits.
 		do {
@@ -168,7 +166,7 @@ namespace QuaSARQ {
 				const size_t shared_size = shared_element_bytes * blockX; \
 				if (shared_size > maxGPUSharedMem) continue; \
 				if (blockX % maxWarpSize != 0) continue; \
-				const int64 gridX = ROUNDUPBLOCKS(size, blockX); \
+				const int64 gridX = ROUNDUP(size, blockX); \
 				if (gridX > maxBlocksPerGrid) continue; \
 				dim3 block((uint32)blockX); \
 				dim3 grid((uint32)gridX); \
@@ -302,7 +300,7 @@ namespace QuaSARQ {
 						if (extended_shared_size >= maxGPUSharedMem || threadsPerBlock > maxThreadsPerBlock) continue; \
 						/* Avoid deadloack due to warp divergence. */ \
 						if (threadsPerBlock % maxWarpSize != 0) continue; \
-						const int64 blocksX = ROUNDUPBLOCKS(data_size_in_x, threadsX); \
+						const int64 blocksX = ROUNDUP(data_size_in_x, threadsX); \
 						if (blocksX > maxBlocksPerGridX) continue; \
 						dim3 block((uint32)threadsX, (uint32)threadsY); \
 						dim3 grid((uint32)blocksX, (uint32)blocksY); \

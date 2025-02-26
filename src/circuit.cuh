@@ -184,9 +184,7 @@ namespace QuaSARQ {
 
 		inline
 		void 		copypivotto 	(Pivot& pivot, const uint32& gate_index, const cudaStream_t& stream) {
-			LOGN2(2, "Copying gate pivot to host asynchroneously.. ");
 			CHECK(cudaMemcpyAsync(&(pivot), _pivots + gate_index, sizeof(Pivot), cudaMemcpyDeviceToHost, stream));
-			LOGDONE(2, 3);
 		}
 
 		inline

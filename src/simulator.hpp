@@ -39,7 +39,6 @@ namespace QuaSARQ {
         DeviceCircuit<DeviceAllocator>  gpu_circuit;
         Locker<DeviceAllocator>         locker;
         Tableau<DeviceAllocator>        tableau;
-        Tableau<DeviceAllocator>        inv_tableau;
         Prefix                          prefix;
         Statistics                      stats;
         Timer                           progress_timer;
@@ -92,9 +91,6 @@ namespace QuaSARQ {
         void transpose(const bool& row_major, const cudaStream_t& stream);
         void reset_pivots(const size_t& num_pivots, const cudaStream_t& stream);
         void find_pivots(Tableau<DeviceAllocator>& tab, const size_t& num_pivots_or_index, const bool& bulky, const cudaStream_t& stream);
-        void initialize_determinate(const size_t& num_gates, const cudaStream_t& stream);
-        void measure_determinate(const size_t& num_gates_or_index, const bool& bulku, const cudaStream_t& stream);
-        void measure_indeterminate(const size_t& gate_index, const cudaStream_t& stream = 0);
         int64 measure_indeterminate(const depth_t& depth_level, const cudaStream_t& stream = 0);
         void measure(const size_t& p, const depth_t& depth_level, const bool& reversed = false);
 

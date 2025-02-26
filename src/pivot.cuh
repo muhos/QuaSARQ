@@ -65,21 +65,27 @@ namespace QuaSARQ {
         if (threadIdx.x < 32) { \
             if (blockDim.x >= 64) { \
                 smem[tid] = val = MIN(val, smem[tid + 32]); \
+                __syncthreads(); \
             } \
             if (blockDim.x >= 32) { \
                 smem[tid] = val = MIN(val, smem[tid + 16]); \
+                __syncthreads(); \
             } \
             if (blockDim.x >= 16) { \
                 smem[tid] = val = MIN(val, smem[tid + 8]); \
+                __syncthreads(); \
             } \
             if (blockDim.x >= 8) { \
                 smem[tid] = val = MIN(val, smem[tid + 4]); \
+                __syncthreads(); \
             } \
             if (blockDim.x >= 4) { \
                 smem[tid] = val = MIN(val, smem[tid + 2]); \
+                __syncthreads(); \
             } \
             if (blockDim.x >= 2) { \
                 smem[tid] = val = MIN(val, smem[tid + 1]); \
+                __syncthreads(); \
             } \
         } \
 	}

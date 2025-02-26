@@ -30,47 +30,47 @@ namespace QuaSARQ {
 
         for_parallel_y(w, num_words_minor) {
 
-            word_std_t t_delta_z = 0;
-            word_std_t t_delta_x = 0;
+            const size_t c_destab = c * num_words_major + w;
+            assert(c_destab < inv_zs->size());
+            assert(c_destab < inv_xs->size());
 
-            grid_t global_tid = blockIdx.x * blockDim.x + threadIdx.x;
+            for_parallel_x(tid_x, total_targets) {
 
-            // make it grid-stride loop, looping over blocks.
-            // for (size_t tile_id = blockIdx.x; tile_id < num_tiles; tile_id += gridDim.x) {
-            if (global_tid < total_targets) { 
-                size_t t = global_tid + c + 1;
+                const size_t t = tid_x + c + 1;
+                word_std_t t_delta_z = 0;
+                word_std_t t_delta_x = 0;
+
                 if (commutations[t].anti_commuting) {
                     const size_t t_destab = t * num_words_major + w;
                     assert(t_destab < inv_zs->size());
+                    assert(t_destab < inv_xs->size());
                     t_delta_z = zs[t_destab];
                     t_delta_x = xs[t_destab];
                 }
-            }
+            
 
-            t_prefix_z[prefix_tid] = t_delta_z;
-            t_prefix_x[prefix_tid] = t_delta_x;
+                t_prefix_z[prefix_tid] = t_delta_z;
+                t_prefix_x[prefix_tid] = t_delta_x;
 
-            __syncthreads();
+                __syncthreads();
 
-            // In-place inclusive XOR prefix-scan
-            word_std_t blockSum_z = scan_block_exclusive(t_prefix_z, blockDim.x);
-            word_std_t blockSum_x = scan_block_exclusive(t_prefix_x, blockDim.x);
+                word_std_t blockSum_z = scan_block_exclusive(t_prefix_z, blockDim.x);
+                word_std_t blockSum_x = scan_block_exclusive(t_prefix_x, blockDim.x);
 
-            // Write each thread's final prefix-scan value to output
-            if (global_tid < total_targets) {
-                const size_t c_destab = c * num_words_major + w;
-                assert(c_destab < inv_zs->size());
                 // Compute local zc = zc ^ zt, where zt is the zt'prefix.
-                (*prefix_zs)[global_tid * num_words_minor + w] = word_std_t(zs[c_destab]) ^ t_prefix_z[prefix_tid];
+                (*prefix_zs)[tid_x * num_words_minor + w] = word_std_t(zs[c_destab]) ^ t_prefix_z[prefix_tid];
                 // Compute local xc = xc ^ xt, where xt is the xt'prefix.
-                (*prefix_xs)[global_tid * num_words_minor + w] = word_std_t(xs[c_destab]) ^ t_prefix_x[prefix_tid];
-            }
+                (*prefix_xs)[tid_x * num_words_minor + w] = word_std_t(xs[c_destab]) ^ t_prefix_x[prefix_tid];
 
-            if (threadIdx.x == blockDim.x - 1) {
-                assert((blockIdx.x * num_words_minor + w) < gridDim.x * num_words_minor);
-                block_intermediate_prefix_z[blockIdx.x * num_words_minor + w] = blockSum_z;
-                block_intermediate_prefix_x[blockIdx.x * num_words_minor + w] = blockSum_x;
-                // printf("w(%lld), t(%lld):  block intermediate prefix-xor (tz) = " B2B_STR "\n", w, global_tid, RB2B(block_intermediate_prefix_z[blockIdx.x * num_words_minor + w]));
+
+                if (threadIdx.x == blockDim.x - 1) {
+                    assert((blockIdx.x * num_words_minor + w) < gridDim.x * num_words_minor);
+                    grid_t bid = tid_x / blockDim.x;
+                    block_intermediate_prefix_z[bid * num_words_minor + w] = blockSum_z;
+                    block_intermediate_prefix_x[bid * num_words_minor + w] = blockSum_x;
+                    // printf("w(%lld), t(%lld):  block intermediate prefix-xor (tz) = " B2B_STR "\n", w, global_tid, RB2B(block_intermediate_prefix_z[blockIdx.x * num_words_minor + w]));
+                }
+
             }
         }
     }
@@ -212,11 +212,9 @@ namespace QuaSARQ {
 
             for_parallel_x(tid_x, total_targets) {
                 size_t t = tid_x + c + 1;
-                if (commutations[t].anti_commuting)
-                {
+                if (commutations[t].anti_commuting) {
                     local_destab_sign ^= (word_std_t)(*prefix_zs)[tid_x * num_words_minor + w];
                     local_stab_sign ^= (word_std_t)(*prefix_xs)[tid_x * num_words_minor + w];
-                    // printf("w(%lld), t(%lld): xc_and_zt & not_zc_xor_xt = " B2B_STR "\n", w, t, RB2B(local_destab_sign));
                 }
             }
 
@@ -235,16 +233,17 @@ namespace QuaSARQ {
     // so that later we can xor every prefix-xor with controlled destabilizer.
     void Prefix::inject_CX(Tableau<DeviceAllocator>& input, const uint32& pivot, const qubit_t& qubit, const cudaStream_t& stream) {
         assert(num_qubits > pivot);
+        assert(nextPow2(MIN_BLOCK_INTERMEDIATE_SIZE) == MIN_BLOCK_INTERMEDIATE_SIZE);
         // Calculate number of target generators.
         const size_t total_targets = num_qubits - pivot - 1;
         if (!total_targets) return;
         // Do the first phase of prefix.
         dim3 inject_cx_blocksize(MIN_BLOCK_INTERMEDIATE_SIZE, 2);
-        nextPow2(inject_cx_blocksize.x);
         dim3 inject_cx_gridsize(1, 1);
         OPTIMIZEBLOCKS2D(inject_cx_gridsize.x, total_targets, inject_cx_blocksize.x);
         OPTIMIZEBLOCKS2D(inject_cx_gridsize.y, num_words_minor, inject_cx_blocksize.y);
-        nextPow2(inject_cx_gridsize.x);
+        const size_t pass_1_blocksize = inject_cx_blocksize.x;
+        const size_t pass_1_gridsize = ROUNDUP(total_targets, inject_cx_blocksize.x);
         OPTIMIZESHARED(smem_size, inject_cx_blocksize.y * (inject_cx_blocksize.x + CONFLICT_FREE_OFFSET(inject_cx_blocksize.x)), 2 * sizeof(word_std_t));
         scan_targets_pass_1 <<<inject_cx_gridsize, inject_cx_blocksize, smem_size, stream>>> (
                     XZ_TABLE(targets), 
@@ -259,7 +258,7 @@ namespace QuaSARQ {
         LASTERR("failed to scan targets in pass 1");
         SYNC(stream);
         // Intermeditae scan of blocks resulted in pass 1.
-        scan_blocks(inject_cx_gridsize.x, stream);
+        scan_blocks(nextPow2(pass_1_gridsize), stream);
         // Second phase of injecting CX.
         dim3 finalize_prefix_blocksize(4, 2);
         dim3 finalize_prefix_gridsize(1, 1);
@@ -277,7 +276,7 @@ namespace QuaSARQ {
                         total_targets, 
                         num_words_major, 
                         num_words_minor, 
-                        inject_cx_blocksize.x);
+                        pass_1_blocksize);
         LASTERR("failed to scan targets in pass 2");
         SYNC(stream);
         dim3 update_signs_blocksize(4, 2);

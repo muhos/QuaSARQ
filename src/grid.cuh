@@ -38,20 +38,20 @@ namespace QuaSARQ {
 		for (grid_t IDX = global_ty + OFF, stride = stride_y, data_size = grid_t(SIZE); IDX < data_size; IDX += stride)
 
 	// macros for blocks calculation
-	#define ROUNDUPBLOCKS(DATALEN, NTHREADS) ((grid_t(DATALEN) + (NTHREADS) - 1) / (NTHREADS))
+	#define ROUNDUP(DATALEN, DIVISOR) ((grid_t(DATALEN) + (DIVISOR) - 1) / (DIVISOR))
 
 	#define OPTIMIZEBLOCKS(NBLOCKS, DATALEN, NTHREADS)       \
 			assert(DATALEN);                                 \
 			assert(NTHREADS);                                \
 			assert(maxGPUBlocks);                            \
-			NBLOCKS = ROUNDUPBLOCKS(DATALEN, NTHREADS); 	 \
+			NBLOCKS = ROUNDUP(DATALEN, NTHREADS); 	 \
 			NBLOCKS = MIN(NBLOCKS, maxGPUBlocks)  		 	 \
 
 	#define OPTIMIZEBLOCKS2D(NBLOCKS, DATALEN, NTHREADS)     \
 			assert(DATALEN);                                 \
 			assert(NTHREADS);                                \
 			assert(maxGPUBlocks2D);                          \
-			NBLOCKS = ROUNDUPBLOCKS(DATALEN, NTHREADS); 	 \
+			NBLOCKS = ROUNDUP(DATALEN, NTHREADS); 	 \
 			NBLOCKS = MIN(NBLOCKS, maxGPUBlocks2D)  		 \
 
 	// macros for shared memory calculation

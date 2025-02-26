@@ -20,9 +20,14 @@ namespace QuaSARQ {
     #define CONFLICT_FREE_OFFSET(n) ((n) >> LOG_NUM_BANKS)
     #endif
 
-	#define MIN_BLOCK_INTERMEDIATE_SIZE 8
-	#define MIN_SUB_BLOCK_SIZE 32
+	#define MIN_BLOCK_INTERMEDIATE_SIZE 32
+	#define MIN_SUB_BLOCK_SIZE 16
+	#if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
+	#define MIN_SINGLE_PASS_THRESHOLD 512
+	#else
 	#define MIN_SINGLE_PASS_THRESHOLD 1024
+	#endif
+
 
     __device__ word_std_t scan_block_exclusive(word_std_t* data, const int& n);
 
@@ -65,6 +70,7 @@ namespace QuaSARQ {
 
 		size_t max_intermediate_blocks;
 		size_t max_sub_blocks;
+		size_t min_blocksize_y;
 
 		size_t num_qubits;
 		size_t num_words_major;
@@ -83,6 +89,7 @@ namespace QuaSARQ {
 		,	subblocks_prefix_x(nullptr)
 		,	max_intermediate_blocks(0)
 		,	max_sub_blocks(0)
+		,	min_blocksize_y(0)
 		,   num_qubits(0)
 		,   num_words_major(0)
 		,   num_words_minor(0)
