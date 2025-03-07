@@ -131,7 +131,7 @@ void Simulator::simulate() {
     timer.start();
     num_partitions = tableau.alloc(num_qubits, winfo.max_window_bytes, false, measuring);
     if (measuring) {
-        prefix.alloc(tableau, winfo.max_window_bytes);
+        prefix.alloc(tableau, config_qubits, winfo.max_window_bytes);
     }
     const size_t num_qubits_per_partition = num_partitions > 1 ? tableau.num_words_major() * WORD_BITS : num_qubits;
     gpu_circuit.initiate(num_qubits, winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);

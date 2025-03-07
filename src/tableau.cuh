@@ -348,7 +348,7 @@ namespace QuaSARQ {
         }
 
         // Doesn't reallocate memory.
-        size_t resize(const size_t& num_qubits, const size_t& max_window_bytes, const bool& measuring = false, const bool& unpack_signs = false, const size_t& forced_num_partitions = 0) {
+        size_t resize(const size_t& num_qubits, const size_t& max_window_bytes, const bool& prefix, const bool& measuring = false, const bool& unpack_signs = false, const size_t& forced_num_partitions = 0) {
             if (!num_qubits)
                 LOGERROR("cannot resize tableau for 0 qubits.");
             if (_num_qubits < num_qubits)
@@ -365,7 +365,7 @@ namespace QuaSARQ {
             const size_t num_words_major_whole_tableau = get_num_words(_num_qubits);
             _num_qubits_padded = get_num_padded_bits(num_qubits);
             _num_words_major = num_words_major_whole_tableau;
-            _num_sign_words = _unpacked_signs ? _num_words_major * WORD_BITS : _num_words_major;
+            if (!prefix) _num_sign_words = _unpacked_signs ? _num_words_major * WORD_BITS : _num_words_major;
             _num_words = _num_words_major * _num_qubits_padded;
             const size_t max_padded_bits_two_tables = 2 * _num_qubits_padded;
             size_t expected_capacity_required = 2 * _num_words * sizeof(word_std_t) + _num_sign_words * sign_word_size + max_window_bytes;
@@ -373,7 +373,7 @@ namespace QuaSARQ {
             assert(_num_words_major * max_padded_bits_two_tables == 2 * _num_words);
             while ((forced_num_partitions && forced_num_partitions > _num_partitions) || (expected_capacity_required >= cap_before && _num_words_major > 1)) {
                 _num_words_major = (_num_words_major + 0.5) / 1.5;
-                _num_sign_words = _unpacked_signs ? _num_words_major * WORD_BITS : _num_words_major;
+                if (!prefix) _num_sign_words = _unpacked_signs ? _num_words_major * WORD_BITS : _num_words_major;
                 expected_capacity_required = _num_words_major * max_padded_bits_two_tables * sizeof(word_std_t) + _num_sign_words * sign_word_size + max_window_bytes;
                 _num_partitions++;
             }
@@ -387,8 +387,9 @@ namespace QuaSARQ {
                 
             // Update number of words.
             _num_words_minor = _num_words_major;
-            if (measuring) _num_words_major <<= 1;
-			_num_words = _num_words_major * _num_qubits_padded;
+            if (measuring && !prefix) _num_words_major <<= 1;
+            if (!prefix) _num_sign_words = _unpacked_signs ? _num_words_major * WORD_BITS : _num_words_major;
+            _num_words = _num_words_major * _num_qubits_padded;
 			expected_capacity_required = 2 * _num_words * sizeof(word_std_t) + _num_sign_words * sign_word_size + max_window_bytes;       
             if (expected_capacity_required > cap_before) {
                 LOGERRORN("insufficient memory during resizing.");
@@ -407,17 +408,19 @@ namespace QuaSARQ {
             _h_zs->alloc(_zs_data, _num_qubits_padded, _num_words_major, _num_words_minor);
             assert(_h_xs->size() == _num_words);
             assert(_h_zs->size() == _num_words);
-            if (_unpacked_signs) {
-                assert(_unpacked_ss_data != nullptr);
-                _h_ss->alloc(_unpacked_ss_data, _num_qubits_padded, _num_sign_words, true);
-            }
-            else {      
-                assert(_ss_data != nullptr);
-                _h_ss->alloc(_ss_data, _num_qubits_padded, _num_sign_words, false);
+            if (!prefix) {
+                if (_unpacked_signs) {
+                    assert(_unpacked_ss_data != nullptr);
+                    _h_ss->alloc(_unpacked_ss_data, _num_qubits_padded, _num_sign_words, true);
+                }
+                else {      
+                    assert(_ss_data != nullptr);
+                    _h_ss->alloc(_ss_data, _num_qubits_padded, _num_sign_words, false);
+                }
+                CHECK(cudaMemcpyAsync(_ss, _h_ss, sizeof(Signs), cudaMemcpyHostToDevice));
             }
             CHECK(cudaMemcpyAsync(_xs, _h_xs, sizeof(Table), cudaMemcpyHostToDevice));
             CHECK(cudaMemcpyAsync(_zs, _h_zs, sizeof(Table), cudaMemcpyHostToDevice));
-            CHECK(cudaMemcpyAsync(_ss, _h_ss, sizeof(Signs), cudaMemcpyHostToDevice));
             
             size_t cap_after = 2 * _num_words * sizeof(word_std_t) + _num_sign_words * sign_word_size + max_window_bytes;
             assert(cap_before >= cap_after);

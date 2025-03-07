@@ -4,7 +4,6 @@
 #include "operators.cuh"
 #include "datatypes.cuh"
 #include "circuit.cuh"
-#include "locker.cuh"
 #include "print.cuh"
 #include "grid.cuh"
 #include "timer.cuh"

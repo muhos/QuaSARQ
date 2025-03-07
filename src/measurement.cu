@@ -1,6 +1,8 @@
 #include "simulator.hpp"
 #include "measurement.cuh"
+#include "commutation.cuh"
 #include "prefix.cuh"
+#include "tuner.cuh"
 
 namespace QuaSARQ {;
 
@@ -28,7 +30,7 @@ namespace QuaSARQ {;
 
     __global__ void inject_CX(Table* inv_xs, Table* inv_zs, Signs* inv_ss, 
                             Commutation* commutations, 
-                            const uint32 control,
+                            const pivot_t control,
                             const qubit_t qubit,
                             const size_t num_qubits, 
                             const size_t num_words_major, const size_t num_words_minor) {
@@ -74,7 +76,7 @@ namespace QuaSARQ {;
     }
 
     __global__ void check_x_destab(Commutation* commutations, const Table* inv_xs, 
-                            const uint32 pivot,
+                            const pivot_t pivot,
                             const qubit_t qubit,
                             const size_t num_words_major) {
         const qubit_t q_w = WORD_OFFSET(qubit);
@@ -86,7 +88,7 @@ namespace QuaSARQ {;
 
     __global__ void inject_Swap(Table* inv_xs, Table* inv_zs, Signs* inv_ss, 
                             const Commutation* commutations, 
-                            const uint32 c,
+                            const pivot_t c,
                             const size_t num_words_major, const size_t num_words_minor) {
         assert(c != INVALID_PIVOT);
         const size_t c_row = c * num_words_major;
@@ -114,20 +116,44 @@ namespace QuaSARQ {;
         }
     }
 
-    __global__ void mark_anti_commutations(Commutation* commutations, const qubit_t q, const Table* inv_xs, const size_t num_qubits, const size_t num_words_major, const size_t num_words_minor) {
-        const qubit_t q_w = WORD_OFFSET(q);
-        const word_std_t q_mask = BITMASK_GLOBAL(q);
-        for_parallel_x(g, num_qubits) {
-            const size_t word_idx = g * num_words_major + q_w + num_words_minor;
-            const word_std_t qubit_word = (*inv_xs)[word_idx];
-            if (qubit_word & q_mask) {
-                commutations[g].anti_commuting = true;
-                //printf("qubit(%d), w(%d), t(%lld): " B2B_STR "\n", q, q_w, g, RB2B(qubit_word));
-            }
-            else {
-                commutations[g].reset();
-            }
+    void Simulator::inject_swap(const pivot_t& new_pivot, const qubit_t& qubit, const cudaStream_t& stream) {
+        const size_t num_words_minor = tableau.num_words_minor();
+        const size_t num_words_major = tableau.num_words_major();
+        check_x_destab<<<1, 1, 0, stream>>>
+        (
+            tableau.commutations(),
+            tableau.xtable(),
+            new_pivot,
+            qubit,
+            num_words_major
+        );
+        uint32 inject_swap_blocksize = 4;
+        uint32 inject_swap_gridsize = 1;
+        OPTIMIZEBLOCKS(inject_swap_gridsize, num_words_minor, inject_swap_blocksize);
+        if (options.tune_injectswap) {
+            SYNCALL;
+            tune_kernel_m(inject_Swap, "injecting swap", 
+                        bestblockinjectswap, bestgridinjectswap, 
+                        XZ_TABLE(tableau),
+                        tableau.signs(),
+                        tableau.commutations(),
+                        new_pivot,
+                        num_words_major,
+                        num_words_minor);
         }
+        TRIM_BLOCK_IN_DEBUG_MODE(bestblockinjectswap, bestgridinjectswap, num_qubits, 0);
+        dim3 currentblock = bestblockinjectswap, currentgrid = bestgridinjectswap;
+        TRIM_GRID_IN_1D(num_qubits, x);
+        inject_Swap<<<inject_swap_gridsize, inject_swap_blocksize, 0, stream>>>
+        (
+            XZ_TABLE(tableau),
+            tableau.signs(),
+            tableau.commutations(),
+            new_pivot,
+            num_words_major,
+            num_words_minor
+        );
+        LOGDONE(2, 4);
     }
 
     #define DEBUG_INJECT_CX 0
@@ -155,8 +181,6 @@ namespace QuaSARQ {;
         SYNC(kernel_stream2);
 
         // Find all pivots if exist.
-        bestblockallpivots.x = 32;
-        bestblockallpivots.y = 16;
         find_pivots(tableau, num_gates_per_window, true, kernel_stream1);
 
         //print_tableau(tableau, depth_level, false);
@@ -170,87 +194,9 @@ namespace QuaSARQ {;
         // Sync pivots wth host.
         SYNC(kernel_stream1);
 
-        pivot_t* host_pivots = gpu_circuit.host_pivots();
-        int64 random_measures = 0;
+        int64 random_measures = measure_indeterminate(depth_level, kernel_stream1);
 
-        bool initial_pivot = true;
-        for(size_t i = 0; i < num_gates_per_window; i++) {
-            const pivot_t curr_pivot = host_pivots[i];
-            const Gate& curr_gate = circuit.gate(depth_level, i);
-            const qubit_t qubit = curr_gate.wires[0];
-            pivot_t new_pivot = INVALID_PIVOT;
-            if (curr_pivot != INVALID_PIVOT) {
-                if (initial_pivot) {
-                    new_pivot = curr_pivot;
-                    uint32 mark_blocksize = 4, mark_gridsize = 1;
-                    OPTIMIZEBLOCKS(mark_gridsize, num_qubits, mark_blocksize);
-                    mark_anti_commutations <<<mark_gridsize, mark_blocksize, 0, kernel_stream1>>> (tableau.commutations(), qubit, tableau.xtable(), num_qubits, num_words_major, num_words_minor);
-                    initial_pivot = false;
-                    LASTERR("failed to mark_anti_commutations");
-                    SYNC(kernel_stream1);
-                }
-                else {
-                    find_pivots(tableau, i, false, kernel_stream1);
-                    gpu_circuit.copypivotto(new_pivot, i, kernel_stream1);
-                    SYNC(kernel_stream1);                
-                }
-                if (new_pivot != INVALID_PIVOT) {
-                    LOGN2(2, "Meauring qubit %d using pivot %d.. ", qubit, new_pivot);
-                    cutimer.start();
-                    #if !DEBUG_INJECT_CX
-                    prefix.inject_CX(tableau, new_pivot, qubit, kernel_stream1);
-                    #else
-                    const uint32 blocksize = 8;
-                    const uint32 gridsize = ROUNDUP(num_words_minor, blocksize);
-                    inject_CX <<<gridsize, blocksize, 0, kernel_stream1>>> (XZ_TABLE(tableau), tableau.signs(), 
-                                tableau.commutations(), 
-                                new_pivot.indeterminate, qubit, 
-                                num_qubits, num_words_major, num_words_minor);
-                    LASTERR("failed to inject_CX");
-                    SYNC(kernel_stream1);
-                    #endif
-                    cutimer.stop();
-                    printf("inject CX time = %.3f\n", cutimer.time());
-                    // printf("qubit(%d), pivot(%d):\n", circuit.gate(depth_level, i).wires[0], new_pivot.indeterminate), print_tableau(tableau, depth_level, false);
-                    check_x_destab <<<1, 1, 0, kernel_stream1>>> (
-                                tableau.commutations(), 
-                                tableau.xtable(), 
-                                new_pivot, 
-                                qubit, 
-                                num_words_major);
-
-                    uint32 inject_swap_blocksize = 4;
-                    uint32 inject_swap_gridsize = 1;
-                    OPTIMIZEBLOCKS(inject_swap_gridsize, num_words_minor, inject_swap_blocksize);
-                    inject_Swap <<<inject_swap_gridsize, inject_swap_blocksize, 0, kernel_stream1>>> (
-                        XZ_TABLE(tableau), 
-                        tableau.signs(), 
-                        tableau.commutations(), 
-                        new_pivot, 
-                        num_words_major, 
-                        num_words_minor);
-                    
-                    LOGDONE(2, 4);
-                    
-                    //printf("After inject_CX:\n"), print_tableau(prefix_tableau, depth_level, false, true);
-                    SYNC(kernel_stream1); printf("After signs update for pivot %d:\n", new_pivot);//, print_tableau(tableau, depth_level, false, false);
-                }
-            }
-        }
-
-        print_tableau(tableau, depth_level, false, false);
-
-        //
-        //// Measure all determinate.
-        //measure_determinate(num_gates_per_window, true, kernel_stream1);
-
-        //// Sync copying pivots.
-        //SYNC(copy_stream1);
-
-        //Measures& measure_stats = stats.circuit.measure_stats;
-        //measure_stats.random_per_window = measure_indeterminate(depth_level, kernel_stream1);
-        //measure_stats.random += measure_stats.random_per_window;
-        //measure_stats.definite += num_gates_per_window - measure_stats.random_per_window;
+        //print_tableau(tableau, depth_level, false, false);
 
         // Transpose the tableau back into column-major format.
         transpose(false, kernel_stream1);
@@ -258,12 +204,52 @@ namespace QuaSARQ {;
 
     int64 Simulator::measure_indeterminate(const depth_t& depth_level, const cudaStream_t& stream) {
         const size_t num_words_minor = tableau.num_words_minor();
+        const size_t num_words_major = tableau.num_words_major();
         const size_t num_gates_per_window = circuit[depth_level].size();
         pivot_t* host_pivots = gpu_circuit.host_pivots();
-        pivot_t new_pivot;
         int64 random_measures = 0;
-        
+        bool initial_pivot = true;
+        for(size_t i = 0; i < num_gates_per_window; i++) {
+            const Gate& curr_gate = circuit.gate(depth_level, i);
+            const pivot_t curr_pivot = host_pivots[i];
+            const qubit_t qubit = curr_gate.wires[0];
+            pivot_t new_pivot = INVALID_PIVOT;
+            if (curr_pivot != INVALID_PIVOT) {
+                if (initial_pivot) {
+                    initial_pivot = false;
+                    new_pivot = curr_pivot;
+                    mark_commutations(qubit, stream);
+                }
+                else {
+                    find_pivots(tableau, i, false, stream);
+                    gpu_circuit.copypivotto(new_pivot, i, stream);
+                    SYNC(stream);                
+                }
+                if (new_pivot != INVALID_PIVOT) {
+                    LOGN2(2, "Meauring qubit %d using pivot %d.. ", qubit, new_pivot);
+                    random_measures++;
 
+                    cutimer.start();
+
+                    #if !DEBUG_INJECT_CX
+                    prefix.inject_CX(tableau, new_pivot, qubit, stream);
+                    #else
+                    const uint32 blocksize = 8;
+                    const uint32 gridsize = ROUNDUP(num_words_minor, blocksize);
+                    inject_CX <<<gridsize, blocksize, 0, stream>>> (XZ_TABLE(tableau), tableau.signs(), 
+                                tableau.commutations(), 
+                                new_pivot.indeterminate, qubit, 
+                                num_qubits, num_words_major, num_words_minor);
+                    LASTERR("failed to inject_CX");
+                    SYNC(stream);
+                    #endif
+
+                    cutimer.stop();
+
+                    inject_swap(new_pivot, qubit, stream);
+                }
+            }
+        }
 
         return random_measures;
     }

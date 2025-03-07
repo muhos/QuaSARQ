@@ -253,7 +253,7 @@ namespace QuaSARQ {
             bestblocktransposeswap, bestgridtransposeswap, 
             XZ_TABLE(tableau), num_words_major, num_words_minor, row_major);
         }
-        bestblocktransposebits.x = MIN(WORD_BITS, bestblocktransposebits.x);
+        bestblocktransposebits.x = WORD_BITS;
         bestgridtransposebits.x = MIN(num_words_major, bestgridtransposebits.x); 
         bestgridtransposebits.z = 2;
         TRIM_Y_BLOCK_IN_DEBUG_MODE(bestblocktransposebits, bestgridtransposebits, num_words_minor);
@@ -267,7 +267,7 @@ namespace QuaSARQ {
             SYNC(stream);
         }
         LOGDONE(2, 4);
-        bestblocktransposeswap.x = MIN(WORD_BITS, bestblocktransposeswap.x);
+        bestblocktransposeswap.x = WORD_BITS;
         bestgridtransposeswap.x = MIN(num_words_minor, bestgridtransposeswap.x); 
         bestgridtransposeswap.z = 2;
         TRIM_Y_BLOCK_IN_DEBUG_MODE(bestblocktransposeswap, bestgridtransposeswap, num_words_minor);

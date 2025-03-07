@@ -3,8 +3,7 @@
 
 namespace QuaSARQ {
 
-	TableauState ts;
-	constexpr bool PRINT_PROGRESS_2D = 0;
+	constexpr bool PRINT_PROGRESS_2D = 1;
 	constexpr size_t NSAMPLES = 2;
 	constexpr int MIN_PRECISION_HITS = 2;
 	constexpr size_t TRIALS = size_t(1e3);
@@ -47,6 +46,9 @@ namespace QuaSARQ {
 		// Resize tableaux.
 		if (num_qubits < tableau.num_qubits()) {
 			tableau.resize(num_qubits, winfo.max_window_bytes, measuring);
+			if (measuring) {
+				prefix.resize(tableau, winfo.max_window_bytes);
+			}
 		}
 	}
 
@@ -57,6 +59,9 @@ namespace QuaSARQ {
 		const size_t max_num_qubits = num_qubits;
 		num_partitions = 1;
 		tableau.alloc(max_num_qubits, winfo.max_window_bytes, false, measuring);
+		if (measuring) {
+			prefix.alloc(tableau, config_qubits, winfo.max_window_bytes);
+		}
 		gpu_circuit.initiate(num_qubits, winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
 		// Start tuning simulation with max qubits.
 		do {
@@ -89,13 +94,11 @@ namespace QuaSARQ {
 	do { \
 		double runtime = 0; \
 		for (size_t sample = 0; sample < NSAMPLES; sample++) { \
-			if (ts.recover) ts.save_state(); \
 			cutimer.start(); \
 			kernel <<< grid, block, SHAREDSIZE >>> ( __VA_ARGS__ ); \
 			LASTERR("failed to launch kernel for benchmarking"); \
 			cutimer.stop(); \
 			runtime += cutimer.time(); \
-			if (ts.recover) ts.recover_state(); \
 		} \
 		AVGTIME = (runtime / NSAMPLES); \
 	} while(0)
@@ -119,7 +122,7 @@ namespace QuaSARQ {
 	#define TUNE_1D(...) \
 	do { \
 		if (bestBlock.x > 1 || bestGrid.x > 1) { \
-			LOG2(2, "\nBest configuration: block(%d), grid(%d) will be used without tuning.", bestBlock.x, bestGrid.x); \
+			LOG2(3, "\nBest configuration: block(%d), grid(%d) will be used without tuning.", bestBlock.x, bestGrid.x); \
 		} \
 		else { \
 			LOG0(""); \
@@ -135,10 +138,12 @@ namespace QuaSARQ {
 				for (int64 blockX = maxThreadsPerBlock; blockX >= initThreadsPerBlock1D && !early_exit && trials < TRIALS; blockX >>= 1, trials++) { \
 					if (blockX > maxWarpSize && blockX % maxWarpSize != 0) \
 						continue; \
+					const size_t shared_size = shared_element_bytes * blockX; \
+					if (shared_size > maxGPUSharedMem) continue; \
 					dim3 block((uint32)blockX); \
 					dim3 grid((uint32)gridX); \
 					double avgRuntime = 0; \
-					BENCHMARK_KERNEL(avgRuntime, NSAMPLES, 0, ## __VA_ARGS__); \
+					BENCHMARK_KERNEL(avgRuntime, NSAMPLES, shared_size, ## __VA_ARGS__); \
 					BEST_CONFIG(avgRuntime, minRuntime, bestGrid, bestBlock, early_exit); \
 				} \
 			} \
@@ -152,7 +157,7 @@ namespace QuaSARQ {
 	#define TUNE_1D_FIX_X(...) \
 	do { \
 		if (bestBlock.x > 1 || bestGrid.x > 1) { \
-			LOG2(2, "\nBest configuration: block(%d), grid(%d) will be used without tuning.", bestBlock.x, bestGrid.x); \
+			LOG2(3, "\nBest configuration: block(%d), grid(%d) will be used without tuning.", bestBlock.x, bestGrid.x); \
 		} \
 		else { \
 			LOG0(""); \
@@ -184,7 +189,7 @@ namespace QuaSARQ {
 	#define TUNE_2D(...) \
 	do { \
 		if (bestBlock.x > 1 || bestGrid.x > 1 || bestBlock.y > 1 || bestGrid.y > 1) { \
-			LOG2(2, "\nBest configuration: block(%d, %d), grid(%d, %d) will be used without tuning.", bestBlock.x, bestBlock.y, bestGrid.x, bestGrid.y); \
+			LOG2(3, "\nBest configuration: block(%d, %d), grid(%d, %d) will be used without tuning.", bestBlock.x, bestBlock.y, bestGrid.x, bestGrid.y); \
 		} \
 		else { \
 			LOG0(""); \
@@ -233,7 +238,7 @@ namespace QuaSARQ {
 	#define TUNE_2D_FIX_BLOCK_X(GRID_Z, ...) \
 	do { \
 		if (bestBlock.x > 1 || bestGrid.x > 1 || bestBlock.y > 1 || bestGrid.y > 1) { \
-			LOG2(2, "\nBest configuration: block(%d, %d), grid(%d, %d) will be used without tuning.", bestBlock.x, bestBlock.y, bestGrid.x, bestGrid.y); \
+			LOG2(3, "\nBest configuration: block(%d, %d), grid(%d, %d) will be used without tuning.", bestBlock.x, bestBlock.y, bestGrid.x, bestGrid.y); \
 		} \
 		else { \
 			LOG0(""); \
@@ -278,7 +283,7 @@ namespace QuaSARQ {
 	#define TUNE_2D_FIX_GRID_X(...) \
 	do { \
 		if (bestBlock.x > 1 || bestGrid.x > 1 || bestBlock.y > 1 || bestGrid.y > 1) { \
-			LOG2(2, "\nBest configuration: block(%d, %d), grid(%d, %d) will be used without tuning.", bestBlock.x, bestBlock.y, bestGrid.x, bestGrid.y); \
+			LOG2(3, "\nBest configuration: block(%d, %d), grid(%d, %d) will be used without tuning.", bestBlock.x, bestBlock.y, bestGrid.x, bestGrid.y); \
 		} \
 		else { \
 			LOG0(""); \
@@ -320,10 +325,64 @@ namespace QuaSARQ {
 		} \
 	} while(0)
 
+	#define TUNE_2D_PREFIX(...) \
+	do { \
+		if (bestBlock.x > 1 || bestGrid.x > 1 || bestBlock.y > 1 || bestGrid.y > 1) { \
+			LOG2(3, "\nBest configuration: block(%d, %d), grid(%d, %d) will be used without tuning.", bestBlock.x, bestBlock.y, bestGrid.x, bestGrid.y); \
+		} \
+		else { \
+			if (initThreadsPerBlockX < 2) \
+				LOGERROR("block size cannot be less than 2."); \
+			LOG0(""); \
+			LOG2(1, "Tunning %s kernel with maximum of %zd trials and %-.5f milliseconds precision...", opname, TRIALS, PRECISION); \
+			int min_precision_hits = MIN_PRECISION_HITS; \
+			int64 initBlocksPerGridX = 0, initBlocksPerGridY = 0; \
+			OPTIMIZEBLOCKS2D(initBlocksPerGridY, data_size_in_y, maxThreadsPerBlockY); \
+			OPTIMIZEBLOCKS2D(initBlocksPerGridX, data_size_in_x, maxThreadsPerBlockX); \
+			double minRuntime = double(UINTMAX_MAX); \
+			bool early_exit = false; \
+			size_t trials = 0; \
+			initBlocksPerGridY = (int64) ceil(initBlocksPerGridY / 1.0); \
+			initBlocksPerGridX = (int64) ceil(initBlocksPerGridX / 1.0); \
+			const int64 maxBlocksPerGridY = maxGPUBlocks2D << 1; \
+			const int64 maxBlocksPerGridX = maxGPUBlocks2D << 1; \
+			for (int64 blocksY = initBlocksPerGridY; (blocksY <= maxBlocksPerGridY) && !early_exit && trials < TRIALS; blocksY += 8, trials++) { \
+				for (int64 blocksX = initBlocksPerGridX; (blocksX <= maxBlocksPerGridX) && !early_exit && trials < TRIALS; blocksX += 8, trials++) { \
+					for (int64 threadsY = maxThreadsPerBlockY; (threadsY >= initThreadsPerBlockY) && !early_exit && trials < TRIALS; threadsY >>= 1) { \
+						for (int64 threadsX = maxThreadsPerBlockX; (threadsX >= MIN_BLOCK_INTERMEDIATE_SIZE) && !early_exit && trials < TRIALS; threadsX >>= 1) { \
+							if (nextPow2(threadsX) != threadsX) \
+								LOGERROR("non-power-of-2 block size is not allowed."); \
+							const size_t pass_1_gridsize = ROUNDUP(data_size_in_x, threadsX); \
+							if (pass_1_gridsize > MIN_SINGLE_PASS_THRESHOLD) continue; \
+							const int64 threadsPerBlock = threadsX * threadsY; \
+							const size_t shared_size = shared_element_bytes * threadsY * (threadsX + CONFLICT_FREE_OFFSET(threadsX)); \
+							if (shared_size > maxGPUSharedMem || threadsPerBlock > maxThreadsPerBlock) continue; \
+							/* Avoid deadloack due to warp divergence. */ \
+							if (threadsPerBlock % maxWarpSize != 0) continue; \
+							dim3 block((uint32)threadsX, (uint32)threadsY); \
+							dim3 grid((uint32)blocksX, (uint32)blocksY); \
+							double avgRuntime = 0; \
+							if (PRINT_PROGRESS_2D) LOG2(1, "  Tuning for block(x:%u, y:%u) and grid(x:%u, y:%u)", block.x, block.y, grid.x, grid.y); fflush(stdout); fflush(stderr); \
+							BENCHMARK_KERNEL(avgRuntime, NSAMPLES, shared_size, ## __VA_ARGS__); \
+							BEST_CONFIG(avgRuntime, minRuntime, bestGrid, bestBlock, early_exit); \
+						} \
+					} \
+				} \
+			} \
+			LOG2(1, "Best %s configuration found after %zd trials:", opname, trials); \
+			LOG2(1, " Block (%-4u, %4u)", bestBlock.x, bestBlock.y); \
+			LOG2(1, " Grid  (%-4u, %4u)", bestGrid.x, bestGrid.y); \
+			LOG2(1, " Min time: %.4f ms", minRuntime); \
+			LOG0(""); \
+			fflush(stdout); \
+		} \
+	} while(0)
+
 	void tune_kernel(void (*kernel)(const size_t, const size_t, Table*),
 		const char* opname, dim3& bestBlock, dim3& bestGrid,
 		const size_t& offset, const size_t& size, Table* ps)
 	{
+		size_t shared_element_bytes = 0;
 		TUNE_1D(offset, size, ps);
 	}
 
@@ -349,6 +408,7 @@ namespace QuaSARQ {
 		#endif
 		Signs *ss)
 	{
+		size_t shared_element_bytes = 0;
 		TUNE_1D(size, TUNE_XZ_TABLES, ss);
 	}
 
@@ -383,6 +443,7 @@ namespace QuaSARQ {
 		const char* opname, dim3& bestBlock, dim3& bestGrid,
 		const size_t& offset, const size_t& size, Table* xs, Table* zs)
 	{
+		size_t shared_element_bytes = 0;
 		TUNE_1D(offset, size, xs, zs);
 	}
 
@@ -390,10 +451,30 @@ namespace QuaSARQ {
 		const char* opname, dim3& bestBlock, dim3& bestGrid,
 		pivot_t* pivots, const size_t size)
 	{
+		size_t shared_element_bytes = 0;
 		TUNE_1D(pivots, size);
 	}
 
-	void tune_kernel_m(void (*kernel)(pivot_t*, bucket_t*, ConstRefsPointer, ConstTablePointer, const size_t, const size_t, const size_t),
+	void tune_kernel_m(void (*kernel)(Commutation* commutations, ConstTablePointer, const qubit_t, const size_t, const size_t, const size_t),
+		const char* opname, dim3& bestBlock, dim3& bestGrid,
+		Commutation* commutations, ConstTablePointer inv_xs, const qubit_t qubit, 
+		const size_t size, const size_t num_words_major, const size_t num_words_minor)
+	{
+		size_t shared_element_bytes = 0;
+		TUNE_1D(commutations, inv_xs, qubit, size, num_words_major, num_words_minor);
+	}
+
+	void tune_kernel_m(void (*kernel)(Table*, Table*, Signs*, const Commutation* commutations, const pivot_t, const size_t, const size_t),
+		const char* opname, dim3& bestBlock, dim3& bestGrid,
+		Table* inv_xs, Table* inv_zs, Signs* ss, const Commutation* commutations, const pivot_t new_pivot, 
+		const size_t num_words_major, const size_t num_words_minor) 
+	{
+		size_t shared_element_bytes = 0;
+		size_t size = num_words_minor;
+		TUNE_1D(inv_xs, inv_zs, ss, commutations, new_pivot, num_words_major, num_words_minor);
+	}
+
+	void tune_kernel_m(void (*kernel)(pivot_t*, bucket_t*, ConstRefsPointer, ConstTablePointer, const size_t, const size_t, const size_t, const size_t),
 		const char* opname, 
 		dim3& bestBlock, dim3& bestGrid,
 		const size_t& shared_element_bytes, 
@@ -401,18 +482,18 @@ namespace QuaSARQ {
 		const size_t& data_size_in_x, 
 		const size_t& data_size_in_y,
 		pivot_t* pivots, bucket_t* measurements, ConstRefsPointer refs, ConstTablePointer inv_xs, 
-        const size_t num_gates, const size_t num_qubits, const size_t num_words_minor)
+        const size_t num_gates, const size_t num_qubits, const size_t num_words_major, const size_t num_words_minor)
 	{
-		TUNE_2D(pivots, measurements, refs, inv_xs, num_gates, num_qubits, num_words_minor);
+		TUNE_2D(pivots, measurements, refs, inv_xs, num_gates, num_qubits, num_words_major, num_words_minor);
 	}
 
-	void tune_kernel_m(void (*kernel)(pivot_t*, bucket_t*, ConstRefsPointer, ConstTablePointer, const size_t, const size_t, const size_t),
+	void tune_kernel_m(void (*kernel)(Commutation* commutations, pivot_t*, bucket_t*, ConstRefsPointer, ConstTablePointer, const size_t, const size_t, const size_t, const size_t),
 		const char* opname, dim3& bestBlock, dim3& bestGrid,
-		pivot_t* pivots, bucket_t* measurements, ConstRefsPointer refs, ConstTablePointer inv_xs, 
-        const size_t& gate_index, const size_t& num_qubits, const size_t& num_words_minor)
+		const size_t& shared_element_bytes, 
+		Commutation* commutations, pivot_t* pivots, bucket_t* measurements, ConstRefsPointer refs, ConstTablePointer inv_xs, 
+        const size_t& gate_index, const size_t& size, const size_t num_words_major, const size_t num_words_minor)
 	{
-		const size_t size = num_qubits;
-		TUNE_1D(pivots, measurements, refs, inv_xs, gate_index, num_qubits, num_words_minor);
+		TUNE_1D(commutations, pivots, measurements, refs, inv_xs, gate_index, size, num_words_major, num_words_minor);
 	}
 
 	void tune_outplace_transpose(void (*kernel)(Table*, Table*, Signs*, ConstTablePointer, ConstTablePointer, ConstSignsPointer, const size_t, const size_t, const size_t),
@@ -464,80 +545,156 @@ namespace QuaSARQ {
 		}
 	}
 
-	void tune_determinate(void (*kernel)(ConstPivotsPointer, bucket_t*, ConstRefsPointer, ConstTablePointer, ConstTablePointer, ConstSignsPointer, const size_t, const size_t, const size_t),
-		const char* opname, 
+	void tune_prefix_pass_1(
+		void (*kernel)(word_std_t*, word_std_t*, word_std_t*, word_std_t*, const size_t, const size_t),
 		dim3& bestBlock, dim3& bestGrid,
 		const size_t& shared_element_bytes, 
-		const bool& shared_size_yextend,
 		const size_t& data_size_in_x, 
 		const size_t& data_size_in_y,
-		ConstPivotsPointer pivots, bucket_t* measurements, ConstRefsPointer refs,
-        ConstTablePointer inv_xs, ConstTablePointer inv_zs, ConstSignsPointer inv_ss, 
-        const size_t num_gates, const size_t num_qubits, const size_t num_words_minor)
+		word_std_t* block_intermediate_prefix_z,
+		word_std_t* block_intermediate_prefix_x,
+		word_std_t* subblocks_prefix_z, 
+		word_std_t* subblocks_prefix_x,
+		const size_t& num_blocks,
+		const size_t& num_words_minor) 
 	{
-		const int64 _initThreadsPerBlockX = initThreadsPerBlockX;
-		initThreadsPerBlockX = 32;
-		TUNE_2D_FIX_GRID_X(pivots, measurements, refs, inv_xs, inv_zs, inv_ss, num_gates, num_qubits, num_words_minor);
-		initThreadsPerBlockX = _initThreadsPerBlockX;
+		const char* opname = "prefix pass 1";
+		TUNE_2D_PREFIX(
+					block_intermediate_prefix_z, 
+                    block_intermediate_prefix_x, 
+                    subblocks_prefix_z, 
+                    subblocks_prefix_x, 
+                    num_blocks, 
+                    num_words_minor);
 	}
 
-	void tune_single_determinate(void (*kernel)(ConstPivotsPointer, bucket_t*, ConstRefsPointer, ConstTablePointer, ConstTablePointer, ConstSignsPointer, const size_t, const size_t, const size_t),
-		const char* opname, dim3& bestBlock, dim3& bestGrid, const size_t& shared_element_bytes, 
-		ConstPivotsPointer pivots, bucket_t* measurements, ConstRefsPointer refs,
-        ConstTablePointer inv_xs, ConstTablePointer inv_zs, ConstSignsPointer inv_ss, 
-        const size_t gate_index, const size_t num_qubits, const size_t num_words_minor)
-	{
-		const size_t size = num_words_minor;
-		TUNE_1D_FIX_X(pivots, measurements, refs, inv_xs, inv_zs, inv_ss, gate_index, num_qubits, num_words_minor);
-	}
-
-	void tune_indeterminate(
-		void (*copy_kernel)(ConstPivotsPointer, bucket_t*, ConstRefsPointer, Table*, Table*, Signs*, const size_t, const size_t, const size_t),
-		void (*phase1_kernel)(ConstPivotsPointer, bucket_t*, ConstRefsPointer, Table*, Table*, Signs*, const size_t, const size_t, const size_t),
-		void (*phase2_kernel)(ConstPivotsPointer, bucket_t*, ConstRefsPointer, Table*, Table*, Signs*, const size_t, const size_t, const size_t),
-		dim3& bestBlockCopy, dim3& bestGridCopy,
-		dim3& bestBlockPhase1, dim3& bestGridPhase1,
-		dim3& bestBlockPhase2, dim3& bestGridPhase2,
+	void tune_inject_pass_1(
+		void (*kernel)(Table*, Table*, Table*, Table*, word_std_t *, word_std_t *, 
+						const Commutation*, const uint32, const size_t, const size_t, const size_t),
+		dim3& bestBlock, dim3& bestGrid,
 		const size_t& shared_element_bytes, 
-		const bool& shared_size_yextend,
-		ConstPivotsPointer pivots, bucket_t* measurements, ConstRefsPointer refs, 
-        Table* inv_xs, Table* inv_zs, Signs *inv_ss,
-        const size_t gate_index, const size_t num_qubits, const size_t num_words_minor)
+		const size_t& data_size_in_x, 
+		const size_t& data_size_in_y,
+		Table *prefix_xs, 
+        Table *prefix_zs, 
+        Table *inv_xs, 
+        Table *inv_zs,
+        word_std_t *block_intermediate_prefix_z,
+        word_std_t *block_intermediate_prefix_x,
+		const Commutation* commutations,
+		const uint32& pivot,
+		const size_t& total_targets,
+		const size_t& num_words_major,
+		const size_t& num_words_minor)
 	{
-		fflush(stdout), fflush(stderr);
-		void (*kernel)(ConstPivotsPointer, bucket_t*, ConstRefsPointer, Table*, Table*, Signs*, const size_t, const size_t, const size_t);
-		// Tune the copy kernel.
-		if (options.tune_copyindeterminate) {
-			dim3 bestBlock = bestBlockCopy, bestGrid = bestGridCopy;
-			kernel = copy_kernel;
-			size_t size = num_words_minor;
-			const char* opname = "Copy";
-			TUNE_1D(pivots, measurements, refs, inv_xs, inv_zs, inv_ss, gate_index, num_qubits, num_words_minor);
-			bestBlockCopy = bestBlock;
-			bestGridCopy = bestGrid;
-		}
-		// Tune phase1 kernel.
-		if (options.tune_phase1indeterminate) {
-			dim3 bestBlock = bestBlockPhase1, bestGrid = bestGridPhase1;
-			kernel = phase1_kernel;
-			const size_t data_size_in_x = num_words_minor;
-			const size_t data_size_in_y = 2 * num_qubits;
-			const char* opname = "Phase1";
-			TUNE_2D(pivots, measurements, refs, inv_xs, inv_zs, inv_ss, gate_index, num_qubits, num_words_minor);
-			bestBlockPhase1 = bestBlock;
-			bestGridPhase1 = bestGrid;
-		}
-		// Tune phase2 kernel.
-		if (options.tune_phase2indeterminate) {
-			dim3 bestBlock = bestBlockPhase2, bestGrid = bestGridPhase2;
-			kernel = phase2_kernel;
-			size_t size = 2 * num_qubits;
-			const char* opname = "Phase2";
-			TUNE_1D(pivots, measurements, refs, inv_xs, inv_zs, inv_ss, gate_index, num_qubits, num_words_minor);
-			bestBlockPhase2 = bestBlock;
-			bestGridPhase2 = bestGrid;
-		}
+		const char* opname = "inject pass 1";
+		TUNE_2D_PREFIX(
+					prefix_xs, 
+        			prefix_zs, 
+       				inv_xs, 
+        			inv_zs,
+        			block_intermediate_prefix_z,
+        			block_intermediate_prefix_x,
+					commutations,
+					pivot,
+					total_targets,
+					num_words_major,
+					num_words_minor);
 	}
+
+	void tune_prefix_pass_2(
+		void (*kernel)(word_std_t*, word_std_t*, const word_std_t*, const word_std_t*, const size_t, const size_t, const size_t),
+		dim3& bestBlock, dim3& bestGrid,
+		const size_t& data_size_in_x, 
+		const size_t& data_size_in_y,
+		word_std_t* block_intermediate_prefix_z,
+		word_std_t* block_intermediate_prefix_x,
+		const word_std_t* subblocks_prefix_z, 
+		const word_std_t* subblocks_prefix_x,
+		const size_t& num_blocks,
+		const size_t& num_words_minor,
+		const size_t& pass_1_blocksize)
+	{
+		const char* opname = "prefix pass 2";
+		const size_t shared_element_bytes = 0;
+		const bool shared_size_yextend = false;
+		TUNE_2D(block_intermediate_prefix_z, block_intermediate_prefix_x, subblocks_prefix_z, subblocks_prefix_x, num_blocks, num_words_minor, pass_1_blocksize);
+	}
+
+	void tune_inject_pass_2(
+		void (*kernel)(Table*, Table*, Table*, Table*, const word_std_t *, const word_std_t *, 
+						const Commutation*, const uint32, 
+						const size_t, const size_t, const size_t, const size_t),
+		dim3& bestBlock, dim3& bestGrid,
+		const size_t& shared_element_bytes, 
+		const size_t& data_size_in_x, 
+		const size_t& data_size_in_y,
+		Table *prefix_xs, 
+        Table *prefix_zs, 
+        Table *inv_xs, 
+        Table *inv_zs,
+        const word_std_t *block_intermediate_prefix_z,
+        const word_std_t *block_intermediate_prefix_x,
+		const Commutation* commutations,
+		const uint32& pivot,
+		const size_t& total_targets,
+		const size_t& num_words_major,
+		const size_t& num_words_minor,
+		const size_t& pass_1_blocksize)
+	{
+		const char* opname = "prefix pass 2";
+		const bool shared_size_yextend = true;
+		TUNE_2D(
+			prefix_xs, 
+			prefix_zs, 
+			inv_xs, 
+			inv_zs,
+			block_intermediate_prefix_z,
+			block_intermediate_prefix_x,
+			commutations,
+			pivot,
+			total_targets,
+			num_words_major,
+			num_words_minor,
+			pass_1_blocksize
+		);
+	}
+
+	void tune_collapse_targets(
+		void (*kernel)(Table*, Table*, Table*, Table*, Signs *, 
+						const Commutation*, const uint32, 
+						const size_t, const size_t, const size_t),
+		dim3& bestBlock, dim3& bestGrid,
+		const size_t& shared_element_bytes, 
+		const size_t& data_size_in_x, 
+		const size_t& data_size_in_y,
+		Table *prefix_xs, 
+        Table *prefix_zs, 
+        Table *inv_xs, 
+        Table *inv_zs,
+		Signs *inv_ss,
+		const Commutation* commutations,
+		const uint32& pivot,
+		const size_t& total_targets,
+		const size_t& num_words_major,
+		const size_t& num_words_minor)
+	{
+		const char* opname = "collapse targets";
+		const bool shared_size_yextend = true;
+		TUNE_2D(
+			prefix_xs, 
+			prefix_zs, 
+			inv_xs, 
+			inv_zs,
+			inv_ss,
+			commutations,
+			pivot,
+			total_targets,
+			num_words_major,
+			num_words_minor
+		);
+	}
+
 
 }
 

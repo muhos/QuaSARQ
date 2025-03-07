@@ -148,9 +148,9 @@ namespace QuaSARQ {
         word_std_t* block_intermediate_prefix_x,
         const word_std_t* subblocks_prefix_z,
         const word_std_t* subblocks_prefix_x,
-        size_t num_blocks,
-        size_t num_words_minor,
-        size_t pass_1_blocksize
+        const size_t num_blocks,
+        const size_t num_words_minor,
+        const size_t pass_1_blocksize
     )
     {
 
@@ -173,7 +173,8 @@ namespace QuaSARQ {
         }
     }
 
-    void Prefix::alloc(const Tableau<DeviceAllocator>& input, const size_t& max_window_bytes) {
+    void Prefix::alloc(const Tableau<DeviceAllocator>& input, const size_t& config_qubits, const size_t& max_window_bytes) {
+        this->config_qubits = config_qubits;
         num_qubits = input.num_qubits();
         num_words_major = input.num_words_major();
         num_words_minor = input.num_words_minor();
@@ -207,41 +208,120 @@ namespace QuaSARQ {
         targets.alloc(num_qubits, max_window_bytes, true, false);
     }
 
+    void Prefix::resize(const Tableau<DeviceAllocator>& input, const size_t& max_window_bytes) {
+        assert(num_qubits <= input.num_qubits());
+        assert(config_qubits != 0);
+        num_qubits = input.num_qubits();
+        num_words_major = input.num_words_major();
+        num_words_minor = input.num_words_minor();
+        if (!num_qubits || num_qubits > MAX_QUBITS)
+            LOGERROR("maximum number of qubits per window is invalid.");
+        if (!num_words_minor || num_words_minor > MAX_WORDS)
+            LOGERROR("number of minor words is invalid.");
+        if (!num_words_major || num_words_major > MAX_WORDS)
+            LOGERROR("number of major words is invalid.");
+        min_blocksize_y = nextPow2(num_words_minor);
+        max_intermediate_blocks = nextPow2(ROUNDUP(num_qubits, MIN_BLOCK_INTERMEDIATE_SIZE));
+        if (max_intermediate_blocks > MIN_SINGLE_PASS_THRESHOLD) {
+            max_sub_blocks = max_intermediate_blocks >> 1;
+        }
+        targets.resize(num_qubits, max_window_bytes, true, false);
+    }
+
     void Prefix::scan_blocks(const size_t& num_blocks, const cudaStream_t& stream) {
         assert(num_blocks <= max_intermediate_blocks);
         assert(nextPow2(num_blocks) == num_blocks);
-        dim3 scan_blocks_blocksize(num_blocks, nextPow2(ROUNDUP(MIN_SINGLE_PASS_THRESHOLD, num_blocks)));
-        dim3 scan_blocks_gridsize(1, 1);
-        scan_blocks_blocksize.y = MIN(scan_blocks_blocksize.y, min_blocksize_y);
-        //printf("scan single pass block size = (%d, %d), num_blocks = %lld\n", scan_blocks_blocksize.x, scan_blocks_blocksize.y, num_blocks);
-        OPTIMIZEBLOCKS2D(scan_blocks_gridsize.y, num_words_minor, scan_blocks_blocksize.y);
+        dim3 currentblock, currentgrid;
+        currentblock.x = MAX(2, num_blocks);
+        currentblock.y = MIN(nextPow2(ROUNDUP(MIN_SINGLE_PASS_THRESHOLD, currentblock.x)), min_blocksize_y);
+        OPTIMIZEBLOCKS2D(currentgrid.y, num_words_minor, currentblock.y);
         if (num_blocks <= MIN_SINGLE_PASS_THRESHOLD) {
             // Do single pass.
-            scan_blocks_blocksize.x = MAX(2, num_blocks);
-            OPTIMIZESHARED(scan_blocks_smem_size, scan_blocks_blocksize.y * (scan_blocks_blocksize.x + CONFLICT_FREE_OFFSET(scan_blocks_blocksize.x)), 2 * sizeof(word_std_t));
-            scan_blocks_single_pass <<<scan_blocks_gridsize, scan_blocks_blocksize, scan_blocks_smem_size, stream>>> (block_intermediate_prefix_z, block_intermediate_prefix_x, num_blocks, num_words_minor);
-            LASTERR("failed to scan_blocks_single_pass");
-            SYNC(stream);
+            currentgrid.x = 1;
+            OPTIMIZESHARED(scan_blocks_smem_size, currentblock.y * (currentblock.x + CONFLICT_FREE_OFFSET(currentblock.x)), 2 * sizeof(word_std_t));
+            scan_blocks_single_pass <<<currentgrid, currentblock, scan_blocks_smem_size, stream>>> (block_intermediate_prefix_z, block_intermediate_prefix_x, num_blocks, num_words_minor);
+            if (options.sync) {
+                LASTERR("failed to scan in a single pass");
+                SYNC(stream);
+            }
         }
         else {
             // Do triple passes.
-            scan_blocks_blocksize.x = MIN_SUB_BLOCK_SIZE;
-            OPTIMIZEBLOCKS2D(scan_blocks_gridsize.x, num_blocks, scan_blocks_blocksize.x);
-            const size_t pass_1_blocksize = scan_blocks_blocksize.x;
-            const size_t pass_1_gridsize = ROUNDUP(num_blocks, scan_blocks_blocksize.x);
-            OPTIMIZESHARED(scan_blocks_p1_smem_size, scan_blocks_blocksize.y * (scan_blocks_blocksize.x + CONFLICT_FREE_OFFSET(scan_blocks_blocksize.x)), 2 * sizeof(word_std_t));
-            scan_blocks_pass_1 <<<scan_blocks_gridsize, scan_blocks_blocksize, scan_blocks_p1_smem_size, stream>>> (block_intermediate_prefix_z, block_intermediate_prefix_x, subblocks_prefix_z, subblocks_prefix_x, num_blocks, num_words_minor);
+            if (options.tune_prefixpass1) {
+                SYNCALL;
+                tune_prefix_pass_1(
+                    scan_blocks_pass_1, 
+                    bestblockprefixpass1, bestgridprefixpass1,
+                    2 * sizeof(word_std_t),
+                    num_blocks,
+                    num_words_minor,
+                    block_intermediate_prefix_z, 
+                    block_intermediate_prefix_x, 
+                    subblocks_prefix_z, 
+                    subblocks_prefix_x, 
+                    num_blocks, 
+                    num_words_minor
+                );
+                SYNCALL;
+            }
+            TRIM_BLOCK_IN_DEBUG_MODE(bestblockprefixpass1, bestgridprefixpass1, num_blocks, num_words_minor);
+            currentblock = bestblockprefixpass1, currentgrid = bestgridprefixpass1;
+            TRIM_GRID_IN_XY(num_blocks, num_words_minor);
+            const size_t pass_1_blocksize = currentblock.x;
+            const size_t pass_1_gridsize = ROUNDUP(num_blocks, pass_1_blocksize);
+            OPTIMIZESHARED(p1_smem_size, currentblock.y * (currentblock.x + CONFLICT_FREE_OFFSET(currentblock.x)), 2 * sizeof(word_std_t));
+            scan_blocks_pass_1 <<<currentgrid, currentblock, p1_smem_size, stream>>> (
+                block_intermediate_prefix_z, 
+                block_intermediate_prefix_x, 
+                subblocks_prefix_z, 
+                subblocks_prefix_x, 
+                num_blocks, 
+                num_words_minor
+            );
+
+            // Single phase
             if (pass_1_gridsize > MIN_SINGLE_PASS_THRESHOLD);
-                LOGERROR("multi-pass scan is impossible due to too large block size.");
-            scan_blocks_blocksize.x = nextPow2(MAX(2, pass_1_gridsize));
-            scan_blocks_gridsize.x = 1;
-            OPTIMIZESHARED(scan_blocks_smem_size, scan_blocks_blocksize.y * (scan_blocks_blocksize.x + CONFLICT_FREE_OFFSET(scan_blocks_blocksize.x)), 2 * sizeof(word_std_t));
-            scan_blocks_single_pass <<<scan_blocks_gridsize, scan_blocks_blocksize, scan_blocks_smem_size, stream>>> (subblocks_prefix_z, subblocks_prefix_x, pass_1_gridsize, num_words_minor);
-            scan_blocks_blocksize.x = MIN_SUB_BLOCK_SIZE; // This can be arbitrary size.
-            OPTIMIZEBLOCKS2D(scan_blocks_gridsize.x, num_blocks, scan_blocks_blocksize.x); 
-            scan_blocks_pass_2 <<<scan_blocks_gridsize, scan_blocks_blocksize, 0, stream>>> (block_intermediate_prefix_z, block_intermediate_prefix_x, subblocks_prefix_z, subblocks_prefix_x, num_blocks, num_words_minor, pass_1_blocksize);
-            LASTERR("failed to scan_blocks_pass_2");
-            SYNC(stream);
+                LOGERROR("pass-1 scan is impossible due to too large block size.");
+            currentblock.x = nextPow2(MAX(2, pass_1_gridsize));
+            currentgrid.x = 1;
+            OPTIMIZESHARED(scan_blocks_smem_size, currentblock.y * (currentblock.x + CONFLICT_FREE_OFFSET(currentblock.x)), 2 * sizeof(word_std_t));
+            scan_blocks_single_pass <<<currentgrid, currentblock, scan_blocks_smem_size, stream>>> (subblocks_prefix_z, subblocks_prefix_x, pass_1_gridsize, num_words_minor);
+
+            // Final phase.
+            if (options.tune_prefixpass2) {
+                SYNCALL;
+                tune_prefix_pass_2(
+                    scan_blocks_pass_2, 
+                    bestblockprefixpass2, bestgridprefixpass2,
+                    num_blocks,
+                    num_words_minor,
+                    block_intermediate_prefix_z, 
+                    block_intermediate_prefix_x, 
+                    subblocks_prefix_z, 
+                    subblocks_prefix_x, 
+                    num_blocks, 
+                    num_words_minor,
+                    pass_1_blocksize
+                );
+                SYNCALL;
+            }
+            TRIM_BLOCK_IN_DEBUG_MODE(bestblockprefixpass2, bestgridprefixpass2, num_blocks, num_words_minor);
+            currentblock = bestblockprefixpass2, currentgrid = bestgridprefixpass2;
+            TRIM_GRID_IN_XY(num_blocks, num_words_minor);
+            scan_blocks_pass_2 <<<currentgrid, currentblock, 0, stream>>> (
+                block_intermediate_prefix_z, 
+                block_intermediate_prefix_x, 
+                subblocks_prefix_z, 
+                subblocks_prefix_x, 
+                num_blocks, 
+                num_words_minor, 
+                pass_1_blocksize
+            );
+
+            if (options.sync) {
+                LASTERR("failed to scan in multiple passes");
+                SYNC(stream);
+            }
         }
     }
 

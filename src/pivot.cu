@@ -113,12 +113,19 @@ namespace QuaSARQ {
         if (bulky) {
             if (options.tune_allpivots) {
                 SYNCALL;
-                // tune_kernel_m(find_all_pivots, "Find all pivots", 
-                //                 bestblockallpivots, bestgridallpivots, 
-                //                 sizeof(uint32), true,   // shared size, extend?
-                //                 num_qubits,             // x-dim
-                //                 num_pivots_or_index,    // y-dim 
-                //                 gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), tab.xtable(), num_pivots_or_index, num_qubits, num_words_minor);
+                tune_kernel_m(find_all_pivots, "Find all pivots", 
+                                bestblockallpivots, bestgridallpivots, 
+                                sizeof(uint32), true,   // shared size, extend?
+                                num_qubits,             // x-dim
+                                num_pivots_or_index,    // y-dim 
+                                gpu_circuit.pivots(), 
+                                gpu_circuit.gates(), 
+                                gpu_circuit.references(), 
+                                tab.xtable(), 
+                                num_pivots_or_index, 
+                                num_qubits, 
+                                num_words_major, 
+                                num_words_minor);
                 reset_all_pivots <<<bestgridreset, bestblockreset>>> (gpu_circuit.pivots(), num_pivots_or_index);
                 SYNCALL;
             }
@@ -148,10 +155,18 @@ namespace QuaSARQ {
             const size_t pivot_index = num_pivots_or_index;
             if (options.tune_newpivots) {
                 SYNCALL;
-
-                // add shared memory here.
-
-                //tune_kernel_m(find_new_pivot, "New pivots", bestblocknewpivots, bestgridnewpivots, gpu_circuit.pivots(), gpu_circuit.gates(), gpu_circuit.references(), tab.xtable(), pivot_index, num_qubits, num_words_minor);
+                tune_kernel_m(find_new_pivot_and_mark, "New pivots", 
+                    bestblocknewpivots, bestgridnewpivots, 
+                    sizeof(uint32),
+                    tab.commutations(),
+                    gpu_circuit.pivots(), 
+                    gpu_circuit.gates(), 
+                    gpu_circuit.references(), 
+                    tab.xtable(), 
+                    pivot_index, 
+                    num_qubits,
+                    num_words_major, 
+                    num_words_minor);
                 SYNCALL;
             }
             TRIM_BLOCK_IN_DEBUG_MODE(bestblocknewpivots, bestgridnewpivots, num_qubits, 0);

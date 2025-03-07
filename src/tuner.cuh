@@ -51,45 +51,6 @@ namespace QuaSARQ {
 		Table* xs, Table* zs, 
 		#endif
 		Signs *ss);
-
-	// With measurements.
-	struct TableauState
-	{
-		word_std_t* saving_xs, *saving_zs;
-		word_std_t* org_xs, *org_zs;
-		size_t num_words;
-		bool recover;
-
-		TableauState() :
-			saving_xs(nullptr), saving_zs(nullptr), org_xs(nullptr), org_zs(nullptr),
-			num_words(0), recover(false) {}
-
-		void set_original_pointers(word_std_t* org_xdata, word_std_t* org_zdata, const size_t& num_words) {
-			org_xs = org_xdata, org_zs, org_zdata;
-			this->num_words = num_words;
-		}
-
-		void set_saving_pointers(word_std_t* saving_xdata, word_std_t* saving_zdata) {
-			saving_xs = saving_xdata, saving_zs, saving_zdata;
-		}
-
-		void save_state() {
-			if (!recover) return;
-			SYNCALL;
-			assert(num_words);
-			if (saving_xs != nullptr) CHECK(cudaMemcpy(saving_xs, org_xs, num_words * sizeof(word_std_t), cudaMemcpyDeviceToDevice));
-			if (saving_zs != nullptr) CHECK(cudaMemcpy(saving_zs, org_zs, num_words * sizeof(word_std_t), cudaMemcpyDeviceToDevice));
-		}
-
-		void recover_state() {
-			if (!recover) return;
-			SYNCALL;
-			assert(num_words);
-			if (org_xs != nullptr) CHECK(cudaMemcpy(org_xs, saving_xs, num_words * sizeof(word_std_t), cudaMemcpyDeviceToDevice));
-			if (org_zs != nullptr) CHECK(cudaMemcpy(org_zs, saving_zs, num_words * sizeof(word_std_t), cudaMemcpyDeviceToDevice));
-		}
-	};
-	extern TableauState ts; 
 	
 	void tune_kernel_m(void (*kernel)(const size_t, const size_t, Table*, Table*),
 		const char* opname, dim3& bestBlock, dim3& bestGrid,
@@ -99,17 +60,28 @@ namespace QuaSARQ {
 		const char* opname, dim3& bestBlock, dim3& bestGrid,
 		pivot_t* pivots, const size_t size);
 
-	void tune_kernel_m(void (*kernel)(pivot_t*, bucket_t*, ConstRefsPointer, ConstTablePointer, const size_t, const size_t, const size_t),
+	void tune_kernel_m(void (*kernel)(Commutation* commutations, ConstTablePointer, const qubit_t, const size_t, const size_t, const size_t),
+		const char* opname, dim3& bestBlock, dim3& bestGrid,
+		Commutation* commutations, ConstTablePointer inv_xs, const qubit_t qubit, 
+		const size_t size, const size_t num_words_major, const size_t num_words_minor);
+
+	void tune_kernel_m(void (*kernel)(Table*, Table*, Signs*, const Commutation* commutations, const pivot_t, const size_t, const size_t),
+		const char* opname, dim3& bestBlock, dim3& bestGrid,
+		Table* inv_xs, Table* inv_zs, Signs* ss, const Commutation* commutations, const pivot_t new_pivot, 
+		const size_t num_words_major, const size_t num_words_minor);
+
+	void tune_kernel_m(void (*kernel)(pivot_t*, bucket_t*, ConstRefsPointer, ConstTablePointer, 
+		const size_t, const size_t, const size_t, const size_t),
 		const char* opname, dim3& bestBlock, dim3& bestGrid, const size_t& shared_element_bytes, const bool& shared_size_yextend,
 		const size_t& data_size_in_x, const size_t& data_size_in_y,
 		pivot_t* pivots, bucket_t* measurements, ConstRefsPointer refs, ConstTablePointer inv_xs, 
-        const size_t num_gates, const size_t num_qubits, const size_t num_words_minor);
+        const size_t num_gates, const size_t num_qubits, const size_t num_words_major, const size_t num_words_minor);
 
-	void tune_kernel_m(void (*kernel)(pivot_t*, bucket_t*, ConstRefsPointer, ConstTablePointer, 
-        const size_t, const size_t, const size_t),
-		const char* opname, dim3& bestBlock, dim3& bestGrid, 
-		pivot_t* pivots, bucket_t* measurements, ConstRefsPointer refs, ConstTablePointer inv_xs, 
-        const size_t& gate_index, const size_t& num_qubits, const size_t& num_words_minor);
+	void tune_kernel_m(void (*kernel)(Commutation* commutations, pivot_t*, bucket_t*, ConstRefsPointer, ConstTablePointer, 
+        const size_t, const size_t, const size_t, const size_t),
+		const char* opname, dim3& bestBlock, dim3& bestGrid, const size_t& shared_element_bytes, 
+		Commutation* commutations, pivot_t* pivots, bucket_t* measurements, ConstRefsPointer refs, ConstTablePointer inv_xs, 
+        const size_t& gate_index, const size_t& num_qubits, const size_t num_words_major, const size_t num_words_minor);
 
 	void tune_outplace_transpose(void (*kernel)(Table*, Table*, Signs*, ConstTablePointer, ConstTablePointer, ConstSignsPointer, const size_t, const size_t, const size_t),
 		const char* opname, 
@@ -130,41 +102,15 @@ namespace QuaSARQ {
 		Table* xs, Table* zs,
         const size_t& num_words_major, const size_t& num_words_minor, const bool& row_major);
 
-	void tune_determinate(void (*kernel)(ConstPivotsPointer, bucket_t*, ConstRefsPointer, ConstTablePointer, ConstTablePointer, ConstSignsPointer, const size_t, const size_t, const size_t),
-		const char* opname, dim3& bestBlock, dim3& bestGrid, const size_t& shared_element_bytes, const bool& shared_size_yextend,
-		const size_t& data_size_in_x, const size_t& data_size_in_y,
-		ConstPivotsPointer pivots, bucket_t* measurements, ConstRefsPointer refs,
-        ConstTablePointer inv_xs, ConstTablePointer inv_zs, ConstSignsPointer inv_ss, 
-        const size_t num_gates, const size_t num_qubits, const size_t num_words_minor);
-
-	void tune_single_determinate(void (*kernel)(ConstPivotsPointer, bucket_t*, ConstRefsPointer, ConstTablePointer, ConstTablePointer, ConstSignsPointer, const size_t, const size_t, const size_t),
-		const char* opname, dim3& bestBlock, dim3& bestGrid, const size_t& shared_element_bytes, 
-		ConstPivotsPointer pivots, bucket_t* measurements, ConstRefsPointer refs,
-        ConstTablePointer inv_xs, ConstTablePointer inv_zs, ConstSignsPointer inv_ss, 
-        const size_t gate_index, const size_t num_qubits, const size_t num_words_minor);
-
-	void tune_indeterminate(
-		void (*copy_kernel)(ConstPivotsPointer, bucket_t*, ConstRefsPointer, Table*, Table*, Signs*, const size_t, const size_t, const size_t),
-		void (*phase1_kernel)(ConstPivotsPointer, bucket_t*, ConstRefsPointer, Table*, Table*, Signs*, const size_t, const size_t, const size_t),
-		void (*phase2_kernel)(ConstPivotsPointer, bucket_t*, ConstRefsPointer, Table*, Table*, Signs*, const size_t, const size_t, const size_t),
-		dim3& bestBlockCopy, dim3& bestGridCopy,
-		dim3& bestBlockPhase1, dim3& bestGridPhase1,
-		dim3& bestBlockPhase2, dim3& bestGridPhase2,
-		const size_t& shared_element_bytes, 
-		const bool& shared_size_yextend,
-		ConstPivotsPointer pivots, bucket_t* measurements, ConstRefsPointer refs, 
-        Table* inv_xs, Table* inv_zs, Signs *inv_ss,
-        const size_t gate_index, const size_t num_qubits, const size_t num_words_minor);
-
 	class Tuner : public Simulator {
 
 		void reset();
 
 	public:
 
-		Tuner() : Simulator() { ts.recover = false; }
+		Tuner() : Simulator() {}
 
-		Tuner(const string& path) : Simulator(path) { ts.recover = false; }
+		Tuner(const string& path) : Simulator(path) {}
 		
 		void write();
 		void run();

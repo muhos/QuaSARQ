@@ -20,8 +20,7 @@ namespace QuaSARQ {
     #define CONFLICT_FREE_OFFSET(n) ((n) >> LOG_NUM_BANKS)
     #endif
 
-	#define MIN_BLOCK_INTERMEDIATE_SIZE 32
-	#define MIN_SUB_BLOCK_SIZE 16
+	#define MIN_BLOCK_INTERMEDIATE_SIZE 8
 	#if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
 	#define MIN_SINGLE_PASS_THRESHOLD 512
 	#else
@@ -30,32 +29,6 @@ namespace QuaSARQ {
 
 
     __device__ word_std_t scan_block_exclusive(word_std_t* data, const int& n);
-
-	__global__ void scan_blocks_single_pass(word_std_t* block_intermediate_prefix_z, 
-                                         word_std_t* block_intermediate_prefix_x,
-                                         const size_t num_blocks,
-                                         const size_t num_words_minor);
-
-	__global__
-	void scan_blocks_pass_1(
-		word_std_t* block_intermediate_prefix_z,
-		word_std_t* block_intermediate_prefix_x,
-		word_std_t* subblocks_prefix_z, 
-		word_std_t* subblocks_prefix_x, 
-		const size_t num_blocks,
-		const size_t num_words_minor
-	);
-
-	__global__ 
-	void scan_blocks_pass_2(
-        word_std_t* block_intermediate_prefix_z,
-        word_std_t* block_intermediate_prefix_x,
-        const word_std_t* subblocks_prefix_z,
-        const word_std_t* subblocks_prefix_x,
-        size_t num_blocks,
-        size_t num_words_minor,
-        size_t pass_1_blocksize
-    );
 
 	class Prefix {
 
@@ -73,6 +46,7 @@ namespace QuaSARQ {
 		size_t min_blocksize_y;
 
 		size_t num_qubits;
+		size_t config_qubits;
 		size_t num_words_major;
 		size_t num_words_minor;
 
@@ -91,6 +65,7 @@ namespace QuaSARQ {
 		,	max_sub_blocks(0)
 		,	min_blocksize_y(0)
 		,   num_qubits(0)
+		,	config_qubits(0)
 		,   num_words_major(0)
 		,   num_words_minor(0)
 		,   pivot(0)
@@ -100,11 +75,98 @@ namespace QuaSARQ {
 		word_std_t* xblocks() { assert(block_intermediate_prefix_x != nullptr); return block_intermediate_prefix_x; }
 
 
-		void alloc(const Tableau<DeviceAllocator>& input, const size_t& max_window_bytes);
+		void alloc(const Tableau<DeviceAllocator>& input, const size_t& config_qubits, const size_t& max_window_bytes);
+		void resize(const Tableau<DeviceAllocator>& input, const size_t& max_window_bytes);
 		void scan_blocks(const size_t& num_blocks, const cudaStream_t& stream);
 		void inject_CX(Tableau<DeviceAllocator>& input, const uint32& pivot, const qubit_t& qubit, const cudaStream_t& stream);
 
 	};
+
+	void tune_prefix_pass_1(
+		void (*kernel)(word_std_t*, word_std_t*, word_std_t*, word_std_t*, const size_t, const size_t),
+		dim3& bestBlockPass1, dim3& bestGridPass1,
+		const size_t& shared_element_bytes, 
+		const size_t& data_size_in_x, 
+		const size_t& data_size_in_y,
+		word_std_t* block_intermediate_prefix_z,
+		word_std_t* block_intermediate_prefix_x,
+		word_std_t* subblocks_prefix_z, 
+		word_std_t* subblocks_prefix_x,
+		const size_t& num_blocks,
+		const size_t& num_words_minor);
+
+	void tune_prefix_pass_2(
+		void (*kernel)(word_std_t*, word_std_t*, const word_std_t*, const word_std_t*, const size_t, const size_t, const size_t),
+		dim3& bestBlock, dim3& bestGrid,
+		const size_t& data_size_in_x, 
+		const size_t& data_size_in_y,
+		word_std_t* block_intermediate_prefix_z,
+		word_std_t* block_intermediate_prefix_x,
+		const word_std_t* subblocks_prefix_z, 
+		const word_std_t* subblocks_prefix_x,
+		const size_t& num_blocks,
+		const size_t& num_words_minor,
+		const size_t& pass_1_blocksize);
+
+	void tune_inject_pass_1(
+		void (*kernel)(Table*, Table*, Table*, Table*, word_std_t *, word_std_t *, 
+						const Commutation*, const uint32, const size_t, const size_t, const size_t),
+		dim3& bestBlock, dim3& bestGrid,
+		const size_t& shared_element_bytes, 
+		const size_t& data_size_in_x, 
+		const size_t& data_size_in_y,
+		Table *prefix_xs, 
+        Table *prefix_zs, 
+        Table *inv_xs, 
+        Table *inv_zs,
+        word_std_t *block_intermediate_prefix_z,
+        word_std_t *block_intermediate_prefix_x,
+		const Commutation* commutations,
+		const uint32& pivot,
+		const size_t& total_targets,
+		const size_t& num_words_major,
+		const size_t& num_words_minor);
+
+	void tune_inject_pass_2(
+		void (*kernel)(Table*, Table*, Table*, Table*, const word_std_t *, const word_std_t *, 
+						const Commutation*, const uint32, 
+						const size_t, const size_t, const size_t, const size_t),
+		dim3& bestBlock, dim3& bestGrid,
+		const size_t& shared_element_bytes, 
+		const size_t& data_size_in_x, 
+		const size_t& data_size_in_y,
+		Table *prefix_xs, 
+        Table *prefix_zs, 
+        Table *inv_xs, 
+        Table *inv_zs,
+        const word_std_t *block_intermediate_prefix_z,
+        const word_std_t *block_intermediate_prefix_x,
+		const Commutation* commutations,
+		const uint32& pivot,
+		const size_t& total_targets,
+		const size_t& num_words_major,
+		const size_t& num_words_minor,
+		const size_t& pass_1_blocksize); 
+	
+
+	void tune_collapse_targets(
+		void (*kernel)(Table*, Table*, Table*, Table*, Signs *, 
+						const Commutation*, const uint32, 
+						const size_t, const size_t, const size_t),
+		dim3& bestBlock, dim3& bestGrid,
+		const size_t& shared_element_bytes, 
+		const size_t& data_size_in_x, 
+		const size_t& data_size_in_y,
+		Table *prefix_xs, 
+        Table *prefix_zs, 
+        Table *inv_xs, 
+        Table *inv_zs,
+		Signs *inv_ss,
+		const Commutation* commutations,
+		const uint32& pivot,
+		const size_t& total_targets,
+		const size_t& num_words_major,
+		const size_t& num_words_minor);
 	
 }
 

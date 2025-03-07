@@ -58,8 +58,10 @@ namespace QuaSARQ {
                 word_std_t blockSum_x = scan_block_exclusive(t_prefix_x, blockDim.x);
 
                 // Compute local zc = zc ^ zt, where zt is the zt'prefix.
+                assert((tid_x * num_words_minor + w) < prefix_zs->size());
                 (*prefix_zs)[tid_x * num_words_minor + w] = word_std_t(zs[c_destab]) ^ t_prefix_z[prefix_tid];
                 // Compute local xc = xc ^ xt, where xt is the xt'prefix.
+                assert((tid_x * num_words_minor + w) < prefix_xs->size());
                 (*prefix_xs)[tid_x * num_words_minor + w] = word_std_t(xs[c_destab]) ^ t_prefix_x[prefix_tid];
 
 
@@ -85,7 +87,6 @@ namespace QuaSARQ {
         const word_std_t *block_intermediate_prefix_x,
         const Commutation *commutations,
         const uint32 c,
-        const qubit_t qubit,
         const size_t total_targets,
         const size_t num_words_major,
         const size_t num_words_minor,
@@ -191,7 +192,6 @@ namespace QuaSARQ {
         Signs *inv_ss,
         const Commutation *commutations,
         const uint32 c,
-        const qubit_t qubit,
         const size_t total_targets,
         const size_t num_words_major, 
         const size_t num_words_minor
@@ -238,14 +238,36 @@ namespace QuaSARQ {
         const size_t total_targets = num_qubits - pivot - 1;
         if (!total_targets) return;
         // Do the first phase of prefix.
-        dim3 inject_cx_blocksize(MIN_BLOCK_INTERMEDIATE_SIZE, 2);
-        dim3 inject_cx_gridsize(1, 1);
-        OPTIMIZEBLOCKS2D(inject_cx_gridsize.x, total_targets, inject_cx_blocksize.x);
-        OPTIMIZEBLOCKS2D(inject_cx_gridsize.y, num_words_minor, inject_cx_blocksize.y);
-        const size_t pass_1_blocksize = inject_cx_blocksize.x;
-        const size_t pass_1_gridsize = ROUNDUP(total_targets, inject_cx_blocksize.x);
-        OPTIMIZESHARED(smem_size, inject_cx_blocksize.y * (inject_cx_blocksize.x + CONFLICT_FREE_OFFSET(inject_cx_blocksize.x)), 2 * sizeof(word_std_t));
-        scan_targets_pass_1 <<<inject_cx_gridsize, inject_cx_blocksize, smem_size, stream>>> (
+        dim3 currentblock, currentgrid;
+        if (options.tune_injectpass1) {
+            SYNCALL;
+            tune_inject_pass_1(
+                scan_targets_pass_1, 
+                bestblockinjectpass1, bestgridinjectpass1,
+                2 * sizeof(word_std_t),
+                total_targets,
+                num_words_minor,
+                XZ_TABLE(targets), 
+                XZ_TABLE(input), 
+                zblocks(), 
+                xblocks(),
+                input.commutations(), 
+                pivot,
+                total_targets, 
+                num_words_major, 
+                num_words_minor
+            );
+            SYNCALL;
+        }
+        TRIM_BLOCK_IN_DEBUG_MODE(bestblockinjectpass1, bestgridinjectpass1, total_targets, num_words_minor);
+        currentblock = bestblockinjectpass1, currentgrid = bestgridinjectpass1;
+        TRIM_GRID_IN_XY(total_targets, num_words_minor);
+        const size_t pass_1_blocksize = currentblock.x;
+        const size_t pass_1_gridsize = ROUNDUP(total_targets, pass_1_blocksize);
+        if (pass_1_gridsize > max_intermediate_blocks)
+            LOGERROR("too many blocks for intermediate arrays.");
+        OPTIMIZESHARED(smem_size, currentblock.y * (currentblock.x + CONFLICT_FREE_OFFSET(currentblock.x)), 2 * sizeof(word_std_t));
+        scan_targets_pass_1 <<<currentgrid, currentblock, smem_size, stream>>> (
                     XZ_TABLE(targets), 
                     XZ_TABLE(input), 
                     zblocks(), 
@@ -254,49 +276,97 @@ namespace QuaSARQ {
                     pivot,
                     total_targets, 
                     num_words_major, 
-                    num_words_minor);
-        LASTERR("failed to scan targets in pass 1");
-        SYNC(stream);
+                    num_words_minor
+                );
+        if (options.sync) {
+            LASTERR("failed to scan targets in pass 1");
+            SYNC(stream);
+        }
+
         // Intermeditae scan of blocks resulted in pass 1.
         scan_blocks(nextPow2(pass_1_gridsize), stream);
+
         // Second phase of injecting CX.
-        dim3 finalize_prefix_blocksize(4, 2);
-        dim3 finalize_prefix_gridsize(1, 1);
-        OPTIMIZEBLOCKS2D(finalize_prefix_gridsize.x, total_targets, finalize_prefix_blocksize.x);
-        OPTIMIZEBLOCKS2D(finalize_prefix_gridsize.y, num_words_minor, finalize_prefix_blocksize.y);
-        OPTIMIZESHARED(finalize_prefix_smem_size, finalize_prefix_blocksize.y * finalize_prefix_blocksize.x, 2 * sizeof(word_std_t));
-        scan_targets_pass_2 <<<finalize_prefix_gridsize, finalize_prefix_blocksize, finalize_prefix_smem_size, stream>>> (
+        if (options.tune_injectpass2) {
+            SYNCALL;
+            tune_inject_pass_2(
+                scan_targets_pass_2, 
+                bestblockinjectpass2, bestgridinjectpass2,
+                2 * sizeof(word_std_t),
+                total_targets,
+                num_words_minor,
+                XZ_TABLE(targets), 
+                XZ_TABLE(input),
+                zblocks(), 
+                xblocks(), 
+                input.commutations(), 
+                pivot, 
+                total_targets, 
+                num_words_major, 
+                num_words_minor, 
+                pass_1_blocksize
+            );
+            SYNCALL;
+        }
+        TRIM_BLOCK_IN_DEBUG_MODE(bestblockinjectpass2, bestgridinjectpass2, total_targets, num_words_minor);
+        currentblock = bestblockinjectpass2, currentgrid = bestgridinjectpass2;
+        TRIM_GRID_IN_XY(total_targets, num_words_minor);
+        OPTIMIZESHARED(finalize_prefix_smem_size, currentblock.y * currentblock.x, 2 * sizeof(word_std_t));
+        scan_targets_pass_2 <<<currentgrid, currentblock, finalize_prefix_smem_size, stream>>> (
                         XZ_TABLE(targets), 
                         XZ_TABLE(input),
                         zblocks(), 
                         xblocks(), 
                         input.commutations(), 
                         pivot, 
-                        qubit,
                         total_targets, 
                         num_words_major, 
                         num_words_minor, 
-                        pass_1_blocksize);
-        LASTERR("failed to scan targets in pass 2");
-        SYNC(stream);
-        dim3 update_signs_blocksize(4, 2);
-        dim3 update_signs_gridsize(1, 1);
-        OPTIMIZEBLOCKS2D(update_signs_gridsize.x, total_targets, update_signs_blocksize.x);
-        OPTIMIZEBLOCKS2D(update_signs_gridsize.y, num_words_minor, update_signs_blocksize.y);
-        OPTIMIZESHARED(reduce_smem_size, update_signs_blocksize.y * update_signs_blocksize.x, 2 * sizeof(word_std_t));
+                        pass_1_blocksize
+                    );
+        if (options.sync) {
+            LASTERR("failed to scan targets in pass 2");
+            SYNC(stream);
+        }
+
         // Final phase to compute the signs of the scanned targets.
-        collapse_scanned_targets <<<update_signs_gridsize, update_signs_blocksize, reduce_smem_size, stream>>> (
+        if (options.tune_collapsetargets) {
+            SYNCALL;
+            tune_collapse_targets(
+                collapse_scanned_targets, 
+                bestblockcollapsetargets, bestgridcollapsetargets,
+                2 * sizeof(word_std_t),
+                total_targets,
+                num_words_minor,
+                XZ_TABLE(targets), 
+                XZ_TABLE(input), 
+                input.signs(), 
+                input.commutations(), 
+                pivot, 
+                total_targets, 
+                num_words_major, 
+                num_words_minor
+            );
+            SYNCALL;
+        }
+        TRIM_BLOCK_IN_DEBUG_MODE(bestblockcollapsetargets, bestgridcollapsetargets, total_targets, num_words_minor);
+        currentblock = bestblockcollapsetargets, currentgrid = bestgridcollapsetargets;
+        TRIM_GRID_IN_XY(total_targets, num_words_minor);
+        OPTIMIZESHARED(reduce_smem_size, currentblock.y * currentblock.x, 2 * sizeof(word_std_t));
+        collapse_scanned_targets <<<currentgrid, currentblock, reduce_smem_size, stream>>> (
                         XZ_TABLE(targets), 
                         XZ_TABLE(input), 
                         input.signs(), 
                         input.commutations(), 
                         pivot, 
-                        qubit,
                         total_targets, 
                         num_words_major, 
-                        num_words_minor);
-        LASTERR("failed to collapse scanned targets");
-        SYNC(stream);
+                        num_words_minor
+                    );
+        if (options.sync) {
+            LASTERR("failed to collapse scanned targets");
+            SYNC(stream);
+        }
     }
 
 }
