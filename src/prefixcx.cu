@@ -5,7 +5,7 @@
 namespace QuaSARQ {
 
     __global__ 
-    void scan_targets_pass_1(
+    void injectcx_pass_1(
         Table *prefix_xs, 
         Table *prefix_zs, 
         Table *inv_xs, 
@@ -48,7 +48,6 @@ namespace QuaSARQ {
                     t_delta_x = xs[t_destab];
                 }
             
-
                 t_prefix_z[prefix_tid] = t_delta_z;
                 t_prefix_x[prefix_tid] = t_delta_x;
 
@@ -70,7 +69,6 @@ namespace QuaSARQ {
                     grid_t bid = tid_x / blockDim.x;
                     block_intermediate_prefix_z[bid * num_words_minor + w] = blockSum_z;
                     block_intermediate_prefix_x[bid * num_words_minor + w] = blockSum_x;
-                    // printf("w(%lld), t(%lld):  block intermediate prefix-xor (tz) = " B2B_STR "\n", w, global_tid, RB2B(block_intermediate_prefix_z[blockIdx.x * num_words_minor + w]));
                 }
 
             }
@@ -78,11 +76,12 @@ namespace QuaSARQ {
     }
 
     __global__ 
-    void scan_targets_pass_2(
+    void injectcx_pass_2(
         Table *prefix_xs, 
         Table *prefix_zs, 
         Table *inv_xs, 
         Table *inv_zs,
+        Signs *inv_ss,
         const word_std_t *block_intermediate_prefix_z,
         const word_std_t *block_intermediate_prefix_x,
         const Commutation *commutations,
@@ -92,12 +91,10 @@ namespace QuaSARQ {
         const size_t num_words_minor,
         const size_t phase1_block_size)
     { 
-        word_std_t *shared = SharedMemory<word_std_t>();
-        word_std_t *shared_z = shared;
-        word_std_t *shared_x = shared_z + blockDim.x;
-        grid_t collapse_tid = threadIdx.y * 2 * blockDim.x + threadIdx.x;
+        assert(blockDim.x <= 32);
         word_std_t *xs = inv_xs->words();
         word_std_t *zs = inv_zs->words();
+        sign_t *ss = inv_ss->data();
 
         for_parallel_y(w, num_words_minor) {
 
@@ -134,22 +131,13 @@ namespace QuaSARQ {
                     zc_xor_zt ^= block_intermediate_prefix_z[bid * num_words_minor + w];
                     xc_xor_xt ^= block_intermediate_prefix_x[bid * num_words_minor + w];
 
-                    // printf("w(%lld), t(%lld): prefix-xor(" B2B_STR ") ^ block[bid: %lld](" B2B_STR ") = " B2B_STR "\n", w, t,
-                    //         RB2B((word_std_t)(*prefix_zs)[tid_x * num_words_minor + w]),
-                    //         bid, RB2B(block_intermediate_prefix_z[bid * num_words_minor + w]),
-                    //         RB2B(zc_xor_zt));
-
                     // Compute the CX expression for Z.
                     word_std_t c_stab_word = zs[c_stab];
                     word_std_t t_destab_word = zs[t_destab];
                     xc_and_zt = (c_stab_word & t_destab_word);
                     not_zc_xor_xt = ~(zc_xor_zt ^ zs[t_stab]);
-
-                    // xc_and_zt = not_zc_xor_xt;
-                    // printf("w(%lld), t(%lld): z-table: xc_and_zt:" B2B_STR " & not_zc_xor_xt:" B2B_STR " = " B2B_STR "\n", w, t, RB2B(xc_and_zt), RB2B(not_zc_xor_xt), RB2B((xc_and_zt & not_zc_xor_xt)));
-
-                    (*prefix_zs)[tid_x * num_words_minor + w] = xc_and_zt & not_zc_xor_xt;
-
+                    local_destab_sign ^= (xc_and_zt & not_zc_xor_xt);
+                    
                     // Update Z tableau.
                     zs[t_stab] ^= c_stab_word;
                     zc_destab ^= t_destab_word; // requires collapse.
@@ -159,11 +147,7 @@ namespace QuaSARQ {
                     t_destab_word = xs[t_destab];
                     xc_and_zt = (c_stab_word & t_destab_word);
                     not_zc_xor_xt = ~(xc_xor_xt ^ xs[t_stab]);
-
-                    // xc_and_zt = not_zc_xor_xt;
-                    // printf("w(%lld), t(%lld): x-table: xc_and_zt:" B2B_STR " & not_zc_xor_xt:" B2B_STR " = " B2B_STR "\n", w, t, RB2B(xc_and_zt), RB2B(not_zc_xor_xt), RB2B((xc_and_zt & not_zc_xor_xt)));
-
-                    (*prefix_xs)[tid_x * num_words_minor + w] = xc_and_zt & not_zc_xor_xt;
+                    local_stab_sign ^= (xc_and_zt & not_zc_xor_xt);
 
                     // Update X tableau.
                     xs[t_stab] ^= c_stab_word;
@@ -171,63 +155,19 @@ namespace QuaSARQ {
                 }
             }
 
-            // Update Z, X in shared memory.
-            collapse_load_shared_dual(shared_z, zc_destab, shared_x, xc_destab, collapse_tid, total_targets);
-            collapse_shared_dual(shared_z, zc_destab, shared_x, xc_destab, collapse_tid);
-            collapse_warp_dual(shared_z, zc_destab, shared_x, xc_destab, collapse_tid);
+            collapse_warp_dual(shared_z, zc_destab, shared_x, xc_destab);
+            collapse_warp_dual(signs_destab, local_destab_sign, signs_stab, local_stab_sign);
 
             if (!threadIdx.x) {
                 if (zc_destab)
                     atomicXOR(zs + c_destab, zc_destab);
                 if (xc_destab)
                     atomicXOR(xs + c_destab, xc_destab);
+                if (local_destab_sign)
+                    atomicXOR(ss + w, local_destab_sign);
+                if (local_stab_sign)
+                    atomicXOR(ss + w + num_words_minor, local_stab_sign);
             }
-        }
-    }
-
-    __global__ 
-    void collapse_scanned_targets(
-        Table *prefix_xs, 
-        Table *prefix_zs, 
-        Table *inv_xs, 
-        Table *inv_zs, 
-        Signs *inv_ss,
-        const Commutation *commutations,
-        const uint32 c,
-        const size_t total_targets,
-        const size_t num_words_major, 
-        const size_t num_words_minor
-    )
-    {
-        word_t *xs = inv_xs->data();
-        word_t *zs = inv_zs->data();
-        sign_t *ss = inv_ss->data();
-        word_std_t *signs_destab = SharedMemory<word_std_t>();
-        word_std_t *signs_stab = signs_destab + blockDim.x;
-
-        grid_t collapse_tid = threadIdx.y * 2 * blockDim.x + threadIdx.x;
-
-        for_parallel_y(w, num_words_minor) { 
-
-            word_std_t local_destab_sign = 0;
-            word_std_t local_stab_sign = 0;
-
-            for_parallel_x(tid_x, total_targets) {
-                size_t t = tid_x + c + 1;
-                if (commutations[t].anti_commuting) {
-                    local_destab_sign ^= (word_std_t)(*prefix_zs)[tid_x * num_words_minor + w];
-                    local_stab_sign ^= (word_std_t)(*prefix_xs)[tid_x * num_words_minor + w];
-                }
-            }
-
-            collapse_load_shared_dual(signs_destab, local_destab_sign, signs_stab, local_stab_sign, collapse_tid, total_targets);
-            collapse_shared_dual(signs_destab, local_destab_sign, signs_stab, local_stab_sign, collapse_tid);
-            collapse_warp_dual(signs_destab, local_destab_sign, signs_stab, local_stab_sign, collapse_tid);
-
-            if (!threadIdx.x && local_destab_sign)
-                atomicXOR(inv_ss->data(w), local_destab_sign);
-            if (!threadIdx.x && local_stab_sign)
-                atomicXOR(inv_ss->data(w + num_words_minor), local_stab_sign);
         }
     }
 
@@ -244,7 +184,7 @@ namespace QuaSARQ {
         if (options.tune_injectprepare) {
             SYNCALL;
             tune_inject_pass_1(
-                scan_targets_pass_1, 
+                injectcx_pass_1, 
                 bestblockinjectprepare, bestgridinjectprepare,
                 2 * sizeof(word_std_t),
                 total_targets,
@@ -269,7 +209,7 @@ namespace QuaSARQ {
         if (pass_1_gridsize > max_intermediate_blocks)
             LOGERROR("too many blocks for intermediate arrays.");
         OPTIMIZESHARED(smem_size, currentblock.y * (currentblock.x + CONFLICT_FREE_OFFSET(currentblock.x)), 2 * sizeof(word_std_t));
-        scan_targets_pass_1 <<<currentgrid, currentblock, smem_size, stream>>> (
+        injectcx_pass_1 <<<currentgrid, currentblock, smem_size, stream>>> (
                     XZ_TABLE(targets), 
                     XZ_TABLE(input), 
                     zblocks(), 
@@ -292,13 +232,14 @@ namespace QuaSARQ {
         if (options.tune_injectfinal) {
             SYNCALL;
             tune_inject_pass_2(
-                scan_targets_pass_2, 
+                injectcx_pass_2, 
                 bestblockinjectfinal, bestgridinjectfinal,
-                2 * sizeof(word_std_t),
+                0,
                 total_targets,
                 num_words_minor,
                 XZ_TABLE(targets), 
                 XZ_TABLE(input),
+                input.signs(), 
                 zblocks(), 
                 xblocks(), 
                 input.commutations(), 
@@ -313,10 +254,12 @@ namespace QuaSARQ {
         TRIM_BLOCK_IN_DEBUG_MODE(bestblockinjectfinal, bestgridinjectfinal, total_targets, num_words_minor);
         currentblock = bestblockinjectfinal, currentgrid = bestgridinjectfinal;
         TRIM_GRID_IN_XY(total_targets, num_words_minor);
-        OPTIMIZESHARED(finalize_prefix_smem_size, currentblock.y * currentblock.x, 2 * sizeof(word_std_t));
-        scan_targets_pass_2 <<<currentgrid, currentblock, finalize_prefix_smem_size, stream>>> (
+        if (currentblock.x > 32)
+            LOGERROR("block size must be <= warp size.");
+        injectcx_pass_2 <<<currentgrid, currentblock, 0, stream>>> (
                         XZ_TABLE(targets), 
                         XZ_TABLE(input),
+                        input.signs(), 
                         zblocks(), 
                         xblocks(), 
                         input.commutations(), 
@@ -328,45 +271,6 @@ namespace QuaSARQ {
                     );
         if (options.sync) {
             LASTERR("failed to scan targets in pass 2");
-            SYNC(stream);
-        }
-
-        // Final phase to compute the signs of the scanned targets.
-        if (options.tune_collapsetargets) {
-            SYNCALL;
-            tune_collapse_targets(
-                collapse_scanned_targets, 
-                bestblockcollapsetargets, bestgridcollapsetargets,
-                2 * sizeof(word_std_t),
-                total_targets,
-                num_words_minor,
-                XZ_TABLE(targets), 
-                XZ_TABLE(input), 
-                input.signs(), 
-                input.commutations(), 
-                pivot, 
-                total_targets, 
-                num_words_major, 
-                num_words_minor
-            );
-            SYNCALL;
-        }
-        TRIM_BLOCK_IN_DEBUG_MODE(bestblockcollapsetargets, bestgridcollapsetargets, total_targets, num_words_minor);
-        currentblock = bestblockcollapsetargets, currentgrid = bestgridcollapsetargets;
-        TRIM_GRID_IN_XY(total_targets, num_words_minor);
-        OPTIMIZESHARED(reduce_smem_size, currentblock.y * currentblock.x, 2 * sizeof(word_std_t));
-        collapse_scanned_targets <<<currentgrid, currentblock, reduce_smem_size, stream>>> (
-                        XZ_TABLE(targets), 
-                        XZ_TABLE(input), 
-                        input.signs(), 
-                        input.commutations(), 
-                        pivot, 
-                        total_targets, 
-                        num_words_major, 
-                        num_words_minor
-                    );
-        if (options.sync) {
-            LASTERR("failed to collapse scanned targets");
             SYNC(stream);
         }
     }

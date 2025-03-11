@@ -128,7 +128,7 @@ namespace QuaSARQ {
 		const size_t& num_words_minor);
 
 	void tune_inject_pass_2(
-		void (*kernel)(Table*, Table*, Table*, Table*, const word_std_t *, const word_std_t *, 
+		void (*kernel)(Table*, Table*, Table*, Table*, Signs *, const word_std_t *, const word_std_t *, 
 						const Commutation*, const uint32, 
 						const size_t, const size_t, const size_t, const size_t),
 		dim3& bestBlock, dim3& bestGrid,
@@ -139,6 +139,7 @@ namespace QuaSARQ {
         Table *prefix_zs, 
         Table *inv_xs, 
         Table *inv_zs,
+		Signs *inv_ss,
         const word_std_t *block_intermediate_prefix_z,
         const word_std_t *block_intermediate_prefix_x,
 		const Commutation* commutations,
@@ -147,26 +148,6 @@ namespace QuaSARQ {
 		const size_t& num_words_major,
 		const size_t& num_words_minor,
 		const size_t& pass_1_blocksize); 
-	
-
-	void tune_collapse_targets(
-		void (*kernel)(Table*, Table*, Table*, Table*, Signs *, 
-						const Commutation*, const uint32, 
-						const size_t, const size_t, const size_t),
-		dim3& bestBlock, dim3& bestGrid,
-		const size_t& shared_element_bytes, 
-		const size_t& data_size_in_x, 
-		const size_t& data_size_in_y,
-		Table *prefix_xs, 
-        Table *prefix_zs, 
-        Table *inv_xs, 
-        Table *inv_zs,
-		Signs *inv_ss,
-		const Commutation* commutations,
-		const uint32& pivot,
-		const size_t& total_targets,
-		const size_t& num_words_major,
-		const size_t& num_words_minor);
 
 	void tune_single_pass(
 		void (*kernel)(word_std_t*, word_std_t*, const size_t, const size_t),

@@ -672,7 +672,7 @@ namespace QuaSARQ {
 	}
 
 	void tune_inject_pass_2(
-		void (*kernel)(Table*, Table*, Table*, Table*, const word_std_t *, const word_std_t *, 
+		void (*kernel)(Table*, Table*, Table*, Table*, Signs *, const word_std_t *, const word_std_t *, 
 						const Commutation*, const uint32, 
 						const size_t, const size_t, const size_t, const size_t),
 		dim3& bestBlock, dim3& bestGrid,
@@ -683,6 +683,7 @@ namespace QuaSARQ {
         Table *prefix_zs, 
         Table *inv_xs, 
         Table *inv_zs,
+		Signs *inv_ss,
         const word_std_t *block_intermediate_prefix_z,
         const word_std_t *block_intermediate_prefix_x,
 		const Commutation* commutations,
@@ -692,13 +693,16 @@ namespace QuaSARQ {
 		const size_t& num_words_minor,
 		const size_t& pass_1_blocksize)
 	{
-		const char* opname = "prefix pass 2";
-		const bool shared_size_yextend = true;
+		const char* opname = "inject pass 2";
+		const bool shared_size_yextend = false;
+		int64 _maxThreadsPerBlockX = maxThreadsPerBlockX;
+		maxThreadsPerBlockX = 32;
 		TUNE_2D(
 			prefix_xs, 
 			prefix_zs, 
 			inv_xs, 
 			inv_zs,
+			inv_ss,
 			block_intermediate_prefix_z,
 			block_intermediate_prefix_x,
 			commutations,
@@ -708,41 +712,7 @@ namespace QuaSARQ {
 			num_words_minor,
 			pass_1_blocksize
 		);
-	}
-
-	void tune_collapse_targets(
-		void (*kernel)(Table*, Table*, Table*, Table*, Signs *, 
-						const Commutation*, const uint32, 
-						const size_t, const size_t, const size_t),
-		dim3& bestBlock, dim3& bestGrid,
-		const size_t& shared_element_bytes, 
-		const size_t& data_size_in_x, 
-		const size_t& data_size_in_y,
-		Table *prefix_xs, 
-        Table *prefix_zs, 
-        Table *inv_xs, 
-        Table *inv_zs,
-		Signs *inv_ss,
-		const Commutation* commutations,
-		const uint32& pivot,
-		const size_t& total_targets,
-		const size_t& num_words_major,
-		const size_t& num_words_minor)
-	{
-		const char* opname = "collapse targets";
-		const bool shared_size_yextend = true;
-		TUNE_2D(
-			prefix_xs, 
-			prefix_zs, 
-			inv_xs, 
-			inv_zs,
-			inv_ss,
-			commutations,
-			pivot,
-			total_targets,
-			num_words_major,
-			num_words_minor
-		);
+		maxThreadsPerBlockX = _maxThreadsPerBlockX;
 	}
 
 	void tune_single_pass(

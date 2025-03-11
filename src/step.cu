@@ -130,7 +130,6 @@ namespace QuaSARQ {
         grid_t tx = threadIdx.x;
         grid_t BX = blockDim.x;
         grid_t global_offset = blockIdx.x * BX;
-        word_std_t* shared_signs = SharedMemory<word_std_t>();
         sign_t* signs = ss->data();
 
         for_parallel_y(w, num_words_major) {
@@ -291,7 +290,7 @@ namespace QuaSARQ {
             if (bestblockstep.x > maxWarpSize)
                 step_2D << < bestgridstep, bestblockstep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs());
             else
-                step_2D_warped << < bestgridstep, bestblockstep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs());
+                step_2D_warped << < bestgridstep, bestblockstep, 0, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs());
 
             if (options.sync) { 
                 LASTERR("failed to launch step kernel");

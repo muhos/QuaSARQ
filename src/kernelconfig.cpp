@@ -79,7 +79,7 @@ void Simulator::register_config() {
 	FOREACH_CONFIG(CONFIG2BOOL);
 	char* line = buffer;
     while (line[0] != '\0') {
-		if (line[0] == '\001' || line[0] == '\003') {
+		if (line[0] == '\001' || line[0] == '\003' || line[0] == '\021') {
 			eatLine(line);
 			continue;
 		} 

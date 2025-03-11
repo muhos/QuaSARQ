@@ -120,7 +120,7 @@ namespace QuaSARQ {
 		} \
 	}
 
-	#define collapse_warp_dual(smem1, val1, smem2, val2, tid) \
+	#define collapse_warp_dual(smem1, val1, smem2, val2) \
 	{ \
 		if (threadIdx.x < 32) { \
 			const grid_t mask = __activemask(); \

@@ -58,6 +58,7 @@ namespace QuaSARQ {
         return blockSum;
     }
 
+
 	__global__ void scan_blocks_single_pass(word_std_t* block_intermediate_prefix_z, 
                                          word_std_t* block_intermediate_prefix_x,
                                          const size_t num_chunks,
