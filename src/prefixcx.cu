@@ -98,8 +98,6 @@ namespace QuaSARQ {
         grid_t collapse_tid = threadIdx.y * 2 * blockDim.x + threadIdx.x;
         word_std_t *xs = inv_xs->words();
         word_std_t *zs = inv_zs->words();
-        word_std_t xc_and_zt = 0;
-        word_std_t not_zc_xor_xt = 0;
 
         for_parallel_y(w, num_words_minor) {
 
@@ -109,6 +107,10 @@ namespace QuaSARQ {
             // For parallel collapsing.
             word_std_t zc_destab = 0;
             word_std_t xc_destab = 0;
+            word_std_t xc_and_zt = 0;
+            word_std_t not_zc_xor_xt = 0;
+            word_std_t local_destab_sign = 0;
+            word_std_t local_stab_sign = 0;
 
             for_parallel_x(tid_x, total_targets) {
 
@@ -137,7 +139,7 @@ namespace QuaSARQ {
                     //         bid, RB2B(block_intermediate_prefix_z[bid * num_words_minor + w]),
                     //         RB2B(zc_xor_zt));
 
-                    // // Compute the CX expression for Z.
+                    // Compute the CX expression for Z.
                     word_std_t c_stab_word = zs[c_stab];
                     word_std_t t_destab_word = zs[t_destab];
                     xc_and_zt = (c_stab_word & t_destab_word);
@@ -152,7 +154,7 @@ namespace QuaSARQ {
                     zs[t_stab] ^= c_stab_word;
                     zc_destab ^= t_destab_word; // requires collapse.
 
-                    // // Compute the CX expression for X.
+                    // Compute the CX expression for X.
                     c_stab_word = xs[c_stab];
                     t_destab_word = xs[t_destab];
                     xc_and_zt = (c_stab_word & t_destab_word);
@@ -239,11 +241,11 @@ namespace QuaSARQ {
         if (!total_targets) return;
         // Do the first phase of prefix.
         dim3 currentblock, currentgrid;
-        if (options.tune_injectpass1) {
+        if (options.tune_injectprepare) {
             SYNCALL;
             tune_inject_pass_1(
                 scan_targets_pass_1, 
-                bestblockinjectpass1, bestgridinjectpass1,
+                bestblockinjectprepare, bestgridinjectprepare,
                 2 * sizeof(word_std_t),
                 total_targets,
                 num_words_minor,
@@ -259,8 +261,8 @@ namespace QuaSARQ {
             );
             SYNCALL;
         }
-        TRIM_BLOCK_IN_DEBUG_MODE(bestblockinjectpass1, bestgridinjectpass1, total_targets, num_words_minor);
-        currentblock = bestblockinjectpass1, currentgrid = bestgridinjectpass1;
+        TRIM_BLOCK_IN_DEBUG_MODE(bestblockinjectprepare, bestgridinjectprepare, total_targets, num_words_minor);
+        currentblock = bestblockinjectprepare, currentgrid = bestgridinjectprepare;
         TRIM_GRID_IN_XY(total_targets, num_words_minor);
         const size_t pass_1_blocksize = currentblock.x;
         const size_t pass_1_gridsize = ROUNDUP(total_targets, pass_1_blocksize);
@@ -287,11 +289,11 @@ namespace QuaSARQ {
         scan_blocks(nextPow2(pass_1_gridsize), stream);
 
         // Second phase of injecting CX.
-        if (options.tune_injectpass2) {
+        if (options.tune_injectfinal) {
             SYNCALL;
             tune_inject_pass_2(
                 scan_targets_pass_2, 
-                bestblockinjectpass2, bestgridinjectpass2,
+                bestblockinjectfinal, bestgridinjectfinal,
                 2 * sizeof(word_std_t),
                 total_targets,
                 num_words_minor,
@@ -308,8 +310,8 @@ namespace QuaSARQ {
             );
             SYNCALL;
         }
-        TRIM_BLOCK_IN_DEBUG_MODE(bestblockinjectpass2, bestgridinjectpass2, total_targets, num_words_minor);
-        currentblock = bestblockinjectpass2, currentgrid = bestgridinjectpass2;
+        TRIM_BLOCK_IN_DEBUG_MODE(bestblockinjectfinal, bestgridinjectfinal, total_targets, num_words_minor);
+        currentblock = bestblockinjectfinal, currentgrid = bestgridinjectfinal;
         TRIM_GRID_IN_XY(total_targets, num_words_minor);
         OPTIMIZESHARED(finalize_prefix_smem_size, currentblock.y * currentblock.x, 2 * sizeof(word_std_t));
         scan_targets_pass_2 <<<currentgrid, currentblock, finalize_prefix_smem_size, stream>>> (

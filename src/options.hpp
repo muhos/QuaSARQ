@@ -45,6 +45,7 @@ namespace QuaSARQ {
         bool profile_equivalence;
         bool disable_concurrency;
         bool sync;
+        bool tune_all;
 
         size_t tuner_initial_qubits;
         size_t tuner_step_qubits;

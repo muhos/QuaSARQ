@@ -167,6 +167,7 @@ namespace QuaSARQ {
                     num_qubits,
                     num_words_major, 
                     num_words_minor);
+                reset_all_pivots <<<bestgridreset, bestblockreset>>> (gpu_circuit.pivots(), num_pivots_or_index);
                 SYNCALL;
             }
             TRIM_BLOCK_IN_DEBUG_MODE(bestblocknewpivots, bestgridnewpivots, num_qubits, 0);

@@ -16,10 +16,11 @@ namespace QuaSARQ {
         CONFIG(newpivots) \
         CONFIG(marking) \
         CONFIG(injectswap) \
-        CONFIG(prefixpass1) \
-        CONFIG(prefixpass2) \
-        CONFIG(injectpass1) \
-        CONFIG(injectpass2) \
+        CONFIG(prefixprepare) \
+        CONFIG(prefixsingle) \
+        CONFIG(prefixfinal) \
+        CONFIG(injectprepare) \
+        CONFIG(injectfinal) \
         CONFIG(collapsetargets) \
 
 
@@ -33,10 +34,11 @@ namespace QuaSARQ {
         CONFIG(newpivots, 32, 1, 2, 1) \
         CONFIG(marking, 4, 1, 500, 1) \
         CONFIG(injectswap, 4, 1, 500, 1) \
-        CONFIG(prefixpass1, 4, 1, 500, 1) \
-        CONFIG(prefixpass2, 4, 1, 500, 1) \
-        CONFIG(injectpass1, 4, 1, 500, 1) \
-        CONFIG(injectpass2, 4, 1, 500, 1) \
+        CONFIG(prefixprepare, 16, 64, 96, 28) \
+        CONFIG(prefixsingle, 512, 2, 1, 10) \
+        CONFIG(prefixfinal, 4, 1, 500, 1) \
+        CONFIG(injectprepare, 4, 1, 500, 1) \
+        CONFIG(injectfinal, 4, 1, 500, 1) \
         CONFIG(collapsetargets, 4, 1, 500, 1) \
 
     #define CONFIG2EXTERN(NAME) \

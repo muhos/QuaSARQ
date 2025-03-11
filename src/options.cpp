@@ -14,6 +14,9 @@ namespace QuaSARQ {
     #define ENABLE_TUNER(CONFIG) \
         tuner_en |= tune_ ## CONFIG;
 
+    #define TUNE_ALL(CONFIG) \
+        tune_ ## CONFIG |= tune_all;
+
     // Default frequency of some gates will be changed later.
     #define GATE2INPUT(GATE) \
         DOUBLE_OPT opt_ ## GATE ## _prob(#GATE, "Frequency of " #GATE " gates in a generated random circuit", (1.0 / NR_GATETYPES), FP64R(0,1));
@@ -37,6 +40,8 @@ namespace QuaSARQ {
     BOOL_OPT opt_sync("sync", "synchronize all kernels and data transfers", false);
     BOOL_OPT opt_profile_equivalence("profile-equivalence", "profile equivalence checking", false);
     BOOL_OPT opt_disable_concurrency("disable-concurrency", "disable concurrency in equivalence checking", false);
+    BOOL_OPT opt_tune_all("tune-all", "enable tuning for all kernels", false);
+
     FOREACH_CONFIG(CONFIG2INPUT);
 
     INT_OPT opt_initialstate("initial", "set initial quantum state (0: 0 state, 1: + state, 2: i state)", 0, INT32R(0, 2));
@@ -83,10 +88,14 @@ namespace QuaSARQ {
 
         sync = opt_sync;
 
-        FOREACH_CONFIG(CONFIG2ASSIGN);
-        FOREACH_CONFIG(ENABLE_TUNER);
         tuner_initial_qubits = opt_tuneinitial_qubits;
         tuner_step_qubits = opt_tunestep_qubits;
+        tune_all = opt_tune_all;
+        FOREACH_CONFIG(CONFIG2ASSIGN);
+        FOREACH_CONFIG(ENABLE_TUNER);
+        FOREACH_CONFIG(TUNE_ALL);
+        tuner_en |= tune_all;
+        
 
         print_final_state = opt_print_final_state;
         print_step_state = opt_print_step_state;

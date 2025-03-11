@@ -153,7 +153,6 @@ namespace QuaSARQ {;
             num_words_major,
             num_words_minor
         );
-        LOGDONE(2, 4);
     }
 
     #define DEBUG_INJECT_CX 0
@@ -226,10 +225,8 @@ namespace QuaSARQ {;
                     SYNC(stream);                
                 }
                 if (new_pivot != INVALID_PIVOT) {
-                    LOGN2(2, "Meauring qubit %d using pivot %d.. ", qubit, new_pivot);
+                    LOG2(2, "Meauring qubit %d using pivot %d.. ", qubit, new_pivot);
                     random_measures++;
-
-                    cutimer.start();
 
                     #if !DEBUG_INJECT_CX
                     prefix.inject_CX(tableau, new_pivot, qubit, stream);
@@ -243,8 +240,6 @@ namespace QuaSARQ {;
                     LASTERR("failed to inject_CX");
                     SYNC(stream);
                     #endif
-
-                    cutimer.stop();
 
                     inject_swap(new_pivot, qubit, stream);
                 }

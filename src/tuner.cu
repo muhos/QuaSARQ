@@ -3,7 +3,7 @@
 
 namespace QuaSARQ {
 
-	constexpr bool PRINT_PROGRESS_2D = 1;
+	constexpr bool PRINT_PROGRESS_2D = 0;
 	constexpr size_t NSAMPLES = 2;
 	constexpr int MIN_PRECISION_HITS = 2;
 	constexpr size_t TRIALS = size_t(1e3);
@@ -53,7 +53,7 @@ namespace QuaSARQ {
 	}
 
 	void Tuner::run() {
-		if (!open_config("wb"))
+		if (!open_config("ab"))
 			LOGERROR("cannot tune without opening a configuration file");
 		// Create a tableau in GPU memory for the maximum qubits.
 		const size_t max_num_qubits = num_qubits;
@@ -325,7 +325,7 @@ namespace QuaSARQ {
 		} \
 	} while(0)
 
-	#define TUNE_2D_PREFIX(...) \
+	#define TUNE_2D_PREFIX(SKIP_GRID_CHECK, ...) \
 	do { \
 		if (bestBlock.x > 1 || bestGrid.x > 1 || bestBlock.y > 1 || bestGrid.y > 1) { \
 			LOG2(3, "\nBest configuration: block(%d, %d), grid(%d, %d) will be used without tuning.", bestBlock.x, bestBlock.y, bestGrid.x, bestGrid.y); \
@@ -346,14 +346,18 @@ namespace QuaSARQ {
 			initBlocksPerGridX = (int64) ceil(initBlocksPerGridX / 1.0); \
 			const int64 maxBlocksPerGridY = maxGPUBlocks2D << 1; \
 			const int64 maxBlocksPerGridX = maxGPUBlocks2D << 1; \
-			for (int64 blocksY = initBlocksPerGridY; (blocksY <= maxBlocksPerGridY) && !early_exit && trials < TRIALS; blocksY += 8, trials++) { \
-				for (int64 blocksX = initBlocksPerGridX; (blocksX <= maxBlocksPerGridX) && !early_exit && trials < TRIALS; blocksX += 8, trials++) { \
+			for (int64 blocksY = initBlocksPerGridY; (blocksY <= maxBlocksPerGridY) && !early_exit && trials < TRIALS; blocksY += 4, trials++) { \
+				for (int64 blocksX = initBlocksPerGridX; (blocksX <= maxBlocksPerGridX) && !early_exit && trials < TRIALS; blocksX += 4, trials++) { \
 					for (int64 threadsY = maxThreadsPerBlockY; (threadsY >= initThreadsPerBlockY) && !early_exit && trials < TRIALS; threadsY >>= 1) { \
-						for (int64 threadsX = maxThreadsPerBlockX; (threadsX >= MIN_BLOCK_INTERMEDIATE_SIZE) && !early_exit && trials < TRIALS; threadsX >>= 1) { \
+						for (int64 threadsX = MIN_BLOCK_INTERMEDIATE_SIZE; threadsX <= maxThreadsPerBlockX && !early_exit && trials < TRIALS; threadsX <<= 1) { \
 							if (nextPow2(threadsX) != threadsX) \
 								LOGERROR("non-power-of-2 block size is not allowed."); \
 							const size_t pass_1_gridsize = ROUNDUP(data_size_in_x, threadsX); \
-							if (pass_1_gridsize > MIN_SINGLE_PASS_THRESHOLD) continue; \
+							if (!SKIP_GRID_CHECK && pass_1_gridsize > MIN_SINGLE_PASS_THRESHOLD) { \
+								if (PRINT_PROGRESS_2D) \
+									LOG2(1, "  Skipping block size %lld for data size of %lld", threadsX, data_size_in_x); \
+								continue; \
+							} \
 							const int64 threadsPerBlock = threadsX * threadsY; \
 							const size_t shared_size = shared_element_bytes * threadsY * (threadsX + CONFLICT_FREE_OFFSET(threadsX)); \
 							if (shared_size > maxGPUSharedMem || threadsPerBlock > maxThreadsPerBlock) continue; \
@@ -362,11 +366,55 @@ namespace QuaSARQ {
 							dim3 block((uint32)threadsX, (uint32)threadsY); \
 							dim3 grid((uint32)blocksX, (uint32)blocksY); \
 							double avgRuntime = 0; \
-							if (PRINT_PROGRESS_2D) LOG2(1, "  Tuning for block(x:%u, y:%u) and grid(x:%u, y:%u)", block.x, block.y, grid.x, grid.y); fflush(stdout); fflush(stderr); \
+							if (PRINT_PROGRESS_2D) LOG2(1, "  Tuning for block(x:%u, y:%u) and grid(x:%u, y:%u), pass_1_gridsize: %lld", block.x, block.y, grid.x, grid.y, pass_1_gridsize); fflush(stdout); fflush(stderr); \
 							BENCHMARK_KERNEL(avgRuntime, NSAMPLES, shared_size, ## __VA_ARGS__); \
 							BEST_CONFIG(avgRuntime, minRuntime, bestGrid, bestBlock, early_exit); \
 						} \
 					} \
+				} \
+			} \
+			LOG2(1, "Best %s configuration found after %zd trials:", opname, trials); \
+			LOG2(1, " Block (%-4u, %4u)", bestBlock.x, bestBlock.y); \
+			LOG2(1, " Grid  (%-4u, %4u)", bestGrid.x, bestGrid.y); \
+			LOG2(1, " Min time: %.4f ms", minRuntime); \
+			LOG0(""); \
+			fflush(stdout); \
+		} \
+	} while(0)
+
+	#define TUNE_2D_PREFIX_SINGLE(...) \
+	do { \
+		if (bestBlock.y > 1 || bestGrid.y > 1) { \
+			LOG2(3, "\nBest configuration: block(%d, %d), grid(%d, %d) will be used without tuning.", bestBlock.x, bestBlock.y, bestGrid.x, bestGrid.y); \
+		} \
+		else { \
+			if (bestBlock.x < 2 || bestBlock.x > MIN_SINGLE_PASS_THRESHOLD) \
+				LOGERROR("x-block size is incorrect."); \
+			if (bestGrid.x > 1) \
+				LOGERROR("x-grid size must be 1."); \
+			LOG0(""); \
+			LOG2(1, "Tunning %s kernel with maximum of %zd trials and %-.5f milliseconds precision...", opname, TRIALS, PRECISION); \
+			int min_precision_hits = MIN_PRECISION_HITS; \
+			int64 initBlocksPerGridY = 0; \
+			OPTIMIZEBLOCKS2D(initBlocksPerGridY, data_size_in_y, maxThreadsPerBlockY); \
+			double minRuntime = double(UINTMAX_MAX); \
+			bool early_exit = false; \
+			size_t trials = 0; \
+			initBlocksPerGridY = (int64) ceil(initBlocksPerGridY / 1.0); \
+			const int64 maxBlocksPerGridY = maxGPUBlocks2D << 1; \
+			for (int64 blocksY = initBlocksPerGridY; (blocksY <= maxBlocksPerGridY) && !early_exit && trials < TRIALS; blocksY += 4, trials++) { \
+				for (int64 threadsY = maxThreadsPerBlockY; (threadsY >= 1) && !early_exit && trials < TRIALS; threadsY >>= 1) { \
+					const int64 threadsPerBlock = bestBlock.x * threadsY; \
+					const size_t shared_size = shared_element_bytes * threadsY * (bestBlock.x + CONFLICT_FREE_OFFSET(bestBlock.x)); \
+					if (shared_size > maxGPUSharedMem || threadsPerBlock > maxThreadsPerBlock) continue; \
+					/* Avoid deadloack due to warp divergence. */ \
+					if (threadsPerBlock % maxWarpSize != 0) continue; \
+					dim3 block((uint32)bestBlock.x, (uint32)threadsY); \
+					dim3 grid((uint32)bestGrid.x, (uint32)blocksY); \
+					double avgRuntime = 0; \
+					if (PRINT_PROGRESS_2D) LOG2(1, "  Tuning for block(x:%u, y:%u) and grid(x:%u, y:%u)", block.x, block.y, grid.x, grid.y); fflush(stdout); fflush(stderr); \
+					BENCHMARK_KERNEL(avgRuntime, NSAMPLES, shared_size, ## __VA_ARGS__); \
+					BEST_CONFIG(avgRuntime, minRuntime, bestGrid, bestBlock, early_exit); \
 				} \
 			} \
 			LOG2(1, "Best %s configuration found after %zd trials:", opname, trials); \
@@ -560,6 +608,7 @@ namespace QuaSARQ {
 	{
 		const char* opname = "prefix pass 1";
 		TUNE_2D_PREFIX(
+					false,
 					block_intermediate_prefix_z, 
                     block_intermediate_prefix_x, 
                     subblocks_prefix_z, 
@@ -589,6 +638,7 @@ namespace QuaSARQ {
 	{
 		const char* opname = "inject pass 1";
 		TUNE_2D_PREFIX(
+					false,
 					prefix_xs, 
         			prefix_zs, 
        				inv_xs, 
@@ -691,6 +741,27 @@ namespace QuaSARQ {
 			pivot,
 			total_targets,
 			num_words_major,
+			num_words_minor
+		);
+	}
+
+	void tune_single_pass(
+		void (*kernel)(word_std_t*, word_std_t*, const size_t, const size_t),
+		dim3& bestBlock, dim3& bestGrid,
+		const size_t& shared_element_bytes, 
+		const size_t& data_size_in_x, 
+		const size_t& data_size_in_y,
+		word_std_t* block_intermediate_prefix_z, 
+		word_std_t* block_intermediate_prefix_x,
+		const size_t num_chunks,
+		const size_t num_words_minor
+	)
+	{
+		const char* opname = "scan single pass";
+		TUNE_2D_PREFIX_SINGLE(
+			block_intermediate_prefix_z, 
+			block_intermediate_prefix_x, 
+			num_chunks, 
 			num_words_minor
 		);
 	}

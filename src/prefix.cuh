@@ -20,11 +20,11 @@ namespace QuaSARQ {
     #define CONFLICT_FREE_OFFSET(n) ((n) >> LOG_NUM_BANKS)
     #endif
 
-	#define MIN_BLOCK_INTERMEDIATE_SIZE 8
+	#define MIN_BLOCK_INTERMEDIATE_SIZE 32
 	#if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
-	#define MIN_SINGLE_PASS_THRESHOLD 512
+	constexpr int64 MIN_SINGLE_PASS_THRESHOLD = 512;
 	#else
-	#define MIN_SINGLE_PASS_THRESHOLD 1024
+	constexpr int64 MIN_SINGLE_PASS_THRESHOLD = 1024;
 	#endif
 
 
@@ -167,6 +167,18 @@ namespace QuaSARQ {
 		const size_t& total_targets,
 		const size_t& num_words_major,
 		const size_t& num_words_minor);
+
+	void tune_single_pass(
+		void (*kernel)(word_std_t*, word_std_t*, const size_t, const size_t),
+		dim3& bestBlock, dim3& bestGrid,
+		const size_t& shared_element_bytes, 
+		const size_t& data_size_in_x, 
+		const size_t& data_size_in_y,
+		word_std_t* block_intermediate_prefix_z, 
+		word_std_t* block_intermediate_prefix_x,
+		const size_t num_chunks,
+		const size_t num_words_minor
+	);
 	
 }
 
