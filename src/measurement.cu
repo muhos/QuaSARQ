@@ -235,7 +235,7 @@ namespace QuaSARQ {;
                     const uint32 gridsize = ROUNDUP(num_words_minor, blocksize);
                     inject_CX <<<gridsize, blocksize, 0, stream>>> (XZ_TABLE(tableau), tableau.signs(), 
                                 tableau.commutations(), 
-                                new_pivot.indeterminate, qubit, 
+                                new_pivot, qubit, 
                                 num_qubits, num_words_major, num_words_minor);
                     LASTERR("failed to inject_CX");
                     SYNC(stream);
