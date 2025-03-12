@@ -61,7 +61,8 @@ namespace QuaSARQ {
 	__global__ void scan_blocks_single_pass(word_std_t* block_intermediate_prefix_z, 
                                          word_std_t* block_intermediate_prefix_x,
                                          const size_t num_chunks,
-                                         const size_t num_words_minor) {
+                                         const size_t num_words_minor,
+                                         const size_t max_blocks) {
         assert(num_chunks <= blockDim.x);
         assert(blockDim.x >= 2);
         grid_t padded_block_size = blockDim.x + CONFLICT_FREE_OFFSET(blockDim.x);
@@ -73,29 +74,19 @@ namespace QuaSARQ {
 
         for_parallel_y(w, num_words_minor) {
 
-            word_std_t local_z = 0;
-			word_std_t local_x = 0;
+            const size_t bid = w * max_blocks + threadIdx.x;
 
-            if (threadIdx.x < num_chunks) {
-                local_z = block_intermediate_prefix_z[threadIdx.x * num_words_minor + w];
-                local_x = block_intermediate_prefix_x[threadIdx.x * num_words_minor + w];
-            }
-
-            prefix_z[prefix_tid] = local_z;
-			prefix_x[prefix_tid] = local_x;
+            prefix_z[prefix_tid] = (threadIdx.x < num_chunks) ? block_intermediate_prefix_z[bid] : 0;
+			prefix_x[prefix_tid] = (threadIdx.x < num_chunks) ? block_intermediate_prefix_x[bid] : 0;
 
             __syncthreads();
 
-            //printf("w(%lld), t(%d):  loaded block intermediate prefix-xor (tz) = " B2B_STR "\n", w, threadIdx.x, RB2B(prefix_z[threadIdx.x]));
-
             scan_block_exclusive(prefix_z, num_chunks);
             scan_block_exclusive(prefix_x, num_chunks);
-
-            //printf("w(%lld), t(%d):  scanned block intermediate prefix-xor (tz) = " B2B_STR "\n", w, threadIdx.x, RB2B(prefix_z[threadIdx.x]));
             
             if (threadIdx.x < num_chunks) {
-                block_intermediate_prefix_z[threadIdx.x * num_words_minor + w] = prefix_z[prefix_tid];
-                block_intermediate_prefix_x[threadIdx.x * num_words_minor + w] = prefix_x[prefix_tid];
+                block_intermediate_prefix_z[bid] = prefix_z[prefix_tid];
+                block_intermediate_prefix_x[bid] = prefix_x[prefix_tid];
             }
 
         }
@@ -107,7 +98,9 @@ namespace QuaSARQ {
 		word_std_t* subblocks_prefix_z, 
 		word_std_t* subblocks_prefix_x, 
 		const size_t num_blocks,
-		const size_t num_words_minor
+		const size_t num_words_minor,
+        const size_t max_blocks,
+		const size_t max_sub_blocks
 	)
 	{
         grid_t padded_block_size = blockDim.x + CONFLICT_FREE_OFFSET(blockDim.x);
@@ -121,22 +114,23 @@ namespace QuaSARQ {
 			
 			for_parallel_x(tid, num_blocks) {
 
-                prefix_z[prefix_tid] = block_intermediate_prefix_z[tid * num_words_minor + w];
-                prefix_x[prefix_tid] = block_intermediate_prefix_x[tid * num_words_minor + w];
+                const size_t bid = w * max_blocks + tid;
+                prefix_z[prefix_tid] = block_intermediate_prefix_z[bid];
+                prefix_x[prefix_tid] = block_intermediate_prefix_x[bid];
 
                 __syncthreads();
 
                 word_std_t blockSum_z = scan_block_exclusive(prefix_z, blockDim.x);
                 word_std_t blockSum_x = scan_block_exclusive(prefix_x, blockDim.x);
 
-                block_intermediate_prefix_z[tid * num_words_minor + w] = prefix_z[prefix_tid];
-                block_intermediate_prefix_x[tid * num_words_minor + w] = prefix_x[prefix_tid];
+                block_intermediate_prefix_z[bid] = prefix_z[prefix_tid];
+                block_intermediate_prefix_x[bid] = prefix_x[prefix_tid];
 
                 if (threadIdx.x == blockDim.x - 1) {
                     assert((blockIdx.x * num_words_minor + w) < gridDim.x * num_words_minor);
-                    grid_t bid = tid / blockDim.x;
-                    subblocks_prefix_z[bid * num_words_minor + w] = blockSum_z;
-                    subblocks_prefix_x[bid * num_words_minor + w] = blockSum_x;
+                    grid_t sub_bid = w * max_sub_blocks + (tid / blockDim.x);
+                    subblocks_prefix_z[sub_bid] = blockSum_z;
+                    subblocks_prefix_x[sub_bid] = blockSum_x;
                 }
             }
 		}
@@ -150,6 +144,8 @@ namespace QuaSARQ {
         const word_std_t* subblocks_prefix_x,
         const size_t num_blocks,
         const size_t num_words_minor,
+        const size_t max_blocks,
+		const size_t max_sub_blocks,
         const size_t pass_1_blocksize
     )
     {
@@ -157,18 +153,19 @@ namespace QuaSARQ {
         for_parallel_y(w, num_words_minor) {
 
             for_parallel_x(tid, num_blocks) {
-                grid_t bid = tid / pass_1_blocksize;
-
+                
                 word_std_t offsetZ = 0;
                 word_std_t offsetX = 0;
                 
-                if (bid > 0) {
-                    offsetZ = subblocks_prefix_z[bid * num_words_minor + w];
-                    offsetX = subblocks_prefix_x[bid * num_words_minor + w];
+                if ((tid / pass_1_blocksize) > 0) {
+                    const size_t sub_bid = w * max_sub_blocks + (tid / pass_1_blocksize);
+                    offsetZ = subblocks_prefix_z[sub_bid];
+                    offsetX = subblocks_prefix_x[sub_bid];
                 }
 
-                block_intermediate_prefix_z[tid * num_words_minor + w] ^= offsetZ;
-                block_intermediate_prefix_x[tid * num_words_minor + w] ^= offsetX;
+                const size_t bid = w * max_blocks + tid;
+                block_intermediate_prefix_z[bid] ^= offsetZ;
+                block_intermediate_prefix_x[bid] ^= offsetX;
             }
         }
     }
@@ -247,7 +244,8 @@ namespace QuaSARQ {
                     block_intermediate_prefix_z, 
                     block_intermediate_prefix_x, 
                     num_blocks, 
-                    num_words_minor
+                    num_words_minor,
+                    max_intermediate_blocks
                 );
                 SYNCALL;
             }
@@ -259,7 +257,8 @@ namespace QuaSARQ {
                 block_intermediate_prefix_z, 
                 block_intermediate_prefix_x, 
                 num_blocks, 
-                num_words_minor
+                num_words_minor,
+                max_intermediate_blocks
             );
             if (options.sync) {
                 LASTERR("failed to scan in a single pass");
@@ -281,7 +280,9 @@ namespace QuaSARQ {
                     subblocks_prefix_z, 
                     subblocks_prefix_x, 
                     num_blocks, 
-                    num_words_minor
+                    num_words_minor,
+                    max_intermediate_blocks,
+                    max_sub_blocks
                 );
                 SYNCALL;
             }
@@ -298,7 +299,9 @@ namespace QuaSARQ {
                 subblocks_prefix_z, 
                 subblocks_prefix_x, 
                 num_blocks, 
-                num_words_minor
+                num_words_minor,
+                max_intermediate_blocks,
+                max_sub_blocks
             );
             LOGDONE(2, 4);
 
@@ -318,7 +321,8 @@ namespace QuaSARQ {
                     subblocks_prefix_z, 
                     subblocks_prefix_x, 
                     pass_1_gridsize, 
-                    num_words_minor
+                    num_words_minor,
+                    max_sub_blocks
                 );
                 SYNCALL;
             }
@@ -331,7 +335,8 @@ namespace QuaSARQ {
                 subblocks_prefix_z, 
                 subblocks_prefix_x, 
                 pass_1_gridsize, 
-                num_words_minor
+                num_words_minor,
+                max_sub_blocks
             );
             LOGDONE(2, 4);
             
@@ -349,6 +354,8 @@ namespace QuaSARQ {
                     subblocks_prefix_x, 
                     num_blocks, 
                     num_words_minor,
+                    max_intermediate_blocks,
+                    max_sub_blocks,
                     pass_1_blocksize
                 );
                 SYNCALL;
@@ -364,6 +371,8 @@ namespace QuaSARQ {
                 subblocks_prefix_x, 
                 num_blocks, 
                 num_words_minor, 
+                max_intermediate_blocks,
+                max_sub_blocks,
                 pass_1_blocksize
             );
             if (options.sync) {

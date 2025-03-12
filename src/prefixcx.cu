@@ -16,7 +16,8 @@ namespace QuaSARQ {
         const uint32 c,
         const size_t total_targets,
         const size_t num_words_major,
-        const size_t num_words_minor
+        const size_t num_words_minor,
+        const size_t max_blocks
     )
     {
         grid_t padded_block_size = blockDim.x + CONFLICT_FREE_OFFSET(blockDim.x);
@@ -57,19 +58,20 @@ namespace QuaSARQ {
                 word_std_t blockSum_z = scan_block_exclusive(t_prefix_z, blockDim.x);
                 word_std_t blockSum_x = scan_block_exclusive(t_prefix_x, blockDim.x);
 
+                const size_t word_idx = w * total_targets + tid_x;
+                assert(word_idx < prefix_zs->size());
+                assert(word_idx < prefix_xs->size());
                 // Compute local zc = zc ^ zt, where zt is the zt'prefix.
-                assert((tid_x * num_words_minor + w) < prefix_zs->size());
-                (*prefix_zs)[tid_x * num_words_minor + w] = word_std_t(zs[c_destab]) ^ t_prefix_z[prefix_tid];
+                (*prefix_zs)[word_idx] = word_std_t(zs[c_destab]) ^ t_prefix_z[prefix_tid];
                 // Compute local xc = xc ^ xt, where xt is the xt'prefix.
-                assert((tid_x * num_words_minor + w) < prefix_xs->size());
-                (*prefix_xs)[tid_x * num_words_minor + w] = word_std_t(xs[c_destab]) ^ t_prefix_x[prefix_tid];
+                (*prefix_xs)[word_idx] = word_std_t(xs[c_destab]) ^ t_prefix_x[prefix_tid];
 
 
                 if (threadIdx.x == blockDim.x - 1) {
                     assert((blockIdx.x * num_words_minor + w) < gridDim.x * num_words_minor);
-                    grid_t bid = tid_x / blockDim.x;
-                    block_intermediate_prefix_z[bid * num_words_minor + w] = blockSum_z;
-                    block_intermediate_prefix_x[bid * num_words_minor + w] = blockSum_x;
+                    const size_t bid = w * max_blocks + (tid_x / blockDim.x);
+                    block_intermediate_prefix_z[bid] = blockSum_z;
+                    block_intermediate_prefix_x[bid] = blockSum_x;
                     // printf("w(%lld), t(%lld):  block intermediate prefix-xor (tz) = " B2B_STR "\n", w, global_tid, RB2B(block_intermediate_prefix_z[blockIdx.x * num_words_minor + w]));
                 }
 
@@ -90,6 +92,7 @@ namespace QuaSARQ {
         const size_t total_targets,
         const size_t num_words_major,
         const size_t num_words_minor,
+        const size_t max_blocks,
         const size_t phase1_block_size)
     { 
         word_std_t *shared = SharedMemory<word_std_t>();
@@ -124,20 +127,14 @@ namespace QuaSARQ {
                     assert(c_destab < inv_zs->size());
                     assert(t_destab < inv_zs->size());
 
-                    word_std_t zc_xor_zt = (*prefix_zs)[tid_x * num_words_minor + w];
-                    word_std_t xc_xor_xt = (*prefix_xs)[tid_x * num_words_minor + w];
-
-                    // Determine from which block (phase‑1 block) this entry came.
-                    grid_t bid = tid_x / phase1_block_size; // block index (0‑indexed)
+                    const size_t word_idx = w * total_targets + tid_x;
+                    word_std_t zc_xor_zt = (*prefix_zs)[word_idx];
+                    word_std_t xc_xor_xt = (*prefix_xs)[word_idx];
 
                     // Compute final prefixes and hence final {x,z}'c = {x,z}'c ^ {x,z}'t expressions.
-                    zc_xor_zt ^= block_intermediate_prefix_z[bid * num_words_minor + w];
-                    xc_xor_xt ^= block_intermediate_prefix_x[bid * num_words_minor + w];
-
-                    // printf("w(%lld), t(%lld): prefix-xor(" B2B_STR ") ^ block[bid: %lld](" B2B_STR ") = " B2B_STR "\n", w, t,
-                    //         RB2B((word_std_t)(*prefix_zs)[tid_x * num_words_minor + w]),
-                    //         bid, RB2B(block_intermediate_prefix_z[bid * num_words_minor + w]),
-                    //         RB2B(zc_xor_zt));
+                    const size_t bid = w * max_blocks + (tid_x / phase1_block_size);
+                    zc_xor_zt ^= block_intermediate_prefix_z[bid];
+                    xc_xor_xt ^= block_intermediate_prefix_x[bid];
 
                     // Compute the CX expression for Z.
                     word_std_t c_stab_word = zs[c_stab];
@@ -145,10 +142,7 @@ namespace QuaSARQ {
                     xc_and_zt = (c_stab_word & t_destab_word);
                     not_zc_xor_xt = ~(zc_xor_zt ^ zs[t_stab]);
 
-                    // xc_and_zt = not_zc_xor_xt;
-                    // printf("w(%lld), t(%lld): z-table: xc_and_zt:" B2B_STR " & not_zc_xor_xt:" B2B_STR " = " B2B_STR "\n", w, t, RB2B(xc_and_zt), RB2B(not_zc_xor_xt), RB2B((xc_and_zt & not_zc_xor_xt)));
-
-                    (*prefix_zs)[tid_x * num_words_minor + w] = xc_and_zt & not_zc_xor_xt;
+                    (*prefix_zs)[word_idx] = xc_and_zt & not_zc_xor_xt;
 
                     // Update Z tableau.
                     zs[t_stab] ^= c_stab_word;
@@ -160,10 +154,7 @@ namespace QuaSARQ {
                     xc_and_zt = (c_stab_word & t_destab_word);
                     not_zc_xor_xt = ~(xc_xor_xt ^ xs[t_stab]);
 
-                    // xc_and_zt = not_zc_xor_xt;
-                    // printf("w(%lld), t(%lld): x-table: xc_and_zt:" B2B_STR " & not_zc_xor_xt:" B2B_STR " = " B2B_STR "\n", w, t, RB2B(xc_and_zt), RB2B(not_zc_xor_xt), RB2B((xc_and_zt & not_zc_xor_xt)));
-
-                    (*prefix_xs)[tid_x * num_words_minor + w] = xc_and_zt & not_zc_xor_xt;
+                    (*prefix_xs)[word_idx] = xc_and_zt & not_zc_xor_xt;
 
                     // Update X tableau.
                     xs[t_stab] ^= c_stab_word;
@@ -215,8 +206,9 @@ namespace QuaSARQ {
             for_parallel_x(tid_x, total_targets) {
                 size_t t = tid_x + c + 1;
                 if (commutations[t].anti_commuting) {
-                    local_destab_sign ^= (word_std_t)(*prefix_zs)[tid_x * num_words_minor + w];
-                    local_stab_sign ^= (word_std_t)(*prefix_xs)[tid_x * num_words_minor + w];
+                    const size_t word_idx = w * total_targets + tid_x;
+                    local_destab_sign ^= (word_std_t)(*prefix_zs)[word_idx];
+                    local_stab_sign ^= (word_std_t)(*prefix_xs)[word_idx];
                 }
             }
 
@@ -257,7 +249,8 @@ namespace QuaSARQ {
                 pivot,
                 total_targets, 
                 num_words_major, 
-                num_words_minor
+                num_words_minor,
+                max_intermediate_blocks
             );
             SYNCALL;
         }
@@ -279,7 +272,8 @@ namespace QuaSARQ {
                     pivot,
                     total_targets, 
                     num_words_major, 
-                    num_words_minor
+                    num_words_minor,
+                    max_intermediate_blocks
                 );
         if (options.sync) {
             LASTERR("failed to scan targets in pass 1");
@@ -307,6 +301,7 @@ namespace QuaSARQ {
                 total_targets, 
                 num_words_major, 
                 num_words_minor, 
+                max_intermediate_blocks,
                 pass_1_blocksize
             );
             SYNCALL;
@@ -325,6 +320,7 @@ namespace QuaSARQ {
                         total_targets, 
                         num_words_major, 
                         num_words_minor, 
+                        max_intermediate_blocks,
                         pass_1_blocksize
                     );
         if (options.sync) {

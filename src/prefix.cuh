@@ -71,19 +71,19 @@ namespace QuaSARQ {
 		,   pivot(0)
 		{}
 
-		word_std_t* zblocks() { assert(block_intermediate_prefix_z != nullptr); return block_intermediate_prefix_z; }
-		word_std_t* xblocks() { assert(block_intermediate_prefix_x != nullptr); return block_intermediate_prefix_x; }
+		word_std_t* zblocks			() { assert(block_intermediate_prefix_z != nullptr); return block_intermediate_prefix_z; }
+		word_std_t* xblocks			() { assert(block_intermediate_prefix_x != nullptr); return block_intermediate_prefix_x; }
 
-
-		void alloc(const Tableau<DeviceAllocator>& input, const size_t& config_qubits, const size_t& max_window_bytes);
-		void resize(const Tableau<DeviceAllocator>& input, const size_t& max_window_bytes);
-		void scan_blocks(const size_t& num_blocks, const cudaStream_t& stream);
-		void inject_CX(Tableau<DeviceAllocator>& input, const uint32& pivot, const qubit_t& qubit, const cudaStream_t& stream);
+		void 		alloc			(const Tableau<DeviceAllocator>& input, const size_t& config_qubits, const size_t& max_window_bytes);
+		void 		resize			(const Tableau<DeviceAllocator>& input, const size_t& max_window_bytes);
+		void 		scan_blocks		(const size_t& num_blocks, const cudaStream_t& stream);
+		void 		inject_CX		(Tableau<DeviceAllocator>& input, const uint32& pivot, const qubit_t& qubit, const cudaStream_t& stream);
 
 	};
 
 	void tune_prefix_pass_1(
-		void (*kernel)(word_std_t*, word_std_t*, word_std_t*, word_std_t*, const size_t, const size_t),
+		void (*kernel)(word_std_t*, word_std_t*, word_std_t*, word_std_t*, 
+						const size_t, const size_t, const size_t, const size_t),
 		dim3& bestBlockPass1, dim3& bestGridPass1,
 		const size_t& shared_element_bytes, 
 		const size_t& data_size_in_x, 
@@ -93,10 +93,13 @@ namespace QuaSARQ {
 		word_std_t* subblocks_prefix_z, 
 		word_std_t* subblocks_prefix_x,
 		const size_t& num_blocks,
-		const size_t& num_words_minor);
+		const size_t& num_words_minor,
+		const size_t& max_blocks,
+		const size_t& max_sub_blocks);
 
 	void tune_prefix_pass_2(
-		void (*kernel)(word_std_t*, word_std_t*, const word_std_t*, const word_std_t*, const size_t, const size_t, const size_t),
+		void (*kernel)(word_std_t*, word_std_t*, const word_std_t*, const word_std_t*, 
+						const size_t, const size_t, const size_t, const size_t, const size_t),
 		dim3& bestBlock, dim3& bestGrid,
 		const size_t& data_size_in_x, 
 		const size_t& data_size_in_y,
@@ -106,11 +109,26 @@ namespace QuaSARQ {
 		const word_std_t* subblocks_prefix_x,
 		const size_t& num_blocks,
 		const size_t& num_words_minor,
+		const size_t& max_blocks,
+		const size_t& max_sub_blocks,
 		const size_t& pass_1_blocksize);
+
+	void tune_single_pass(
+		void (*kernel)(word_std_t*, word_std_t*, const size_t, const size_t, const size_t),
+		dim3& bestBlock, dim3& bestGrid,
+		const size_t& shared_element_bytes, 
+		const size_t& data_size_in_x, 
+		const size_t& data_size_in_y,
+		word_std_t* block_intermediate_prefix_z, 
+		word_std_t* block_intermediate_prefix_x,
+		const size_t num_chunks,
+		const size_t num_words_minor,
+		const size_t max_blocks
+	);
 
 	void tune_inject_pass_1(
 		void (*kernel)(Table*, Table*, Table*, Table*, word_std_t *, word_std_t *, 
-						const Commutation*, const uint32, const size_t, const size_t, const size_t),
+						const Commutation*, const uint32, const size_t, const size_t, const size_t, const size_t),
 		dim3& bestBlock, dim3& bestGrid,
 		const size_t& shared_element_bytes, 
 		const size_t& data_size_in_x, 
@@ -125,12 +143,13 @@ namespace QuaSARQ {
 		const uint32& pivot,
 		const size_t& total_targets,
 		const size_t& num_words_major,
-		const size_t& num_words_minor);
+		const size_t& num_words_minor,
+		const size_t& max_blocks);
 
 	void tune_inject_pass_2(
 		void (*kernel)(Table*, Table*, Table*, Table*, const word_std_t *, const word_std_t *, 
 						const Commutation*, const uint32, 
-						const size_t, const size_t, const size_t, const size_t),
+						const size_t, const size_t, const size_t, const size_t, const size_t),
 		dim3& bestBlock, dim3& bestGrid,
 		const size_t& shared_element_bytes, 
 		const size_t& data_size_in_x, 
@@ -146,6 +165,7 @@ namespace QuaSARQ {
 		const size_t& total_targets,
 		const size_t& num_words_major,
 		const size_t& num_words_minor,
+		const size_t& max_blocks,
 		const size_t& pass_1_blocksize); 
 	
 
@@ -167,18 +187,6 @@ namespace QuaSARQ {
 		const size_t& total_targets,
 		const size_t& num_words_major,
 		const size_t& num_words_minor);
-
-	void tune_single_pass(
-		void (*kernel)(word_std_t*, word_std_t*, const size_t, const size_t),
-		dim3& bestBlock, dim3& bestGrid,
-		const size_t& shared_element_bytes, 
-		const size_t& data_size_in_x, 
-		const size_t& data_size_in_y,
-		word_std_t* block_intermediate_prefix_z, 
-		word_std_t* block_intermediate_prefix_x,
-		const size_t num_chunks,
-		const size_t num_words_minor
-	);
 	
 }
 
