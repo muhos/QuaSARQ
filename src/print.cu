@@ -64,12 +64,38 @@ namespace QuaSARQ {
                 }
                 LOGGPU("\n");
             }
+            for (size_t w = 0; w < t.num_words_minor(); w++) {
+                LOGGPU("%-3lld  ", w);
+                for (size_t q = 0; q < t.num_qubits_padded(); q++) {
+                    const size_t word_idx = w * t.num_qubits_padded() + q;
+                    #if defined(WORD_SIZE_64)
+                    LOGGPU(B2B_STR, RB2B(uint32(word_std_t(t[word_idx]) & 0xFFFFFFFFUL)));
+                    LOGGPU(B2B_STR "  ", RB2B(uint32((word_std_t(t[word_idx]) >> 32) & 0xFFFFFFFFUL)));
+                    #else
+                    LOGGPU(B2B_STR "  ", RB2B(word_std_t(t[word_idx])));
+                    #endif
+                }
+                LOGGPU("\n");
+            }
         }
         LOGGPU("Stabilizers:\n");
         for (size_t q = 0; q < t.num_qubits_padded(); q++) {
             LOGGPU("%-3lld  ", q);
             for (size_t w = 0; w < t.num_words_minor(); w++) {
                 const size_t word_idx = q * t.num_words_major() + w + stab_offset;
+                #if defined(WORD_SIZE_64)
+                LOGGPU(B2B_STR, RB2B(uint32(word_std_t(t[word_idx]) & 0xFFFFFFFFUL)));
+                LOGGPU(B2B_STR "  ", RB2B(uint32((word_std_t(t[word_idx]) >> 32) & 0xFFFFFFFFUL)));
+                #else
+                LOGGPU(B2B_STR "  ", RB2B(word_std_t(t[word_idx])));
+                #endif
+            }
+            LOGGPU("\n");
+        }
+        for (size_t w = 0; w < t.num_words_minor(); w++) {
+            LOGGPU("%-3lld  ", w);
+            for (size_t q = 0; q < t.num_qubits_padded(); q++) {
+                const size_t word_idx = w * t.num_qubits_padded() + q + t.num_words_minor() * t.num_qubits_padded();
                 #if defined(WORD_SIZE_64)
                 LOGGPU(B2B_STR, RB2B(uint32(word_std_t(t[word_idx]) & 0xFFFFFFFFUL)));
                 LOGGPU(B2B_STR "  ", RB2B(uint32((word_std_t(t[word_idx]) >> 32) & 0xFFFFFFFFUL)));
