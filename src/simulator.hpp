@@ -93,7 +93,7 @@ namespace QuaSARQ {
         void find_pivots(Tableau<DeviceAllocator>& tab, const size_t& num_pivots_or_index, const bool& bulky, const cudaStream_t& stream);
         void mark_commutations(const qubit_t& qubit, const cudaStream_t& stream);
         void inject_swap(const pivot_t& new_pivot, const qubit_t& qubit, const cudaStream_t& stream);
-        int64 measure_indeterminate(const depth_t& depth_level, const cudaStream_t& stream, const cudaStream_t& reset_stream);
+        int64 measure_indeterminate(const depth_t& depth_level, const cudaStream_t& stream = 0);
         void measure(const size_t& p, const depth_t& depth_level, const bool& reversed = false);
 
         // Printers.

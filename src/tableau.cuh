@@ -356,7 +356,6 @@ namespace QuaSARQ {
             LOGN2(1, "Resizing tableau for %s%lld qubits%s.. ", CREPORTVAL, int64(num_qubits), CNORMAL);
             assert(_num_qubits >= num_qubits);
             // Reset the tableau.
-            if (!prefix) reset_signs();
             reset();
             _unpacked_signs = unpack_signs;
             size_t sign_word_size = _unpacked_signs ? sizeof(int) : sizeof(sign_t);
@@ -443,11 +442,12 @@ namespace QuaSARQ {
             }
         }
 
-        void reset(const cudaStream_t& stream = 0) const {
+        void reset() const {
             assert(_xs_data != nullptr);
             assert(_zs_data != nullptr);
-            CHECK(cudaMemsetAsync(_xs_data, 0, _num_words * sizeof(word_t), stream));
-            CHECK(cudaMemsetAsync(_zs_data, 0, _num_words * sizeof(word_t), stream));
+            reset_signs();
+            CHECK(cudaMemsetAsync(_xs_data, 0, _num_words * sizeof(word_t)));
+            CHECK(cudaMemsetAsync(_zs_data, 0, _num_words * sizeof(word_t)));
         }
 
         inline size_t size() const { return 2 * _num_words + _num_sign_words; }
@@ -521,7 +521,7 @@ namespace QuaSARQ {
             assert(_num_qubits);
             assert(_num_words_minor);
             const size_t stab_pivot = pivot + _num_qubits;
-            const size_t q_w = WORD_OFFSET(q);
+            const qubit_t q_w = WORD_OFFSET(q);
             const word_std_t q_mask = BITMASK_GLOBAL(q);
             assert(_xs_data != nullptr);
             assert((stab_pivot * _num_words_minor + q_w) < _num_words);

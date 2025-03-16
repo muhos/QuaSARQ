@@ -83,13 +83,16 @@ namespace QuaSARQ {
 		Commutation* commutations, pivot_t* pivots, bucket_t* measurements, ConstRefsPointer refs, ConstTablePointer inv_xs, 
         const size_t& gate_index, const size_t& num_qubits, const size_t num_words_major, const size_t num_words_minor);
 
-	void tune_rowmajor_transpose(void (*kernel)(Table*, Table*, const size_t, const size_t, const size_t, const bool),
+	void tune_outplace_transpose(void (*kernel)(Table*, Table*, Signs*, ConstTablePointer, ConstTablePointer, ConstSignsPointer, const size_t, const size_t, const size_t),
+		const char* opname, 
 		dim3& bestBlock, dim3& bestGrid,
-		Table *xs, Table *zs,
-		const size_t num_words_major,
-		const size_t num_words_minor,
-		const size_t num_qubits, 
-		const bool row_major);
+		const size_t& shared_element_bytes, 
+		const bool& shared_size_yextend,
+		const size_t& data_size_in_x, 
+		const size_t& data_size_in_y,
+		Table* xs1, Table* zs1, Signs* ss1, 
+        ConstTablePointer xs2, ConstTablePointer zs2, ConstSignsPointer ss2, 
+        const size_t& num_words_major, const size_t& num_words_minor, const size_t& num_qubits);
 
 	void tune_inplace_transpose(
 		void (*transpose_tiles_kernel)(Table*, Table*, const size_t, const size_t, const bool),

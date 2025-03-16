@@ -43,11 +43,14 @@ namespace QuaSARQ {
 
 		size_t max_intermediate_blocks;
 		size_t max_sub_blocks;
+		size_t min_blocksize_y;
 
 		size_t num_qubits;
 		size_t config_qubits;
 		size_t num_words_major;
 		size_t num_words_minor;
+
+		uint32 pivot;
 
 	public:
 
@@ -60,21 +63,21 @@ namespace QuaSARQ {
 		,	subblocks_prefix_x(nullptr)
 		,	max_intermediate_blocks(0)
 		,	max_sub_blocks(0)
+		,	min_blocksize_y(0)
 		,   num_qubits(0)
 		,	config_qubits(0)
 		,   num_words_major(0)
 		,   num_words_minor(0)
+		,   pivot(0)
 		{}
 
 		word_std_t* zblocks			() { assert(block_intermediate_prefix_z != nullptr); return block_intermediate_prefix_z; }
 		word_std_t* xblocks			() { assert(block_intermediate_prefix_x != nullptr); return block_intermediate_prefix_x; }
-		Tableau<DeviceAllocator>&	tableau() { return targets; }
 
 		void 		alloc			(const Tableau<DeviceAllocator>& input, const size_t& config_qubits, const size_t& max_window_bytes);
 		void 		resize			(const Tableau<DeviceAllocator>& input, const size_t& max_window_bytes);
 		void 		scan_blocks		(const size_t& num_blocks, const cudaStream_t& stream);
 		void 		inject_CX		(Tableau<DeviceAllocator>& input, const uint32& pivot, const qubit_t& qubit, const cudaStream_t& stream);
-		void 		reset			(const cudaStream_t& stream);
 
 	};
 
@@ -167,19 +170,22 @@ namespace QuaSARQ {
 	
 
 	void tune_collapse_targets(
-		void (*kernel)(Table*, Table*, Signs *, 
+		void (*kernel)(Table*, Table*, Table*, Table*, Signs *, 
 						const Commutation*, const uint32, 
-						const size_t, const size_t),
+						const size_t, const size_t, const size_t),
 		dim3& bestBlock, dim3& bestGrid,
 		const size_t& shared_element_bytes, 
 		const size_t& data_size_in_x, 
 		const size_t& data_size_in_y,
 		Table *prefix_xs, 
         Table *prefix_zs, 
+        Table *inv_xs, 
+        Table *inv_zs,
 		Signs *inv_ss,
 		const Commutation* commutations,
 		const uint32& pivot,
 		const size_t& total_targets,
+		const size_t& num_words_major,
 		const size_t& num_words_minor);
 	
 }

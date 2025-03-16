@@ -181,6 +181,7 @@ namespace QuaSARQ {
             LOGERROR("number of minor words is invalid.");
         if (!num_words_major || num_words_major > MAX_WORDS)
             LOGERROR("number of major words is invalid.");
+        min_blocksize_y = nextPow2(num_words_minor);
         if (!max_intermediate_blocks) {
             max_intermediate_blocks = nextPow2(ROUNDUP(num_qubits, MIN_BLOCK_INTERMEDIATE_SIZE));
             size_t max_array_size = max_intermediate_blocks * num_words_minor;
@@ -216,23 +217,12 @@ namespace QuaSARQ {
             LOGERROR("number of minor words is invalid.");
         if (!num_words_major || num_words_major > MAX_WORDS)
             LOGERROR("number of major words is invalid.");
+        min_blocksize_y = nextPow2(num_words_minor);
         max_intermediate_blocks = nextPow2(ROUNDUP(num_qubits, MIN_BLOCK_INTERMEDIATE_SIZE));
         if (max_intermediate_blocks > MIN_SINGLE_PASS_THRESHOLD) {
             max_sub_blocks = max_intermediate_blocks >> 1;
         }
         targets.resize(num_qubits, max_window_bytes, true, false);
-    }
-
-    void Prefix::reset(const cudaStream_t& stream) { 
-        targets.reset(stream);
-        size_t max_array_size = max_intermediate_blocks * num_words_minor;
-        CHECK(cudaMemsetAsync(block_intermediate_prefix_z, 0, max_array_size * sizeof(word_std_t), stream));
-        CHECK(cudaMemsetAsync(block_intermediate_prefix_x, 0, max_array_size * sizeof(word_std_t), stream));
-        if (max_intermediate_blocks > MIN_SINGLE_PASS_THRESHOLD) {
-            max_array_size = max_sub_blocks * num_words_minor;
-            CHECK(cudaMemsetAsync(subblocks_prefix_z, 0, max_array_size * sizeof(word_std_t), stream));
-            CHECK(cudaMemsetAsync(subblocks_prefix_x, 0, max_array_size * sizeof(word_std_t), stream));
-        }
     }
 
     void Prefix::scan_blocks(const size_t& num_blocks, const cudaStream_t& stream) {

@@ -10,11 +10,11 @@
 namespace QuaSARQ {
 
 
-    INLINE_DEVICE size_t compute_block_index(const size_t& i, const size_t& j, const size_t& w, const size_t& num_words_major) {
+    __device__ inline size_t compute_block_index(const size_t& i, const size_t& j, const size_t& w, const size_t& num_words_major) {
         return ((i << WORD_POWER) + j) * num_words_major + w;
     }
 
-    NOINLINE_DEVICE void transpose_tile(word_std_t* data, word_std_t* tile, const size_t& tile_offset) {
+    __device__ void transpose_tile(word_std_t* data, word_std_t* tile, const size_t& tile_offset) {
         assert(blockDim.x == WORD_BITS);
 
         static const word_std_t masks[WORD_POWER] = {
@@ -75,9 +75,12 @@ namespace QuaSARQ {
     }
 
     __global__ void transpose_tiles_kernel(Table* xs, Table* zs, const size_t num_words_major, const size_t num_words_minor, const bool row_major) {
-        assert(gridDim.z == 2);
-        word_std_t* data = reinterpret_cast<word_std_t*>((!blockIdx.z) ? xs->data() : zs->data());
         word_std_t* shared = SharedMemory<word_std_t>();
+        Table& t = blockIdx.z == 0 ? *xs : *zs;
+        word_std_t* data = reinterpret_cast<word_std_t*>(t.data());
+        if (!blockIdx.x && !blockIdx.y && !threadIdx.x) {
+            t.flag_orientation(row_major);
+        }
         for_parallel_y(a, num_words_minor) {
             for (size_t b = blockIdx.x; b < num_words_major; b += gridDim.x) {
                 // Inline transpose a tile of WORD_BITS words, each word has WORD_BITS bits.
@@ -103,9 +106,9 @@ namespace QuaSARQ {
     }
 
     __global__ void swap_tiles_kernel(Table* xs, Table* zs, const size_t num_words_major, const size_t num_words_minor) {
-        assert(gridDim.z == 2);
-        word_std_t* data = reinterpret_cast<word_std_t*>((!blockIdx.z) ? xs->data() : zs->data());
         word_std_t* shared = SharedMemory<word_std_t>();
+        Table& t = blockIdx.z == 0 ? *xs : *zs;
+        word_std_t* data = reinterpret_cast<word_std_t*>(t.data());
         for_parallel_y(a, num_words_minor) {
             for (size_t b = blockIdx.x; b < num_words_minor; b += gridDim.x) {
                 // Only swap words above diagonal
@@ -119,33 +122,92 @@ namespace QuaSARQ {
         }
     }
 
-    __global__ void rowmajor_kernel(Table *xs, Table *zs,
-                                    const size_t num_words_major,
-                                    const size_t num_words_minor,
-                                    const size_t num_qubits_padded,
-                                    const bool row_major)
-    {
-        assert(gridDim.z == 2);
-        Table& t = (!blockIdx.z) ? *xs : *zs;
-        if (!blockIdx.x && !blockIdx.y && !threadIdx.x) {
-            t.flag_orientation(row_major);
+    __global__ void outplace_transpose_to_rowmajor(Table *inv_xs, Table *inv_zs, Signs *inv_ss,
+                              const Table *  xs, const Table *  zs, const Signs *  ss,
+                              const size_t num_words_major, const size_t num_words_minor,
+                              const size_t num_qubits) {
+        if (!global_ty) {
+            for_parallel_x(w, num_words_major) {
+                sign_t signs_word = (*ss)[w];
+                const size_t word_idx = w * WORD_BITS;
+                #pragma unroll
+                for (uint32 j = 0; j < WORD_BITS; j++) {
+                    inv_ss->unpacked_data()[word_idx + j] = ((signs_word >> j) & 1) * 2;
+                }
+            }
+            if (!global_tx) {
+                inv_xs->flag_rowmajor();
+                inv_zs->flag_rowmajor();
+            }
         }
-        word_std_t* shared = SharedMemory<word_std_t>();
-        word_std_t* tile_destab = shared;
-        word_std_t* tile_stab = tile_destab + blockDim.y * blockDim.x;
-        size_t tile_idx = threadIdx.y * blockDim.x + threadIdx.x;
-        grid_t q = blockIdx.x * blockDim.x + threadIdx.x; 
-        grid_t w = blockIdx.y * blockDim.y + threadIdx.y; 
-        if (q < num_qubits_padded && w < num_words_minor) {
-            const size_t old_idx = row_major ? q * num_words_major + w : w * num_qubits_padded + q;
-            const size_t old_stab_offset = row_major ? num_words_minor : num_qubits_padded * num_words_minor;
-            tile_destab[tile_idx] = t[old_idx];
-            tile_stab  [tile_idx] = t[old_idx + old_stab_offset];
-            __syncthreads();
-            const size_t new_idx = row_major ? w * num_qubits_padded + q : q * num_words_major + w;
-            const size_t new_stab_offset = row_major ? num_qubits_padded * num_words_minor : num_words_minor;
-            t[new_idx] = tile_destab[tile_idx];
-            t[new_idx + new_stab_offset] = tile_stab[tile_idx];
+
+        for_parallel_y(w, 2 * num_qubits) {
+            const word_std_t generator_index_per_word = (w & WORD_MASK);
+            for_parallel_x(q, num_words_minor) {
+                word_std_t inv_word_x = 0;
+                word_std_t inv_word_z = 0;
+                const size_t block_idx = q * WORD_BITS * num_words_major + WORD_OFFSET(w);
+                #pragma unroll
+                for (uint32 k = 0; k < WORD_BITS; k++) {
+                    const size_t src_word_idx = k * num_words_major + block_idx;
+                    const word_std_t generators_word_x = (*xs)[src_word_idx];
+                    const word_std_t generators_word_z = (*zs)[src_word_idx];
+                    const word_std_t generator_bit_x = (generators_word_x >> generator_index_per_word) & 1;
+                    const word_std_t generator_bit_z = (generators_word_z >> generator_index_per_word) & 1;
+                    inv_word_x |= (generator_bit_x << k);
+                    inv_word_z |= (generator_bit_z << k);
+                }
+                const size_t dest_word_idx = q + w * num_words_minor;
+                (*inv_xs)[dest_word_idx] = inv_word_x;
+                (*inv_zs)[dest_word_idx] = inv_word_z;
+            }
+        }
+    }
+
+    __global__ void outplace_transpose_to_colmajor(Table* xs, Table* zs, Signs* ss, 
+                        ConstTablePointer inv_xs, ConstTablePointer inv_zs, ConstSignsPointer  inv_ss, 
+                        const size_t num_words_major, const size_t num_words_minor, 
+                        const size_t num_qubits) {
+
+        if (!global_ty) {
+            sign_t *packed_signs = ss->data();
+            for_parallel_x(w, num_words_major) {
+                sign_t signs_word = 0;
+                const size_t word_idx = w * WORD_BITS;
+                #pragma unroll
+                for (uint32 j = 0; j < WORD_BITS; j++) {
+                    sign_t corrected_sign = ((inv_ss->unpacked_data()[word_idx + j] % 4 + 4) % 4 >> 1);
+                    assert(corrected_sign >= 0 && corrected_sign <= 1);
+                    signs_word |= (corrected_sign << j);
+                }
+                packed_signs[w] = signs_word;
+            }
+            if (!global_tx) {
+                xs->flag_colmajor();
+                zs->flag_colmajor();
+            }
+        }
+
+        for_parallel_y(w, num_qubits) {
+            const word_std_t qubit_index_per_word = (w & WORD_MASK);
+            for_parallel_x(q, num_words_major) {
+                word_std_t inv_word_x = 0;
+                word_std_t inv_word_z = 0;
+                const size_t block_idx = q * WORD_BITS * num_words_minor + WORD_OFFSET(w);
+                #pragma unroll
+                for (uint32 k = 0; k < WORD_BITS; k++) {
+                    const size_t src_word_idx = k * num_words_minor + block_idx;
+                    const word_std_t qubits_word_x = (*inv_xs)[src_word_idx];
+                    const word_std_t qubits_word_z = (*inv_zs)[src_word_idx];
+                    const word_std_t qubit_bit_x = (qubits_word_x >> qubit_index_per_word) & 1;
+                    const word_std_t qubit_bit_z = (qubits_word_z >> qubit_index_per_word) & 1;
+                    inv_word_x |= (qubit_bit_x << k);
+                    inv_word_z |= (qubit_bit_z << k);
+                }
+                const size_t dest_word_idx = q + w * num_words_major;
+                (*xs)[dest_word_idx] = inv_word_x;
+                (*zs)[dest_word_idx] = inv_word_z;
+            }
         }
     }
 
@@ -161,37 +223,6 @@ namespace QuaSARQ {
             bestblocktransposeswap, bestgridtransposeswap, 
             XZ_TABLE(tableau), num_words_major, num_words_minor, row_major);
         }
-        if (options.tune_transposerowmajor) {
-            SYNCALL;
-            tune_rowmajor_transpose(rowmajor_kernel, 
-            bestblocktransposerowmajor, bestgridtransposerowmajor, 
-            XZ_TABLE(tableau), num_words_major, num_words_minor, tableau.num_qubits_padded(), row_major);
-        }
-
-        bestgridtransposerowmajor.z = 2;
-        if (bestgridtransposerowmajor.x == 1)
-            bestgridtransposerowmajor.x = ROUNDUP(tableau.num_qubits_padded(), bestblocktransposerowmajor.x);
-        if (bestgridtransposerowmajor.y == 1)
-            bestgridtransposerowmajor.y = ROUNDUP(num_words_minor, bestblocktransposerowmajor.y);
-        OPTIMIZESHARED(rowmajor_smem_size, bestblocktransposerowmajor.y * bestblocktransposerowmajor.x, 2 * sizeof(word_std_t));
-        
-        if (!row_major) {
-            currentblock = bestblocktransposerowmajor, currentgrid = bestgridtransposerowmajor;
-            LOGN2(2, "Running column-major with block(x:%u, y:%u) and grid(x:%u, y:%u, z:%u).. ", currentblock.x, currentblock.y, currentgrid.x, currentgrid.y, currentgrid.z);
-            rowmajor_kernel <<<currentgrid, currentblock, rowmajor_smem_size, stream>>> (
-                XZ_TABLE(tableau), 
-                num_words_major, 
-                num_words_minor, 
-                tableau.num_qubits_padded(),
-                row_major
-            );
-            if (options.sync) {
-                LASTERR("failed to launch rowmajor kernel");
-                SYNC(stream);
-            }
-            LOGDONE(2, 4);
-        }
-
         bestblocktransposebits.x = WORD_BITS;
         bestgridtransposebits.x = MIN(num_words_major, bestgridtransposebits.x); 
         bestgridtransposebits.z = 2;
@@ -206,7 +237,6 @@ namespace QuaSARQ {
             SYNC(stream);
         }
         LOGDONE(2, 4);
-
         bestblocktransposeswap.x = WORD_BITS;
         bestgridtransposeswap.x = MIN(num_words_minor, bestgridtransposeswap.x); 
         bestgridtransposeswap.z = 2;
@@ -221,26 +251,6 @@ namespace QuaSARQ {
             SYNC(stream);
         }
         LOGDONE(2, 4);
-
-        if (row_major) {
-            //print_tableau(tableau, -1, false); 
-            currentblock = bestblocktransposerowmajor, currentgrid = bestgridtransposerowmajor;
-            LOGN2(2, "Running row-major with block(x:%u, y:%u) and grid(x:%u, y:%u, z:%u).. ", currentblock.x, currentblock.y, currentgrid.x, currentgrid.y, currentgrid.z);
-            rowmajor_kernel <<<currentgrid, currentblock, rowmajor_smem_size, stream>>> (
-                XZ_TABLE(tableau), 
-                num_words_major, 
-                num_words_minor, 
-                tableau.num_qubits_padded(),
-                row_major
-            );
-            if (options.sync) {
-                LASTERR("failed to launch rowmajor kernel");
-                SYNC(stream);
-            }
-            LOGDONE(2, 4);
-        }
-        //print_tableau(tableau, -1, false);        
-        
     }
 
 }
