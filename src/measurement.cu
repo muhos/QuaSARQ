@@ -35,22 +35,20 @@ namespace QuaSARQ {;
                             const size_t num_qubits, 
                             const size_t num_words_major, const size_t num_words_minor) {
         assert(control != INVALID_PIVOT);
-        const size_t c_row = control * num_words_major;
         word_t *xs = inv_xs->data();
         word_t *zs = inv_zs->data();
         sign_t *ss = inv_ss->data();
 
         for_parallel_x(w, num_words_minor) { // Update all words in both destabs and stabs.
 
-            const size_t c_destab = c_row + w;
+            const size_t c_destab = control + w * inv_xs->num_qubits_padded();
             word_std_t zc_destab = zs[c_destab], zt_destab = 0;
 
             for (size_t t = control + 1; t < num_qubits; t++) { // targets: pivot + 1, ..., num_qubits - 1.
                 if (commutations[t].anti_commuting) {
-                    const size_t t_row = t * num_words_major;
-                    const size_t t_destab = t_row + w;
-                    const size_t c_stab = c_destab + num_words_minor;
-                    const size_t t_stab = t_destab + num_words_minor;
+                    const size_t t_destab = t + w * inv_xs->num_qubits_padded();
+                    const size_t c_stab = c_destab + num_words_minor * inv_xs->num_qubits_padded();
+                    const size_t t_stab = t_destab + num_words_minor * inv_xs->num_qubits_padded();
                     assert(c_destab < inv_zs->size());
                     assert(t_destab < inv_zs->size());
                     assert(c_stab < inv_zs->size());
@@ -79,9 +77,9 @@ namespace QuaSARQ {;
                             const pivot_t pivot,
                             const qubit_t qubit,
                             const size_t num_words_major) {
-        const qubit_t q_w = WORD_OFFSET(qubit);
+        const size_t q_w = WORD_OFFSET(qubit);
         const word_std_t q_mask = BITMASK_GLOBAL(qubit);
-        const word_std_t qubit_word = (*inv_xs)[pivot * num_words_major + q_w];
+        const word_std_t qubit_word = (*inv_xs)[pivot + q_w * inv_xs->num_qubits_padded()];
         commutations[pivot].commuting = bool(qubit_word & q_mask);
         //printf("qubit(%d), destab w(%d) pivot(%d): " B2B_STR "\n", qubit, q_w, pivot, RB2B(qubit_word));
     }
@@ -91,14 +89,13 @@ namespace QuaSARQ {;
                             const pivot_t c,
                             const size_t num_words_major, const size_t num_words_minor) {
         assert(c != INVALID_PIVOT);
-        const size_t c_row = c * num_words_major;
         word_t* xs = inv_xs->data();
         word_t* zs = inv_zs->data();
         sign_t* ss = inv_ss->data();
 
         for_parallel_x(w, num_words_minor) { // Update all words in both destabs and stabs.
-            const size_t c_destab = c_row + w;
-            const size_t c_stab = c_destab + num_words_minor;
+            const size_t c_destab = c + w * inv_xs->num_qubits_padded();
+            const size_t c_stab = c_destab + num_words_minor * inv_xs->num_qubits_padded();
             assert(c_destab < inv_zs->size());
             assert(c_stab < inv_zs->size());
             assert(c_destab < inv_xs->size());
@@ -127,9 +124,6 @@ namespace QuaSARQ {;
             qubit,
             num_words_major
         );
-        uint32 inject_swap_blocksize = 4;
-        uint32 inject_swap_gridsize = 1;
-        OPTIMIZEBLOCKS(inject_swap_gridsize, num_words_minor, inject_swap_blocksize);
         if (options.tune_injectswap) {
             SYNCALL;
             tune_kernel_m(inject_Swap, "injecting swap", 
@@ -141,10 +135,10 @@ namespace QuaSARQ {;
                         num_words_major,
                         num_words_minor);
         }
-        TRIM_BLOCK_IN_DEBUG_MODE(bestblockinjectswap, bestgridinjectswap, num_qubits, 0);
+        TRIM_BLOCK_IN_DEBUG_MODE(bestblockinjectswap, bestgridinjectswap, num_words_minor, 0);
         dim3 currentblock = bestblockinjectswap, currentgrid = bestgridinjectswap;
-        TRIM_GRID_IN_1D(num_qubits, x);
-        inject_Swap<<<inject_swap_gridsize, inject_swap_blocksize, 0, stream>>>
+        TRIM_GRID_IN_1D(num_words_minor, x);
+        inject_Swap<<<1, 1, 0, stream>>>
         (
             XZ_TABLE(tableau),
             tableau.signs(),
@@ -154,8 +148,6 @@ namespace QuaSARQ {;
             num_words_minor
         );
     }
-
-    #define DEBUG_INJECT_CX 0
 
     void Simulator::measure(const size_t& p, const depth_t& depth_level, const bool& reversed) {
         assert(options.streams >= 4);
@@ -193,7 +185,7 @@ namespace QuaSARQ {;
         // Sync pivots wth host.
         SYNC(kernel_stream1);
 
-        int64 random_measures = measure_indeterminate(depth_level, kernel_stream1);
+        int64 random_measures = measure_indeterminate(depth_level, kernel_stream1, kernel_stream2);
 
         //print_tableau(tableau, depth_level, false, false);
 
@@ -201,7 +193,9 @@ namespace QuaSARQ {;
         transpose(false, kernel_stream1);
     }
 
-    int64 Simulator::measure_indeterminate(const depth_t& depth_level, const cudaStream_t& stream) {
+    #define DEBUG_INJECT_CX 0
+
+    int64 Simulator::measure_indeterminate(const depth_t& depth_level, const cudaStream_t& stream, const cudaStream_t& reset_stream) {
         const size_t num_words_minor = tableau.num_words_minor();
         const size_t num_words_major = tableau.num_words_major();
         const size_t num_gates_per_window = circuit[depth_level].size();
@@ -217,9 +211,11 @@ namespace QuaSARQ {;
                 if (initial_pivot) {
                     initial_pivot = false;
                     new_pivot = curr_pivot;
+                    prefix.reset(reset_stream);
                     mark_commutations(qubit, stream);
                 }
                 else {
+                    prefix.reset(reset_stream);
                     find_pivots(tableau, i, false, stream);
                     gpu_circuit.copypivotto(new_pivot, i, stream);
                     SYNC(stream);                
@@ -229,6 +225,7 @@ namespace QuaSARQ {;
                     random_measures++;
 
                     #if !DEBUG_INJECT_CX
+                    SYNC(reset_stream);
                     prefix.inject_CX(tableau, new_pivot, qubit, stream);
                     #else
                     const uint32 blocksize = 8;
@@ -241,10 +238,13 @@ namespace QuaSARQ {;
                     SYNC(stream);
                     #endif
 
+                    // Data racing here:
                     inject_swap(new_pivot, qubit, stream);
                 }
             }
         }
+
+        //print_tableau(prefix.tableau(), -1, false, true);
 
         return random_measures;
     }

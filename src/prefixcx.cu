@@ -31,7 +31,7 @@ namespace QuaSARQ {
 
         for_parallel_y(w, num_words_minor) {
 
-            const size_t c_destab = c * num_words_major + w;
+            const size_t c_destab = w * inv_xs->num_qubits_padded() + c;
             assert(c_destab < inv_zs->size());
             assert(c_destab < inv_xs->size());
 
@@ -42,7 +42,7 @@ namespace QuaSARQ {
                 word_std_t t_delta_x = 0;
 
                 if (commutations[t].anti_commuting) {
-                    const size_t t_destab = t * num_words_major + w;
+                    const size_t t_destab = w * inv_xs->num_qubits_padded() + t;
                     assert(t_destab < inv_zs->size());
                     assert(t_destab < inv_xs->size());
                     t_delta_z = zs[t_destab];
@@ -104,8 +104,8 @@ namespace QuaSARQ {
 
         for_parallel_y(w, num_words_minor) {
 
-            const size_t c_destab = c * num_words_major + w;
-            const size_t c_stab = c_destab + num_words_minor;
+            const size_t c_destab = w * inv_xs->num_qubits_padded() + c;
+            const size_t c_stab = c_destab + num_words_minor * inv_xs->num_qubits_padded();
 
             // For parallel collapsing.
             word_std_t zc_destab = 0;
@@ -121,8 +121,8 @@ namespace QuaSARQ {
 
                 if (commutations[t].anti_commuting) {
 
-                    const size_t t_destab = t * num_words_major + w;
-                    const size_t t_stab = t_destab + num_words_minor;
+                    const size_t t_destab = w * inv_xs->num_qubits_padded() + t;
+                    const size_t t_stab = t_destab + num_words_minor * inv_xs->num_qubits_padded();
 
                     assert(c_destab < inv_zs->size());
                     assert(t_destab < inv_zs->size());
@@ -180,18 +180,13 @@ namespace QuaSARQ {
     void collapse_scanned_targets(
         Table *prefix_xs, 
         Table *prefix_zs, 
-        Table *inv_xs, 
-        Table *inv_zs, 
         Signs *inv_ss,
         const Commutation *commutations,
         const uint32 c,
         const size_t total_targets,
-        const size_t num_words_major, 
         const size_t num_words_minor
     )
     {
-        word_t *xs = inv_xs->data();
-        word_t *zs = inv_zs->data();
         sign_t *ss = inv_ss->data();
         word_std_t *signs_destab = SharedMemory<word_std_t>();
         word_std_t *signs_stab = signs_destab + blockDim.x;
@@ -338,12 +333,10 @@ namespace QuaSARQ {
                 total_targets,
                 num_words_minor,
                 XZ_TABLE(targets), 
-                XZ_TABLE(input), 
                 input.signs(), 
                 input.commutations(), 
                 pivot, 
                 total_targets, 
-                num_words_major, 
                 num_words_minor
             );
             SYNCALL;
@@ -354,12 +347,10 @@ namespace QuaSARQ {
         OPTIMIZESHARED(reduce_smem_size, currentblock.y * currentblock.x, 2 * sizeof(word_std_t));
         collapse_scanned_targets <<<currentgrid, currentblock, reduce_smem_size, stream>>> (
                         XZ_TABLE(targets), 
-                        XZ_TABLE(input), 
                         input.signs(), 
                         input.commutations(), 
                         pivot, 
                         total_targets, 
-                        num_words_major, 
                         num_words_minor
                     );
         if (options.sync) {

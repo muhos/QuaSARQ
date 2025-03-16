@@ -5,10 +5,10 @@
 namespace QuaSARQ {
 
     __global__ void mark_anti_commutations(Commutation* commutations, ConstTablePointer inv_xs, const qubit_t q, const size_t num_qubits, const size_t num_words_major, const size_t num_words_minor) {
-        const qubit_t q_w = WORD_OFFSET(q);
+        const size_t q_w = WORD_OFFSET(q);
         const word_std_t q_mask = BITMASK_GLOBAL(q);
         for_parallel_x(g, num_qubits) {
-            const size_t word_idx = g * num_words_major + q_w + num_words_minor;
+            const size_t word_idx = g + (q_w + num_words_minor) * inv_xs->num_qubits_padded();
             const word_std_t qubit_word = (*inv_xs)[word_idx];
             if (qubit_word & q_mask) {
                 commutations[g].anti_commuting = true;

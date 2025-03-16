@@ -85,7 +85,10 @@ namespace QuaSARQ {
             state = 'i';
         LOGN2(1, "Creating \'%c\' initial state  for size %zd and offset %zd using grid(%d) and block(%d).. ", state, num_qubits_per_partition, offset_per_partition, bestgrididentity.x, bestblockidentity.x);
         if (options.sync) cutimer.start();
-        if (offset_per_partition) tab.reset();
+        if (offset_per_partition) {
+            tab.reset_signs();
+            tab.reset();
+        }
         if (measuring) { 
             if (istate == Zero)
                 identity_Z_extended_1D <<< bestgrididentity, bestblockidentity, 0, streams[KERNEL_STREAM] >>> (offset_per_partition, num_qubits_per_partition, XZ_TABLE(tab));

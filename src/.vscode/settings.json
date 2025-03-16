@@ -98,7 +98,8 @@
         "source_location": "cpp",
         "stdfloat": "cpp",
         "cinttypes": "cpp",
-        "typeindex": "cpp"
+        "typeindex": "cpp",
+        "target": "cpp"
     },
     "git.ignoreLimitWarning": true
 }

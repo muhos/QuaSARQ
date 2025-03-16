@@ -39,7 +39,7 @@ namespace QuaSARQ {
 	}
 
 	void Tuner::reset() {
-		// Force kernel tuner to run on all kernels.
+		// Reset enabled tuners.
 		FOREACH_CONFIG(CONFIG2RESET);
 		// Reset stats.
 		stats.reset();
@@ -154,38 +154,6 @@ namespace QuaSARQ {
 		} \
 	} while(0)
 
-	#define TUNE_1D_FIX_X(...) \
-	do { \
-		if (bestBlock.x > 1 || bestGrid.x > 1) { \
-			LOG2(3, "\nBest configuration: block(%d), grid(%d) will be used without tuning.", bestBlock.x, bestGrid.x); \
-		} \
-		else { \
-			LOG0(""); \
-			LOG2(1, "Tunning %s kernel with maximum of %zd trials and %-.5f milliseconds precision...", opname, TRIALS, PRECISION); \
-			int min_precision_hits = MIN_PRECISION_HITS;  \
-			const int64 maxBlocksPerGrid = maxGPUBlocks << 3; \
-			double minRuntime = double(UINTMAX_MAX); \
-			bool early_exit = false; \
-			size_t trials = 0; \
-			for (int64 blockX = maxThreadsPerBlock; blockX >= initThreadsPerBlock1D && !early_exit && trials < TRIALS; blockX >>= 1, trials++) { \
-				const size_t shared_size = shared_element_bytes * blockX; \
-				if (shared_size > maxGPUSharedMem) continue; \
-				if (blockX % maxWarpSize != 0) continue; \
-				const int64 gridX = ROUNDUP(size, blockX); \
-				if (gridX > maxBlocksPerGrid) continue; \
-				dim3 block((uint32)blockX); \
-				dim3 grid((uint32)gridX); \
-				double avgRuntime = 0; \
-				BENCHMARK_KERNEL(avgRuntime, NSAMPLES, shared_size, ## __VA_ARGS__); \
-				BEST_CONFIG(avgRuntime, minRuntime, bestGrid, bestBlock, early_exit); \
-			} \
-			LOG0(""); \
-			LOG2(1, "Best GPU time for %s operation using block(%d, 1), and grid(%d, 1): %f ms", opname, bestBlock.x, bestGrid.x, minRuntime); \
-			LOG0(""); \
-			fflush(stdout); \
-		} \
-	} while(0)
-
 	#define TUNE_2D(...) \
 	do { \
 		if (bestBlock.x > 1 || bestGrid.x > 1 || bestBlock.y > 1 || bestGrid.y > 1) { \
@@ -280,40 +248,31 @@ namespace QuaSARQ {
 		} \
 	} while(0)
 
-	#define TUNE_2D_FIX_GRID_X(...) \
+	#define TUNE_2D_FIX_GRID(GRID_Z, ...) \
 	do { \
-		if (bestBlock.x > 1 || bestGrid.x > 1 || bestBlock.y > 1 || bestGrid.y > 1) { \
+		if (bestBlock.x > 1 || bestBlock.y > 1) { \
 			LOG2(3, "\nBest configuration: block(%d, %d), grid(%d, %d) will be used without tuning.", bestBlock.x, bestBlock.y, bestGrid.x, bestGrid.y); \
 		} \
 		else { \
 			LOG0(""); \
 			LOG2(1, "Tunning %s kernel with maximum of %zd trials and %-.5f milliseconds precision...", opname, TRIALS, PRECISION); \
 			int min_precision_hits = MIN_PRECISION_HITS; \
-			int64 initBlocksPerGridY = 0; \
-			OPTIMIZEBLOCKS2D(initBlocksPerGridY, data_size_in_y, maxThreadsPerBlockY); \
 			double minRuntime = double(UINTMAX_MAX); \
 			bool early_exit = false; \
 			size_t trials = 0; \
-			initBlocksPerGridY = (int64) ceil(initBlocksPerGridY / 1.0); \
-			const int64 maxBlocksPerGridY = maxGPUBlocks2D << 1; \
-			const int64 maxBlocksPerGridX = maxGPUBlocks2D << 3; \
-			for (int64 blocksY = initBlocksPerGridY; (blocksY <= maxBlocksPerGridY) && !early_exit && trials < TRIALS; blocksY += 4, trials++) { \
-				for (int64 threadsY = maxThreadsPerBlockY; (threadsY >= initThreadsPerBlockY) && !early_exit && trials < TRIALS; threadsY >>= 1) { \
-					for (int64 threadsX = maxThreadsPerBlockX; (threadsX >= initThreadsPerBlockX) && !early_exit && trials < TRIALS; threadsX >>= 1) { \
-						const int64 threadsPerBlock = threadsX * threadsY; \
-						const size_t extended_shared_size = shared_size_yextend ? shared_element_bytes * threadsPerBlock : shared_element_bytes * threadsX; \
-						if (extended_shared_size >= maxGPUSharedMem || threadsPerBlock > maxThreadsPerBlock) continue; \
-						/* Avoid deadloack due to warp divergence. */ \
-						if (threadsPerBlock % maxWarpSize != 0) continue; \
-						const int64 blocksX = ROUNDUP(data_size_in_x, threadsX); \
-						if (blocksX > maxBlocksPerGridX) continue; \
-						dim3 block((uint32)threadsX, (uint32)threadsY); \
-						dim3 grid((uint32)blocksX, (uint32)blocksY); \
-						double avgRuntime = 0; \
-						BENCHMARK_KERNEL(avgRuntime, NSAMPLES, extended_shared_size, ## __VA_ARGS__); \
-						if (PRINT_PROGRESS_2D) LOG2(1, "  GPU Time for block(x:%u, y:%u) and grid(x:%u, y:%u): %f ms", block.x, block.y, grid.x, grid.y, avgRuntime); fflush(stdout); fflush(stderr); \
-						BEST_CONFIG(avgRuntime, minRuntime, bestGrid, bestBlock, early_exit); \
-					} \
+			for (int64 threadsY = maxThreadsPerBlockY; (threadsY >= initThreadsPerBlockY) && !early_exit && trials < TRIALS; threadsY >>= 1) { \
+				for (int64 threadsX = maxThreadsPerBlockX; (threadsX >= initThreadsPerBlockX) && !early_exit && trials < TRIALS; threadsX >>= 1) { \
+					const int64 threadsPerBlock = threadsX * threadsY; \
+					const size_t extended_shared_size = shared_size_yextend ? shared_element_bytes * threadsPerBlock : shared_element_bytes * threadsX; \
+					if (extended_shared_size >= maxGPUSharedMem || threadsPerBlock > maxThreadsPerBlock) continue; \
+					/* Avoid deadloack due to warp divergence. */ \
+					if (threadsPerBlock % maxWarpSize != 0) continue; \
+					dim3 block((uint32)threadsX, (uint32)threadsY); \
+					dim3 grid((uint32)ROUNDUP(data_size_in_x, threadsX), (uint32)ROUNDUP(data_size_in_y, threadsY), (uint32)GRID_Z); \
+					double avgRuntime = 0; \
+					BENCHMARK_KERNEL(avgRuntime, NSAMPLES, extended_shared_size, ## __VA_ARGS__); \
+					if (PRINT_PROGRESS_2D) LOG2(1, "  GPU Time for block(x:%u, y:%u) and grid(x:%u, y:%u): %f ms", block.x, block.y, grid.x, grid.y, avgRuntime); fflush(stdout); fflush(stderr); \
+					BEST_CONFIG(avgRuntime, minRuntime, bestGrid, bestBlock, early_exit); \
 				} \
 			} \
 			LOG2(1, "Best %s configuration found after %zd trials:", opname, trials); \
@@ -544,21 +503,20 @@ namespace QuaSARQ {
 		TUNE_1D(commutations, pivots, measurements, refs, inv_xs, gate_index, size, num_words_major, num_words_minor);
 	}
 
-	void tune_outplace_transpose(void (*kernel)(Table*, Table*, Signs*, ConstTablePointer, ConstTablePointer, ConstSignsPointer, const size_t, const size_t, const size_t),
-		const char* opname, 
+	void tune_rowmajor_transpose(void (*kernel)(Table*, Table*, const size_t, const size_t, const size_t, const bool),
 		dim3& bestBlock, dim3& bestGrid,
-		const size_t& shared_element_bytes, 
-		const bool& shared_size_yextend,
-		const size_t& data_size_in_x, 
-		const size_t& data_size_in_y,
-		Table* xs1, Table* zs1, Signs* ss1, 
-        ConstTablePointer xs2, ConstTablePointer zs2, ConstSignsPointer ss2, 
-        const size_t& num_words_major, const size_t& num_words_minor, const size_t& num_qubits) 
+		Table *xs, Table *zs,
+		const size_t num_words_major,
+		const size_t num_words_minor,
+		const size_t num_qubits, 
+		const bool row_major) 
 	{
-		const int64 _initThreadsPerBlockY = initThreadsPerBlockY;
-		initThreadsPerBlockY = 32;
-		TUNE_2D(xs1, zs1, ss1, xs2, zs2, ss2, num_words_major, num_words_minor, num_qubits);
-		initThreadsPerBlockY = _initThreadsPerBlockY;
+		const char* opname = "rowmajor transpose";
+		const bool shared_size_yextend = true;
+		const size_t shared_element_bytes =  2 * sizeof(word_std_t);
+		const size_t data_size_in_x = num_qubits;
+		const size_t data_size_in_y = num_words_minor;
+		TUNE_2D_FIX_GRID(2, xs, zs, num_words_major, num_words_minor, num_qubits, row_major);
 	}
 
 	void tune_inplace_transpose(
@@ -732,22 +690,19 @@ namespace QuaSARQ {
 	}
 
 	void tune_collapse_targets(
-		void (*kernel)(Table*, Table*, Table*, Table*, Signs *, 
+		void (*kernel)(Table*, Table*, Signs *, 
 						const Commutation*, const uint32, 
-						const size_t, const size_t, const size_t),
+						const size_t, const size_t),
 		dim3& bestBlock, dim3& bestGrid,
 		const size_t& shared_element_bytes, 
 		const size_t& data_size_in_x, 
 		const size_t& data_size_in_y,
 		Table *prefix_xs, 
         Table *prefix_zs, 
-        Table *inv_xs, 
-        Table *inv_zs,
 		Signs *inv_ss,
 		const Commutation* commutations,
 		const uint32& pivot,
 		const size_t& total_targets,
-		const size_t& num_words_major,
 		const size_t& num_words_minor)
 	{
 		const char* opname = "collapse targets";
@@ -755,13 +710,10 @@ namespace QuaSARQ {
 		TUNE_2D(
 			prefix_xs, 
 			prefix_zs, 
-			inv_xs, 
-			inv_zs,
 			inv_ss,
 			commutations,
 			pivot,
 			total_targets,
-			num_words_major,
 			num_words_minor
 		);
 	}
