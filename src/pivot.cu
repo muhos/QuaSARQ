@@ -4,24 +4,34 @@
 #include "datatypes.cuh"
 #include "shared.cuh"
 #include "commutation.cuh"
+#include "access.cuh"
 
 namespace QuaSARQ {
 
     // Find first stabilizer generator that anti-commutes with the obeservable qubit.
-    INLINE_DEVICE void find_min_pivot(pivot_t& p, const qubit_t& q, const Table& inv_xs, const size_t num_qubits, const size_t num_words_major, const size_t num_words_minor) {
+    INLINE_DEVICE 
+    void find_min_pivot(
+                pivot_t&    p, 
+        const   qubit_t&    q, 
+        const   Table&      inv_xs, 
+        const   size_t      num_qubits, 
+        const   size_t      num_words_major, 
+        const   size_t      num_words_minor,
+        const   size_t      num_qubits_padded) 
+    {
         uint32* shared_mins = SharedMemory<uint32>();
         
         grid_t tx = threadIdx.x;
         grid_t BX = blockDim.x;
         grid_t shared_tid = threadIdx.y * BX + tx;
 
-        const qubit_t q_w = WORD_OFFSET(q);
+        const size_t q_w = WORD_OFFSET(q);
         const word_std_t q_mask = BITMASK_GLOBAL(q);
 
         uint32 local_min = INVALID_PIVOT;
 
         for_parallel_x(g, num_qubits) {
-            const size_t word_idx = g * num_words_major + q_w + num_words_minor;
+            const size_t word_idx = TABLEAU_INDEX(q_w, g) + TABLEAU_STAB_OFFSET;
             const word_std_t qubit_word = inv_xs[word_idx];
             if (qubit_word & q_mask) {
                 local_min = MIN(uint32(g), local_min);
@@ -36,25 +46,40 @@ namespace QuaSARQ {
         }
     }
 
-    __global__ void reset_all_pivots(pivot_t* pivots, const size_t num_gates) {
-        for_parallel_x(i, num_gates) {
-            pivots[i] = INVALID_PIVOT;
-        }
-    }
-
-    __global__ void find_all_pivots(pivot_t* pivots, bucket_t* measurements, ConstRefsPointer refs, ConstTablePointer inv_xs, 
-                                        const size_t num_gates, const size_t num_qubits, const size_t num_words_major, const size_t num_words_minor) {
+    __global__ 
+    void find_all_pivots(
+                pivot_t*            pivots, 
+                bucket_t*           measurements, 
+                ConstRefsPointer    refs, 
+                ConstTablePointer   inv_xs, 
+        const   size_t              num_gates, 
+        const   size_t              num_qubits, 
+        const   size_t              num_words_major, 
+        const   size_t              num_words_minor,
+        const   size_t              num_qubits_padded) 
+    {
         for_parallel_y(i, num_gates) {
             const gate_ref_t r = refs[i];
             assert(r < NO_REF);
             Gate& m = (Gate&) measurements[r];
             assert(m.size == 1);
-            find_min_pivot(pivots[i], m.wires[0], *inv_xs, num_qubits, num_words_major, num_words_minor);
+            find_min_pivot(pivots[i], m.wires[0], *inv_xs, num_qubits, num_words_major, num_words_minor, num_qubits_padded);
         }
     }
 
-    __global__ void find_new_pivot_and_mark(Commutation* commutations, pivot_t* pivots, bucket_t* measurements, ConstRefsPointer refs, ConstTablePointer inv_xs, 
-                                            const size_t gate_index, const size_t num_qubits, const size_t num_words_major, const size_t num_words_minor) {
+    __global__ 
+    void find_new_pivot_and_mark(
+                Commutation*        commutations, 
+                pivot_t*            pivots, 
+                bucket_t*           measurements, 
+                ConstRefsPointer    refs, 
+                ConstTablePointer   inv_xs, 
+        const   size_t              gate_index, 
+        const   size_t              num_qubits, 
+        const   size_t              num_words_major, 
+        const   size_t              num_words_minor,
+        const   size_t              num_qubits_padded) 
+    {
         const gate_ref_t r = refs[gate_index];
         assert(r < NO_REF);
         Gate& m = (Gate&) measurements[r];
@@ -66,13 +91,14 @@ namespace QuaSARQ {
         grid_t BX = blockDim.x;
         grid_t shared_tid = threadIdx.y * BX + tx;
 
-        const qubit_t q = m.wires[0], q_w = WORD_OFFSET(q);
+        const qubit_t q = m.wires[0];
+        const size_t q_w = WORD_OFFSET(q);
         const word_std_t q_mask = BITMASK_GLOBAL(q);
 
         uint32 local_min = INVALID_PIVOT;
 
         for_parallel_x(g, num_qubits) {
-            const size_t word_idx = g * num_words_major + q_w + num_words_minor;
+            const size_t word_idx = TABLEAU_INDEX(q_w, g) + TABLEAU_STAB_OFFSET;
             const word_std_t qubit_word = (*inv_xs)[word_idx];
             if (qubit_word & q_mask) {
                 commutations[g].anti_commuting = true;
@@ -88,6 +114,14 @@ namespace QuaSARQ {
 
         if (!threadIdx.x && local_min != INVALID_PIVOT) { 
             atomicMin(pivots + gate_index, local_min);
+        }
+    }
+
+    __global__ 
+    void reset_all_pivots(pivot_t* pivots, const size_t num_gates) 
+    {
+        for_parallel_x(i, num_gates) {
+            pivots[i] = INVALID_PIVOT;
         }
     }
 
@@ -109,6 +143,8 @@ namespace QuaSARQ {
     void Simulator::find_pivots(Tableau<DeviceAllocator>& tab, const size_t& num_pivots_or_index, const bool& bulky, const cudaStream_t& stream) {
         const size_t num_words_major = tab.num_words_major();
         const size_t num_words_minor = tab.num_words_minor();
+        const size_t num_qubits_padded = tableau.num_qubits_padded();
+
         dim3 currentblock, currentgrid;
         if (bulky) {
             if (options.tune_allpivots) {
@@ -125,7 +161,8 @@ namespace QuaSARQ {
                                 num_pivots_or_index, 
                                 num_qubits, 
                                 num_words_major, 
-                                num_words_minor);
+                                num_words_minor,
+                                num_qubits_padded);
                 reset_all_pivots <<<bestgridreset, bestblockreset>>> (gpu_circuit.pivots(), num_pivots_or_index);
                 SYNCALL;
             }
@@ -143,7 +180,8 @@ namespace QuaSARQ {
                 num_pivots_or_index, 
                 num_qubits, 
                 num_words_major, 
-                num_words_minor
+                num_words_minor,
+                num_qubits_padded
             );
             if (options.sync) {
                 LASTERR("failed to launch find_all_pivots_indet kernel");
@@ -166,7 +204,8 @@ namespace QuaSARQ {
                     pivot_index, 
                     num_qubits,
                     num_words_major, 
-                    num_words_minor);
+                    num_words_minor,
+                    num_qubits_padded);
                 reset_all_pivots <<<bestgridreset, bestblockreset>>> (gpu_circuit.pivots(), num_pivots_or_index);
                 SYNCALL;
             }
@@ -184,7 +223,8 @@ namespace QuaSARQ {
                 pivot_index, 
                 num_qubits, 
                 num_words_major, 
-                num_words_minor
+                num_words_minor,
+                num_qubits_padded
             );
             if (options.sync) {
                 LASTERR("failed to launch find_new_pivot_and_mark kernel");

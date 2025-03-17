@@ -202,7 +202,7 @@ namespace QuaSARQ {
                 LOGDONE(2, 3);
             }
         }
-        targets.alloc(num_qubits, max_window_bytes, true, false);
+        targets.alloc(num_qubits, max_window_bytes, true, false, false);
     }
 
     void Prefix::resize(const Tableau<DeviceAllocator>& input, const size_t& max_window_bytes) {
@@ -222,7 +222,7 @@ namespace QuaSARQ {
         if (max_intermediate_blocks > MIN_SINGLE_PASS_THRESHOLD) {
             max_sub_blocks = max_intermediate_blocks >> 1;
         }
-        targets.resize(num_qubits, max_window_bytes, true, false);
+        targets.resize(num_qubits, max_window_bytes, true, false, false);
     }
 
     void Prefix::scan_blocks(const size_t& num_blocks, const cudaStream_t& stream) {

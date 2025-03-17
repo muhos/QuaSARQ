@@ -1,24 +1,25 @@
 
 #include "prefix.cuh"
 #include "collapse.cuh"
+#include "access.cuh"
 
 namespace QuaSARQ {
 
     __global__ 
     void scan_targets_pass_1(
-        Table *prefix_xs, 
-        Table *prefix_zs, 
-        Table *inv_xs, 
-        Table *inv_zs,
-        word_std_t *block_intermediate_prefix_z,
-        word_std_t *block_intermediate_prefix_x,
-        const Commutation *commutations,
-        const uint32 c,
-        const size_t total_targets,
-        const size_t num_words_major,
-        const size_t num_words_minor,
-        const size_t max_blocks
-    )
+        Table *             prefix_xs, 
+        Table *             prefix_zs, 
+        Table *             inv_xs, 
+        Table *             inv_zs,
+        word_std_t *        block_intermediate_prefix_z,
+        word_std_t *        block_intermediate_prefix_x,
+        const Commutation * commutations,
+        const uint32        c,
+        const size_t        total_targets,
+        const size_t        num_words_major,
+        const size_t        num_words_minor,
+        const size_t        num_qubits_padded,
+        const size_t        max_blocks)
     {
         grid_t padded_block_size = blockDim.x + CONFLICT_FREE_OFFSET(blockDim.x);
         grid_t slice = 2 * padded_block_size;
@@ -31,7 +32,7 @@ namespace QuaSARQ {
 
         for_parallel_y(w, num_words_minor) {
 
-            const size_t c_destab = c * num_words_major + w;
+            const size_t c_destab = TABLEAU_INDEX(w, c);
             assert(c_destab < inv_zs->size());
             assert(c_destab < inv_xs->size());
 
@@ -42,14 +43,13 @@ namespace QuaSARQ {
                 word_std_t t_delta_x = 0;
 
                 if (commutations[t].anti_commuting) {
-                    const size_t t_destab = t * num_words_major + w;
+                    const size_t t_destab = TABLEAU_INDEX(w, t);
                     assert(t_destab < inv_zs->size());
                     assert(t_destab < inv_xs->size());
                     t_delta_z = zs[t_destab];
                     t_delta_x = xs[t_destab];
                 }
             
-
                 t_prefix_z[prefix_tid] = t_delta_z;
                 t_prefix_x[prefix_tid] = t_delta_x;
 
@@ -81,19 +81,20 @@ namespace QuaSARQ {
 
     __global__ 
     void scan_targets_pass_2(
-        Table *prefix_xs, 
-        Table *prefix_zs, 
-        Table *inv_xs, 
-        Table *inv_zs,
-        const word_std_t *block_intermediate_prefix_z,
-        const word_std_t *block_intermediate_prefix_x,
-        const Commutation *commutations,
-        const uint32 c,
-        const size_t total_targets,
-        const size_t num_words_major,
-        const size_t num_words_minor,
-        const size_t max_blocks,
-        const size_t phase1_block_size)
+                Table *         prefix_xs, 
+                Table *         prefix_zs, 
+                Table *         inv_xs, 
+                Table *         inv_zs,
+        const   word_std_t *    block_intermediate_prefix_z,
+        const   word_std_t *    block_intermediate_prefix_x,
+        const   Commutation *   commutations,
+        const   uint32          c,
+        const   size_t          total_targets,
+        const   size_t          num_words_major,
+        const   size_t          num_words_minor,
+        const   size_t          num_qubits_padded,
+        const   size_t          max_blocks,
+        const   size_t          phase1_block_size)
     { 
         word_std_t *shared = SharedMemory<word_std_t>();
         word_std_t *shared_z = shared;
@@ -104,8 +105,8 @@ namespace QuaSARQ {
 
         for_parallel_y(w, num_words_minor) {
 
-            const size_t c_destab = c * num_words_major + w;
-            const size_t c_stab = c_destab + num_words_minor;
+            const size_t c_destab = TABLEAU_INDEX(w, c);
+            const size_t c_stab = c_destab + TABLEAU_STAB_OFFSET;
 
             // For parallel collapsing.
             word_std_t zc_destab = 0;
@@ -121,8 +122,8 @@ namespace QuaSARQ {
 
                 if (commutations[t].anti_commuting) {
 
-                    const size_t t_destab = t * num_words_major + w;
-                    const size_t t_stab = t_destab + num_words_minor;
+                    const size_t t_destab = TABLEAU_INDEX(w, t);
+                    const size_t t_stab = t_destab + TABLEAU_STAB_OFFSET;
 
                     assert(c_destab < inv_zs->size());
                     assert(t_destab < inv_zs->size());
@@ -178,17 +179,17 @@ namespace QuaSARQ {
 
     __global__ 
     void collapse_scanned_targets(
-        Table *prefix_xs, 
-        Table *prefix_zs, 
-        Table *inv_xs, 
-        Table *inv_zs, 
-        Signs *inv_ss,
-        const Commutation *commutations,
-        const uint32 c,
-        const size_t total_targets,
-        const size_t num_words_major, 
-        const size_t num_words_minor
-    )
+                Table *         prefix_xs, 
+                Table *         prefix_zs, 
+                Table *         inv_xs, 
+                Table *         inv_zs, 
+                Signs *         inv_ss,
+        const   Commutation *   commutations,
+        const   uint32          c,
+        const   size_t          total_targets,
+        const   size_t          num_words_major, 
+        const   size_t          num_words_minor,
+        const   size_t          num_qubits_padded)
     {
         word_t *xs = inv_xs->data();
         word_t *zs = inv_zs->data();
@@ -228,6 +229,9 @@ namespace QuaSARQ {
     void Prefix::inject_CX(Tableau<DeviceAllocator>& input, const Commutation* commutations, const uint32& pivot, const qubit_t& qubit, const cudaStream_t& stream) {
         assert(num_qubits > pivot);
         assert(nextPow2(MIN_BLOCK_INTERMEDIATE_SIZE) == MIN_BLOCK_INTERMEDIATE_SIZE);
+        
+        const size_t num_qubits_padded = input.num_qubits_padded();
+
         // Calculate number of target generators.
         const size_t total_targets = num_qubits - pivot - 1;
         if (!total_targets) return;
@@ -250,6 +254,7 @@ namespace QuaSARQ {
                 total_targets, 
                 num_words_major, 
                 num_words_minor,
+                num_qubits_padded,
                 max_intermediate_blocks
             );
             SYNCALL;
@@ -273,6 +278,7 @@ namespace QuaSARQ {
                     total_targets, 
                     num_words_major, 
                     num_words_minor,
+                    num_qubits_padded,
                     max_intermediate_blocks
                 );
         if (options.sync) {
@@ -301,6 +307,7 @@ namespace QuaSARQ {
                 total_targets, 
                 num_words_major, 
                 num_words_minor, 
+                num_qubits_padded,
                 max_intermediate_blocks,
                 pass_1_blocksize
             );
@@ -320,6 +327,7 @@ namespace QuaSARQ {
                         total_targets, 
                         num_words_major, 
                         num_words_minor, 
+                        num_qubits_padded,
                         max_intermediate_blocks,
                         pass_1_blocksize
                     );
@@ -344,7 +352,8 @@ namespace QuaSARQ {
                 pivot, 
                 total_targets, 
                 num_words_major, 
-                num_words_minor
+                num_words_minor,
+                num_qubits_padded
             );
             SYNCALL;
         }
@@ -360,7 +369,8 @@ namespace QuaSARQ {
                         pivot, 
                         total_targets, 
                         num_words_major, 
-                        num_words_minor
+                        num_words_minor,
+                        num_qubits_padded
                     );
         if (options.sync) {
             LASTERR("failed to collapse scanned targets");

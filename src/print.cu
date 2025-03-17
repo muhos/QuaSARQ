@@ -1,5 +1,6 @@
 #include "simulator.hpp"
 #include "print.cuh"
+#include "access.cuh"
 
 namespace QuaSARQ {
 
@@ -42,17 +43,17 @@ namespace QuaSARQ {
     NOINLINE_ALL void print_table(const Table& t) {
         LOGGPU("%-3s ", "g\\q ");
         size_t bits, rows, cols, word_idx;
-        const size_t num_qubits = t.num_qubits_padded();
+        const size_t num_qubits_padded = t.num_qubits_padded();
         const size_t num_words_major = t.num_words_major();
         const size_t num_words_minor = t.num_words_minor();
         constexpr int ROWMAJOR_STEP = 2;
         if (t.is_rowmajor()) {
             bits = num_words_minor * WORD_BITS;
-            rows = 2 * num_qubits, cols = num_words_minor;
+            rows = 2 * num_qubits_padded, cols = num_words_minor;
         }
         else {
             bits = num_words_major * WORD_BITS;
-            rows = num_qubits, cols = num_words_major;
+            rows = num_qubits_padded, cols = num_words_major;
         }
         for (size_t q = 0; q < bits; q++) {
             if (q > 0 && q % WORD_BITS == 0)

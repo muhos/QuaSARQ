@@ -91,7 +91,6 @@ namespace QuaSARQ {
         
         // Do measurements in a single simulation step.
         void transpose(const bool& row_major, const cudaStream_t& stream);
-        void inplace_transpose(const bool& row_major, const cudaStream_t& stream);
         void reset_pivots(const size_t& num_pivots, const cudaStream_t& stream);
         void find_pivots(Tableau<DeviceAllocator>& tab, const size_t& num_pivots_or_index, const bool& bulky, const cudaStream_t& stream);
         void mark_commutations(const qubit_t& qubit, const cudaStream_t& stream);

@@ -60,39 +60,41 @@ namespace QuaSARQ {
 		const char* opname, dim3& bestBlock, dim3& bestGrid,
 		pivot_t* pivots, const size_t size);
 
-	void tune_kernel_m(void (*kernel)(Commutation* commutations, ConstTablePointer, const qubit_t, const size_t, const size_t, const size_t),
+	void tune_kernel_m(void (*kernel)(Commutation* commutations, ConstTablePointer, 
+		const qubit_t, const size_t, const size_t, const size_t, const size_t),
 		const char* opname, dim3& bestBlock, dim3& bestGrid,
 		Commutation* commutations, ConstTablePointer inv_xs, const qubit_t qubit, 
-		const size_t size, const size_t num_words_major, const size_t num_words_minor);
+		const size_t size, const size_t num_words_major, const size_t num_words_minor, const size_t num_qubits_padded);
 
-	void tune_kernel_m(void (*kernel)(Table*, Table*, Signs*, const Commutation* commutations, const pivot_t, const size_t, const size_t),
+	void tune_kernel_m(void (*kernel)(Table*, Table*, Signs*, const Commutation* commutations, 
+		const pivot_t, const size_t, const size_t, const size_t),
 		const char* opname, dim3& bestBlock, dim3& bestGrid,
 		Table* inv_xs, Table* inv_zs, Signs* ss, const Commutation* commutations, const pivot_t new_pivot, 
-		const size_t num_words_major, const size_t num_words_minor);
+		const size_t num_words_major, const size_t num_words_minor, const size_t num_qubits_padded);
 
 	void tune_kernel_m(void (*kernel)(pivot_t*, bucket_t*, ConstRefsPointer, ConstTablePointer, 
-		const size_t, const size_t, const size_t, const size_t),
+		const size_t, const size_t, const size_t, const size_t, const size_t),
 		const char* opname, dim3& bestBlock, dim3& bestGrid, const size_t& shared_element_bytes, const bool& shared_size_yextend,
 		const size_t& data_size_in_x, const size_t& data_size_in_y,
 		pivot_t* pivots, bucket_t* measurements, ConstRefsPointer refs, ConstTablePointer inv_xs, 
-        const size_t num_gates, const size_t num_qubits, const size_t num_words_major, const size_t num_words_minor);
+        const size_t num_gates, const size_t num_qubits, const size_t num_words_major, const size_t num_words_minor, const size_t num_qubits_padded);
 
 	void tune_kernel_m(void (*kernel)(Commutation* commutations, pivot_t*, bucket_t*, ConstRefsPointer, ConstTablePointer, 
-        const size_t, const size_t, const size_t, const size_t),
+        const size_t, const size_t, const size_t, const size_t, const size_t),
 		const char* opname, dim3& bestBlock, dim3& bestGrid, const size_t& shared_element_bytes, 
 		Commutation* commutations, pivot_t* pivots, bucket_t* measurements, ConstRefsPointer refs, ConstTablePointer inv_xs, 
-        const size_t& gate_index, const size_t& num_qubits, const size_t num_words_major, const size_t num_words_minor);
+        const size_t& gate_index, const size_t& num_qubits, const size_t num_words_major, const size_t num_words_minor, const size_t num_qubits_padded);
 
-	void tune_outplace_transpose(void (*kernel)(Table*, Table*, Signs*, ConstTablePointer, ConstTablePointer, ConstSignsPointer, const size_t, const size_t, const size_t),
+	void tune_outplace_transpose(void (*kernel)(Table*, Table*, ConstTablePointer, ConstTablePointer, const size_t, const size_t, const size_t),
 		const char* opname, 
 		dim3& bestBlock, dim3& bestGrid,
 		const size_t& shared_element_bytes, 
 		const bool& shared_size_yextend,
 		const size_t& data_size_in_x, 
 		const size_t& data_size_in_y,
-		Table* xs1, Table* zs1, Signs* ss1, 
-        ConstTablePointer xs2, ConstTablePointer zs2, ConstSignsPointer ss2, 
-        const size_t& num_words_major, const size_t& num_words_minor, const size_t& num_qubits);
+		Table* xs1, Table* zs1, 
+        ConstTablePointer xs2, ConstTablePointer zs2,
+        const size_t& num_words_major, const size_t& num_words_minor, const size_t& num_qubits_padded);
 
 	void tune_inplace_transpose(
 		void (*transpose_tiles_kernel)(Table*, Table*, const size_t, const size_t, const bool),

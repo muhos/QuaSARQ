@@ -5,7 +5,7 @@
 #include "print.cuh"
 #include "tuner.cuh"
 #include "grid.cuh"
-
+#include "access.cuh"
 
 namespace QuaSARQ {
 
@@ -243,11 +243,9 @@ namespace QuaSARQ {
             for_parallel_x(q, num_words_major) {
                 word_std_t inv_word_x = 0;
                 word_std_t inv_word_z = 0;
-                //const size_t block_idx = q * WORD_BITS * num_words_minor + WORD_OFFSET(w);
                 const size_t block_idx = q * WORD_BITS + WORD_OFFSET(w) * 2 * num_qubits;            
                 #pragma unroll
                 for (uint32 k = 0; k < WORD_BITS; k++) {
-                    //const size_t src_word_idx = k * num_words_minor + block_idx;
                     const size_t src_word_idx = k + block_idx;
                     const word_std_t qubits_word_x = (*inv_xs)[src_word_idx];
                     const word_std_t qubits_word_z = (*inv_zs)[src_word_idx];
@@ -263,6 +261,7 @@ namespace QuaSARQ {
         }
     }
 
+    #if ROW_MAJOR
     void Simulator::transpose(const bool& row_major, const cudaStream_t& stream) {
         const size_t num_words_minor = tableau.num_words_minor();
         const size_t num_words_major = tableau.num_words_major();
@@ -273,18 +272,18 @@ namespace QuaSARQ {
         // tableau.copy_to_host(&in_xs, &in_zs);
 
         if (row_major) {
-            // if (options.tune_transposec2r) {
-            //     SYNCALL;
-            //     tune_transpose(transpose_to_rowmajor, "Transposing to row-major", 
-            //     bestblocktransposec2r, bestgridtransposec2r, 
-            //     0, false,        // shared size, extend?
-            //     num_words_major, // x-dim
-            //     2 * num_qubits_padded,  // y-dim 
-            //     XZ_TABLE(inv_tableau), inv_tableau.signs(), XZ_TABLE(tableau), tableau.signs(), num_words_major, num_words_minor, num_qubits_padded);
-            // }
-            TRIM_BLOCK_IN_DEBUG_MODE(bestblocktransposec2r, bestgridtransposec2r, num_words_major, 2 * num_qubits_padded);
+            if (options.tune_transposec2r) {
+                SYNCALL;
+                tune_outplace_transpose(transpose_to_rowmajor, "Transposing to row-major", 
+                bestblocktransposec2r, bestgridtransposec2r, 
+                0, false,        // shared size, extend?
+                num_words_major, // x-dim
+                2 * num_qubits_padded,  // y-dim 
+                XZ_TABLE(inv_tableau), XZ_TABLE(tableau), num_words_major, num_words_minor, num_qubits_padded);
+            }
+            TRIM_BLOCK_IN_DEBUG_MODE(bestblocktransposec2r, bestgridtransposec2r, 2 * num_qubits_padded, num_words_minor);
             currentblock = bestblocktransposec2r, currentgrid = bestgridtransposec2r;
-            TRIM_GRID_IN_XY(num_words_major, 2 * num_qubits_padded);
+            TRIM_GRID_IN_XY(2 * num_qubits_padded, num_words_minor);
             transpose_to_rowmajor <<< currentgrid, currentblock, 0, stream >>> (
                 XZ_TABLE(inv_tableau), 
                 XZ_TABLE(tableau), 
@@ -298,16 +297,16 @@ namespace QuaSARQ {
             tableau.swap_tableaus(inv_tableau);
         }
         else {
-            inv_tableau.swap_tableaus(tableau);
-            // if (options.tune_transposer2c) {
-            //     SYNCALL;
-            //     tune_transpose(transpose_to_colmajor, "Transposing to column-major", 
-            //     bestblocktransposer2c, bestgridtransposer2c, 
-            //     0, false,        // shared size, extend?
-            //     num_words_major, // x-dim
-            //     num_qubits_padded,      // y-dim 
-            //     XZ_TABLE(tableau), tableau.signs(), XZ_TABLE(inv_tableau), inv_tableau.signs(), num_words_major, num_words_minor, num_qubits_padded);
-            // }
+            tableau.swap_tableaus(inv_tableau);
+            if (options.tune_transposer2c) {
+                SYNCALL;
+                tune_outplace_transpose(transpose_to_colmajor, "Transposing to column-major", 
+                bestblocktransposer2c, bestgridtransposer2c, 
+                0, false,        // shared size, extend?
+                num_words_major, // x-dim
+                num_qubits_padded,      // y-dim 
+                XZ_TABLE(tableau), XZ_TABLE(inv_tableau), num_words_major, num_words_minor, num_qubits_padded);
+            }
             TRIM_BLOCK_IN_DEBUG_MODE(bestblocktransposer2c, bestgridtransposer2c, num_words_major, num_qubits_padded);
             currentblock = bestblocktransposer2c, currentgrid = bestgridtransposer2c;     
             TRIM_GRID_IN_XY(num_words_major, num_qubits_padded);
@@ -331,7 +330,8 @@ namespace QuaSARQ {
         //exit(0);
     }
 
-    void Simulator::inplace_transpose(const bool& row_major, const cudaStream_t& stream) {
+    #else
+    void Simulator::transpose(const bool& row_major, const cudaStream_t& stream) {
         const size_t num_words_minor = tableau.num_words_minor();
         const size_t num_words_major = tableau.num_words_major();
         dim3 currentblock, currentgrid;
@@ -371,45 +371,8 @@ namespace QuaSARQ {
             SYNC(stream);
         }
         LOGDONE(2, 4);
-
-
-        // Table in_xs, in_zs;
-        // tableau.copy_to_host(&in_xs, &in_zs);
-
-        dim3 block(16, 2);
-        dim3 grid(
-            (tableau.num_qubits_padded() + block.x - 1) / block.x,
-            (num_words_minor  + block.y - 1) / block.y,
-            2 // blockIdx.z => 0 or 1 for x, z
-        );
-        rowmajor_kernel_out_of_place_grid_stride<<<grid, block, 0, stream>>>(
-            XZ_TABLE(tableau),
-            XZ_TABLE(inv_tableau),
-            num_words_major,
-            num_words_minor,
-            tableau.num_qubits_padded(),
-            true
-        );
-
-        // rowmajor_kernel_out_of_place_grid_stride<<<grid, block, 0, stream>>>(
-        //     XZ_TABLE(inv_tableau),
-        //     XZ_TABLE(tableau),
-        //     num_words_major,
-        //     num_words_minor,
-        //     tableau.num_qubits_padded(),
-        //     false
-        // );
-
-        SYNC(stream);
-        tableau.swap_tableaus(inv_tableau);
-
-        // Table out_xs, out_zs;
-        // inv_tableau.copy_to_host(&out_xs, &out_zs);
-        // verify_transpose(in_xs, in_zs, out_xs, out_zs);
-        
-
-        //exit(0);
     }
+    #endif
 
 }
 

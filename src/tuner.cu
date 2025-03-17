@@ -45,7 +45,7 @@ namespace QuaSARQ {
 		stats.reset();
 		// Resize tableaux.
 		if (num_qubits < tableau.num_qubits()) {
-			tableau.resize(num_qubits, winfo.max_window_bytes, measuring);
+			tableau.resize(num_qubits, winfo.max_window_bytes, false, measuring, true);
 			if (measuring) {
 				prefix.resize(tableau, winfo.max_window_bytes);
 			}
@@ -58,7 +58,7 @@ namespace QuaSARQ {
 		// Create a tableau in GPU memory for the maximum qubits.
 		const size_t max_num_qubits = num_qubits;
 		num_partitions = 1;
-		tableau.alloc(max_num_qubits, winfo.max_window_bytes, false, measuring);
+		tableau.alloc(max_num_qubits, winfo.max_window_bytes, false, measuring, true);
 		if (measuring) {
 			prefix.alloc(tableau, config_qubits, winfo.max_window_bytes);
 		}
@@ -503,26 +503,29 @@ namespace QuaSARQ {
 		TUNE_1D(pivots, size);
 	}
 
-	void tune_kernel_m(void (*kernel)(Commutation* commutations, ConstTablePointer, const qubit_t, const size_t, const size_t, const size_t),
+	void tune_kernel_m(void (*kernel)(Commutation* commutations, ConstTablePointer, 
+		const qubit_t, const size_t, const size_t, const size_t, const size_t),
 		const char* opname, dim3& bestBlock, dim3& bestGrid,
 		Commutation* commutations, ConstTablePointer inv_xs, const qubit_t qubit, 
-		const size_t size, const size_t num_words_major, const size_t num_words_minor)
+		const size_t size, const size_t num_words_major, const size_t num_words_minor, const size_t num_qubits_padded)
 	{
 		size_t shared_element_bytes = 0;
-		TUNE_1D(commutations, inv_xs, qubit, size, num_words_major, num_words_minor);
+		TUNE_1D(commutations, inv_xs, qubit, size, num_words_major, num_words_minor, num_qubits_padded);
 	}
 
-	void tune_kernel_m(void (*kernel)(Table*, Table*, Signs*, const Commutation* commutations, const pivot_t, const size_t, const size_t),
+	void tune_kernel_m(void (*kernel)(Table*, Table*, Signs*, const Commutation* commutations, 
+		const pivot_t, const size_t, const size_t, const size_t),
 		const char* opname, dim3& bestBlock, dim3& bestGrid,
 		Table* inv_xs, Table* inv_zs, Signs* ss, const Commutation* commutations, const pivot_t new_pivot, 
-		const size_t num_words_major, const size_t num_words_minor) 
+		const size_t num_words_major, const size_t num_words_minor, const size_t num_qubits_padded) 
 	{
 		size_t shared_element_bytes = 0;
 		size_t size = num_words_minor;
-		TUNE_1D(inv_xs, inv_zs, ss, commutations, new_pivot, num_words_major, num_words_minor);
+		TUNE_1D(inv_xs, inv_zs, ss, commutations, new_pivot, num_words_major, num_words_minor, num_qubits_padded);
 	}
 
-	void tune_kernel_m(void (*kernel)(pivot_t*, bucket_t*, ConstRefsPointer, ConstTablePointer, const size_t, const size_t, const size_t, const size_t),
+	void tune_kernel_m(void (*kernel)(pivot_t*, bucket_t*, ConstRefsPointer, ConstTablePointer, 
+		const size_t, const size_t, const size_t, const size_t, const size_t),
 		const char* opname, 
 		dim3& bestBlock, dim3& bestGrid,
 		const size_t& shared_element_bytes, 
@@ -530,35 +533,33 @@ namespace QuaSARQ {
 		const size_t& data_size_in_x, 
 		const size_t& data_size_in_y,
 		pivot_t* pivots, bucket_t* measurements, ConstRefsPointer refs, ConstTablePointer inv_xs, 
-        const size_t num_gates, const size_t num_qubits, const size_t num_words_major, const size_t num_words_minor)
+        const size_t num_gates, const size_t num_qubits, const size_t num_words_major, const size_t num_words_minor, const size_t num_qubits_padded)
 	{
-		TUNE_2D(pivots, measurements, refs, inv_xs, num_gates, num_qubits, num_words_major, num_words_minor);
+		TUNE_2D(pivots, measurements, refs, inv_xs, num_gates, num_qubits, num_words_major, num_words_minor, num_qubits_padded);
 	}
 
-	void tune_kernel_m(void (*kernel)(Commutation* commutations, pivot_t*, bucket_t*, ConstRefsPointer, ConstTablePointer, const size_t, const size_t, const size_t, const size_t),
+	void tune_kernel_m(void (*kernel)(Commutation* commutations, pivot_t*, bucket_t*, ConstRefsPointer, ConstTablePointer, 
+		const size_t, const size_t, const size_t, const size_t, const size_t),
 		const char* opname, dim3& bestBlock, dim3& bestGrid,
 		const size_t& shared_element_bytes, 
 		Commutation* commutations, pivot_t* pivots, bucket_t* measurements, ConstRefsPointer refs, ConstTablePointer inv_xs, 
-        const size_t& gate_index, const size_t& size, const size_t num_words_major, const size_t num_words_minor)
+        const size_t& gate_index, const size_t& size, const size_t num_words_major, const size_t num_words_minor, const size_t num_qubits_padded)
 	{
-		TUNE_1D(commutations, pivots, measurements, refs, inv_xs, gate_index, size, num_words_major, num_words_minor);
+		TUNE_1D(commutations, pivots, measurements, refs, inv_xs, gate_index, size, num_words_major, num_words_minor, num_qubits_padded);
 	}
 
-	void tune_outplace_transpose(void (*kernel)(Table*, Table*, Signs*, ConstTablePointer, ConstTablePointer, ConstSignsPointer, const size_t, const size_t, const size_t),
+	void tune_outplace_transpose(void (*kernel)(Table*, Table*, ConstTablePointer, ConstTablePointer, const size_t, const size_t, const size_t),
 		const char* opname, 
 		dim3& bestBlock, dim3& bestGrid,
 		const size_t& shared_element_bytes, 
 		const bool& shared_size_yextend,
 		const size_t& data_size_in_x, 
 		const size_t& data_size_in_y,
-		Table* xs1, Table* zs1, Signs* ss1, 
-        ConstTablePointer xs2, ConstTablePointer zs2, ConstSignsPointer ss2, 
-        const size_t& num_words_major, const size_t& num_words_minor, const size_t& num_qubits) 
+		Table* xs1, Table* zs1,
+        ConstTablePointer xs2, ConstTablePointer zs2,
+        const size_t& num_words_major, const size_t& num_words_minor, const size_t& num_qubits_padded) 
 	{
-		const int64 _initThreadsPerBlockY = initThreadsPerBlockY;
-		initThreadsPerBlockY = 32;
-		TUNE_2D(xs1, zs1, ss1, xs2, zs2, ss2, num_words_major, num_words_minor, num_qubits);
-		initThreadsPerBlockY = _initThreadsPerBlockY;
+		TUNE_2D(xs1, zs1, xs2, zs2, num_words_major, num_words_minor, num_qubits_padded);
 	}
 
 	void tune_inplace_transpose(
@@ -624,7 +625,7 @@ namespace QuaSARQ {
 
 	void tune_inject_pass_1(
 		void (*kernel)(Table*, Table*, Table*, Table*, word_std_t *, word_std_t *, 
-						const Commutation*, const uint32, const size_t, const size_t, const size_t, const size_t),
+						const Commutation*, const uint32, const size_t, const size_t, const size_t, const size_t, const size_t),
 		dim3& bestBlock, dim3& bestGrid,
 		const size_t& shared_element_bytes, 
 		const size_t& data_size_in_x, 
@@ -640,6 +641,7 @@ namespace QuaSARQ {
 		const size_t& total_targets,
 		const size_t& num_words_major,
 		const size_t& num_words_minor,
+		const size_t& num_qubits_padded,
 		const size_t& max_blocks)
 	{
 		const char* opname = "inject pass 1";
@@ -656,6 +658,7 @@ namespace QuaSARQ {
 					total_targets,
 					num_words_major,
 					num_words_minor,
+					num_qubits_padded,
 					max_blocks);
 	}
 
@@ -693,7 +696,7 @@ namespace QuaSARQ {
 	void tune_inject_pass_2(
 		void (*kernel)(Table*, Table*, Table*, Table*, const word_std_t *, const word_std_t *, 
 						const Commutation*, const uint32, 
-						const size_t, const size_t, const size_t, const size_t, const size_t),
+						const size_t, const size_t, const size_t, const size_t, const size_t, const size_t),
 		dim3& bestBlock, dim3& bestGrid,
 		const size_t& shared_element_bytes, 
 		const size_t& data_size_in_x, 
@@ -709,6 +712,7 @@ namespace QuaSARQ {
 		const size_t& total_targets,
 		const size_t& num_words_major,
 		const size_t& num_words_minor,
+		const size_t& num_qubits_padded,
 		const size_t& max_blocks,
 		const size_t& pass_1_blocksize)
 	{
@@ -726,6 +730,7 @@ namespace QuaSARQ {
 			total_targets,
 			num_words_major,
 			num_words_minor,
+			num_qubits_padded,
 			max_blocks,
 			pass_1_blocksize
 		);
@@ -734,7 +739,7 @@ namespace QuaSARQ {
 	void tune_collapse_targets(
 		void (*kernel)(Table*, Table*, Table*, Table*, Signs *, 
 						const Commutation*, const uint32, 
-						const size_t, const size_t, const size_t),
+						const size_t, const size_t, const size_t, const size_t),
 		dim3& bestBlock, dim3& bestGrid,
 		const size_t& shared_element_bytes, 
 		const size_t& data_size_in_x, 
@@ -748,7 +753,8 @@ namespace QuaSARQ {
 		const uint32& pivot,
 		const size_t& total_targets,
 		const size_t& num_words_major,
-		const size_t& num_words_minor)
+		const size_t& num_words_minor,
+		const size_t& num_qubits_padded)
 	{
 		const char* opname = "collapse targets";
 		const bool shared_size_yextend = true;
@@ -762,7 +768,8 @@ namespace QuaSARQ {
 			pivot,
 			total_targets,
 			num_words_major,
-			num_words_minor
+			num_words_minor,
+			num_qubits_padded
 		);
 	}
 

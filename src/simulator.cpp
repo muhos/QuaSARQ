@@ -131,9 +131,9 @@ void Simulator::simulate() {
     // Create tableau(s) in GPU memory.
     Power power;
     timer.start();
-    num_partitions = tableau.alloc(num_qubits, winfo.max_window_bytes, false, measuring);
+    num_partitions = tableau.alloc(num_qubits, winfo.max_window_bytes, false, measuring, true);
     if (measuring) {
-        inv_tableau.alloc(num_qubits, winfo.max_window_bytes, false, measuring);
+        inv_tableau.alloc(num_qubits, winfo.max_window_bytes, false, measuring, false);
         prefix.alloc(tableau, config_qubits, winfo.max_window_bytes);
         commutations = gpu_allocator.allocate<Commutation>(num_qubits);
     }
