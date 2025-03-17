@@ -40,21 +40,31 @@ namespace QuaSARQ {
     }
 
     NOINLINE_ALL void print_table(const Table& t) {
-        size_t bits = t.num_words_minor() * WORD_BITS;
-        size_t stab_offset = 0;
-        LOGGPU("     ");
+        LOGGPU("%-3s ", "g\\q ");
+        size_t bits, rows, cols, word_idx;
+        const size_t num_qubits = t.num_qubits_padded();
+        const size_t num_words_major = t.num_words_major();
+        const size_t num_words_minor = t.num_words_minor();
+        constexpr int ROWMAJOR_STEP = 2;
+        if (t.is_rowmajor()) {
+            bits = num_words_minor * WORD_BITS;
+            rows = 2 * num_qubits, cols = num_words_minor;
+        }
+        else {
+            bits = num_words_major * WORD_BITS;
+            rows = num_qubits, cols = num_words_major;
+        }
         for (size_t q = 0; q < bits; q++) {
             if (q > 0 && q % WORD_BITS == 0)
                 LOGGPU("  ");
             LOGGPU("%-3lld", q);
         }
-        if (t.num_words_major() == 2 * t.num_words_minor()) {
-            stab_offset = t.num_words_minor();
-            LOGGPU("\n\nDestabilizers:\n");
-            for (size_t q = 0; q < t.num_qubits_padded(); q++) {
+        LOGGPU("\n\n");
+        if (t.is_rowmajor()) {
+            for (size_t q = 0; q < rows; q++) {
                 LOGGPU("%-3lld  ", q);
-                for (size_t w = 0; w < t.num_words_minor(); w++) {
-                    const size_t word_idx = q * t.num_words_major() + w;
+                for (size_t w = 0; w < cols; w++) {
+                    const size_t word_idx = q + w * rows;
                     #if defined(WORD_SIZE_64)
                     LOGGPU(B2B_STR, RB2B(uint32(word_std_t(t[word_idx]) & 0xFFFFFFFFUL)));
                     LOGGPU(B2B_STR "  ", RB2B(uint32((word_std_t(t[word_idx]) >> 32) & 0xFFFFFFFFUL)));
@@ -65,21 +75,102 @@ namespace QuaSARQ {
                 LOGGPU("\n");
             }
         }
-        LOGGPU("Stabilizers:\n");
-        for (size_t q = 0; q < t.num_qubits_padded(); q++) {
-            LOGGPU("%-3lld  ", q);
-            for (size_t w = 0; w < t.num_words_minor(); w++) {
-                const size_t word_idx = q * t.num_words_major() + w + stab_offset;
-                #if defined(WORD_SIZE_64)
-                LOGGPU(B2B_STR, RB2B(uint32(word_std_t(t[word_idx]) & 0xFFFFFFFFUL)));
-                LOGGPU(B2B_STR "  ", RB2B(uint32((word_std_t(t[word_idx]) >> 32) & 0xFFFFFFFFUL)));
-                #else
-                LOGGPU(B2B_STR "  ", RB2B(word_std_t(t[word_idx])));
-                #endif
+        else {
+            for (size_t q = 0; q < rows; q++) {
+                LOGGPU("%-3lld  ", q);
+                for (size_t w = 0; w < cols; w++) {
+                    const size_t word_idx = q * cols + w;
+                    #if defined(WORD_SIZE_64)
+                    LOGGPU(B2B_STR, RB2B(uint32(word_std_t(t[word_idx]) & 0xFFFFFFFFUL)));
+                    LOGGPU(B2B_STR "  ", RB2B(uint32((word_std_t(t[word_idx]) >> 32) & 0xFFFFFFFFUL)));
+                    #else
+                    LOGGPU(B2B_STR "  ", RB2B(word_std_t(t[word_idx])));
+                    #endif
+                }
+                LOGGPU("\n");
             }
-            LOGGPU("\n");
         }
+        
     }
+
+    // NOINLINE_ALL void print_table(const Table& t) {
+    //     size_t bits = t.num_words_minor() * WORD_BITS;
+    //     size_t stab_offset = 0;
+    //     LOGGPU("      ");
+    //     for (size_t q = 0; q < bits; q++) {
+    //         if (q > 0 && q % WORD_BITS == 0)
+    //             LOGGPU("  ");
+    //         LOGGPU("%-3lld", q);
+    //     }
+    //     constexpr int ROWMAJOR_STEP = 2;
+    //     if (t.num_words_major() == 2 * t.num_words_minor()) {
+    //         stab_offset = t.num_words_minor();
+    //         LOGGPU("\n\nDestabilizers:\n");
+    //         if (t.is_rowmajor()) {
+    //             for (size_t w = 0; w < t.num_words_minor(); w++) {
+    //                 LOGGPU("w%-3lld  ", w);
+    //                 for (size_t q = 0; q < t.num_qubits_padded(); q++) {
+    //                     if (q && q % ROWMAJOR_STEP == 0) LOGGPU("\n%-6s", " ");
+    //                     const size_t word_idx = w * t.num_qubits_padded() + q;
+    //                     #if defined(WORD_SIZE_64)
+    //                     LOGGPU(B2B_STR, RB2B(uint32(word_std_t(t[word_idx]) & 0xFFFFFFFFUL)));
+    //                     LOGGPU(B2B_STR "  ", RB2B(uint32((word_std_t(t[word_idx]) >> 32) & 0xFFFFFFFFUL)));
+    //                     #else
+    //                     LOGGPU(B2B_STR "  ", RB2B(word_std_t(t[word_idx])));
+    //                     #endif
+    //                 }
+    //                 LOGGPU("\n\n");
+    //             }
+    //         }
+    //         else {
+    //             for (size_t q = 0; q < t.num_qubits_padded(); q++) {
+    //                 LOGGPU("%-3lld  ", q);
+    //                 for (size_t w = 0; w < t.num_words_minor(); w++) {
+    //                     const size_t word_idx = q * t.num_words_major() + w;
+    //                     #if defined(WORD_SIZE_64)
+    //                     LOGGPU(B2B_STR, RB2B(uint32(word_std_t(t[word_idx]) & 0xFFFFFFFFUL)));
+    //                     LOGGPU(B2B_STR "  ", RB2B(uint32((word_std_t(t[word_idx]) >> 32) & 0xFFFFFFFFUL)));
+    //                     #else
+    //                     LOGGPU(B2B_STR "  ", RB2B(word_std_t(t[word_idx])));
+    //                     #endif
+    //                 }
+    //                 LOGGPU("\n");
+    //             }
+    //         }
+    //     }
+    //     LOGGPU("Stabilizers:\n");
+    //     if (t.is_rowmajor()) {
+    //         for (size_t w = 0; w < t.num_words_minor(); w++) {
+    //             LOGGPU("w%-3lld  ", w);
+    //             for (size_t q = 0; q < t.num_qubits_padded(); q++) {
+    //                 if (q && q % ROWMAJOR_STEP == 0) LOGGPU("\n%-6s", " ");
+    //                 const size_t word_idx = w * t.num_qubits_padded() + q + t.num_words_minor() * t.num_qubits_padded();
+    //                 #if defined(WORD_SIZE_64)
+    //                 LOGGPU(B2B_STR, RB2B(uint32(word_std_t(t[word_idx]) & 0xFFFFFFFFUL)));
+    //                 LOGGPU(B2B_STR "  ", RB2B(uint32((word_std_t(t[word_idx]) >> 32) & 0xFFFFFFFFUL)));
+    //                 #else
+    //                 LOGGPU(B2B_STR "  ", RB2B(word_std_t(t[word_idx])));
+    //                 #endif
+    //             }
+    //             LOGGPU("\n\n");
+    //         }
+    //     }
+    //     else {
+    //         for (size_t q = 0; q < t.num_qubits_padded(); q++) {
+    //             LOGGPU("%-3lld  ", q);
+    //             for (size_t w = 0; w < t.num_words_minor(); w++) {
+    //                 const size_t word_idx = q * t.num_words_major() + w + stab_offset;
+    //                 #if defined(WORD_SIZE_64)
+    //                 LOGGPU(B2B_STR, RB2B(uint32(word_std_t(t[word_idx]) & 0xFFFFFFFFUL)));
+    //                 LOGGPU(B2B_STR "  ", RB2B(uint32((word_std_t(t[word_idx]) >> 32) & 0xFFFFFFFFUL)));
+    //                 #else
+    //                 LOGGPU(B2B_STR "  ", RB2B(word_std_t(t[word_idx])));
+    //                 #endif
+    //             }
+    //             LOGGPU("\n");
+    //         }
+    //     }
+    // }
 
     NOINLINE_ALL void print_table_signs(const Signs& ss, const size_t& start, const size_t& end) {
         const size_t size = ss.is_unpacked() ? ss.size() : ss.size() * WORD_BITS;

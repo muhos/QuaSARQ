@@ -225,7 +225,7 @@ namespace QuaSARQ {
 
     // We need to compute prefix-xor of t-th destabilizer in X,Z for t = c+1, c+2, ... c+n-1
     // so that later we can xor every prefix-xor with controlled destabilizer.
-    void Prefix::inject_CX(Tableau<DeviceAllocator>& input, const uint32& pivot, const qubit_t& qubit, const cudaStream_t& stream) {
+    void Prefix::inject_CX(Tableau<DeviceAllocator>& input, const Commutation* commutations, const uint32& pivot, const qubit_t& qubit, const cudaStream_t& stream) {
         assert(num_qubits > pivot);
         assert(nextPow2(MIN_BLOCK_INTERMEDIATE_SIZE) == MIN_BLOCK_INTERMEDIATE_SIZE);
         // Calculate number of target generators.
@@ -245,7 +245,7 @@ namespace QuaSARQ {
                 XZ_TABLE(input), 
                 zblocks(), 
                 xblocks(),
-                input.commutations(), 
+                commutations, 
                 pivot,
                 total_targets, 
                 num_words_major, 
@@ -268,7 +268,7 @@ namespace QuaSARQ {
                     XZ_TABLE(input), 
                     zblocks(), 
                     xblocks(),
-                    input.commutations(), 
+                    commutations, 
                     pivot,
                     total_targets, 
                     num_words_major, 
@@ -296,7 +296,7 @@ namespace QuaSARQ {
                 XZ_TABLE(input),
                 zblocks(), 
                 xblocks(), 
-                input.commutations(), 
+                commutations, 
                 pivot, 
                 total_targets, 
                 num_words_major, 
@@ -315,7 +315,7 @@ namespace QuaSARQ {
                         XZ_TABLE(input),
                         zblocks(), 
                         xblocks(), 
-                        input.commutations(), 
+                        commutations, 
                         pivot, 
                         total_targets, 
                         num_words_major, 
@@ -340,7 +340,7 @@ namespace QuaSARQ {
                 XZ_TABLE(targets), 
                 XZ_TABLE(input), 
                 input.signs(), 
-                input.commutations(), 
+                commutations, 
                 pivot, 
                 total_targets, 
                 num_words_major, 
@@ -356,7 +356,7 @@ namespace QuaSARQ {
                         XZ_TABLE(targets), 
                         XZ_TABLE(input), 
                         input.signs(), 
-                        input.commutations(), 
+                        commutations, 
                         pivot, 
                         total_targets, 
                         num_words_major, 

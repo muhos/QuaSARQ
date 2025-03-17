@@ -4,6 +4,7 @@
 
 #include "definitions.hpp"
 #include "definitions.cuh"
+#include "commutation.cuh"
 #include "shared.cuh"
 #include "word.cuh"
 #include "grid.cuh"
@@ -77,7 +78,7 @@ namespace QuaSARQ {
 		void 		alloc			(const Tableau<DeviceAllocator>& input, const size_t& config_qubits, const size_t& max_window_bytes);
 		void 		resize			(const Tableau<DeviceAllocator>& input, const size_t& max_window_bytes);
 		void 		scan_blocks		(const size_t& num_blocks, const cudaStream_t& stream);
-		void 		inject_CX		(Tableau<DeviceAllocator>& input, const uint32& pivot, const qubit_t& qubit, const cudaStream_t& stream);
+		void 		inject_CX		(Tableau<DeviceAllocator>& input,  const Commutation* commutations, const uint32& pivot, const qubit_t& qubit, const cudaStream_t& stream);
 
 	};
 

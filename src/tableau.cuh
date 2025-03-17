@@ -4,7 +4,6 @@
 
 #include "table.cuh"
 #include "signs.cuh"
-#include "commutation.cuh"
 
 namespace QuaSARQ {
 
@@ -194,8 +193,6 @@ namespace QuaSARQ {
         sign_t* _ss_data;
         int* _unpacked_ss_data;
 
-        Commutation* _commutations;
-
         size_t _num_qubits;
         size_t _num_qubits_padded;
         size_t _num_words;
@@ -215,6 +212,21 @@ namespace QuaSARQ {
         // Are signs unpacked?
         bool _unpacked_signs;
 
+        void swap(Tableau &lhs, Tableau &rhs) {
+            using std::swap;
+            swap(lhs._xs,                  rhs._xs);
+            swap(lhs._zs,                  rhs._zs);
+            swap(lhs._ss,                  rhs._ss);
+            swap(lhs._h_xs,                rhs._h_xs);
+            swap(lhs._h_zs,                rhs._h_zs);
+            swap(lhs._h_ss,                rhs._h_ss);
+            swap(lhs._xs_data,             rhs._xs_data);
+            swap(lhs._zs_data,             rhs._zs_data);
+            swap(lhs._ss_data,             rhs._ss_data);
+            swap(lhs._unpacked_ss_data,    rhs._unpacked_ss_data);
+            swap(lhs._unpacked_signs,      rhs._unpacked_signs);
+        }
+
     public:
 
         Tableau(ALLOCATOR& allocator) : 
@@ -229,7 +241,6 @@ namespace QuaSARQ {
         ,   _zs_data(nullptr)
         ,   _ss_data(nullptr)
         ,   _unpacked_ss_data(nullptr)
-        ,   _commutations(nullptr)
         ,   _num_qubits(0)
         ,   _num_qubits_padded(0)
         ,   _num_words(0)
@@ -239,6 +250,10 @@ namespace QuaSARQ {
         ,   _num_partitions(1)
         ,   _unpacked_signs(false)
         { }
+
+        void swap_tableaus(Tableau &other) {
+            this->swap(*this, other);
+        }
 
         size_t alloc(const size_t& num_qubits, const size_t& max_window_bytes, const bool& prefix, const bool& measuring, const bool& unpack_signs = false, const size_t& forced_num_partitions = 0) {
             if (!num_qubits)
@@ -311,7 +326,6 @@ namespace QuaSARQ {
             _zs_data = allocator.template allocate<word_t>(_num_words);
             assert(_zs_data != nullptr);
             if (!prefix) {
-                _commutations = allocator.template allocate<Commutation>(_num_qubits);
                 _ss = allocator.template allocate<Signs>(1);
                 assert(_ss != nullptr);
             }
@@ -461,8 +475,6 @@ namespace QuaSARQ {
         inline size_t num_words_major() const { return _num_words_major; }
 
         inline size_t num_words_minor() const { return _num_words_minor; }
-
-        inline Commutation* commutations() const { assert(_commutations != nullptr); return _commutations; }
 
         inline Signs* signs() const { assert(_ss != nullptr); return _ss; }
 

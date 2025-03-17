@@ -78,7 +78,7 @@ void Checker::check_transpose() {
 
     Table out_xs, out_zs;
     tableau.copy_to_host(&out_xs, &out_zs);
-    verify_inline_transpose(in_xs, out_xs, in_zs, out_zs);
+    verify_inline_transpose(in_xs, in_zs, out_xs, out_zs);
 }
 
 void Checker::check_integrity() {

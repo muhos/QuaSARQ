@@ -26,7 +26,7 @@ namespace QuaSARQ {
             SYNCALL;
             tune_kernel_m(mark_anti_commutations, "Marking anit-commutations", 
                             bestblockmarking, bestgridmarking, 
-                            tableau.commutations(), tableau.xtable(), 
+                            commutations, tableau.xtable(), 
                             qubit, num_qubits, num_words_major, num_words_minor);
         }
         TRIM_BLOCK_IN_DEBUG_MODE(bestblockmarking, bestgridmarking, num_qubits, 0);
@@ -34,7 +34,7 @@ namespace QuaSARQ {
         TRIM_GRID_IN_1D(num_qubits, x);
         mark_anti_commutations <<<currentblock, currentgrid, 0, stream>>> 
         (
-            tableau.commutations(), 
+            commutations, 
             tableau.xtable(), 
             qubit, num_qubits, 
             num_words_major, 

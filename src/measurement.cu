@@ -1,6 +1,5 @@
 #include "simulator.hpp"
 #include "measurement.cuh"
-#include "commutation.cuh"
 #include "prefix.cuh"
 #include "tuner.cuh"
 
@@ -121,7 +120,7 @@ namespace QuaSARQ {;
         const size_t num_words_major = tableau.num_words_major();
         check_x_destab<<<1, 1, 0, stream>>>
         (
-            tableau.commutations(),
+            commutations,
             tableau.xtable(),
             new_pivot,
             qubit,
@@ -133,7 +132,7 @@ namespace QuaSARQ {;
                         bestblockinjectswap, bestgridinjectswap, 
                         XZ_TABLE(tableau),
                         tableau.signs(),
-                        tableau.commutations(),
+                        commutations,
                         new_pivot,
                         num_words_major,
                         num_words_minor);
@@ -145,7 +144,7 @@ namespace QuaSARQ {;
         (
             XZ_TABLE(tableau),
             tableau.signs(),
-            tableau.commutations(),
+            commutations,
             new_pivot,
             num_words_major,
             num_words_minor
@@ -226,12 +225,12 @@ namespace QuaSARQ {;
                     random_measures++;
 
                     #if !DEBUG_INJECT_CX
-                    prefix.inject_CX(tableau, new_pivot, qubit, stream);
+                    prefix.inject_CX(tableau, commutations, new_pivot, qubit, stream);
                     #else
                     const uint32 blocksize = 8;
                     const uint32 gridsize = ROUNDUP(num_words_minor, blocksize);
                     inject_CX <<<gridsize, blocksize, 0, stream>>> (XZ_TABLE(tableau), tableau.signs(), 
-                                tableau.commutations(), 
+                                commutations, 
                                 new_pivot, qubit, 
                                 num_qubits, num_words_major, num_words_minor);
                     LASTERR("failed to inject_CX");

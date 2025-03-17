@@ -158,7 +158,7 @@ namespace QuaSARQ {
                 tune_kernel_m(find_new_pivot_and_mark, "New pivots", 
                     bestblocknewpivots, bestgridnewpivots, 
                     sizeof(uint32),
-                    tab.commutations(),
+                    commutations,
                     gpu_circuit.pivots(), 
                     gpu_circuit.gates(), 
                     gpu_circuit.references(), 
@@ -176,7 +176,7 @@ namespace QuaSARQ {
             OPTIMIZESHARED(smem_size, currentblock.x, sizeof(uint32));
             find_new_pivot_and_mark <<< currentgrid, currentblock, smem_size, stream >>> 
             (
-                tab.commutations(), 
+                commutations, 
                 gpu_circuit.pivots(), 
                 gpu_circuit.gates(), 
                 gpu_circuit.references(), 

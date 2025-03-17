@@ -29,6 +29,7 @@ Simulator::Simulator() :
 	, gpu_circuit(gpu_allocator)
     , locker(gpu_allocator)
     , tableau(gpu_allocator)
+    , inv_tableau(gpu_allocator)
     , prefix(gpu_allocator)
 	, config_file(nullptr)
     , config_qubits(0)
@@ -51,6 +52,7 @@ Simulator::Simulator(const string& path) :
     , gpu_circuit(gpu_allocator)
     , locker(gpu_allocator)
     , tableau(gpu_allocator)
+    , inv_tableau(gpu_allocator)
     , prefix(gpu_allocator)
     , config_file(nullptr)
     , config_qubits(0)
@@ -131,7 +133,9 @@ void Simulator::simulate() {
     timer.start();
     num_partitions = tableau.alloc(num_qubits, winfo.max_window_bytes, false, measuring);
     if (measuring) {
+        inv_tableau.alloc(num_qubits, winfo.max_window_bytes, false, measuring);
         prefix.alloc(tableau, config_qubits, winfo.max_window_bytes);
+        commutations = gpu_allocator.allocate<Commutation>(num_qubits);
     }
     const size_t num_qubits_per_partition = num_partitions > 1 ? tableau.num_words_major() * WORD_BITS : num_qubits;
     gpu_circuit.initiate(num_qubits, winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
