@@ -47,6 +47,7 @@ namespace QuaSARQ {
 		if (num_qubits < tableau.num_qubits()) {
 			tableau.resize(num_qubits, winfo.max_window_bytes, false, measuring, true);
 			if (measuring) {
+				inv_tableau.resize(num_qubits, winfo.max_window_bytes, false, measuring, false);
 				prefix.resize(tableau, winfo.max_window_bytes);
 			}
 		}
@@ -60,7 +61,9 @@ namespace QuaSARQ {
 		num_partitions = 1;
 		tableau.alloc(max_num_qubits, winfo.max_window_bytes, false, measuring, true);
 		if (measuring) {
+			inv_tableau.alloc(num_qubits, winfo.max_window_bytes, false, measuring, false);
 			prefix.alloc(tableau, config_qubits, winfo.max_window_bytes);
+			commutations = gpu_allocator.allocate<Commutation>(num_qubits);
 		}
 		gpu_circuit.initiate(num_qubits, winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
 		// Start tuning simulation with max qubits.

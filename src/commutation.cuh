@@ -8,8 +8,8 @@
 namespace QuaSARQ {
 
     struct Commutation {
-        bool commuting : 1;
-        bool anti_commuting : 1;
+        bool commuting;
+        bool anti_commuting;
 
         INLINE_ALL
         Commutation() : commuting(false), anti_commuting(false) {}
