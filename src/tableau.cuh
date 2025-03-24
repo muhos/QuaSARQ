@@ -483,7 +483,7 @@ namespace QuaSARQ {
             }
             if (h_ss != nullptr) {
                 h_ss->alloc_host(_num_qubits_padded, _num_sign_words);
-                CHECK(cudaMemcpy(h_ss->data(), _ss_data, sizeof(sign_t) * _num_words, cudaMemcpyDeviceToHost));
+                CHECK(cudaMemcpy(h_ss->data(), _ss_data, sizeof(sign_t) * _num_sign_words, cudaMemcpyDeviceToHost));
             }
         }
 

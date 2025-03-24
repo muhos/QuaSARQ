@@ -67,8 +67,6 @@ namespace QuaSARQ {
 
     constexpr size_t GATESIZE = sizeof(Gate);
 
-    typedef Vec<qubit_t, input_size_t> Gate_inputs;
-
 }
 
 #endif

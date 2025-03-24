@@ -60,12 +60,6 @@ namespace QuaSARQ {
 		const char* opname, dim3& bestBlock, dim3& bestGrid,
 		pivot_t* pivots, const size_t size);
 
-	void tune_kernel_m(void (*kernel)(Commutation* commutations, ConstTablePointer, 
-		const qubit_t, const size_t, const size_t, const size_t, const size_t),
-		const char* opname, dim3& bestBlock, dim3& bestGrid,
-		Commutation* commutations, ConstTablePointer inv_xs, const qubit_t qubit, 
-		const size_t size, const size_t num_words_major, const size_t num_words_minor, const size_t num_qubits_padded);
-
 	void tune_kernel_m(void (*kernel)(Table*, Table*, Signs*, const Commutation* commutations, 
 		const pivot_t, const size_t, const size_t, const size_t),
 		const char* opname, dim3& bestBlock, dim3& bestGrid,

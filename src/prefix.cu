@@ -111,6 +111,11 @@ namespace QuaSARQ {
         grid_t prefix_tid = threadIdx.x + CONFLICT_FREE_OFFSET(threadIdx.x);
 
 		for_parallel_y(w, num_words_minor) {
+
+            prefix_z[prefix_tid] = 0;
+            prefix_x[prefix_tid] = 0;
+
+            __syncthreads();
 			
 			for_parallel_x(tid, num_blocks) {
 
@@ -126,7 +131,7 @@ namespace QuaSARQ {
                 block_intermediate_prefix_z[bid] = prefix_z[prefix_tid];
                 block_intermediate_prefix_x[bid] = prefix_x[prefix_tid];
 
-                if (threadIdx.x == blockDim.x - 1) {
+                if (threadIdx.x == blockDim.x - 1 || tid == num_blocks - 1) {
                     assert((blockIdx.x * num_words_minor + w) < gridDim.x * num_words_minor);
                     grid_t sub_bid = w * max_sub_blocks + (tid / blockDim.x);
                     subblocks_prefix_z[sub_bid] = blockSum_z;
@@ -203,6 +208,8 @@ namespace QuaSARQ {
             }
         }
         targets.alloc(num_qubits, max_window_bytes, true, false, false);
+        // For verification.
+        checker.alloc(num_qubits);
     }
 
     void Prefix::resize(const Tableau<DeviceAllocator>& input, const size_t& max_window_bytes) {

@@ -131,7 +131,7 @@ void Simulator::generate() {
                 assert(type < NR_GATETYPES);
                 assert(type < 256);    
                 // 0: q (control), 1: target.
-                Gate_inputs gate_inputs;
+                Vec<qubit_t, input_size_t> gate_inputs;
                 gate_inputs.push(q);
                 if (isGate2(type)) {
                     // Get (independent) random target qubit and lock it.

@@ -64,15 +64,15 @@ namespace QuaSARQ {
 
 	#if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
         #define TRIM_BLOCK_IN_DEBUG_MODE(BLOCK, GRID, DATALEN_X, DATALEN_Y) \
-            if (BLOCK.x * BLOCK.y == 1024) { \
+            if (BLOCK.x * BLOCK.y >= 512) { \
 				if (BLOCK.y == 1) { \
-					BLOCK.x = MIN(256, BLOCK.x); \
+					BLOCK.x = MIN(64, BLOCK.x); \
 					OPTIMIZEBLOCKS(GRID.x, DATALEN_X, BLOCK.x); \
 				} \
 				else if (BLOCK.x <= 2) \
-					BLOCK.y = MIN(256, BLOCK.y); \
+					BLOCK.y = MIN(64, BLOCK.y); \
 				else { \
-					BLOCK.x = MIN(32, BLOCK.x); \
+					BLOCK.x = MIN(16, BLOCK.x); \
 					BLOCK.y = MIN(16, BLOCK.y); \
 					OPTIMIZEBLOCKS2D(GRID.x, DATALEN_X, BLOCK.x); \
 					OPTIMIZEBLOCKS2D(GRID.y, DATALEN_Y, BLOCK.y); \

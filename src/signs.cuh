@@ -32,8 +32,6 @@ namespace QuaSARQ {
 
         ~Signs() {
             destroy();
-            RESETSTRUCT(this);
-            _context = UNKNOWN;
         }
 
         void destroy() {
@@ -44,6 +42,7 @@ namespace QuaSARQ {
             _num_words = 0;
             _data = nullptr;
             _unpacked_data = nullptr;
+            _context = UNKNOWN;
         }
 
         // Doesn't allocate memory by itself. Memory should

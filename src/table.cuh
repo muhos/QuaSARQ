@@ -105,10 +105,11 @@ namespace QuaSARQ {
 
         void destroy() {
             if (_context == CPU) {
-                if (_data != nullptr)
+                if (_data != nullptr) {
                     std::free(_data);
+                }
             }
-            RESETSTRUCT(this);
+            _data = nullptr;
             _is_identity = true;
             _context = UNKNOWN;
         }
@@ -135,13 +136,17 @@ namespace QuaSARQ {
                 LOGERRORN("cannot allocate CPU pointer to a pre-allocated GPU pointer.");
                 return;
             }
+            if (_data != nullptr) {
+                assert(_num_words == num_words_major * num_qubits_padded);
+                return;
+            }
             assert(num_qubits_padded);
             assert(num_words_major);
             _num_qubits_padded = num_qubits_padded;
             _num_words_major = num_words_major;
             _num_words_minor = num_words_minor;
             _num_words = _num_words_major * _num_qubits_padded;
-            _data = calloc<word_t>(_num_words);;
+            _data = calloc<word_t>(_num_words);
             _context = CPU;
         }
 

@@ -40,7 +40,7 @@ namespace QuaSARQ {
         LOGGPU("\n");
     }
 
-    NOINLINE_ALL void print_table(const Table& t) {
+    NOINLINE_ALL void print_table(const Table& t, const size_t& total_targets) {
         LOGGPU("%-3s ", "g\\q ");
         size_t bits, rows, cols, word_idx;
         const size_t num_qubits_padded = t.num_qubits_padded();
@@ -49,7 +49,7 @@ namespace QuaSARQ {
         constexpr int ROWMAJOR_STEP = 2;
         if (t.is_rowmajor()) {
             bits = num_words_minor * WORD_BITS;
-            rows = 2 * num_qubits_padded, cols = num_words_minor;
+            rows = total_targets ? total_targets : 2 * num_qubits_padded, cols = num_words_minor;
         }
         else {
             bits = num_words_major * WORD_BITS;

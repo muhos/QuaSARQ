@@ -221,7 +221,7 @@ namespace QuaSARQ {
         }
 
         inline 
-        Gate*       addGate     (const depth_t& depth_level, const byte_t& type, const Gate_inputs& inputs) {
+        Gate*       addGate     (const depth_t& depth_level, const byte_t& type, const Vec<qubit_t, input_size_t>& inputs) {
 			assert(depth_level < MAX_DEPTH);
 			const input_size_t size = inputs.size();
 			gate_ref_t r = (gate_ref_t) buckets_container::alloc(NBUCKETS(size));

@@ -13,7 +13,7 @@ namespace QuaSARQ {
 
     NOINLINE_ALL void print_table_interleave(const Table& t);
 
-    NOINLINE_ALL void print_table(const Table& t);
+    NOINLINE_ALL void print_table(const Table& t, const size_t& total_targets = 0);
 
     NOINLINE_ALL void print_table_signs(const Signs& ss, const size_t& start, const size_t& end);
 
