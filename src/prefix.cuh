@@ -33,7 +33,8 @@ namespace QuaSARQ {
     __device__ word_std_t scan_block_exclusive(word_std_t* data, const int& n);
 
 	struct PrefixChecker {
-		Table h_xs, h_zs; 
+		Table h_xs, h_zs;
+		Table d_xs, d_zs;
 
 		Table h_prefix_xs, h_prefix_zs;
 		Table d_prefix_xs, d_prefix_zs;
@@ -74,10 +75,13 @@ namespace QuaSARQ {
 			d_ss.alloc_host(num_qubits_padded, num_words_major);
 		}
 
-		bool copy_input(Tableau<DeviceAllocator>& other) {
+		bool copy_input(Tableau<DeviceAllocator>& other, const bool& to_device = false) {
 			SYNCALL;
-			h_xs.flag_rowmajor(), h_zs.flag_rowmajor();
-			other.copy_to_host(&h_xs, &h_zs, &h_ss);
+			Table& dest_xs = to_device ? d_xs : h_xs;
+			Table& dest_zs = to_device ? d_zs : h_zs;
+			Signs& dest_ss = to_device ? d_ss : h_ss;
+			dest_xs.flag_rowmajor(), dest_zs.flag_rowmajor();
+			other.copy_to_host(&dest_xs, &dest_zs, &dest_ss);
 			return true;
 		}
 
@@ -131,8 +135,8 @@ namespace QuaSARQ {
 		);
 
 		bool check_prefix_pass_2(
-					Tableau<DeviceAllocator>& other_targets, 
-					Signs *			other_signs,
+			Tableau<DeviceAllocator>& other_targets, 
+			Tableau<DeviceAllocator>& other_input,
 			const   qubit_t 		qubit, 
 			const   uint32   		pivot,
 			const   size_t          total_targets,

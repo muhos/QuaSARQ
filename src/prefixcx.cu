@@ -432,8 +432,8 @@ namespace QuaSARQ {
     }
 
     bool PrefixChecker::check_prefix_pass_2(
-                Tableau<DeviceAllocator>& other_targets, 
-                Signs *			other_signs,
+        Tableau<DeviceAllocator>& other_targets, 
+        Tableau<DeviceAllocator>& other_input,
         const   qubit_t 		qubit, 
         const   uint32   		pivot,
         const   size_t          total_targets,
@@ -448,6 +448,7 @@ namespace QuaSARQ {
         LOGN1(" Checking pass-2 prefix for qubit %d and pivot %d.. ", qubit, pivot);
 
         copy_prefix(other_targets);
+        copy_input(other_input, true);
 
         for (size_t w = 0; w < num_words_minor; w++) {
 
@@ -458,8 +459,6 @@ namespace QuaSARQ {
             word_std_t xc_destab = 0;
             word_std_t xc_and_zt = 0;
             word_std_t not_zc_xor_xt = 0;
-            word_std_t local_destab_sign = 0;
-            word_std_t local_stab_sign = 0;
 
             for (size_t tid_x = 0; tid_x < total_targets; tid_x++) {
             
@@ -499,23 +498,50 @@ namespace QuaSARQ {
                     word_std_t t_destab_word = h_zs[t_destab];
                     xc_and_zt = (c_stab_word & t_destab_word);
                     not_zc_xor_xt = ~(zc_xor_zt ^ word_std_t(h_zs[t_stab]));
-                    local_destab_sign ^= xc_and_zt & not_zc_xor_xt;
+                    h_ss[w] ^= (xc_and_zt & not_zc_xor_xt);
                     
                     // Update Z tableau.
-                    //h_zs[t_stab] ^= c_stab_word;
-                    //zc_destab ^= t_destab_word; // requires collapse.
+                    h_zs[t_stab] ^= c_stab_word;
+                    h_zs[c_destab] ^= t_destab_word;
 
                     // Compute the CX expression for X.
                     c_stab_word = h_xs[c_stab];
                     t_destab_word = h_xs[t_destab];
                     xc_and_zt = (c_stab_word & t_destab_word);
                     not_zc_xor_xt = ~(xc_xor_xt ^ word_std_t(h_xs[t_stab]));
-                    local_stab_sign ^= xc_and_zt & not_zc_xor_xt;
+                    h_ss[w + num_words_minor] ^= (xc_and_zt & not_zc_xor_xt);
 
                     // Update X tableau.
-                    //h_xs[t_stab] ^= c_stab_word;
-                    //xc_destab ^= t_destab_word; // requires collapse.
+                    h_xs[t_stab] ^= c_stab_word;
+                    h_xs[c_destab] ^= t_destab_word;
+
+                    if (h_xs[t_stab] != d_xs[t_stab]) {
+                        LOGERRORN("X-Destabilizer failed at w(%lld), tid(%lld)", w, tid_x);
+                        return false;
+                    }
+                    if (h_zs[t_stab] != d_zs[t_stab]) {
+                        LOGERRORN("Z-Destabilizer failed at w(%lld), tid(%lld)", w, tid_x);
+                        return false;
+                    }
                 }
+            }
+
+            if (h_xs[c_destab] != d_xs[c_destab]) {
+                LOGERRORN("X-Stabilizer failed at w(%lld), pivot(%lld)", w, pivot);
+                return false;
+            }
+            if (h_zs[c_destab] != d_zs[c_destab]) {
+                LOGERRORN("Z-Stabilizer failed at w(%lld), pivot(%lld)", w, pivot);
+                return false;
+            }
+
+            if (h_ss[w] != d_ss[w]) {
+                LOGERRORN("Destabilizer signs failed at w(%lld)", w);
+                return false;
+            }
+            if (h_ss[w + num_words_minor] != d_ss[w + num_words_minor]) {
+                LOGERRORN("Destabilizer signs failed at w(%lld)", w + num_words_minor);
+                return false;
             }
         }
 
@@ -671,7 +697,7 @@ namespace QuaSARQ {
         // Verify pass-1 prefix.
         assert(checker.check_prefix_pass_2(
             targets, 
-            input.signs(),
+            input,
             qubit,
             pivot, 
             total_targets, 
