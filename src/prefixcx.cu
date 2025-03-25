@@ -7,6 +7,75 @@
 
 namespace QuaSARQ {
 
+    // __global__ 
+    // void scan_targets_pass_1(
+    //     Table *             prefix_xs, 
+    //     Table *             prefix_zs, 
+    //     Table *             inv_xs, 
+    //     Table *             inv_zs,
+    //     word_std_t *        block_intermediate_prefix_z,
+    //     word_std_t *        block_intermediate_prefix_x,
+    //     const Commutation * commutations,
+    //     const uint32        c,
+    //     const size_t        total_targets,
+    //     const size_t        num_words_major,
+    //     const size_t        num_words_minor,
+    //     const size_t        num_qubits_padded,
+    //     const size_t        max_blocks)
+    // {
+    //     grid_t padded_block_size = blockDim.x + CONFLICT_FREE_OFFSET(blockDim.x);
+    //     grid_t slice = 2 * padded_block_size;
+    //     word_std_t *shared = SharedMemory<word_std_t>();
+    //     word_std_t *t_prefix_z = shared + threadIdx.y * slice;
+    //     word_std_t *t_prefix_x = t_prefix_z + padded_block_size;
+    //     grid_t prefix_tid = threadIdx.x + CONFLICT_FREE_OFFSET(threadIdx.x);
+
+    //     // Must initialize shared memory in case a partial block is scanned.
+    //     t_prefix_z[prefix_tid] = 0;
+    //     t_prefix_x[prefix_tid] = 0;
+
+    //     __syncthreads();
+
+    //     for_parallel_y(w, num_words_minor) {
+
+    //         const size_t c_destab = TABLEAU_INDEX(w, c);
+
+    //         for_parallel_x(tid_x, total_targets) {
+
+    //             const size_t t = tid_x + c + 1;
+            
+    //             if (commutations[t].anti_commuting) {
+    //                 const size_t t_destab = TABLEAU_INDEX(w, t);
+    //                 t_prefix_z[prefix_tid] = (*inv_zs)[t_destab];
+    //                 t_prefix_x[prefix_tid] = (*inv_xs)[t_destab];
+    //             }
+
+    //             __syncthreads();
+
+    //             word_std_t blockSum_z = scan_block_exclusive(t_prefix_z, blockDim.x);
+    //             word_std_t blockSum_x = scan_block_exclusive(t_prefix_x, blockDim.x);
+
+    //             const size_t word_idx = w * total_targets + tid_x;
+    //             assert(word_idx < prefix_zs->size());
+    //             assert(word_idx < prefix_xs->size());
+    //             // Compute local zc = zc ^ zt, where zt is the zt'prefix.
+    //             (*prefix_zs)[word_idx] = word_std_t((*inv_zs)[c_destab]) ^ t_prefix_z[prefix_tid];
+    //             // Compute local xc = xc ^ xt, where xt is the xt'prefix.
+    //             (*prefix_xs)[word_idx] = word_std_t((*inv_xs)[c_destab]) ^ t_prefix_x[prefix_tid];
+
+    //             if (threadIdx.x == blockDim.x - 1 || tid_x == total_targets - 1) {
+    //                 //printf("threadIdx.x = %d, tid_x = %lld, blockIdx.x = %d\n", threadIdx.x, tid_x, blockIdx.x);
+    //                 assert((blockIdx.x * num_words_minor + w) < gridDim.x * num_words_minor);
+    //                 const size_t bid = w * max_blocks + (tid_x / blockDim.x);
+    //                 block_intermediate_prefix_z[bid] = blockSum_z;
+    //                 block_intermediate_prefix_x[bid] = blockSum_x;
+    //                 //LOGGPU("(w: %-6lld, b: %-6lld)-> block_prefix_z: " B2B_STR "\n", w, (tid_x / blockDim.x), RB2B(word_std_t(block_intermediate_prefix_z[bid])));
+    //             }
+
+    //         }
+    //     }
+    // }
+
     __global__ 
     void scan_targets_pass_1(
         Table *             prefix_xs, 
@@ -16,7 +85,7 @@ namespace QuaSARQ {
         word_std_t *        block_intermediate_prefix_z,
         word_std_t *        block_intermediate_prefix_x,
         const Commutation * commutations,
-        const uint32        c,
+        const uint32        pivot,
         const size_t        total_targets,
         const size_t        num_words_major,
         const size_t        num_words_minor,
@@ -30,48 +99,52 @@ namespace QuaSARQ {
         word_std_t *t_prefix_x = t_prefix_z + padded_block_size;
         grid_t prefix_tid = threadIdx.x + CONFLICT_FREE_OFFSET(threadIdx.x);
 
-        for_parallel_y(w, num_words_minor) {
+        for_parallel_y_tiled(by, num_words_minor) {
 
-            const size_t c_destab = TABLEAU_INDEX(w, c);
+            const grid_t w = threadIdx.y + by * blockDim.y;
 
-            // Must initialize shared memory in case a partial block is scanned.
-            t_prefix_z[prefix_tid] = 0;
-            t_prefix_x[prefix_tid] = 0;
+            for_parallel_x_tiled(bx, total_targets) {
 
-            __syncthreads();
+                const grid_t tid_x = threadIdx.x + bx * blockDim.x;
+                
+                word_std_t z = 0;
+                word_std_t x = 0;
 
-            for_parallel_x(tid_x, total_targets) {
-
-                const size_t t = tid_x + c + 1;
-            
-                if (commutations[t].anti_commuting) {
-                    const size_t t_destab = TABLEAU_INDEX(w, t);
-                    t_prefix_z[prefix_tid] = (*inv_zs)[t_destab];
-                    t_prefix_x[prefix_tid] = (*inv_xs)[t_destab];
+                if (w < num_words_minor && tid_x < total_targets) {
+                    const size_t t = tid_x + pivot + 1;
+                    if (commutations[t].anti_commuting) {
+                        const size_t t_destab = TABLEAU_INDEX(w, t);
+                        z = (*inv_zs)[t_destab];
+                        x = (*inv_xs)[t_destab];
+                    }
                 }
+
+                t_prefix_z[prefix_tid] = z;
+                t_prefix_x[prefix_tid] = x;
 
                 __syncthreads();
 
                 word_std_t blockSum_z = scan_block_exclusive(t_prefix_z, blockDim.x);
                 word_std_t blockSum_x = scan_block_exclusive(t_prefix_x, blockDim.x);
 
-                const size_t word_idx = w * total_targets + tid_x;
-                assert(word_idx < prefix_zs->size());
-                assert(word_idx < prefix_xs->size());
-                // Compute local zc = zc ^ zt, where zt is the zt'prefix.
-                (*prefix_zs)[word_idx] = word_std_t((*inv_zs)[c_destab]) ^ t_prefix_z[prefix_tid];
-                // Compute local xc = xc ^ xt, where xt is the xt'prefix.
-                (*prefix_xs)[word_idx] = word_std_t((*inv_xs)[c_destab]) ^ t_prefix_x[prefix_tid];
-
-                if (threadIdx.x == blockDim.x - 1 || tid_x == total_targets - 1) {
-                    //printf("threadIdx.x = %d, tid_x = %lld, blockIdx.x = %d\n", threadIdx.x, tid_x, blockIdx.x);
-                    assert((blockIdx.x * num_words_minor + w) < gridDim.x * num_words_minor);
-                    const size_t bid = w * max_blocks + (tid_x / blockDim.x);
-                    block_intermediate_prefix_z[bid] = blockSum_z;
-                    block_intermediate_prefix_x[bid] = blockSum_x;
-                    //LOGGPU("(w: %-6lld, b: %-6lld)-> block_prefix_z: " B2B_STR "\n", w, (tid_x / blockDim.x), RB2B(word_std_t(block_intermediate_prefix_z[bid])));
+                if (w < num_words_minor && tid_x < total_targets) {
+                    const size_t word_idx = w * total_targets + tid_x;
+                    assert(word_idx < prefix_zs->size());
+                    assert(word_idx < prefix_xs->size());
+                    size_t c_destab = TABLEAU_INDEX(w, pivot);
+                    (*prefix_zs)[word_idx] = word_std_t((*inv_zs)[c_destab]) ^ t_prefix_z[prefix_tid];
+                    (*prefix_xs)[word_idx] = word_std_t((*inv_xs)[c_destab]) ^ t_prefix_x[prefix_tid];
                 }
 
+                // if (w == 8)
+                //     LOGGPU("(w: %-6lld, b: %-6lld)-> blockSum_z: " B2B_STR "\n", w, bx, RB2B(blockSum_z));
+
+                if (w < num_words_minor && threadIdx.x == blockDim.x - 1) {
+                    assert((blockIdx.x * num_words_minor + w) < gridDim.x * num_words_minor);
+                    const size_t bid = w * max_blocks + bx;
+                    block_intermediate_prefix_z[bid] = blockSum_z;
+                    block_intermediate_prefix_x[bid] = blockSum_x;
+                }
             }
         }
     }
@@ -337,8 +410,8 @@ namespace QuaSARQ {
                         h_prefix_zs[word_idx] = word_std_t(h_zs[c_destab]) ^ t_prefix_z[tid_x];
                         h_prefix_xs[word_idx] = word_std_t(h_xs[c_destab]) ^ t_prefix_x[tid_x];
 
-                        // LOGGPU("(w: %-6lld, t: %-6lld)-> h_prefix_z: " B2B_STR "\n", w, global_tid_x, RB2B(word_std_t(h_prefix_zs[word_idx])));
-                        // LOGGPU("(w: %-6lld, t: %-6lld)-> d_prefix_z: " B2B_STR "\n", w, global_tid_x, RB2B(word_std_t(d_prefix_zs[word_idx])));
+                        //LOGGPU("(w: %-6lld, t: %-6lld)-> h_prefix_z: " B2B_STR "\n", w, global_tid_x, RB2B(word_std_t(h_prefix_zs[word_idx])));
+                        //LOGGPU("(w: %-6lld, t: %-6lld)-> d_prefix_z: " B2B_STR "\n", w, global_tid_x, RB2B(word_std_t(d_prefix_zs[word_idx])));
 
                         if (d_prefix_xs[word_idx] != h_prefix_xs[word_idx]) {
                             LOGERRORN("X-FAILED at w(%lld) and tid(%lld)", w, global_tid_x);
@@ -356,8 +429,10 @@ namespace QuaSARQ {
                     h_block_intermediate_prefix_z[bid] = blockSum_z;
                     h_block_intermediate_prefix_x[bid] = blockSum_x;
 
-                    //LOGGPU("(w: %-6lld, b: %-6lld)-> h_block_prefix_z: " B2B_STR "\n", w, blockIdx, RB2B(word_std_t(h_block_intermediate_prefix_z[bid])));
-                    //LOGGPU("(w: %-6lld, b: %-6lld)-> d_block_prefix_z: " B2B_STR "\n", w, blockIdx, RB2B(word_std_t(d_block_intermediate_prefix_z[bid])));
+                    // if (w == 8) {
+                    //     LOGGPU("(w: %-6lld, b: %-6lld)-> h_block_prefix_z: " B2B_STR "\n", w, blockIdx, RB2B(word_std_t(h_block_intermediate_prefix_z[bid])));
+                    //     LOGGPU("(w: %-6lld, b: %-6lld)-> d_block_prefix_z: " B2B_STR "\n", w, blockIdx, RB2B(word_std_t(d_block_intermediate_prefix_z[bid])));
+                    // }
                     if (h_block_intermediate_prefix_x[bid] != d_block_intermediate_prefix_x[bid]) {
                         LOGERRORN("X-FAILED at w(%lld) and block(%lld)", w, blockIdx);
                         return false;
@@ -375,7 +450,7 @@ namespace QuaSARQ {
         return true;
     }
 
-    bool PrefixChecker::check_prefix_single_pass(
+    bool PrefixChecker::check_prefix_intermediate_pass(
         const   word_std_t* other_zs,
         const   word_std_t* other_xs,
         const   qubit_t  qubit, 
@@ -386,15 +461,17 @@ namespace QuaSARQ {
     ) {
         SYNCALL;
 
-        LOGN1(" Checking single-pass prefix for qubit %d and pivot %d.. ", qubit, pivot);
+        LOGN1(" Checking pass-x prefix for qubit %d and pivot %d.. ", qubit, pivot);
 
         // LOG0("");
         // LOG0("Before Scan:");
         // for (size_t w = 0; w < num_words_minor; w++) {
-        //     for (size_t tid_x = 0; tid_x < pass_1_gridsize; tid_x++) {
-        //         size_t bid = w * max_blocks + tid_x;
-        //         LOGGPU("(w: %-6lld, b: %-6lld)-> h_block_prefix_z: " B2B_STR "\n", w, tid_x, RB2B(word_std_t(h_block_intermediate_prefix_z[bid])));
-        //         LOGGPU("(w: %-6lld, b: %-6lld)-> d_block_prefix_z: " B2B_STR "\n", w, tid_x, RB2B(word_std_t(d_block_intermediate_prefix_z[bid])));
+        //     if (w == 8) {
+        //         for (size_t tid_x = 0; tid_x < pass_1_gridsize; tid_x++) {
+        //             size_t bid = w * max_blocks + tid_x;
+        //             LOGGPU("(w: %-6lld, b: %-6lld)-> h_block_prefix_z: " B2B_STR "\n", w, tid_x, RB2B(word_std_t(h_block_intermediate_prefix_z[bid])));
+        //             LOGGPU("(w: %-6lld, b: %-6lld)-> d_block_prefix_z: " B2B_STR "\n", w, tid_x, RB2B(word_std_t(d_block_intermediate_prefix_z[bid])));
+        //         }
         //     }
         // }
 
@@ -403,17 +480,25 @@ namespace QuaSARQ {
         //LOG0("After Scan:");
 
         // Scan intermediate blocks.
+        const int nextpow2_blocksize = nextPow2(pass_1_gridsize);
         for (size_t w = 0; w < num_words_minor; w++) {
             word_std_t* block_z = h_block_intermediate_prefix_z + w * max_blocks;
             word_std_t* block_x = h_block_intermediate_prefix_x + w * max_blocks;
-            scan_block_exclusive_cpu(block_z, int(pass_1_gridsize));
-            scan_block_exclusive_cpu(block_x, int(pass_1_gridsize));
+
+            for (size_t tid_x = pass_1_gridsize; tid_x < nextpow2_blocksize; tid_x++) {
+                block_z[tid_x] = 0, block_x[tid_x] = 0;
+            }
+
+            scan_block_exclusive_cpu(block_z, nextpow2_blocksize);
+            scan_block_exclusive_cpu(block_x, nextpow2_blocksize);
 
             for (size_t tid_x = 0; tid_x < pass_1_gridsize; tid_x++) {
                 size_t bid = w * max_blocks + tid_x;
 
-                //LOGGPU("(w: %-6lld, b: %-6lld)-> h_block_prefix_z: " B2B_STR "\n", w, tid_x, RB2B(word_std_t(h_block_intermediate_prefix_z[bid])));
-                //LOGGPU("(w: %-6lld, b: %-6lld)-> d_block_prefix_z: " B2B_STR "\n", w, tid_x, RB2B(word_std_t(d_block_intermediate_prefix_z[bid])));
+                // if (w == 8) {
+                //     LOGGPU("(w: %-6lld, b: %-6lld)-> h_block_prefix_z: " B2B_STR "\n", w, tid_x, RB2B(word_std_t(h_block_intermediate_prefix_z[bid])));
+                //     LOGGPU("(w: %-6lld, b: %-6lld)-> d_block_prefix_z: " B2B_STR "\n", w, tid_x, RB2B(word_std_t(d_block_intermediate_prefix_z[bid])));
+                // }
 
                 if (h_block_intermediate_prefix_x[bid] != d_block_intermediate_prefix_x[bid]) {
                     LOGERRORN("X-FAILED at w(%lld) and i(%lld)", w, tid_x);
@@ -540,7 +625,7 @@ namespace QuaSARQ {
                 return false;
             }
             if (h_ss[w + num_words_minor] != d_ss[w + num_words_minor]) {
-                LOGERRORN("Destabilizer signs failed at w(%lld)", w + num_words_minor);
+                LOGERRORN("Stabilizer signs failed at w(%lld)", w + num_words_minor);
                 return false;
             }
         }
@@ -586,7 +671,6 @@ namespace QuaSARQ {
             );
             SYNCALL;
         }
-        SYNCALL;
         TRIM_BLOCK_IN_DEBUG_MODE(bestblockinjectprepare, bestgridinjectprepare, total_targets, num_words_minor);
         currentblock = bestblockinjectprepare, currentgrid = bestgridinjectprepare;
         TRIM_GRID_IN_XY(total_targets, num_words_minor);
@@ -632,17 +716,17 @@ namespace QuaSARQ {
         ));
 
         // Intermeditae scan of blocks resulted in pass 1.
-        scan_blocks(nextPow2(pass_1_gridsize), stream);
+        scan_blocks(nextPow2(pass_1_gridsize), pass_1_blocksize, stream);
 
-        // Verify single-pass prefix.
-        assert(checker.check_prefix_single_pass(
+        // Verify intermediate-pass prefix.
+        assert(checker.check_prefix_intermediate_pass(
             zblocks(), 
             xblocks(),
             qubit,
             pivot,
             num_words_minor,
             max_intermediate_blocks,
-            nextPow2(pass_1_gridsize)
+            pass_1_gridsize
         ));
 
         // Second phase of injecting CX.
@@ -694,7 +778,7 @@ namespace QuaSARQ {
             SYNC(stream);
         }
 
-        // Verify pass-1 prefix.
+        // Verify pass-2 prefix.
         assert(checker.check_prefix_pass_2(
             targets, 
             input,

@@ -72,19 +72,29 @@ namespace QuaSARQ {
         word_std_t* prefix_x = prefix_z + padded_block_size;
         grid_t prefix_tid = threadIdx.x + CONFLICT_FREE_OFFSET(threadIdx.x);
 
-        for_parallel_y(w, num_words_minor) {
+        for_parallel_y_tiled(by, num_words_minor) {
 
-            const size_t bid = w * max_blocks + threadIdx.x;
+            const grid_t w = threadIdx.y + by * blockDim.y;
+            
+            word_std_t z = 0;
+            word_std_t x = 0;
 
-            prefix_z[prefix_tid] = (threadIdx.x < num_chunks) ? block_intermediate_prefix_z[bid] : 0;
-			prefix_x[prefix_tid] = (threadIdx.x < num_chunks) ? block_intermediate_prefix_x[bid] : 0;
+            if (w < num_words_minor && threadIdx.x < num_chunks) {
+                const size_t bid = w * max_blocks + threadIdx.x;
+                z = block_intermediate_prefix_z[bid];
+			    x = block_intermediate_prefix_x[bid];
+            }
+
+            prefix_z[prefix_tid] = z;
+            prefix_x[prefix_tid] = x;
 
             __syncthreads();
 
             scan_block_exclusive(prefix_z, num_chunks);
             scan_block_exclusive(prefix_x, num_chunks);
             
-            if (threadIdx.x < num_chunks) {
+            if (w < num_words_minor && threadIdx.x < num_chunks) {
+                const size_t bid = w * max_blocks + threadIdx.x;
                 block_intermediate_prefix_z[bid] = prefix_z[prefix_tid];
                 block_intermediate_prefix_x[bid] = prefix_x[prefix_tid];
             }
@@ -110,30 +120,40 @@ namespace QuaSARQ {
         word_std_t* prefix_x = prefix_z + padded_block_size;
         grid_t prefix_tid = threadIdx.x + CONFLICT_FREE_OFFSET(threadIdx.x);
 
-		for_parallel_y(w, num_words_minor) {
+		for_parallel_y_tiled(by, num_words_minor) {
 
-            prefix_z[prefix_tid] = 0;
-            prefix_x[prefix_tid] = 0;
-
-            __syncthreads();
+            const grid_t w = threadIdx.y + by * blockDim.y;
 			
-			for_parallel_x(tid, num_blocks) {
+			for_parallel_x_tiled(bx, num_blocks) {
 
-                const size_t bid = w * max_blocks + tid;
-                prefix_z[prefix_tid] = block_intermediate_prefix_z[bid];
-                prefix_x[prefix_tid] = block_intermediate_prefix_x[bid];
+                const grid_t tid_x = threadIdx.x + bx * blockDim.x;
+                
+                word_std_t z = 0;
+                word_std_t x = 0;
 
+                if (w < num_words_minor && tid_x < num_blocks) {
+                    const size_t bid = w * max_blocks + tid_x;
+                    z = block_intermediate_prefix_z[bid];
+                    x = block_intermediate_prefix_x[bid];
+                }
+
+                prefix_z[prefix_tid] = z;
+                prefix_x[prefix_tid] = x;
+                
                 __syncthreads();
 
                 word_std_t blockSum_z = scan_block_exclusive(prefix_z, blockDim.x);
                 word_std_t blockSum_x = scan_block_exclusive(prefix_x, blockDim.x);
 
-                block_intermediate_prefix_z[bid] = prefix_z[prefix_tid];
-                block_intermediate_prefix_x[bid] = prefix_x[prefix_tid];
+                if (w < num_words_minor && tid_x < num_blocks) {
+                    const size_t bid = w * max_blocks + tid_x;
+                    block_intermediate_prefix_z[bid] = prefix_z[prefix_tid];
+                    block_intermediate_prefix_x[bid] = prefix_x[prefix_tid];
+                }
 
-                if (threadIdx.x == blockDim.x - 1 || tid == num_blocks - 1) {
+                if (w < num_words_minor && threadIdx.x == blockDim.x - 1) {
                     assert((blockIdx.x * num_words_minor + w) < gridDim.x * num_words_minor);
-                    grid_t sub_bid = w * max_sub_blocks + (tid / blockDim.x);
+                    grid_t sub_bid = w * max_sub_blocks + bx;
                     subblocks_prefix_z[sub_bid] = blockSum_z;
                     subblocks_prefix_x[sub_bid] = blockSum_x;
                 }
@@ -154,7 +174,6 @@ namespace QuaSARQ {
         const size_t pass_1_blocksize
     )
     {
-
         for_parallel_y(w, num_words_minor) {
 
             for_parallel_x(tid, num_blocks) {
@@ -232,7 +251,7 @@ namespace QuaSARQ {
         targets.resize(num_qubits, max_window_bytes, true, false, false);
     }
 
-    void Prefix::scan_blocks(const size_t& num_blocks, const cudaStream_t& stream) {
+    void Prefix::scan_blocks(const size_t& num_blocks, const size_t& inject_pass_1_blocksize, const cudaStream_t& stream) {
         assert(num_blocks <= max_intermediate_blocks);
         assert(nextPow2(num_blocks) == num_blocks);
         dim3 currentblock, currentgrid;
@@ -293,13 +312,24 @@ namespace QuaSARQ {
                 );
                 SYNCALL;
             }
+            assert(bestblockprefixprepare.x);
+            bestgridprefixprepare.x = ROUNDUP(num_blocks, bestblockprefixprepare.x);
+            while (bestgridprefixprepare.x > MIN_SINGLE_PASS_THRESHOLD &&
+                   bestblockprefixprepare.x <= MIN_SINGLE_PASS_THRESHOLD) {
+                bestblockprefixprepare.x <<= 1;
+                bestgridprefixprepare.x = ROUNDUP(num_blocks, bestblockprefixprepare.x);
+            }
+            if (bestblockprefixprepare.y == 1) {
+                bestblockprefixprepare.y = 2;
+                OPTIMIZEBLOCKS2D(bestgridprefixprepare.y, num_words_minor, bestblockprefixprepare.y);
+            }
             TRIM_BLOCK_IN_DEBUG_MODE(bestblockprefixprepare, bestgridprefixprepare, num_blocks, num_words_minor);
             currentblock = bestblockprefixprepare, currentgrid = bestgridprefixprepare;
             TRIM_GRID_IN_XY(num_blocks, num_words_minor);
             const size_t pass_1_blocksize = currentblock.x;
             const size_t pass_1_gridsize = ROUNDUP(num_blocks, pass_1_blocksize);
             OPTIMIZESHARED(p1_smem_size, currentblock.y * (currentblock.x + CONFLICT_FREE_OFFSET(currentblock.x)), 2 * sizeof(word_std_t));
-            LOGN2(2, " Pass-1 scanning %lld words with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", num_blocks, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
+            LOGN2(2, "  Pass-1 scanning %lld words with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", num_blocks, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
             scan_blocks_pass_1 <<<currentgrid, currentblock, p1_smem_size, stream>>> (
                 block_intermediate_prefix_z, 
                 block_intermediate_prefix_x, 
@@ -333,11 +363,15 @@ namespace QuaSARQ {
                 );
                 SYNCALL;
             }
+            if (bestblockprefixsingle.y == 1) {
+                bestblockprefixsingle.y = bestblockprefixprepare.y;
+                bestgridprefixsingle.y = bestgridprefixprepare.y;
+            }
             TRIM_Y_BLOCK_IN_DEBUG_MODE(bestblockprefixsingle, bestgridprefixsingle, num_words_minor);
             TRIM_GRID_IN_2D(bestblockprefixsingle, bestgridprefixsingle, num_words_minor, y);
             currentblock = bestblockprefixsingle, currentgrid = bestgridprefixsingle;
             OPTIMIZESHARED(scan_blocks_smem_size, currentblock.y * (currentblock.x + CONFLICT_FREE_OFFSET(currentblock.x)), 2 * sizeof(word_std_t));
-            LOGN2(2, " Single-pass scanning %lld chunks with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", pass_1_gridsize, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
+            LOGN2(2, "  Pass-x scanning %lld chunks with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", pass_1_gridsize, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
             scan_blocks_single_pass <<<currentgrid, currentblock, scan_blocks_smem_size, stream>>> (
                 subblocks_prefix_z, 
                 subblocks_prefix_x, 
@@ -366,6 +400,14 @@ namespace QuaSARQ {
                     pass_1_blocksize
                 );
                 SYNCALL;
+            }
+            if (bestblockprefixfinal.y == 1) {
+                bestblockprefixfinal.y = bestblockprefixprepare.y;
+                bestgridprefixfinal.y = bestgridprefixprepare.y;
+            }
+            if (bestblockprefixfinal.x == 1) {
+                bestblockprefixfinal.x = bestblockprefixprepare.x;
+                bestgridprefixfinal.x = bestgridprefixprepare.x;
             }
             TRIM_BLOCK_IN_DEBUG_MODE(bestblockprefixfinal, bestgridprefixfinal, num_blocks, num_words_minor);
             currentblock = bestblockprefixfinal, currentgrid = bestgridprefixfinal;

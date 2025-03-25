@@ -31,11 +31,17 @@ namespace QuaSARQ {
 	#define for_parallel_x(IDX, SIZE) \
 		for (grid_t IDX = global_tx, stride = stride_x, data_size = grid_t(SIZE); IDX < data_size; IDX += stride)
 
+	#define for_parallel_x_tiled(BIDX, SIZE) \
+		for (grid_t BIDX = blockIdx.x, MAX_BLOCKS_X = ROUNDUP(SIZE, blockDim.x); BIDX < MAX_BLOCKS_X; BIDX += gridDim.x)
+
 	#define for_parallel_y(IDX, SIZE) \
 		for (grid_t IDX = global_ty, stride = stride_y, data_size = grid_t(SIZE); IDX < data_size; IDX += stride)
 
 	#define for_parallel_y_off(IDX, OFF, SIZE) \
 		for (grid_t IDX = global_ty + OFF, stride = stride_y, data_size = grid_t(SIZE); IDX < data_size; IDX += stride)
+
+	#define for_parallel_y_tiled(BIDX, SIZE) \
+		for (grid_t BIDX = blockIdx.y, MAX_BLOCKS_Y = ROUNDUP(SIZE, blockDim.y); BIDX < MAX_BLOCKS_Y; BIDX += gridDim.y)
 
 	// macros for blocks calculation
 	#define ROUNDUP(DATALEN, DIVISOR) ((grid_t(DATALEN) + (DIVISOR) - 1) / (DIVISOR))

@@ -92,29 +92,29 @@ namespace QuaSARQ {;
     }
 
     __global__ 
-    void inject_Swap(
+    void inject_swap_k(
                 Table*          inv_xs, 
                 Table*          inv_zs,
                 Signs*          inv_ss, 
         const   Commutation*    commutations, 
-        const   pivot_t         c,
+        const   pivot_t         pivot,
         const   size_t          num_words_major, 
         const   size_t          num_words_minor,
         const   size_t          num_qubits_padded) 
     {
-        assert(c != INVALID_PIVOT);
+        assert(pivot != INVALID_PIVOT);
         word_t* xs = inv_xs->data();
         word_t* zs = inv_zs->data();
         sign_t* ss = inv_ss->data();
 
         for_parallel_x(w, num_words_minor) { 
-            const size_t c_destab = TABLEAU_INDEX(w, c);
+            const size_t c_destab = TABLEAU_INDEX(w, pivot);
             const size_t c_stab = c_destab + TABLEAU_STAB_OFFSET;
             assert(c_destab < inv_zs->size());
             assert(c_stab < inv_zs->size());
             assert(c_destab < inv_xs->size());
             assert(c_stab < inv_xs->size());
-            if (commutations[c].commuting) {
+            if (commutations[pivot].commuting) {
                 do_YZ_Swap(zs[c_stab], zs[c_destab], ss[w]);
                 do_YZ_Swap(xs[c_stab], xs[c_destab], ss[w + num_words_minor]);
             }
@@ -125,7 +125,80 @@ namespace QuaSARQ {;
         }
     }
 
-    void Simulator::inject_swap(const pivot_t& new_pivot, const qubit_t& qubit, const cudaStream_t& stream) {
+    bool check_inject_swap(
+                Table&          h_xs, 
+                Table&          h_zs,
+                Signs&          h_ss, 
+                Table&          d_xs, 
+                Table&          d_zs,
+                Signs&          d_ss, 
+        const   Vec<Commutation>& d_commutations,
+        const   qubit_t         qubit,
+        const   pivot_t         pivot,
+        const   size_t          num_words_major, 
+        const   size_t          num_words_minor,
+        const   size_t          num_qubits_padded) 
+    {
+        SYNCALL;
+
+        LOGN1(" Checking inject-swap for qubit %d and pivot %d.. ", qubit, pivot);
+
+        assert(pivot != INVALID_PIVOT);
+        const size_t q_w = WORD_OFFSET(qubit);
+        const word_std_t q_mask = BITMASK_GLOBAL(qubit);
+        const size_t word_idx = TABLEAU_INDEX(q_w, pivot);
+        const word_std_t qubit_word = h_xs[word_idx];
+        const bool commuting = bool(qubit_word & q_mask);
+
+        if (commuting != d_commutations[pivot].commuting) {
+            LOGERRORN("Commuting bit not identical at pivot(%lld)", pivot);
+            return false;
+        }
+
+        for (size_t w = 0; w < num_words_minor; w++) { 
+            const size_t c_destab = TABLEAU_INDEX(w, pivot);
+            const size_t c_stab = c_destab + TABLEAU_STAB_OFFSET;
+            assert(c_destab < h_zs.size());
+            assert(c_stab < h_zs.size());
+            assert(c_destab < h_xs.size());
+            assert(c_stab < h_xs.size());
+            if (commuting) {
+                do_YZ_Swap(h_zs[c_stab], h_zs[c_destab], h_ss[w]);
+                do_YZ_Swap(h_xs[c_stab], h_xs[c_destab], h_ss[w + num_words_minor]);
+            }
+            else {
+                do_XZ_Swap(h_zs[c_stab], h_zs[c_destab], h_ss[w]);
+                do_XZ_Swap(h_xs[c_stab], h_xs[c_destab], h_ss[w + num_words_minor]);
+            }
+        }
+
+        for (size_t w = 0; w < num_words_minor; w++) { 
+            const size_t c_destab = TABLEAU_INDEX(w, pivot);
+            const size_t c_stab = c_destab + TABLEAU_STAB_OFFSET;
+            if (h_xs[c_destab] != d_xs[c_destab]) {
+                LOGERRORN("X-Stabilizer failed at w(%lld), pivot(%lld)", w, pivot);
+                return false;
+            }
+            if (h_zs[c_destab] != d_zs[c_destab]) {
+                LOGERRORN("Z-Stabilizer failed at w(%lld), pivot(%lld)", w, pivot);
+                return false;
+            }
+            if (h_ss[w] != d_ss[w]) {
+                LOGERRORN("Destabilizer signs failed at w(%lld)", w);
+                return false;
+            }
+            if (h_ss[w + num_words_minor] != d_ss[w + num_words_minor]) {
+                LOGERRORN("Stabilizer signs failed at w(%lld)", w + num_words_minor);
+                return false;
+            }
+        }
+
+        LOG0("PASSED");
+        
+        return true;
+    }
+
+    void Simulator::inject_swap(const pivot_t& pivot, const qubit_t& qubit, const cudaStream_t& stream) {
         const size_t num_words_minor = tableau.num_words_minor();
         const size_t num_words_major = tableau.num_words_major();
         const size_t num_qubits_padded = tableau.num_qubits_padded();
@@ -134,19 +207,19 @@ namespace QuaSARQ {;
         (
             commutations,
             tableau.xtable(),
-            new_pivot,
+            pivot,
             qubit,
             num_words_major,
             num_qubits_padded
         );
         if (options.tune_injectswap) {
             SYNCALL;
-            tune_kernel_m(inject_Swap, "injecting swap", 
+            tune_kernel_m(inject_swap_k, "injecting swap", 
                         bestblockinjectswap, bestgridinjectswap, 
                         XZ_TABLE(tableau),
                         tableau.signs(),
                         commutations,
-                        new_pivot,
+                        pivot,
                         num_words_major,
                         num_words_minor,
                         num_qubits_padded);
@@ -154,16 +227,37 @@ namespace QuaSARQ {;
         TRIM_BLOCK_IN_DEBUG_MODE(bestblockinjectswap, bestgridinjectswap, num_words_minor, 0);
         dim3 currentblock = bestblockinjectswap, currentgrid = bestgridinjectswap;
         TRIM_GRID_IN_1D(num_words_minor, x);
-        inject_Swap<<<currentgrid, currentblock, 0, stream>>>
+        inject_swap_k<<<currentgrid, currentblock, 0, stream>>>
         (
             XZ_TABLE(tableau),
             tableau.signs(),
             commutations,
-            new_pivot,
+            pivot,
             num_words_major,
             num_words_minor,
             num_qubits_padded
         );
+        if (options.sync) {
+            LASTERR("failed to inject swap");
+            SYNC(stream);
+        }
+
+        assert(prefix.get_checker().copy_commutations(commutations, num_qubits));
+        assert(prefix.get_checker().copy_input(tableau, true));
+        assert(check_inject_swap(
+            prefix.get_checker().h_xs,
+            prefix.get_checker().h_zs,
+            prefix.get_checker().h_ss,
+            prefix.get_checker().d_xs,
+            prefix.get_checker().d_zs,
+            prefix.get_checker().d_ss,
+            prefix.get_checker().d_commutations,
+            qubit,
+            pivot,
+            num_words_major,
+            num_words_minor,
+            num_qubits_padded
+        ));
     }
 
     #define DEBUG_INJECT_CX 0

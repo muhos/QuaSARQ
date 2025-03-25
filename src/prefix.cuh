@@ -58,6 +58,8 @@ namespace QuaSARQ {
 		, 	signs(false)
 		{}
 
+		~PrefixChecker() {}
+
 		void alloc(const size_t& num_qubits) {
 			h_commutations.resize(num_qubits);
 			d_commutations.resize(num_qubits);
@@ -108,7 +110,7 @@ namespace QuaSARQ {
 			return true;
 		}
 
-		bool check_prefix_single_pass(
+		bool check_prefix_intermediate_pass(
 			const   word_std_t* other_zs,
 			const   word_std_t* other_xs,
 			const   qubit_t  qubit, 
@@ -192,12 +194,14 @@ namespace QuaSARQ {
 		,   pivot(0)
 		{}
 
+		PrefixChecker& get_checker		() { return checker; }
+
 		word_std_t* zblocks			() { assert(block_intermediate_prefix_z != nullptr); return block_intermediate_prefix_z; }
 		word_std_t* xblocks			() { assert(block_intermediate_prefix_x != nullptr); return block_intermediate_prefix_x; }
 
 		void 		alloc			(const Tableau<DeviceAllocator>& input, const size_t& config_qubits, const size_t& max_window_bytes);
 		void 		resize			(const Tableau<DeviceAllocator>& input, const size_t& max_window_bytes);
-		void 		scan_blocks		(const size_t& num_blocks, const cudaStream_t& stream);
+		void 		scan_blocks		(const size_t& num_blocks, const size_t& inject_pass_1_blocksize, const cudaStream_t& stream);
 		void 		inject_CX		(Tableau<DeviceAllocator>& input,  const Commutation* commutations, const uint32& pivot, const qubit_t& qubit, const cudaStream_t& stream);
 
 	};
