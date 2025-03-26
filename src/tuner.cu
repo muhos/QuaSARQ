@@ -1,5 +1,6 @@
 #include "simulator.hpp"
 #include "tuner.cuh"
+#include "prefixcxcub.cuh"
 
 namespace QuaSARQ {
 
@@ -100,6 +101,21 @@ namespace QuaSARQ {
 			cutimer.start(); \
 			kernel <<< grid, block, SHAREDSIZE >>> ( __VA_ARGS__ ); \
 			LASTERR("failed to launch kernel for benchmarking"); \
+			SYNCALL; \
+			cutimer.stop(); \
+			runtime += cutimer.time(); \
+		} \
+		AVGTIME = (runtime / NSAMPLES); \
+	} while(0)
+
+	#define BENCHMARK_CALL(AVGTIME, NSAMPLES, SHAREDSIZE, CALL, ...) \
+	do { \
+		double runtime = 0; \
+		for (size_t sample = 0; sample < NSAMPLES; sample++) { \
+			cutimer.start(); \
+			CALL(__VA_ARGS__, block, grid, 0); \
+			LASTERR("failed to launch kernel for benchmarking"); \
+			SYNCALL; \
 			cutimer.stop(); \
 			runtime += cutimer.time(); \
 		} \
@@ -328,7 +344,7 @@ namespace QuaSARQ {
 		} \
 	} while(0)
 
-	#define TUNE_2D_PREFIX(SKIP_GRID_CHECK, ...) \
+	#define TUNE_2D_PREFIX(SKIP_GRID_CHECK, CALL, ...) \
 	do { \
 		if (bestBlock.x > 1 || bestGrid.x > 1 || bestBlock.y > 1 || bestGrid.y > 1) { \
 			LOG2(3, "\nBest configuration: block(%d, %d), grid(%d, %d) will be used without tuning.", bestBlock.x, bestBlock.y, bestGrid.x, bestGrid.y); \
@@ -370,7 +386,7 @@ namespace QuaSARQ {
 							dim3 grid((uint32)blocksX, (uint32)blocksY); \
 							double avgRuntime = 0; \
 							if (PRINT_PROGRESS_2D) LOG2(1, "  Tuning for block(x:%u, y:%u) and grid(x:%u, y:%u), pass_1_gridsize: %lld", block.x, block.y, grid.x, grid.y, pass_1_gridsize); fflush(stdout); fflush(stderr); \
-							BENCHMARK_KERNEL(avgRuntime, NSAMPLES, shared_size, ## __VA_ARGS__); \
+							BENCHMARK_CALL(avgRuntime, NSAMPLES, shared_size, CALL, ## __VA_ARGS__); \
 							BEST_CONFIG(avgRuntime, minRuntime, bestGrid, bestBlock, early_exit); \
 						} \
 					} \
@@ -628,16 +644,16 @@ namespace QuaSARQ {
 		const size_t& max_sub_blocks) 
 	{
 		const char* opname = "prefix pass 1";
-		TUNE_2D_PREFIX(
-					false,
-					block_intermediate_prefix_z, 
-                    block_intermediate_prefix_x, 
-                    subblocks_prefix_z, 
-                    subblocks_prefix_x, 
-                    num_blocks, 
-                    num_words_minor,
-					max_blocks,
-					max_sub_blocks);
+		// TUNE_2D_PREFIX(
+		// 			false,
+		// 			block_intermediate_prefix_z, 
+        //             block_intermediate_prefix_x, 
+        //             subblocks_prefix_z, 
+        //             subblocks_prefix_x, 
+        //             num_blocks, 
+        //             num_words_minor,
+		// 			max_blocks,
+		// 			max_sub_blocks);
 	}
 
 	void tune_inject_pass_1(
@@ -662,12 +678,46 @@ namespace QuaSARQ {
 		const size_t& max_blocks)
 	{
 		const char* opname = "inject pass 1";
+		// TUNE_2D_PREFIX(
+		// 			false,
+		// 			prefix_xs, 
+        // 			prefix_zs, 
+       	// 			inv_xs, 
+        // 			inv_zs,
+        // 			block_intermediate_prefix_z,
+        // 			block_intermediate_prefix_x,
+		// 			commutations,
+		// 			pivot,
+		// 			total_targets,
+		// 			num_words_major,
+		// 			num_words_minor,
+		// 			num_qubits_padded,
+		// 			max_blocks);
+	}
+
+	void tune_inject_pass_1(
+		dim3& bestBlock, dim3& bestGrid,
+		const size_t& shared_element_bytes, 
+		const size_t& data_size_in_x, 
+		const size_t& data_size_in_y,
+		Tableau<DeviceAllocator>& targets, 
+		Tableau<DeviceAllocator>& input, 
+        word_std_t *block_intermediate_prefix_z,
+        word_std_t *block_intermediate_prefix_x,
+		const Commutation* commutations,
+		const uint32& pivot,
+		const size_t& total_targets,
+		const size_t& num_words_major,
+		const size_t& num_words_minor,
+		const size_t& num_qubits_padded,
+		const size_t& max_blocks)
+	{
+		const char* opname = "inject pass 1";
 		TUNE_2D_PREFIX(
 					false,
-					prefix_xs, 
-        			prefix_zs, 
-       				inv_xs, 
-        			inv_zs,
+					call_pass_1_kernel,
+					targets,
+       				input,
         			block_intermediate_prefix_z,
         			block_intermediate_prefix_x,
 					commutations,

@@ -9,9 +9,15 @@ namespace QuaSARQ {
 	#if ROW_MAJOR
 		#define TABLEAU_INDEX(WORD_IDX, QUBIT_IDX) ((QUBIT_IDX) + (WORD_IDX) * (2 * num_qubits_padded))
 		#define TABLEAU_STAB_OFFSET (num_qubits_padded)
+
+		#define PREFIX_TABLEAU_INDEX(WORD_IDX, TID) ((TID) + (WORD_IDX) * total_targets)
+		#define PREFIX_INTERMEDIATE_INDEX(WORD_IDX, BX) ((BX) + (WORD_IDX) * max_blocks)
 	#else
 		#define TABLEAU_INDEX(WORD_IDX, QUBIT_IDX) ((QUBIT_IDX) * num_words_major + (WORD_IDX))
 		#define TABLEAU_STAB_OFFSET (num_words_minor)
+
+		#define PREFIX_TABLEAU_INDEX(WORD_IDX, TID) ((TID) * num_words_minor + (WORD_IDX))
+		#define PREFIX_INTERMEDIATE_INDEX(WORD_IDX, BX) ((BX) * num_words_minor + (WORD_IDX))
 	#endif
 	
 }

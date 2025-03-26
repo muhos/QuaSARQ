@@ -279,6 +279,7 @@ namespace QuaSARQ {
             TRIM_GRID_IN_2D(bestblockprefixsingle, bestgridprefixsingle, num_words_minor, y);
             currentblock = bestblockprefixsingle, currentgrid = bestgridprefixsingle;
             OPTIMIZESHARED(scan_blocks_smem_size, currentblock.y * (currentblock.x + CONFLICT_FREE_OFFSET(currentblock.x)), 2 * sizeof(word_std_t));
+            LOGN2(2, " Running pass-x kernel scanning %lld chunks with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", num_blocks, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
             scan_blocks_single_pass <<<currentgrid, currentblock, scan_blocks_smem_size, stream>>> (
                 block_intermediate_prefix_z, 
                 block_intermediate_prefix_x, 
@@ -290,6 +291,7 @@ namespace QuaSARQ {
                 LASTERR("failed to scan in a single pass");
                 SYNC(stream);
             }
+            LOGDONE(2, 4);
         }
         else {
             // Do triple passes.
@@ -329,7 +331,7 @@ namespace QuaSARQ {
             const size_t pass_1_blocksize = currentblock.x;
             const size_t pass_1_gridsize = ROUNDUP(num_blocks, pass_1_blocksize);
             OPTIMIZESHARED(p1_smem_size, currentblock.y * (currentblock.x + CONFLICT_FREE_OFFSET(currentblock.x)), 2 * sizeof(word_std_t));
-            LOGN2(2, "  Pass-1 scanning %lld words with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", num_blocks, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
+            LOGN2(2, "  Running pass-1 kernel scanning %lld words with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", num_blocks, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
             scan_blocks_pass_1 <<<currentgrid, currentblock, p1_smem_size, stream>>> (
                 block_intermediate_prefix_z, 
                 block_intermediate_prefix_x, 
@@ -371,7 +373,7 @@ namespace QuaSARQ {
             TRIM_GRID_IN_2D(bestblockprefixsingle, bestgridprefixsingle, num_words_minor, y);
             currentblock = bestblockprefixsingle, currentgrid = bestgridprefixsingle;
             OPTIMIZESHARED(scan_blocks_smem_size, currentblock.y * (currentblock.x + CONFLICT_FREE_OFFSET(currentblock.x)), 2 * sizeof(word_std_t));
-            LOGN2(2, "  Pass-x scanning %lld chunks with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", pass_1_gridsize, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
+            LOGN2(2, "  Running pass-2 kernel  %lld chunks with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", pass_1_gridsize, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
             scan_blocks_single_pass <<<currentgrid, currentblock, scan_blocks_smem_size, stream>>> (
                 subblocks_prefix_z, 
                 subblocks_prefix_x, 
@@ -412,7 +414,7 @@ namespace QuaSARQ {
             TRIM_BLOCK_IN_DEBUG_MODE(bestblockprefixfinal, bestgridprefixfinal, num_blocks, num_words_minor);
             currentblock = bestblockprefixfinal, currentgrid = bestgridprefixfinal;
             TRIM_GRID_IN_XY(num_blocks, num_words_minor);
-            LOGN2(2, " Pass-2 scanning %lld words with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", num_blocks, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
+            LOGN2(2, "  Pass-2 scanning %lld words with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", num_blocks, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
             scan_blocks_pass_2 <<<currentgrid, currentblock, 0, stream>>> (
                 block_intermediate_prefix_z, 
                 block_intermediate_prefix_x, 

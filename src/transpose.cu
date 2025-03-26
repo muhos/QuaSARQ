@@ -122,68 +122,6 @@ namespace QuaSARQ {
         }
     }
 
-    __global__
-    void rowmajor_kernel_out_of_place_grid_stride(
-        const Table *src_xs,
-        const Table *src_zs,
-        Table       *dst_xs,
-        Table       *dst_zs,
-        size_t       num_words_major,
-        size_t       num_words_minor,
-        size_t       num_qubits_padded,
-        bool         row_major)
-    {
-        assert(gridDim.z == 2);
-
-        const Table &src = (blockIdx.z == 0) ? *src_xs : *src_zs;
-        Table       &dst = (blockIdx.z == 0) ? *dst_xs : *dst_zs;
-
-       if (!blockIdx.x && !blockIdx.y && !threadIdx.x) {
-            dst.flag_orientation(row_major);
-        }
-
-        for_parallel_y(w, num_words_minor) {
-            for_parallel_x(q, num_qubits_padded) {
-                size_t old_idx = row_major
-                    ? (q * num_words_major + w)
-                    : (w * num_qubits_padded + q);
-
-                size_t old_stab_offset = row_major
-                    ? num_words_minor
-                    : (num_qubits_padded * num_words_minor);
-
-                size_t new_idx = row_major
-                    ? (w * num_qubits_padded + q)
-                    : (q * num_words_major + w);
-
-                size_t new_stab_offset = row_major
-                    ? (num_qubits_padded * num_words_minor)
-                    : num_words_minor;
-
-                dst[new_idx] = src[old_idx];
-                dst[new_idx + new_stab_offset] = src[old_idx + old_stab_offset];
-            }
-        }
-    }
-
-    inline bool verify_transpose(const Table& x1, const Table& z1, const Table& x2, const Table& z2) {
-        if (x1.size() != x2.size()) return false;
-        if (z1.size() != z2.size()) return false;
-        for (size_t i = 0; i < x1.size(); i++) {
-            if (x1[i] != x2[i]) {
-                LOGERRORN("incorrect transpose of x1 or x2 at index %lld.", i);
-                return false;
-            }
-        }
-        for (size_t i = 0; i < z1.size(); i++) {
-            if (z1[i] != z2[i]) {
-                LOGERRORN("incorrect transpose of z1 or z2 at index %lld.", i);
-                return false;
-            }
-        }
-        return true;
-    }
-
     __global__ 
     void transpose_to_rowmajor(
         Table *inv_xs, 
@@ -261,15 +199,75 @@ namespace QuaSARQ {
         }
     }
 
+    bool check_transpose(const Table& x1, const Table& z1, const Table& x2, const Table& z2) {
+        LOGN0(" Checking its correctness.. ");
+        if (x1.size() != x2.size()) return false;
+        if (z1.size() != z2.size()) return false;
+        for (size_t i = 0; i < x1.size(); i++) {
+            if (x1[i] != x2[i]) {
+                LOGERRORN("FAILED for x1 or x2 at word %lld.", i);
+                return false;
+            }
+        }
+        for (size_t i = 0; i < z1.size(); i++) {
+            if (z1[i] != z2[i]) {
+                LOGERRORN("FAILED for z1 or z2 at word %lld.", i);
+                return false;
+            }
+        }
+        LOG0("PASSED");
+        return true;
+    }
+
+    void transpose_to_colmajor_cpu(Table& xs, Table& zs, const Table& inv_xs, const Table& inv_zs) {
+        xs.flag_colmajor();
+        zs.flag_colmajor();
+        for(size_t w = 0; w < xs.num_qubits_padded(); w++) {
+            const word_std_t qubit_index_per_word = (w & WORD_MASK);
+            for(size_t q = 0; q < xs.num_words_major(); q++) {
+                word_std_t inv_word_x = 0;
+                word_std_t inv_word_z = 0;
+                const size_t block_idx = q * WORD_BITS + WORD_OFFSET(w) * 2 * xs.num_qubits_padded();
+                for (uint32 k = 0; k < WORD_BITS; k++) {
+                    const size_t src_word_idx = k + block_idx;
+                    const word_std_t qubits_word_x = inv_xs[src_word_idx];
+                    const word_std_t qubits_word_z = inv_zs[src_word_idx];
+                    const word_std_t qubit_bit_x = (qubits_word_x >> qubit_index_per_word) & 1;
+                    const word_std_t qubit_bit_z = (qubits_word_z >> qubit_index_per_word) & 1;
+                    inv_word_x |= (qubit_bit_x << k);
+                    inv_word_z |= (qubit_bit_z << k);
+                }
+                const size_t dest_word_idx = q + w * xs.num_words_major();
+                xs[dest_word_idx] = inv_word_x;
+                zs[dest_word_idx] = inv_word_z;
+            }
+        }
+    }
+
+    bool check_transpose(Tableau<DeviceAllocator>& d_tab, Tableau<DeviceAllocator>& d_inv_tab) {
+        SYNCALL;
+
+        Table d_xs, d_zs;
+        d_tab.copy_to_host(&d_xs, &d_zs);
+
+        Table d_inv_xs, d_inv_zs;
+        d_inv_xs.flag_rowmajor(), d_inv_zs.flag_rowmajor();
+        d_inv_tab.copy_to_host(&d_inv_xs, &d_inv_zs);
+    
+        Table h_xs, h_zs;
+        h_xs.alloc_host(d_tab.num_qubits_padded(), d_tab.num_words_major(), d_tab.num_words_minor());
+        h_zs.alloc_host(d_tab.num_qubits_padded(), d_tab.num_words_major(), d_tab.num_words_minor());
+        transpose_to_colmajor_cpu(h_xs, h_zs, d_inv_xs, d_inv_zs);
+
+        return check_transpose(h_xs, h_zs, d_xs, d_zs);
+    }
+
     #if ROW_MAJOR
     void Simulator::transpose(const bool& row_major, const cudaStream_t& stream) {
         const size_t num_words_minor = tableau.num_words_minor();
         const size_t num_words_major = tableau.num_words_major();
         const size_t num_qubits_padded = tableau.num_qubits_padded();
         dim3 currentblock, currentgrid;
-
-        // Table in_xs, in_zs;
-        // tableau.copy_to_host(&in_xs, &in_zs);
 
         if (row_major) {
             if (options.tune_transposec2r) {
@@ -284,6 +282,7 @@ namespace QuaSARQ {
             TRIM_BLOCK_IN_DEBUG_MODE(bestblocktransposec2r, bestgridtransposec2r, 2 * num_qubits_padded, num_words_minor);
             currentblock = bestblocktransposec2r, currentgrid = bestgridtransposec2r;
             TRIM_GRID_IN_XY(2 * num_qubits_padded, num_words_minor);
+            LOGN2(2, "Running row-major transpose with block(x:%u, y:%u) and grid(x:%u, y:%u, z:%u).. ", currentblock.x, currentblock.y, currentgrid.x, currentgrid.y, currentgrid.z);
             transpose_to_rowmajor <<< currentgrid, currentblock, 0, stream >>> (
                 XZ_TABLE(inv_tableau), 
                 XZ_TABLE(tableau), 
@@ -291,10 +290,13 @@ namespace QuaSARQ {
                 num_words_minor, 
                 num_qubits_padded
                 );
-
-            LASTERR("failed to launch transpose_to_rowmajor kernel");
-            SYNC(stream);
+            if (options.sync) {
+                LASTERR("failed to launch transpose_to_rowmajor kernel");
+                SYNC(stream);
+            }
+            LOGDONE(2, 4);
             tableau.swap_tableaus(inv_tableau);
+            assert(check_transpose(inv_tableau, tableau));
         }
         else {
             tableau.swap_tableaus(inv_tableau);
@@ -310,6 +312,7 @@ namespace QuaSARQ {
             TRIM_BLOCK_IN_DEBUG_MODE(bestblocktransposer2c, bestgridtransposer2c, num_words_major, num_qubits_padded);
             currentblock = bestblocktransposer2c, currentgrid = bestgridtransposer2c;     
             TRIM_GRID_IN_XY(num_words_major, num_qubits_padded);
+            LOGN2(2, "Running column-major transpose with block(x:%u, y:%u) and grid(x:%u, y:%u, z:%u).. ", currentblock.x, currentblock.y, currentgrid.x, currentgrid.y, currentgrid.z);
             transpose_to_colmajor <<< currentgrid, currentblock, 0, stream >>> (
                 XZ_TABLE(tableau), 
                 XZ_TABLE(inv_tableau),
@@ -317,17 +320,12 @@ namespace QuaSARQ {
                 num_words_minor, 
                 num_qubits_padded
                 );
-            LASTERR("failed to launch transpose_to_colmajor kernel");
-            SYNC(stream);
+            if (options.sync) {
+                LASTERR("failed to launch transpose_to_colmajor kernel");
+                SYNC(stream);
+            }
+            LOGDONE(2, 4);
        }
-
-        // Table out_xs, out_zs;
-        // tableau.copy_to_host(&out_xs, &out_zs);
-        // verify_transpose(in_xs, in_zs, out_xs, out_zs);
-
-        //print_tableau(tableau, -1, false);
-        //print_tableau(inv_tableau, -1, false);
-        //exit(0);
     }
 
     #else

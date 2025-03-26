@@ -54,8 +54,10 @@ namespace QuaSARQ {
 		dim3 bestblock ## CONFIG(BLOCKX, BLOCKY); \
 
 	#define CONFIG2RESET(NAME) \
-        bestgrid ## NAME = dim3(); \
-		bestblock ## NAME = dim3(); \
+        if (options.tune_ ## NAME) { \
+            bestgrid ## NAME = dim3(); \
+            bestblock ## NAME = dim3(); \
+        }
 
 	// Kernel configuration parameters.
 	// If they are set to default (1), tuner will be triggered.

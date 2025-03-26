@@ -141,7 +141,7 @@ namespace QuaSARQ {;
     {
         SYNCALL;
 
-        LOGN1(" Checking inject-swap for qubit %d and pivot %d.. ", qubit, pivot);
+        LOGN1("  Checking inject-swap for qubit %d and pivot %d.. ", qubit, pivot);
 
         assert(pivot != INVALID_PIVOT);
         const size_t q_w = WORD_OFFSET(qubit);
@@ -227,6 +227,8 @@ namespace QuaSARQ {;
         TRIM_BLOCK_IN_DEBUG_MODE(bestblockinjectswap, bestgridinjectswap, num_words_minor, 0);
         dim3 currentblock = bestblockinjectswap, currentgrid = bestgridinjectswap;
         TRIM_GRID_IN_1D(num_words_minor, x);
+        LOGN2(2, "Running pass-1 kernel with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", \
+            currentblock.x, currentblock.y, currentgrid.x, currentgrid.y); \
         inject_swap_k<<<currentgrid, currentblock, 0, stream>>>
         (
             XZ_TABLE(tableau),
@@ -241,7 +243,7 @@ namespace QuaSARQ {;
             LASTERR("failed to inject swap");
             SYNC(stream);
         }
-
+        LOGDONE(2, 4);
         assert(prefix.get_checker().copy_commutations(commutations, num_qubits));
         assert(prefix.get_checker().copy_input(tableau, true));
         assert(check_inject_swap(
