@@ -6,75 +6,6 @@
 
 namespace QuaSARQ {;
 
-    // Xc: zs[c_stab], Zc: zs[c_destab], Xt: zs[t_stab], Zt: zs[t_destab]
-    INLINE_DEVICE void do_CX_sharing_control(word_t& Xc, word_t& Zc, word_t& Xt, word_t& Zt, sign_t& s, size_t w, size_t t) {
-        const word_std_t xc = Xc, zc = Zc, xt = Xt, zt = Zt;
-        // Update X and Z words.
-        Xt = xt ^ xc;
-        Zc = zc ^ zt;
-        // Update Sign words.
-        word_std_t xc_and_zt = xc & zt;
-        word_std_t not_zc_xor_xt = ~(zc ^ xt);
-        // printf("w(%lld), t(%lld):   zs[c_stab  ]:" B2B_STR " & zs[t_destab]:" B2B_STR "  = " B2B_STR "\n", w, t, 
-        //             RB2B(xc), RB2B(zt), RB2B((xc & zt)));
-        // printf("w(%lld), t(%lld): ~(zs[c_destab]:" B2B_STR " ^ zs[t_stab  ]:" B2B_STR ") = " B2B_STR "\n", w, t, 
-        //             RB2B(zc), RB2B(xt), RB2B(~(xt ^ zc)));
-        //xc_and_zt = not_zc_xor_xt;
-        // printf("w(%lld), t(%lld): not_zc_xor_xt:" B2B_STR " & not_zc_xor_xt:" B2B_STR " = " B2B_STR "\n", w, t, 
-        //              RB2B(xc_and_zt), RB2B(not_zc_xor_xt), RB2B((xc_and_zt & not_zc_xor_xt)));
-        // printf("w(%lld), t(%lld):             s:" B2B_STR " ^ (-----------):" B2B_STR " = " B2B_STR "\n", w, t, 
-        //             RB2B(s), RB2B((xc_and_zt & not_zc_xor_xt)), RB2B(s ^ (xc_and_zt & not_zc_xor_xt)));
-        //s ^= (xt ^ zc);
-        s ^= (xc_and_zt & not_zc_xor_xt);
-    }
-
-    __global__ void inject_CX(Table* inv_xs, Table* inv_zs, Signs* inv_ss, 
-                            Commutation* commutations, 
-                            const pivot_t control,
-                            const qubit_t qubit,
-                            const size_t num_qubits, 
-                            const size_t num_words_major, 
-                            const size_t num_words_minor,
-                            const size_t num_qubits_padded) {
-        assert(control != INVALID_PIVOT);
-        word_t *xs = inv_xs->data();
-        word_t *zs = inv_zs->data();
-        sign_t *ss = inv_ss->data();
-
-        for_parallel_x(w, num_words_minor) { // Update all words in both destabs and stabs.
-
-            const size_t c_destab = TABLEAU_INDEX(w, control);
-            const size_t c_stab = c_destab + TABLEAU_STAB_OFFSET;
-            word_std_t zc_destab = zs[c_destab], zt_destab = 0;
-
-            for (size_t t = control + 1; t < num_qubits; t++) { // targets: pivot + 1, ..., num_qubits - 1.
-                if (commutations[t].anti_commuting) {
-                    const size_t t_destab = TABLEAU_INDEX(w, t);
-                    const size_t t_stab = t_destab + TABLEAU_STAB_OFFSET;
-                    assert(c_destab < inv_zs->size());
-                    assert(t_destab < inv_zs->size());
-                    assert(c_stab < inv_zs->size());
-                    assert(t_stab < inv_zs->size());
-                    //printf("z table:\n");
-
-                    //printf("w(%lld), t(%lld):   zc: " B2B_STR " ^ zt: " B2B_STR " ", w, t, RB2B(zc_destab), RB2B(zt_destab));
-
-                    do_CX_sharing_control(zs[c_stab], zs[c_destab], zs[t_stab], zs[t_destab], ss[w], w, t);
-
-                    //zc_destab ^= zt_destab, zt_destab = zs[t_destab], printf("= " B2B_STR "\n", RB2B(zc_destab));
-                    //printf("w(%lld), t(%lld): prefix zt = " B2B_STR "\n", w, t, RB2B(zt_destab)), zt_destab ^= (word_std_t)zs[t_destab];
-
-                    assert(c_destab < inv_xs->size());
-                    assert(t_destab < inv_xs->size());
-                    assert(c_stab < inv_xs->size());
-                    assert(t_stab < inv_xs->size());
-                    //printf("x table:\n");
-                    do_CX_sharing_control(xs[c_stab], xs[c_destab], xs[t_stab], xs[t_destab], ss[w + num_words_minor], w, t);
-                }
-            }
-        }
-    }
-
     __global__ 
     void check_x_destab(
                 Commutation*    commutations, 
@@ -330,20 +261,7 @@ namespace QuaSARQ {;
                 if (new_pivot != INVALID_PIVOT) {
                     LOG2(2, "Meauring qubit %d using pivot %d.. ", qubit, new_pivot);
                     random_measures++;
-
-                    #if !DEBUG_INJECT_CX
                     prefix.inject_CX(tableau, commutations, new_pivot, qubit, stream);
-                    #else
-                    const uint32 blocksize = 8;
-                    const uint32 gridsize = ROUNDUP(num_words_minor, blocksize);
-                    inject_CX <<<gridsize, blocksize, 0, stream>>> (XZ_TABLE(tableau), tableau.signs(), 
-                                commutations, 
-                                new_pivot, qubit, 
-                                num_qubits, num_words_major, num_words_minor);
-                    LASTERR("failed to inject_CX");
-                    SYNC(stream);
-                    #endif
-
                     inject_swap(new_pivot, qubit, stream);
                 }
             }

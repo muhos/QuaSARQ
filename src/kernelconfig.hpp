@@ -23,7 +23,6 @@ namespace QuaSARQ {
         CONFIG(prefixfinal) \
         CONFIG(injectprepare) \
         CONFIG(injectfinal) \
-        CONFIG(collapsetargets) \
 
 
     #define FOREACH_CONFIG_INIT(CONFIG) \
@@ -34,16 +33,15 @@ namespace QuaSARQ {
         CONFIG(transposeswap, 64, 16, 33, 1) \
         CONFIG(transposec2r, 32, 16, 33, 1) \
         CONFIG(transposer2c, 32, 16, 33, 1) \
-        CONFIG(allpivots, 32, 1, 2, 1) \
-        CONFIG(newpivots, 32, 1, 2, 1) \
-        CONFIG(marking, 4, 1, 500, 1) \
-        CONFIG(injectswap, 4, 1, 500, 1) \
+        CONFIG(allpivots, 256, 2, 100, 16) \
+        CONFIG(newpivots, 256, 1, 100, 1) \
+        CONFIG(marking, 256, 1, 100, 1) \
+        CONFIG(injectswap, 256, 1, 100, 1) \
         CONFIG(prefixprepare, 16, 64, 96, 28) \
         CONFIG(prefixsingle, 512, 2, 1, 10) \
-        CONFIG(prefixfinal, 4, 1, 500, 1) \
-        CONFIG(injectprepare, 4, 1, 500, 1) \
-        CONFIG(injectfinal, 4, 1, 500, 1) \
-        CONFIG(collapsetargets, 4, 1, 500, 1) \
+        CONFIG(prefixfinal, 256, 2, 100, 16) \
+        CONFIG(injectprepare, 256, 2, 100, 16) \
+        CONFIG(injectfinal, 256, 2, 100, 16) \
 
     #define CONFIG2EXTERN(NAME) \
         extern dim3 bestgrid ## NAME; \

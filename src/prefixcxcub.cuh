@@ -8,15 +8,9 @@
 
 namespace QuaSARQ {
 
-    struct XOROP {
-        __device__ __forceinline__ word_std_t operator()(const word_std_t &a, const word_std_t &b) const {
-            return a ^ b;
-        }
-    };
-
     template <int BLOCKX, int BLOCKY>
     __global__ 
-    void scan_targets_pass_1_cub(
+    void scan_targets_pass_1(
                 Table *             prefix_xs, 
                 Table *             prefix_zs, 
                 Table *             inv_xs, 
@@ -29,8 +23,8 @@ namespace QuaSARQ {
         const   size_t              num_words_major,
         const   size_t              num_words_minor,
         const   size_t              num_qubits_padded,
-        const   size_t              max_blocks)
-    {
+        const   size_t              max_blocks) {
+            
         typedef cub::BlockScan<word_std_t, BLOCKX, cub::BLOCK_SCAN_RAKING> BlockScan;
 
         __shared__ typename BlockScan::TempStorage temp_storage_z[BLOCKY];
@@ -83,7 +77,7 @@ namespace QuaSARQ {
         }
     }
 
-    void call_pass_1_kernel(
+    void call_injectcx_pass_1_kernel(
                 Tableau<DeviceAllocator>& targets, 
                 Tableau<DeviceAllocator>& input,
                 word_std_t *        block_intermediate_prefix_z,
@@ -100,27 +94,25 @@ namespace QuaSARQ {
         const   cudaStream_t&       stream);
 
     void tune_inject_pass_1(
-		dim3& bestBlock, dim3& bestGrid,
-		const size_t& shared_element_bytes, 
-		const size_t& data_size_in_x, 
-		const size_t& data_size_in_y,
-		Tableau<DeviceAllocator>& targets, 
-		Tableau<DeviceAllocator>& input, 
-        word_std_t *block_intermediate_prefix_z,
-        word_std_t *block_intermediate_prefix_x,
-		const Commutation* commutations,
-		const uint32& pivot,
-		const size_t& total_targets,
-		const size_t& num_words_major,
-		const size_t& num_words_minor,
-		const size_t& num_qubits_padded,
-		const size_t& max_blocks);
+		        dim3&           bestBlock, 
+                dim3&           bestGrid,
+		const   size_t&         shared_element_bytes, 
+		const   size_t&         data_size_in_x, 
+		const   size_t&         data_size_in_y,
+		        Tableau<DeviceAllocator>& targets, 
+		        Tableau<DeviceAllocator>& input, 
+                word_std_t *    block_intermediate_prefix_z,
+                word_std_t *    block_intermediate_prefix_x,
+		const   Commutation*    commutations,
+		const   uint32&         pivot,
+		const   size_t&         total_targets,
+		const   size_t&         num_words_major,
+		const   size_t&         num_words_minor,
+		const   size_t&         num_qubits_padded,
+		const   size_t&         max_blocks);
 
-    #define CALL_PASS_1_FOR_BLOCK(X, Y) \
-        LOGN2(2, " Running pass-1 kernel with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", \
-            X, Y, currentgrid.x, currentgrid.y); \
-        if (options.sync) cutimer.start(stream); \
-        scan_targets_pass_1_cub<X, Y> \
+    #define CALL_INJECTCX_PASS_1_FOR_BLOCK(X, Y) \
+        scan_targets_pass_1 <X, Y> \
         <<<currentgrid, currentblock, 0, stream>>> ( \
                 XZ_TABLE(targets), \
                 XZ_TABLE(input), \
@@ -133,11 +125,8 @@ namespace QuaSARQ {
                 num_words_minor, \
                 num_qubits_padded, \
                 max_blocks \
-            ); \
-        if (options.sync) { \
-            cutimer.stop(stream); \
-            LOGENDING(2, 4, "(time %.3f ms)", cutimer.time()); \
-        } else LOGDONE(2, 4);
+            )
+
 }
 
 #endif

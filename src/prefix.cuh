@@ -25,6 +25,12 @@ namespace QuaSARQ {
 	constexpr int64 MIN_SINGLE_PASS_THRESHOLD = 1024;
 	#endif
 
+	struct XOROP {
+        __device__ __forceinline__ word_std_t operator()(const word_std_t &a, const word_std_t &b) const {
+            return a ^ b;
+        }
+    };
+
     __device__ word_std_t scan_block_exclusive(word_std_t* data, const int& n);
 
 	class Prefix {
@@ -82,22 +88,6 @@ namespace QuaSARQ {
 
 	};
 
-	void tune_prefix_pass_1(
-		void (*kernel)(word_std_t*, word_std_t*, word_std_t*, word_std_t*, 
-						const size_t, const size_t, const size_t, const size_t),
-		dim3& bestBlockPass1, dim3& bestGridPass1,
-		const size_t& shared_element_bytes, 
-		const size_t& data_size_in_x, 
-		const size_t& data_size_in_y,
-		word_std_t* block_intermediate_prefix_z,
-		word_std_t* block_intermediate_prefix_x,
-		word_std_t* subblocks_prefix_z, 
-		word_std_t* subblocks_prefix_x,
-		const size_t& num_blocks,
-		const size_t& num_words_minor,
-		const size_t& max_blocks,
-		const size_t& max_sub_blocks);
-
 	void tune_prefix_pass_2(
 		void (*kernel)(word_std_t*, word_std_t*, const word_std_t*, const word_std_t*, 
 						const size_t, const size_t, const size_t, const size_t, const size_t),
@@ -113,40 +103,6 @@ namespace QuaSARQ {
 		const size_t& max_blocks,
 		const size_t& max_sub_blocks,
 		const size_t& pass_1_blocksize);
-
-	void tune_single_pass(
-		void (*kernel)(word_std_t*, word_std_t*, const size_t, const size_t, const size_t),
-		dim3& bestBlock, dim3& bestGrid,
-		const size_t& shared_element_bytes, 
-		const size_t& data_size_in_x, 
-		const size_t& data_size_in_y,
-		word_std_t* block_intermediate_prefix_z, 
-		word_std_t* block_intermediate_prefix_x,
-		const size_t num_chunks,
-		const size_t num_words_minor,
-		const size_t max_blocks
-	);
-
-	void tune_inject_pass_1(
-		void (*kernel)(Table*, Table*, Table*, Table*, word_std_t *, word_std_t *, 
-						const Commutation*, const uint32, const size_t, const size_t, const size_t, const size_t, const size_t),
-		dim3& bestBlock, dim3& bestGrid,
-		const size_t& shared_element_bytes, 
-		const size_t& data_size_in_x, 
-		const size_t& data_size_in_y,
-		Table *prefix_xs, 
-        Table *prefix_zs, 
-        Table *inv_xs, 
-        Table *inv_zs,
-        word_std_t *block_intermediate_prefix_z,
-        word_std_t *block_intermediate_prefix_x,
-		const Commutation* commutations,
-		const uint32& pivot,
-		const size_t& total_targets,
-		const size_t& num_words_major,
-		const size_t& num_words_minor,
-		const size_t& num_qubits_padded,
-		const size_t& max_blocks);
 
 	void tune_inject_pass_2(
 		void (*kernel)(Table*, Table*, Table*, Table*, Signs*, const word_std_t *, const word_std_t *, 

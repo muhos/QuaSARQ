@@ -10,76 +10,6 @@
 namespace QuaSARQ {
 
     __global__ 
-    void scan_targets_pass_1(
-                Table *             prefix_xs, 
-                Table *             prefix_zs, 
-                Table *             inv_xs, 
-                Table *             inv_zs,
-                word_std_t *        block_intermediate_prefix_z,
-                word_std_t *        block_intermediate_prefix_x,
-        const   Commutation *       commutations,
-        const   uint32              pivot,
-        const   size_t              total_targets,
-        const   size_t              num_words_major,
-        const   size_t              num_words_minor,
-        const   size_t              num_qubits_padded,
-        const   size_t              max_blocks)
-    {
-        grid_t padded_block_size = blockDim.x + CONFLICT_FREE_OFFSET(blockDim.x);
-        grid_t slice = 2 * padded_block_size;
-        word_std_t *shared = SharedMemory<word_std_t>();
-        word_std_t *t_prefix_z = shared + threadIdx.y * slice;
-        word_std_t *t_prefix_x = t_prefix_z + padded_block_size;
-        grid_t prefix_tid = threadIdx.x + CONFLICT_FREE_OFFSET(threadIdx.x);
-
-        for_parallel_y_tiled(by, num_words_minor) {
-
-            const grid_t w = threadIdx.y + by * blockDim.y;
-
-            for_parallel_x_tiled(bx, total_targets) {
-
-                const grid_t tid_x = threadIdx.x + bx * blockDim.x;
-                
-                word_std_t z = 0;
-                word_std_t x = 0;
-
-                if (w < num_words_minor && tid_x < total_targets) {
-                    const size_t t = tid_x + pivot + 1;
-                    if (commutations[t].anti_commuting) {
-                        const size_t t_destab = TABLEAU_INDEX(w, t);
-                        z = (*inv_zs)[t_destab];
-                        x = (*inv_xs)[t_destab];
-                    }
-                }
-
-                t_prefix_z[prefix_tid] = z;
-                t_prefix_x[prefix_tid] = x;
-
-                __syncthreads();
-
-                word_std_t blockSum_z = scan_block_exclusive(t_prefix_z, blockDim.x);
-                word_std_t blockSum_x = scan_block_exclusive(t_prefix_x, blockDim.x);
-
-                if (w < num_words_minor && tid_x < total_targets) {
-                    const size_t word_idx = PREFIX_TABLEAU_INDEX(w, tid_x);
-                    assert(word_idx < prefix_zs->size());
-                    assert(word_idx < prefix_xs->size());
-                    size_t c_destab = TABLEAU_INDEX(w, pivot);
-                    (*prefix_zs)[word_idx] = word_std_t((*inv_zs)[c_destab]) ^ t_prefix_z[prefix_tid];
-                    (*prefix_xs)[word_idx] = word_std_t((*inv_xs)[c_destab]) ^ t_prefix_x[prefix_tid];
-                }
-
-                if (w < num_words_minor && threadIdx.x == blockDim.x - 1) {
-                    assert((blockIdx.x * num_words_minor + w) < gridDim.x * num_words_minor);
-                    const size_t bid = w * max_blocks + bx;
-                    block_intermediate_prefix_z[bid] = blockSum_z;
-                    block_intermediate_prefix_x[bid] = blockSum_x;
-                }
-            }
-        }
-    }
-
-    __global__ 
     void scan_targets_pass_2(
                 Table *         prefix_xs, 
                 Table *         prefix_zs, 
@@ -183,7 +113,7 @@ namespace QuaSARQ {
         }
     }
 
-    void call_pass_1_kernel(
+    void call_injectcx_pass_1_kernel(
                 Tableau<DeviceAllocator>& targets, 
                 Tableau<DeviceAllocator>& input,
                 word_std_t *        block_intermediate_prefix_z,
@@ -199,16 +129,7 @@ namespace QuaSARQ {
         const   dim3&               currentgrid,
         const   cudaStream_t&       stream) {
         
-        switch (currentblock.y) {
-            POW2_Y_DIM_1(CALL_PASS_1_FOR_BLOCK);
-            POW2_Y_DIM_2(CALL_PASS_1_FOR_BLOCK);
-            POW2_Y_DIM_4(CALL_PASS_1_FOR_BLOCK);
-            POW2_Y_DIM_8(CALL_PASS_1_FOR_BLOCK);
-            POW2_Y_DIM_16(CALL_PASS_1_FOR_BLOCK);
-            POW2_Y_DIM_32(CALL_PASS_1_FOR_BLOCK);
-            default:
-            LOGERROR("unknown block size in y-dimension");
-        }
+        GENERATE_SWITCH_FOR_CALL(CALL_INJECTCX_PASS_1_FOR_BLOCK)
     }
 
     // We need to compute prefix-xor of t-th destabilizer in X,Z for t = c+1, c+2, ... c+n-1
@@ -227,27 +148,9 @@ namespace QuaSARQ {
         dim3 currentblock, currentgrid;
         if (options.tune_injectprepare) {
             SYNCALL;
-            // tune_inject_pass_1(
-            //     scan_targets_pass_1, 
-            //     bestblockinjectprepare, bestgridinjectprepare,
-            //     2 * sizeof(word_std_t),
-            //     total_targets,
-            //     num_words_minor,
-            //     XZ_TABLE(targets), 
-            //     XZ_TABLE(input), 
-            //     zblocks(), 
-            //     xblocks(),
-            //     commutations, 
-            //     pivot,
-            //     total_targets, 
-            //     num_words_major, 
-            //     num_words_minor,
-            //     num_qubits_padded,
-            //     max_intermediate_blocks
-            // );
             tune_inject_pass_1(
                 bestblockinjectprepare, bestgridinjectprepare,
-                2 * sizeof(word_std_t),
+                2 * sizeof(word_std_t), // used to skip very large blocks.
                 total_targets,
                 num_words_minor,
                 targets, 
@@ -271,7 +174,10 @@ namespace QuaSARQ {
         const size_t pass_1_gridsize = ROUNDUP(total_targets, pass_1_blocksize);
         if (pass_1_gridsize > max_intermediate_blocks)
             LOGERROR("too many blocks for intermediate arrays.");
-        call_pass_1_kernel(
+        LOGN2(2, " Running pass-1 kernel with block(x:%u, y:%u) and grid(x:%u, y:%u).. ",
+            currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
+        if (options.sync) cutimer.start(stream);
+        call_injectcx_pass_1_kernel(
             targets, 
             input, 
             zblocks(), 
@@ -287,24 +193,11 @@ namespace QuaSARQ {
             currentgrid,
             stream
         );
-        //OPTIMIZESHARED(smem_size, currentblock.y * (currentblock.x + CONFLICT_FREE_OFFSET(currentblock.x)), 2 * sizeof(word_std_t));
-        //scan_targets_pass_1 <<<currentgrid, currentblock, smem_size, stream>>> (
-                //     XZ_TABLE(targets), 
-                //     XZ_TABLE(input), 
-                //     zblocks(), 
-                //     xblocks(),
-                //     commutations, 
-                //     pivot,
-                //     total_targets, 
-                //     num_words_major, 
-                //     num_words_minor,
-                //     num_qubits_padded,
-                //     max_intermediate_blocks
-                // );
         if (options.sync) {
             LASTERR("failed to scan targets in pass 1");
-            SYNC(stream);
-        }
+            cutimer.stop(stream);
+            LOGENDING(2, 4, "(time %.3f ms)", cutimer.time());
+        } else LOGDONE(2, 4);
 
         // Verify pass-1 prefix.
         assert(checker.check_prefix_pass_1(
@@ -369,8 +262,8 @@ namespace QuaSARQ {
         OPTIMIZESHARED(finalize_prefix_smem_size, currentblock.y * currentblock.x, 4 * sizeof(word_std_t));
         LOGN2(2, " Running pass-2 kernel with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", \
             currentblock.x, currentblock.y, currentgrid.x, currentgrid.y); \
-        scan_targets_pass_2 
-        <<<currentgrid, currentblock, finalize_prefix_smem_size, stream>>> (
+        if (options.sync) cutimer.start(stream);
+        scan_targets_pass_2 <<<currentgrid, currentblock, finalize_prefix_smem_size, stream>>> (
             XZ_TABLE(targets), 
             XZ_TABLE(input),
             input.signs(),
@@ -387,9 +280,10 @@ namespace QuaSARQ {
         );
         if (options.sync) {
             LASTERR("failed to scan targets in pass 2");
-            SYNC(stream);
-        }
-        LOGDONE(2, 4);
+            cutimer.stop(stream);
+            LOGENDING(2, 4, "(time %.3f ms)", cutimer.time());
+        } else LOGDONE(2, 4);
+
         // Verify pass-2 prefix.
         assert(checker.check_prefix_pass_2(
             targets, 

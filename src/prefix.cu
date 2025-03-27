@@ -1,179 +1,23 @@
 
 #include "prefix.cuh"
+#include "prefixcub.cuh"
+#include "prefixdim.cuh"
+#include "timer.cuh"
 
 namespace QuaSARQ {
 
-    __device__ word_std_t scan_block_exclusive(word_std_t* data, const int& n) {
-        assert(blockDim.x >= 2);
-
-        int tid = threadIdx.x;
-        int offset = 1;
-
-        // UP-SWEEP (reduce) phase.
-        for (int d = n >> 1; d > 0; d >>= 1) {
-            if (tid < d) {
-                int i = offset * (2 * tid + 1) - 1;
-                int j = offset * (2 * tid + 2) - 1;
-                int ai = i + CONFLICT_FREE_OFFSET(i);
-                int aj = j + CONFLICT_FREE_OFFSET(j);
-                data[aj] ^= data[ai];
-            }
-            offset *= 2;
-            __syncthreads();
-        }
-        
-        // The total block XOR is now stored at data[n-1].
-        int last = n - 1;
-        int last_index = last + CONFLICT_FREE_OFFSET(last);
-        word_std_t blockSum = data[last_index];
-
-        // Set the last element to (0 for XOR) to start the down‑sweep.
-        if (tid == 0) {
-            data[last_index] = 0;
-        }
-
-        __syncthreads();
-        
-        // DOWN‑SWEEP phase.
-        for (int d = 1; d < n; d *= 2) {
-            offset /= 2;
-            if (tid < d) {
-                int i = offset * (2 * tid + 1) - 1;
-                int j = offset * (2 * tid + 2) - 1;
-                int ai = i + CONFLICT_FREE_OFFSET(i);
-                int aj = j + CONFLICT_FREE_OFFSET(j);
-                word_std_t temp = data[ai];
-                data[ai] = data[aj];
-                data[aj] ^= temp;
-            }
-            __syncthreads();
-        }
-
-
-        // data[0] = 0,
-        // data[1] = a0,
-        // data[2] = a0 ^ a1
-        // ...
-
-        return blockSum;
-    }
-
-	__global__ void scan_blocks_single_pass(word_std_t* block_intermediate_prefix_z, 
-                                         word_std_t* block_intermediate_prefix_x,
-                                         const size_t num_chunks,
-                                         const size_t num_words_minor,
-                                         const size_t max_blocks) {
-        assert(num_chunks <= blockDim.x);
-        assert(blockDim.x >= 2);
-        grid_t padded_block_size = blockDim.x + CONFLICT_FREE_OFFSET(blockDim.x);
-        grid_t slice = 2 * padded_block_size;
-        word_std_t* shared = SharedMemory<word_std_t>();
-        word_std_t* prefix_z = shared + threadIdx.y * slice;
-        word_std_t* prefix_x = prefix_z + padded_block_size;
-        grid_t prefix_tid = threadIdx.x + CONFLICT_FREE_OFFSET(threadIdx.x);
-
-        for_parallel_y_tiled(by, num_words_minor) {
-
-            const grid_t w = threadIdx.y + by * blockDim.y;
-            
-            word_std_t z = 0;
-            word_std_t x = 0;
-
-            if (w < num_words_minor && threadIdx.x < num_chunks) {
-                const size_t bid = w * max_blocks + threadIdx.x;
-                z = block_intermediate_prefix_z[bid];
-			    x = block_intermediate_prefix_x[bid];
-            }
-
-            prefix_z[prefix_tid] = z;
-            prefix_x[prefix_tid] = x;
-
-            __syncthreads();
-
-            scan_block_exclusive(prefix_z, num_chunks);
-            scan_block_exclusive(prefix_x, num_chunks);
-            
-            if (w < num_words_minor && threadIdx.x < num_chunks) {
-                const size_t bid = w * max_blocks + threadIdx.x;
-                block_intermediate_prefix_z[bid] = prefix_z[prefix_tid];
-                block_intermediate_prefix_x[bid] = prefix_x[prefix_tid];
-            }
-
-        }
-    }
-
-    __global__ void scan_blocks_pass_1(
-		word_std_t* block_intermediate_prefix_z,
-		word_std_t* block_intermediate_prefix_x,
-		word_std_t* subblocks_prefix_z, 
-		word_std_t* subblocks_prefix_x, 
-		const size_t num_blocks,
-		const size_t num_words_minor,
-        const size_t max_blocks,
-		const size_t max_sub_blocks
-	)
-	{
-        grid_t padded_block_size = blockDim.x + CONFLICT_FREE_OFFSET(blockDim.x);
-        grid_t slice = 2 * padded_block_size;
-        word_std_t* shared = SharedMemory<word_std_t>();
-        word_std_t* prefix_z = shared + threadIdx.y * slice;
-        word_std_t* prefix_x = prefix_z + padded_block_size;
-        grid_t prefix_tid = threadIdx.x + CONFLICT_FREE_OFFSET(threadIdx.x);
-
-		for_parallel_y_tiled(by, num_words_minor) {
-
-            const grid_t w = threadIdx.y + by * blockDim.y;
-			
-			for_parallel_x_tiled(bx, num_blocks) {
-
-                const grid_t tid_x = threadIdx.x + bx * blockDim.x;
-                
-                word_std_t z = 0;
-                word_std_t x = 0;
-
-                if (w < num_words_minor && tid_x < num_blocks) {
-                    const size_t bid = w * max_blocks + tid_x;
-                    z = block_intermediate_prefix_z[bid];
-                    x = block_intermediate_prefix_x[bid];
-                }
-
-                prefix_z[prefix_tid] = z;
-                prefix_x[prefix_tid] = x;
-                
-                __syncthreads();
-
-                word_std_t blockSum_z = scan_block_exclusive(prefix_z, blockDim.x);
-                word_std_t blockSum_x = scan_block_exclusive(prefix_x, blockDim.x);
-
-                if (w < num_words_minor && tid_x < num_blocks) {
-                    const size_t bid = w * max_blocks + tid_x;
-                    block_intermediate_prefix_z[bid] = prefix_z[prefix_tid];
-                    block_intermediate_prefix_x[bid] = prefix_x[prefix_tid];
-                }
-
-                if (w < num_words_minor && threadIdx.x == blockDim.x - 1) {
-                    assert((blockIdx.x * num_words_minor + w) < gridDim.x * num_words_minor);
-                    grid_t sub_bid = w * max_sub_blocks + bx;
-                    subblocks_prefix_z[sub_bid] = blockSum_z;
-                    subblocks_prefix_x[sub_bid] = blockSum_x;
-                }
-            }
-		}
-	}
-
     __global__
     void scan_blocks_pass_2(
-        word_std_t* block_intermediate_prefix_z,
-        word_std_t* block_intermediate_prefix_x,
-        const word_std_t* subblocks_prefix_z,
-        const word_std_t* subblocks_prefix_x,
-        const size_t num_blocks,
-        const size_t num_words_minor,
-        const size_t max_blocks,
-		const size_t max_sub_blocks,
-        const size_t pass_1_blocksize
-    )
-    {
+                word_std_t* block_intermediate_prefix_z,
+                word_std_t* block_intermediate_prefix_x,
+        const   word_std_t* subblocks_prefix_z,
+        const   word_std_t* subblocks_prefix_x,
+        const   size_t      num_blocks,
+        const   size_t      num_words_minor,
+        const   size_t      max_blocks,
+		const   size_t      max_sub_blocks,
+        const   size_t      pass_1_blocksize) {
+
         for_parallel_y(w, num_words_minor) {
 
             for_parallel_x(tid, num_blocks) {
@@ -251,6 +95,35 @@ namespace QuaSARQ {
         targets.resize(num_qubits, max_window_bytes, true, false, false);
     }
 
+    void call_single_pass_kernel(
+                word_std_t *        intermediate_prefix_z,
+                word_std_t *        intermediate_prefix_x,
+        const   size_t              num_chunks,
+        const   size_t              num_words_minor,
+        const   size_t              max_blocks,
+        const   dim3&               currentblock,
+        const   dim3&               currentgrid,
+        const   cudaStream_t&       stream) {
+
+            GENERATE_SWITCH_FOR_CALL(CALL_SINGLE_PASS_FOR_BLOCK)
+        }
+
+    void call_scan_blocks_pass_1_kernel(
+                word_std_t*     block_intermediate_prefix_z,
+                word_std_t*     block_intermediate_prefix_x,
+                word_std_t*     subblocks_prefix_z, 
+                word_std_t*     subblocks_prefix_x, 
+        const   size_t          num_blocks,
+        const   size_t          num_words_minor,
+        const   size_t          max_blocks,
+        const   size_t          max_sub_blocks,
+        const   dim3&           currentblock,
+        const   dim3&           currentgrid,
+        const   cudaStream_t&   stream) {
+
+            GENERATE_SWITCH_FOR_CALL(CALL_PREFIX_PASS_1_FOR_BLOCK)
+        }
+
     void Prefix::scan_blocks(const size_t& num_blocks, const size_t& inject_pass_1_blocksize, const cudaStream_t& stream) {
         assert(num_blocks <= max_intermediate_blocks);
         assert(nextPow2(num_blocks) == num_blocks);
@@ -262,45 +135,51 @@ namespace QuaSARQ {
             if (options.tune_prefixsingle) {
                 SYNCALL;
                 tune_single_pass(
-                    scan_blocks_single_pass, 
                     bestblockprefixsingle, bestgridprefixsingle,
-                    2 * sizeof(word_std_t),
+                    2 * sizeof(word_std_t), // used to skip very large blocks.
                     num_blocks,
                     num_words_minor,
                     block_intermediate_prefix_z, 
                     block_intermediate_prefix_x, 
                     num_blocks, 
                     num_words_minor,
-                    max_intermediate_blocks
-                );
+                    max_intermediate_blocks);
                 SYNCALL;
             }
+            if (bestblockprefixsingle.y == 1)
+                bestblockprefixsingle.y = 2;
+            if (bestblockprefixsingle.y * bestblockprefixsingle.x > MIN_SINGLE_PASS_THRESHOLD) 
+                bestblockprefixsingle.y = 1;
+            bestgridprefixsingle.y = ROUNDUP(num_words_minor, bestblockprefixsingle.y);
             TRIM_Y_BLOCK_IN_DEBUG_MODE(bestblockprefixsingle, bestgridprefixsingle, num_words_minor);
             TRIM_GRID_IN_2D(bestblockprefixsingle, bestgridprefixsingle, num_words_minor, y);
             currentblock = bestblockprefixsingle, currentgrid = bestgridprefixsingle;
             OPTIMIZESHARED(scan_blocks_smem_size, currentblock.y * (currentblock.x + CONFLICT_FREE_OFFSET(currentblock.x)), 2 * sizeof(word_std_t));
             LOGN2(2, " Running pass-x kernel scanning %lld chunks with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", num_blocks, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
-            scan_blocks_single_pass <<<currentgrid, currentblock, scan_blocks_smem_size, stream>>> (
+            if (options.sync) cutimer.start(stream);
+            call_single_pass_kernel(
                 block_intermediate_prefix_z, 
                 block_intermediate_prefix_x, 
                 num_blocks, 
                 num_words_minor,
-                max_intermediate_blocks
-            );
+                max_intermediate_blocks,
+                currentblock,
+                currentgrid,
+                stream);
             if (options.sync) {
                 LASTERR("failed to scan in a single pass");
-                SYNC(stream);
-            }
-            LOGDONE(2, 4);
+                cutimer.stop(stream);
+                LOGENDING(2, 4, "(time %.3f ms)", cutimer.time());
+            } else LOGDONE(2, 4);
         }
         else {
             // Do triple passes.
             if (options.tune_prefixprepare) {
                 SYNCALL;
                 tune_prefix_pass_1(
-                    scan_blocks_pass_1, 
-                    bestblockprefixprepare, bestgridprefixprepare,
-                    2 * sizeof(word_std_t),
+                    bestblockprefixprepare,
+                    bestgridprefixprepare,
+                    2 * sizeof(word_std_t), // used to skip very large blocks.
                     num_blocks,
                     num_words_minor,
                     block_intermediate_prefix_z, 
@@ -310,8 +189,7 @@ namespace QuaSARQ {
                     num_blocks, 
                     num_words_minor,
                     max_intermediate_blocks,
-                    max_sub_blocks
-                );
+                    max_sub_blocks);
                 SYNCALL;
             }
             assert(bestblockprefixprepare.x);
@@ -332,7 +210,8 @@ namespace QuaSARQ {
             const size_t pass_1_gridsize = ROUNDUP(num_blocks, pass_1_blocksize);
             OPTIMIZESHARED(p1_smem_size, currentblock.y * (currentblock.x + CONFLICT_FREE_OFFSET(currentblock.x)), 2 * sizeof(word_std_t));
             LOGN2(2, "  Running pass-1 kernel scanning %lld words with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", num_blocks, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
-            scan_blocks_pass_1 <<<currentgrid, currentblock, p1_smem_size, stream>>> (
+            if (options.sync) cutimer.start(stream);
+            call_scan_blocks_pass_1_kernel(
                 block_intermediate_prefix_z, 
                 block_intermediate_prefix_x, 
                 subblocks_prefix_z, 
@@ -340,9 +219,15 @@ namespace QuaSARQ {
                 num_blocks, 
                 num_words_minor,
                 max_intermediate_blocks,
-                max_sub_blocks
-            );
-            LOGDONE(2, 4);
+                max_sub_blocks,
+                currentblock,
+                currentgrid,
+                stream);
+            if (options.sync) {
+                LASTERR("failed to scan in pass-1 kernel");
+                cutimer.stop(stream);
+                LOGENDING(2, 4, "(time %.3f ms)", cutimer.time());
+            } else LOGDONE(2, 4);
 
             // Single phase
             assert(bestgridprefixsingle.x == 1);
@@ -352,9 +237,8 @@ namespace QuaSARQ {
             if (options.tune_prefixsingle) {
                 SYNCALL;
                 tune_single_pass(
-                    scan_blocks_single_pass, 
                     bestblockprefixsingle, bestgridprefixsingle,
-                    2 * sizeof(word_std_t),
+                    2 * sizeof(word_std_t), // used to skip very large blocks.
                     pass_1_gridsize,
                     num_words_minor,
                     subblocks_prefix_z, 
@@ -365,23 +249,32 @@ namespace QuaSARQ {
                 );
                 SYNCALL;
             }
-            if (bestblockprefixsingle.y == 1) {
-                bestblockprefixsingle.y = bestblockprefixprepare.y;
-                bestgridprefixsingle.y = bestgridprefixprepare.y;
-            }
+            if (bestblockprefixsingle.y == 1)
+                bestblockprefixsingle.y = 2;
+            if (bestblockprefixsingle.y * bestblockprefixsingle.x > MIN_SINGLE_PASS_THRESHOLD) 
+                bestblockprefixsingle.y = 1;
+            bestgridprefixsingle.y = ROUNDUP(num_words_minor, bestblockprefixsingle.y);
             TRIM_Y_BLOCK_IN_DEBUG_MODE(bestblockprefixsingle, bestgridprefixsingle, num_words_minor);
             TRIM_GRID_IN_2D(bestblockprefixsingle, bestgridprefixsingle, num_words_minor, y);
             currentblock = bestblockprefixsingle, currentgrid = bestgridprefixsingle;
             OPTIMIZESHARED(scan_blocks_smem_size, currentblock.y * (currentblock.x + CONFLICT_FREE_OFFSET(currentblock.x)), 2 * sizeof(word_std_t));
-            LOGN2(2, "  Running pass-2 kernel  %lld chunks with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", pass_1_gridsize, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
-            scan_blocks_single_pass <<<currentgrid, currentblock, scan_blocks_smem_size, stream>>> (
+            LOGN2(2, "  Running pass-x kernel scanning %lld chunks with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", pass_1_gridsize, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
+            if (options.sync) cutimer.start(stream);
+            call_single_pass_kernel(
                 subblocks_prefix_z, 
                 subblocks_prefix_x, 
                 pass_1_gridsize, 
                 num_words_minor,
-                max_sub_blocks
+                max_sub_blocks,
+                currentblock,
+                currentgrid,
+                stream
             );
-            LOGDONE(2, 4);
+            if (options.sync) {
+                LASTERR("failed to scan in a single pass");
+                cutimer.stop(stream);
+                LOGENDING(2, 4, "(time %.3f ms)", cutimer.time());
+            } else LOGDONE(2, 4);
             
             // Final phase.
             if (options.tune_prefixfinal) {
@@ -414,7 +307,8 @@ namespace QuaSARQ {
             TRIM_BLOCK_IN_DEBUG_MODE(bestblockprefixfinal, bestgridprefixfinal, num_blocks, num_words_minor);
             currentblock = bestblockprefixfinal, currentgrid = bestgridprefixfinal;
             TRIM_GRID_IN_XY(num_blocks, num_words_minor);
-            LOGN2(2, "  Pass-2 scanning %lld words with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", num_blocks, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
+            LOGN2(2, "  Running pass-2 kernel scanning %lld words with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", num_blocks, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
+            if (options.sync) cutimer.start(stream);
             scan_blocks_pass_2 <<<currentgrid, currentblock, 0, stream>>> (
                 block_intermediate_prefix_z, 
                 block_intermediate_prefix_x, 
@@ -427,10 +321,10 @@ namespace QuaSARQ {
                 pass_1_blocksize
             );
             if (options.sync) {
-                LASTERR("failed to scan in multiple passes");
-                SYNC(stream);
-            }
-            LOGDONE(2, 4);
+                LASTERR("failed to scan in pass-2 kernel");
+                cutimer.stop(stream);
+                LOGENDING(2, 4, "(time %.3f ms)", cutimer.time());
+            } else LOGDONE(2, 4);
         }
     }
 
