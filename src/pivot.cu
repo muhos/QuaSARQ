@@ -171,8 +171,8 @@ namespace QuaSARQ {
             TRIM_GRID_IN_XY(num_qubits, num_pivots_or_index);
             OPTIMIZESHARED(smem_size, currentblock.y * currentblock.x, sizeof(uint32));
             LOGN2(2, "Finding all pivots with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
-            find_all_pivots <<< currentgrid, currentblock, smem_size, stream >>> 
-            (
+            if (options.sync) cutimer.start(stream);
+            find_all_pivots <<< currentgrid, currentblock, smem_size, stream >>> (
                 gpu_circuit.pivots(), 
                 gpu_circuit.gates(), 
                 gpu_circuit.references(), 
@@ -181,13 +181,12 @@ namespace QuaSARQ {
                 num_qubits, 
                 num_words_major, 
                 num_words_minor,
-                num_qubits_padded
-            );
+                num_qubits_padded);
             if (options.sync) {
-                LASTERR("failed to launch find_all_pivots_indet kernel");
-                SYNC(stream);
-            }
-            LOGDONE(2, 4);
+                LASTERR("failed to launch find_all_pivots kernel");
+                cutimer.stop(stream);
+                LOGENDING(2, 4, "(time %.3f ms)", cutimer.time());
+            } else LOGDONE(2, 4);
         }
         else {
             const size_t pivot_index = num_pivots_or_index;
@@ -213,8 +212,9 @@ namespace QuaSARQ {
             currentblock = bestblocknewpivots, currentgrid = bestgridnewpivots;
             TRIM_GRID_IN_1D(num_qubits, x);
             OPTIMIZESHARED(smem_size, currentblock.x, sizeof(uint32));
-            find_new_pivot_and_mark <<< currentgrid, currentblock, smem_size, stream >>> 
-            (
+            LOGN2(2, "Finding new pivot with marking using block(x:%u, y:%u) and grid(x:%u, y:%u).. ", currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
+            if (options.sync) cutimer.start(stream);
+            find_new_pivot_and_mark <<< currentgrid, currentblock, smem_size, stream >>> (
                 commutations, 
                 gpu_circuit.pivots(), 
                 gpu_circuit.gates(), 
@@ -224,12 +224,12 @@ namespace QuaSARQ {
                 num_qubits, 
                 num_words_major, 
                 num_words_minor,
-                num_qubits_padded
-            );
+                num_qubits_padded);
             if (options.sync) {
                 LASTERR("failed to launch find_new_pivot_and_mark kernel");
-                SYNC(stream);
-            }
+                cutimer.stop(stream);
+                LOGENDING(2, 4, "(time %.3f ms)", cutimer.time());
+            } else LOGDONE(2, 4);
         }
     }
 }

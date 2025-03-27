@@ -1,5 +1,6 @@
 #include "simulator.hpp"
 #include "tuner.cuh"
+#include "transpose.cuh"
 #include "prefixcxcub.cuh"
 #include "prefixcub.cuh"
 

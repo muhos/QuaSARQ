@@ -1,10 +1,8 @@
 
 #include "simulator.hpp"
-#include "datatypes.cuh"
+#include "transpose.cuh"
 #include "shared.cuh"
 #include "print.cuh"
-#include "tuner.cuh"
-#include "grid.cuh"
 #include "access.cuh"
 
 namespace QuaSARQ {

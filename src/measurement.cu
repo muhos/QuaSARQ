@@ -158,23 +158,22 @@ namespace QuaSARQ {;
         TRIM_BLOCK_IN_DEBUG_MODE(bestblockinjectswap, bestgridinjectswap, num_words_minor, 0);
         dim3 currentblock = bestblockinjectswap, currentgrid = bestgridinjectswap;
         TRIM_GRID_IN_1D(num_words_minor, x);
-        LOGN2(2, "Running pass-1 kernel with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", \
+        LOGN2(2, "Running inject-swap kernel with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", \
             currentblock.x, currentblock.y, currentgrid.x, currentgrid.y); \
-        inject_swap_k<<<currentgrid, currentblock, 0, stream>>>
-        (
+        if (options.sync) cutimer.start(stream);
+        inject_swap_k<<<currentgrid, currentblock, 0, stream>>> (
             XZ_TABLE(tableau),
             tableau.signs(),
             commutations,
             pivot,
             num_words_major,
             num_words_minor,
-            num_qubits_padded
-        );
+            num_qubits_padded);
         if (options.sync) {
             LASTERR("failed to inject swap");
-            SYNC(stream);
-        }
-        LOGDONE(2, 4);
+            cutimer.stop(stream);
+            LOGENDING(2, 4, "(time %.3f ms)", cutimer.time());
+        } else LOGDONE(2, 4);
         assert(prefix.get_checker().copy_commutations(commutations, num_qubits));
         assert(prefix.get_checker().copy_input(tableau, true));
         assert(check_inject_swap(
