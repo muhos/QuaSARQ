@@ -15,9 +15,6 @@
 
 namespace QuaSARQ {
 
-    #define LOG_NUM_BANKS 4
-    #define CONFLICT_FREE_OFFSET(N) ((N) >> LOG_NUM_BANKS)
-
 	#define MIN_BLOCK_INTERMEDIATE_SIZE 32
 	#if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
 	constexpr int64 MIN_SINGLE_PASS_THRESHOLD = 512;
@@ -30,8 +27,6 @@ namespace QuaSARQ {
             return a ^ b;
         }
     };
-
-    __device__ word_std_t scan_block_exclusive(word_std_t* data, const int& n);
 
 	class Prefix {
 
@@ -88,6 +83,107 @@ namespace QuaSARQ {
 
 	};
 
+	void call_single_pass_kernel(
+                word_std_t *        intermediate_prefix_z,
+                word_std_t *        intermediate_prefix_x,
+        const   size_t              num_chunks,
+        const   size_t              num_words_minor,
+        const   size_t              max_blocks,
+        const   dim3&               currentblock,
+        const   dim3&               currentgrid,
+        const   cudaStream_t&       stream);
+
+    void call_scan_blocks_pass_1_kernel(
+                word_std_t*     block_intermediate_prefix_z,
+                word_std_t*     block_intermediate_prefix_x,
+                word_std_t*     subblocks_prefix_z, 
+                word_std_t*     subblocks_prefix_x, 
+        const   size_t          num_blocks,
+        const   size_t          num_words_minor,
+        const   size_t          max_blocks,
+        const   size_t          max_sub_blocks,
+        const   dim3&           currentblock,
+        const   dim3&           currentgrid,
+        const   cudaStream_t&   stream);
+
+    void tune_single_pass(
+                dim3&       bestBlock, 
+                dim3&       bestGrid,
+        const   size_t&     shared_element_bytes, 
+        const   size_t&     data_size_in_x, 
+        const   size_t&     data_size_in_y,
+                word_std_t* block_intermediate_prefix_z, 
+                word_std_t* block_intermediate_prefix_x,
+        const   size_t      num_chunks,
+        const   size_t      num_words_minor,
+        const   size_t      max_blocks);
+
+    void tune_prefix_pass_1(
+                dim3&       bestBlock, 
+                dim3&       bestGrid,
+        const   size_t&     shared_element_bytes, 
+        const   size_t&     data_size_in_x, 
+        const   size_t&     data_size_in_y,
+                word_std_t* block_intermediate_prefix_z,
+                word_std_t* block_intermediate_prefix_x,
+                word_std_t* subblocks_prefix_z, 
+                word_std_t* subblocks_prefix_x,
+        const   size_t&     num_blocks,
+        const   size_t&     num_words_minor,
+        const   size_t&     max_blocks,
+        const   size_t&     max_sub_blocks);
+
+	void call_injectcx_pass_1_kernel(
+                Tableau<DeviceAllocator>& targets, 
+                Tableau<DeviceAllocator>& input,
+                word_std_t *        block_intermediate_prefix_z,
+                word_std_t *        block_intermediate_prefix_x,
+        const   Commutation *       commutations,
+        const   uint32              pivot,
+        const   size_t              total_targets,
+        const   size_t              num_words_major,
+        const   size_t              num_words_minor,
+        const   size_t              num_qubits_padded,
+        const   size_t              max_blocks,
+        const   dim3&               currentblock,
+        const   dim3&               currentgrid,
+        const   cudaStream_t&       stream);
+
+	void call_injectcx_pass_2_kernel(
+                Tableau<DeviceAllocator>& targets, 
+                Tableau<DeviceAllocator>& input,
+        const   word_std_t *        block_intermediate_prefix_z,
+        const   word_std_t *        block_intermediate_prefix_x,
+        const   Commutation *       commutations,
+        const   uint32              pivot,
+        const   size_t              total_targets,
+        const   size_t              num_words_major,
+        const   size_t              num_words_minor,
+        const   size_t              num_qubits_padded,
+        const   size_t              max_blocks,
+        const   size_t              pass_1_blocksize,
+        const   dim3&               currentblock,
+        const   dim3&               currentgrid,
+        const   cudaStream_t&       stream);
+
+    void tune_inject_pass_1(
+		        dim3&           bestBlock, 
+                dim3&           bestGrid,
+		const   size_t&         shared_element_bytes, 
+		const   size_t&         data_size_in_x, 
+		const   size_t&         data_size_in_y,
+		        Tableau<DeviceAllocator>& targets, 
+		        Tableau<DeviceAllocator>& input, 
+                word_std_t *    block_intermediate_prefix_z,
+                word_std_t *    block_intermediate_prefix_x,
+		const   Commutation*    commutations,
+		const   uint32&         pivot,
+		const   size_t&         total_targets,
+		const   size_t&         num_words_major,
+		const   size_t&         num_words_minor,
+		const   size_t&         num_qubits_padded,
+		const   size_t&         max_blocks);
+
 	void tune_prefix_pass_2(
 		void (*kernel)(word_std_t*, word_std_t*, const word_std_t*, const word_std_t*, 
 						const size_t, const size_t, const size_t, const size_t, const size_t),
@@ -105,28 +201,23 @@ namespace QuaSARQ {
 		const size_t& pass_1_blocksize);
 
 	void tune_inject_pass_2(
-		void (*kernel)(Table*, Table*, Table*, Table*, Signs*, const word_std_t *, const word_std_t *, 
-						const Commutation*, const uint32, 
-						const size_t, const size_t, const size_t, const size_t, const size_t, const size_t),
-		dim3& bestBlock, dim3& bestGrid,
-		const size_t& shared_element_bytes, 
-		const size_t& data_size_in_x, 
-		const size_t& data_size_in_y,
-		Table *prefix_xs, 
-		Table *prefix_zs, 
-		Table *inv_xs, 
-		Table *inv_zs,
-		Signs *inv_ss,
-		const word_std_t *block_intermediate_prefix_z,
-		const word_std_t *block_intermediate_prefix_x,
-		const Commutation* commutations,
-		const uint32& pivot,
-		const size_t& total_targets,
-		const size_t& num_words_major,
-		const size_t& num_words_minor,
-		const size_t& num_qubits_padded,
-		const size_t& max_blocks,
-		const size_t& pass_1_blocksize);
+				dim3& 			bestBlock, 
+				dim3& 			bestGrid,
+		const 	size_t& 		shared_element_bytes, 
+		const 	size_t& 		data_size_in_x, 
+		const 	size_t& 		data_size_in_y,
+				Tableau<DeviceAllocator>& targets, 
+				Tableau<DeviceAllocator>& input, 
+        const 	word_std_t *	block_intermediate_prefix_z,
+        const 	word_std_t *	block_intermediate_prefix_x,
+		const 	Commutation* 	commutations,
+		const 	uint32& 		pivot,
+		const 	size_t& 		total_targets,
+		const 	size_t& 		num_words_major,
+		const 	size_t& 		num_words_minor,
+		const 	size_t& 		num_qubits_padded,
+		const 	size_t& 		max_blocks,
+		const 	size_t& 		pass_1_blocksize);
 	
 }
 

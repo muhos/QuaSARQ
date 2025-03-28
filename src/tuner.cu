@@ -1,8 +1,6 @@
 #include "simulator.hpp"
 #include "tuner.cuh"
 #include "transpose.cuh"
-#include "prefixcxcub.cuh"
-#include "prefixcub.cuh"
 
 namespace QuaSARQ {
 
@@ -346,7 +344,56 @@ namespace QuaSARQ {
 		} \
 	} while(0)
 
-	#define TUNE_2D_PREFIX(SKIP_GRID_CHECK, CALL, ...) \
+	#define TUNE_2D_CUB(CALL, ...) \
+	do { \
+		if (bestBlock.x > 1 || bestGrid.x > 1 || bestBlock.y > 1 || bestGrid.y > 1) { \
+			LOG2(3, "\nBest configuration: block(%d, %d), grid(%d, %d) will be used without tuning.", bestBlock.x, bestBlock.y, bestGrid.x, bestGrid.y); \
+		} \
+		else { \
+			LOG0(""); \
+			LOG2(1, "Tunning %s kernel with maximum of %zd trials and %-.5f milliseconds precision...", opname, TRIALS, PRECISION); \
+			int min_precision_hits = MIN_PRECISION_HITS; \
+			const bool x_warped = (bool) hasstr(opname, "warped"); \
+			int64 initBlocksPerGridX = 0, initBlocksPerGridY = 0; \
+			OPTIMIZEBLOCKS2D(initBlocksPerGridY, data_size_in_y, maxThreadsPerBlockY); \
+			OPTIMIZEBLOCKS2D(initBlocksPerGridX, data_size_in_x, maxThreadsPerBlockX); \
+			double minRuntime = double(UINTMAX_MAX); \
+			bool early_exit = false; \
+			size_t trials = 0; \
+			initBlocksPerGridY = (int64) ceil(initBlocksPerGridY / 1.0); \
+			initBlocksPerGridX = (int64) ceil(initBlocksPerGridX / 1.0); \
+			const int64 maxBlocksPerGridY = maxGPUBlocks2D << 1; \
+			const int64 maxBlocksPerGridX = maxGPUBlocks2D << 1; \
+			for (int64 blocksY = initBlocksPerGridY; (blocksY <= maxBlocksPerGridY) && !early_exit && trials < TRIALS; blocksY += 8, trials++) { \
+				for (int64 blocksX = initBlocksPerGridX; (blocksX <= maxBlocksPerGridX) && !early_exit && trials < TRIALS; blocksX += 8, trials++) { \
+					for (int64 threadsY = maxThreadsPerBlockY; (threadsY >= initThreadsPerBlockY) && !early_exit && trials < TRIALS; threadsY >>= 1) { \
+						for (int64 threadsX = maxThreadsPerBlockX; (threadsX >= initThreadsPerBlockX) && !early_exit && trials < TRIALS; threadsX >>= 1) { \
+							const int64 threadsPerBlock = threadsX * threadsY; \
+							const size_t extended_shared_size = shared_size_yextend ? shared_element_bytes * threadsPerBlock : shared_element_bytes * threadsX; \
+							if (x_warped && threadsX > maxWarpSize) continue; \
+							if (extended_shared_size > maxGPUSharedMem || threadsPerBlock > maxThreadsPerBlock) continue; \
+							/* Avoid deadloack due to warp divergence. */ \
+							if (threadsPerBlock % maxWarpSize != 0) continue; \
+							dim3 block((uint32)threadsX, (uint32)threadsY); \
+							dim3 grid((uint32)blocksX, (uint32)blocksY); \
+							double avgRuntime = 0; \
+							BENCHMARK_CUB_CALL(avgRuntime, NSAMPLES, CALL, ## __VA_ARGS__); \
+							if (PRINT_PROGRESS_2D) LOG2(1, "  GPU Time for block(x:%u, y:%u) and grid(x:%u, y:%u): %f ms", block.x, block.y, grid.x, grid.y, avgRuntime); fflush(stdout); fflush(stderr); \
+							BEST_CONFIG(avgRuntime, minRuntime, bestGrid, bestBlock, early_exit); \
+						} \
+					} \
+				} \
+			} \
+			LOG2(1, "Best %s configuration found after %zd trials:", opname, trials); \
+			LOG2(1, " Block (%-4u, %4u)", bestBlock.x, bestBlock.y); \
+			LOG2(1, " Grid  (%-4u, %4u)", bestGrid.x, bestGrid.y); \
+			LOG2(1, " Min time: %.4f ms", minRuntime); \
+			LOG0(""); \
+			fflush(stdout); \
+		} \
+	} while(0)
+
+	#define TUNE_2D_PREFIX_CUB(SKIP_GRID_CHECK, CALL, ...) \
 	do { \
 		if (bestBlock.x > 1 || bestGrid.x > 1 || bestBlock.y > 1 || bestGrid.y > 1) { \
 			LOG2(3, "\nBest configuration: block(%d, %d), grid(%d, %d) will be used without tuning.", bestBlock.x, bestBlock.y, bestGrid.x, bestGrid.y); \
@@ -403,7 +450,7 @@ namespace QuaSARQ {
 		} \
 	} while(0)
 
-	#define TUNE_2D_PREFIX_SINGLE(CALL, ...) \
+	#define TUNE_2D_PREFIX_SINGLE_CUB(CALL, ...) \
 	do { \
 		if (bestBlock.y > 1 || bestGrid.y > 1) { \
 			LOG2(3, "\nBest configuration: block(%d, %d), grid(%d, %d) will be used without tuning.", bestBlock.x, bestBlock.y, bestGrid.x, bestGrid.y); \
@@ -764,7 +811,7 @@ namespace QuaSARQ {
 		const   size_t&     max_sub_blocks) 
 	{
 		const char* opname = "prefix pass 1";
-		TUNE_2D_PREFIX(
+		TUNE_2D_PREFIX_CUB(
 			false,
 			call_scan_blocks_pass_1_kernel,
 			block_intermediate_prefix_z, 
@@ -795,8 +842,8 @@ namespace QuaSARQ {
 		const   size_t&         num_qubits_padded,
 		const   size_t&         max_blocks)
 	{
-		const char* opname = "inject pass 1";
-		TUNE_2D_PREFIX(
+		const char* opname = "inject-cx pass 1";
+		TUNE_2D_PREFIX_CUB(
 			false,
 			call_injectcx_pass_1_kernel,
 			targets,
@@ -853,32 +900,13 @@ namespace QuaSARQ {
 	}
 
 	void tune_inject_pass_2(
-		void (*kernel)(
-				Table*, 
-				Table*, 
-				Table*, 
-				Table*, 
-				Signs*, 
-		const 	word_std_t *, 
-		const 	word_std_t *, 
-		const 	Commutation*, 
-		const 	uint32, 
-		const 	size_t, 
-		const 	size_t, 
-		const 	size_t, 
-		const 	size_t, 
-		const 	size_t, 
-		const 	size_t),
 				dim3& 			bestBlock, 
 				dim3& 			bestGrid,
 		const 	size_t& 		shared_element_bytes, 
 		const 	size_t& 		data_size_in_x, 
 		const 	size_t& 		data_size_in_y,
-				Table *			prefix_xs, 
-        		Table *			prefix_zs, 
-        		Table *			inv_xs, 
-        		Table *			inv_zs,
-				Signs *			inv_ss,
+				Tableau<DeviceAllocator>& targets, 
+				Tableau<DeviceAllocator>& input, 
         const 	word_std_t *	block_intermediate_prefix_z,
         const 	word_std_t *	block_intermediate_prefix_x,
 		const 	Commutation* 	commutations,
@@ -890,14 +918,12 @@ namespace QuaSARQ {
 		const 	size_t& 		max_blocks,
 		const 	size_t& 		pass_1_blocksize) 
 	{
-		const char* opname = "prefix pass 2";
+		const char* opname = "inject-cx pass 2";
 		const bool shared_size_yextend = true;
-		TUNE_2D(
-			prefix_xs, 
-			prefix_zs, 
-			inv_xs, 
-			inv_zs,
-			inv_ss,
+		TUNE_2D_CUB(
+			call_injectcx_pass_2_kernel,
+			targets,
+			input,
 			block_intermediate_prefix_z,
 			block_intermediate_prefix_x,
 			commutations,
@@ -925,7 +951,7 @@ namespace QuaSARQ {
 	)
 	{
 		const char* opname = "scan single pass";
-		TUNE_2D_PREFIX_SINGLE(
+		TUNE_2D_PREFIX_SINGLE_CUB(
 			call_single_pass_kernel,
 			block_intermediate_prefix_z, 
 			block_intermediate_prefix_x, 

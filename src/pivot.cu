@@ -8,44 +8,6 @@
 
 namespace QuaSARQ {
 
-    // Find first stabilizer generator that anti-commutes with the obeservable qubit.
-    INLINE_DEVICE 
-    void find_min_pivot(
-                pivot_t&    p, 
-        const   qubit_t&    q, 
-        const   Table&      inv_xs, 
-        const   size_t      num_qubits, 
-        const   size_t      num_words_major, 
-        const   size_t      num_words_minor,
-        const   size_t      num_qubits_padded) 
-    {
-        uint32* shared_mins = SharedMemory<uint32>();
-        
-        grid_t tx = threadIdx.x;
-        grid_t BX = blockDim.x;
-        grid_t shared_tid = threadIdx.y * BX + tx;
-
-        const size_t q_w = WORD_OFFSET(q);
-        const word_std_t q_mask = BITMASK_GLOBAL(q);
-
-        uint32 local_min = INVALID_PIVOT;
-
-        for_parallel_x(g, num_qubits) {
-            const size_t word_idx = TABLEAU_INDEX(q_w, g) + TABLEAU_STAB_OFFSET;
-            const word_std_t qubit_word = inv_xs[word_idx];
-            if (qubit_word & q_mask) {
-                local_min = MIN(uint32(g), local_min);
-            }
-        }
-
-        min_pivot_load_shared(shared_mins, local_min, INVALID_PIVOT, shared_tid, num_qubits);
-        min_pivot_shared(shared_mins, local_min, shared_tid);
-
-        if (!threadIdx.x && local_min != INVALID_PIVOT) { 
-            atomicMin(&(p), local_min);
-        }
-    }
-
     __global__ 
     void find_all_pivots(
                 pivot_t*            pivots, 
@@ -58,12 +20,34 @@ namespace QuaSARQ {
         const   size_t              num_words_minor,
         const   size_t              num_qubits_padded) 
     {
+        uint32* shared_mins = SharedMemory<uint32>();
+        grid_t shared_tid = threadIdx.y * blockDim.x + threadIdx.x;
+
         for_parallel_y(i, num_gates) {
             const gate_ref_t r = refs[i];
             assert(r < NO_REF);
-            Gate& m = (Gate&) measurements[r];
+            const Gate& m = (Gate&) measurements[r];
             assert(m.size == 1);
-            find_min_pivot(pivots[i], m.wires[0], *inv_xs, num_qubits, num_words_major, num_words_minor, num_qubits_padded);
+            const qubit_t q = m.wires[0];
+            const size_t q_w = WORD_OFFSET(q);
+            const word_std_t q_mask = BITMASK_GLOBAL(q);
+
+            uint32 local_min = INVALID_PIVOT;
+
+            for_parallel_x(g, num_qubits) {
+                const size_t word_idx = TABLEAU_INDEX(q_w, g) + TABLEAU_STAB_OFFSET;
+                const word_std_t qubit_word = (*inv_xs)[word_idx];
+                if (qubit_word & q_mask) {
+                    local_min = MIN(uint32(g), local_min);
+                }
+            }
+
+            min_pivot_load_shared(shared_mins, local_min, INVALID_PIVOT, shared_tid, num_qubits);
+            min_pivot_shared(shared_mins, local_min, shared_tid);
+
+            if (!threadIdx.x && local_min != INVALID_PIVOT) { 
+                atomicMin(pivots + i, local_min);
+            }
         }
     }
 
@@ -80,17 +64,14 @@ namespace QuaSARQ {
         const   size_t              num_words_minor,
         const   size_t              num_qubits_padded) 
     {
-        const gate_ref_t r = refs[gate_index];
-        assert(r < NO_REF);
-        Gate& m = (Gate&) measurements[r];
-        assert(m.size == 1);
-
         uint32* shared_mins = SharedMemory<uint32>();
         
-        grid_t tx = threadIdx.x;
-        grid_t BX = blockDim.x;
-        grid_t shared_tid = threadIdx.y * BX + tx;
+        grid_t shared_tid = threadIdx.y * blockDim.x + threadIdx.x;
 
+        const gate_ref_t r = refs[gate_index];
+        assert(r < NO_REF);
+        const Gate& m = (Gate&) measurements[r];
+        assert(m.size == 1);
         const qubit_t q = m.wires[0];
         const size_t q_w = WORD_OFFSET(q);
         const word_std_t q_mask = BITMASK_GLOBAL(q);

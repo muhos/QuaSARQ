@@ -205,7 +205,6 @@ namespace QuaSARQ {;
         const size_t num_words_major = tableau.num_words_major();
         const size_t num_gates_per_window = circuit[depth_level].size();
 
-        // Reset all pivots.
         reset_pivots(num_gates_per_window, kernel_stream2);
 
         transpose(true, kernel_stream1);
@@ -216,7 +215,6 @@ namespace QuaSARQ {;
         // Sync resetting pivots.
         SYNC(kernel_stream2);
 
-        // Find all pivots if exist.
         find_pivots(tableau, num_gates_per_window, true, kernel_stream1);
 
         // Copy pivots to host.
@@ -230,7 +228,6 @@ namespace QuaSARQ {;
 
         int64 random_measures = measure_indeterminate(depth_level, kernel_stream1);
 
-        // Transpose the tableau back into column-major format.
         transpose(false, kernel_stream1);
     }
 

@@ -127,7 +127,7 @@ namespace QuaSARQ {
                     }
                 }
                 if (pass_1_blocksize > 0 && pass_1_gridsize > 1) {
-                    size_t bid = w * max_blocks + bx;
+                    size_t bid = PREFIX_INTERMEDIATE_INDEX(w, bx);
                     h_block_intermediate_prefix_z[bid] = blockSum_z;
                     h_block_intermediate_prefix_x[bid] = blockSum_x;
                     if (h_block_intermediate_prefix_x[bid] != d_block_intermediate_prefix_x[bid]) {
@@ -162,16 +162,25 @@ namespace QuaSARQ {
         copy_prefix_blocks(other_xs, other_zs, max_blocks * num_words_minor);
 
         const int nextpow2_blocksize = nextPow2(pass_1_gridsize);
+        Vec<word_std_t> block_z(nextpow2_blocksize);
+        Vec<word_std_t> block_x(nextpow2_blocksize);
         for (size_t w = 0; w < num_words_minor; w++) {
-            word_std_t* block_z = h_block_intermediate_prefix_z + w * max_blocks;
-            word_std_t* block_x = h_block_intermediate_prefix_x + w * max_blocks;
             for (size_t tx = pass_1_gridsize; tx < nextpow2_blocksize; tx++) {
-                block_z[tx] = 0, block_x[tx] = 0;
+                size_t bid = PREFIX_INTERMEDIATE_INDEX(w, tx);
+                h_block_intermediate_prefix_z[bid] = 0;
+                h_block_intermediate_prefix_x[bid] = 0;
+            }
+            for (size_t tx = 0; tx < nextpow2_blocksize; tx++) {
+                size_t bid = PREFIX_INTERMEDIATE_INDEX(w, tx);
+                block_z[tx] = h_block_intermediate_prefix_z[bid];
+                block_x[tx] = h_block_intermediate_prefix_x[bid];
             }
             scan_block_exclusive_cpu(block_z, nextpow2_blocksize);
             scan_block_exclusive_cpu(block_x, nextpow2_blocksize);
             for (size_t tx = 0; tx < pass_1_gridsize; tx++) {
-                size_t bid = w * max_blocks + tx;
+                size_t bid = PREFIX_INTERMEDIATE_INDEX(w, tx);
+                h_block_intermediate_prefix_z[bid] = block_z[tx];
+                h_block_intermediate_prefix_x[bid] = block_x[tx];
                 if (h_block_intermediate_prefix_x[bid] != d_block_intermediate_prefix_x[bid]) {
                     LOGERRORN("Pass-x FAILED at block-prefix-x[w: %lld, tx: %lld]", w, tx);
                     return false;
@@ -225,7 +234,7 @@ namespace QuaSARQ {
                     word_std_t d_zc_xor_zt = d_prefix_zs[word_idx];
                     word_std_t d_xc_xor_xt = d_prefix_xs[word_idx];
 
-                    const size_t bid = w * max_blocks + (tid_x / pass_1_blocksize);
+                    const size_t bid = PREFIX_INTERMEDIATE_INDEX(w, (tid_x / pass_1_blocksize));
                     zc_xor_zt ^= h_block_intermediate_prefix_z[bid];
                     xc_xor_xt ^= h_block_intermediate_prefix_x[bid];
                     d_zc_xor_zt ^= d_block_intermediate_prefix_z[bid];
