@@ -94,85 +94,6 @@ namespace QuaSARQ {
         
     }
 
-    // NOINLINE_ALL void print_table(const Table& t) {
-    //     size_t bits = t.num_words_minor() * WORD_BITS;
-    //     size_t stab_offset = 0;
-    //     LOGGPU("      ");
-    //     for (size_t q = 0; q < bits; q++) {
-    //         if (q > 0 && q % WORD_BITS == 0)
-    //             LOGGPU("  ");
-    //         LOGGPU("%-3lld", q);
-    //     }
-    //     constexpr int ROWMAJOR_STEP = 2;
-    //     if (t.num_words_major() == 2 * t.num_words_minor()) {
-    //         stab_offset = t.num_words_minor();
-    //         LOGGPU("\n\nDestabilizers:\n");
-    //         if (t.is_rowmajor()) {
-    //             for (size_t w = 0; w < t.num_words_minor(); w++) {
-    //                 LOGGPU("w%-3lld  ", w);
-    //                 for (size_t q = 0; q < t.num_qubits_padded(); q++) {
-    //                     if (q && q % ROWMAJOR_STEP == 0) LOGGPU("\n%-6s", " ");
-    //                     const size_t word_idx = w * t.num_qubits_padded() + q;
-    //                     #if defined(WORD_SIZE_64)
-    //                     LOGGPU(B2B_STR, RB2B(uint32(word_std_t(t[word_idx]) & 0xFFFFFFFFUL)));
-    //                     LOGGPU(B2B_STR "  ", RB2B(uint32((word_std_t(t[word_idx]) >> 32) & 0xFFFFFFFFUL)));
-    //                     #else
-    //                     LOGGPU(B2B_STR "  ", RB2B(word_std_t(t[word_idx])));
-    //                     #endif
-    //                 }
-    //                 LOGGPU("\n\n");
-    //             }
-    //         }
-    //         else {
-    //             for (size_t q = 0; q < t.num_qubits_padded(); q++) {
-    //                 LOGGPU("%-3lld  ", q);
-    //                 for (size_t w = 0; w < t.num_words_minor(); w++) {
-    //                     const size_t word_idx = q * t.num_words_major() + w;
-    //                     #if defined(WORD_SIZE_64)
-    //                     LOGGPU(B2B_STR, RB2B(uint32(word_std_t(t[word_idx]) & 0xFFFFFFFFUL)));
-    //                     LOGGPU(B2B_STR "  ", RB2B(uint32((word_std_t(t[word_idx]) >> 32) & 0xFFFFFFFFUL)));
-    //                     #else
-    //                     LOGGPU(B2B_STR "  ", RB2B(word_std_t(t[word_idx])));
-    //                     #endif
-    //                 }
-    //                 LOGGPU("\n");
-    //             }
-    //         }
-    //     }
-    //     LOGGPU("Stabilizers:\n");
-    //     if (t.is_rowmajor()) {
-    //         for (size_t w = 0; w < t.num_words_minor(); w++) {
-    //             LOGGPU("w%-3lld  ", w);
-    //             for (size_t q = 0; q < t.num_qubits_padded(); q++) {
-    //                 if (q && q % ROWMAJOR_STEP == 0) LOGGPU("\n%-6s", " ");
-    //                 const size_t word_idx = w * t.num_qubits_padded() + q + t.num_words_minor() * t.num_qubits_padded();
-    //                 #if defined(WORD_SIZE_64)
-    //                 LOGGPU(B2B_STR, RB2B(uint32(word_std_t(t[word_idx]) & 0xFFFFFFFFUL)));
-    //                 LOGGPU(B2B_STR "  ", RB2B(uint32((word_std_t(t[word_idx]) >> 32) & 0xFFFFFFFFUL)));
-    //                 #else
-    //                 LOGGPU(B2B_STR "  ", RB2B(word_std_t(t[word_idx])));
-    //                 #endif
-    //             }
-    //             LOGGPU("\n\n");
-    //         }
-    //     }
-    //     else {
-    //         for (size_t q = 0; q < t.num_qubits_padded(); q++) {
-    //             LOGGPU("%-3lld  ", q);
-    //             for (size_t w = 0; w < t.num_words_minor(); w++) {
-    //                 const size_t word_idx = q * t.num_words_major() + w + stab_offset;
-    //                 #if defined(WORD_SIZE_64)
-    //                 LOGGPU(B2B_STR, RB2B(uint32(word_std_t(t[word_idx]) & 0xFFFFFFFFUL)));
-    //                 LOGGPU(B2B_STR "  ", RB2B(uint32((word_std_t(t[word_idx]) >> 32) & 0xFFFFFFFFUL)));
-    //                 #else
-    //                 LOGGPU(B2B_STR "  ", RB2B(word_std_t(t[word_idx])));
-    //                 #endif
-    //             }
-    //             LOGGPU("\n");
-    //         }
-    //     }
-    // }
-
     NOINLINE_ALL void print_table_signs(const Signs& ss, const size_t& start, const size_t& end) {
         const size_t size = ss.is_unpacked() ? ss.size() : ss.size() * WORD_BITS;
         for (size_t i = start; i < end; i++) {
@@ -345,7 +266,7 @@ namespace QuaSARQ {
         }
 	}
 
-	void Simulator::print_paulis(const Tableau<DeviceAllocator>& tab, const depth_t& depth_level, const bool& reversed) {
+	void Simulator::print_paulis(const Tableau& tab, const depth_t& depth_level, const bool& reversed) {
 		if (!options.sync) SYNCALL;
 		if (depth_level == -1) 
 			LOGHEADER(0, 3, "Initial state");
@@ -363,7 +284,7 @@ namespace QuaSARQ {
         fflush(stdout);
 	}
 
-	void Simulator::print_tableau(const Tableau<DeviceAllocator>& tab, const depth_t& depth_level, const bool& reversed, const bool& prefix) {
+	void Simulator::print_tableau(const Tableau& tab, const depth_t& depth_level, const bool& reversed, const bool& prefix) {
 		if (!options.sync) SYNCALL;
 		LOG2(0, "");
 		if (depth_level == -1)
@@ -378,7 +299,7 @@ namespace QuaSARQ {
         fflush(stdout);
 	}
 
-	void Simulator::print_gates(const DeviceCircuit<DeviceAllocator>& gpu_circuit, const gate_ref_t& num_gates, const depth_t& depth_level) {
+	void Simulator::print_gates(const DeviceCircuit& gpu_circuit, const gate_ref_t& num_gates, const depth_t& depth_level) {
 		if (!options.print_gates) return;
 		if (!options.sync) SYNCALL;
 		LOG2(0, " Gates on GPU for %d-time step:", depth_level);
@@ -388,7 +309,7 @@ namespace QuaSARQ {
 		fflush(stdout);
 	}
 
-	void Simulator::print_measurements(const DeviceCircuit<DeviceAllocator>& gpu_circuit, const gate_ref_t& num_gates, const depth_t& depth_level) {
+	void Simulator::print_measurements(const DeviceCircuit& gpu_circuit, const gate_ref_t& num_gates, const depth_t& depth_level) {
 		if (!options.print_measurements) return;
 		if (!circuit.is_measuring(depth_level)) return;
 		if (!options.sync) SYNCALL;

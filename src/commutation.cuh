@@ -3,7 +3,6 @@
 #define __CU_COMMUTATION_H
 
 #include "definitions.cuh"
-#include "datatypes.cuh"
 #include "logging.hpp"
 
 namespace QuaSARQ {
@@ -28,26 +27,6 @@ namespace QuaSARQ {
                 LOGGPU("\n");
         }
     };
-
-    void tune_marking(
-        void (*kernel)(
-                Commutation*, 
-                ConstTablePointer, 
-		const   qubit_t, 
-        const   size_t, 
-        const   size_t, 
-        const   size_t, 
-        const   size_t),
-		const   char*               opname, 
-                dim3&               bestBlock, 
-                dim3&               bestGrid,
-		        Commutation*        commutations, 
-                ConstTablePointer   inv_xs, 
-        const   qubit_t             qubit, 
-		const   size_t              size, 
-        const   size_t              num_words_major, 
-        const   size_t              num_words_minor, 
-        const   size_t              num_qubits_padded);
     
 }
 

@@ -126,7 +126,7 @@ namespace QuaSARQ {
 	void tune_kernel_m(
 		void (*kernel)(
 				pivot_t*,
-				bucket_t*,
+				ConstBucketsPointer,
 				ConstRefsPointer,
 				ConstTablePointer,
 		const 	size_t,
@@ -142,7 +142,7 @@ namespace QuaSARQ {
 		const 	size_t& 			data_size_in_x,
 		const 	size_t& 			data_size_in_y,
 				pivot_t* 			pivots,
-				bucket_t* 			measurements,
+				ConstBucketsPointer measurements,
 				ConstRefsPointer 	refs,
 				ConstTablePointer 	inv_xs,
 		const 	size_t 				num_gates,
@@ -155,7 +155,7 @@ namespace QuaSARQ {
 		void (*kernel)(
 				Commutation* 		commutations,
 				pivot_t*,
-				bucket_t*,
+				ConstBucketsPointer,
 				ConstRefsPointer,
 				ConstTablePointer,
 		const 	size_t,
@@ -169,7 +169,7 @@ namespace QuaSARQ {
 		const 	size_t& 			shared_element_bytes,
 				Commutation* 		commutations,
 				pivot_t* 			pivots,
-				bucket_t* 			measurements,
+				ConstBucketsPointer measurements,
 				ConstRefsPointer 	refs,
 				ConstTablePointer 	inv_xs,
 		const 	size_t& 			gate_index,
@@ -177,6 +177,26 @@ namespace QuaSARQ {
 		const 	size_t 				num_words_major,
 		const 	size_t 				num_words_minor,
 		const 	size_t 				num_qubits_padded);
+
+	void tune_marking(
+        void (*kernel)(
+                Commutation*, 
+                ConstTablePointer, 
+		const   qubit_t, 
+        const   size_t, 
+        const   size_t, 
+        const   size_t, 
+        const   size_t),
+		const   char*               opname, 
+                dim3&               bestBlock, 
+                dim3&               bestGrid,
+		        Commutation*        commutations, 
+                ConstTablePointer   inv_xs, 
+		const 	qubit_t& 			qubit,
+		const 	size_t& 			size,
+		const 	size_t& 			num_words_major,
+		const 	size_t& 			num_words_minor,
+		const 	size_t& 			num_qubits_padded);
 
 	class Tuner : public Simulator {
 

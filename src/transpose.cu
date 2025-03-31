@@ -242,7 +242,7 @@ namespace QuaSARQ {
         }
     }
 
-    bool check_transpose(Tableau<DeviceAllocator>& d_tab, Tableau<DeviceAllocator>& d_inv_tab) {
+    bool check_transpose(Tableau& d_tab, Tableau& d_inv_tab) {
         SYNCALL;
 
         Table d_xs, d_zs;

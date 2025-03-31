@@ -5,6 +5,7 @@
 #include "vector.hpp"
 #include "print.cuh"
 #include "prefixdim.cuh"
+#include "datatypes.cuh"
 #include <cub/block/block_scan.cuh>
 #include <cub/block/block_reduce.cuh>
 
@@ -15,11 +16,11 @@ namespace QuaSARQ {
     void scan_targets_pass_1(
                 Table *             prefix_xs, 
                 Table *             prefix_zs, 
-                Table *             inv_xs, 
-                Table *             inv_zs,
                 word_std_t *        block_intermediate_prefix_z,
                 word_std_t *        block_intermediate_prefix_x,
-        const   Commutation *       commutations,
+                ConstTablePointer   inv_xs, 
+                ConstTablePointer   inv_zs,
+                ConstCommsPointer   commutations,
         const   uint32              pivot,
         const   size_t              total_targets,
         const   size_t              num_words_major,
@@ -83,9 +84,9 @@ namespace QuaSARQ {
         scan_targets_pass_1 <X, Y> \
         <<<currentgrid, currentblock, 0, stream>>> ( \
                 XZ_TABLE(targets), \
-                XZ_TABLE(input), \
                 block_intermediate_prefix_z, \
                 block_intermediate_prefix_x, \
+                XZ_TABLE(input), \
                 commutations, \
                 pivot, \
                 total_targets, \
@@ -98,21 +99,21 @@ namespace QuaSARQ {
     template <int BLOCKSX, int BLOCKSY>
     __global__ 
     void scan_targets_pass_2(
-                Table *         prefix_xs, 
-                Table *         prefix_zs, 
-                Table *         inv_xs, 
-                Table *         inv_zs,
-                Signs *         inv_ss,
-        const   word_std_t *    block_intermediate_prefix_z,
-        const   word_std_t *    block_intermediate_prefix_x,
-        const   Commutation *   commutations,
-        const   uint32          pivot,
-        const   size_t          total_targets,
-        const   size_t          num_words_major,
-        const   size_t          num_words_minor,
-        const   size_t          num_qubits_padded,
-        const   size_t          max_blocks,
-        const   size_t          pass_1_blocksize)
+                Table *             inv_xs, 
+                Table *             inv_zs,
+                Signs *             inv_ss,
+                ConstTablePointer   prefix_xs, 
+                ConstTablePointer   prefix_zs, 
+                ConstWordsPointer   block_intermediate_prefix_z,
+                ConstWordsPointer   block_intermediate_prefix_x,
+                ConstCommsPointer   commutations,
+        const   uint32              pivot,
+        const   size_t              total_targets,
+        const   size_t              num_words_major,
+        const   size_t              num_words_minor,
+        const   size_t              num_qubits_padded,
+        const   size_t              max_blocks,
+        const   size_t              pass_1_blocksize)
     { 
         word_std_t *xs = inv_xs->words();
         word_std_t *zs = inv_zs->words();
@@ -202,9 +203,9 @@ namespace QuaSARQ {
     #define CALL_INJECTCX_PASS_2_FOR_BLOCK(X, Y) \
         scan_targets_pass_2 <X, Y> \
         <<<currentgrid, currentblock, 0, stream>>> ( \
-                XZ_TABLE(targets), \
                 XZ_TABLE(input), \
                 input.signs(), \
+                XZ_TABLE(targets), \
                 block_intermediate_prefix_z, \
                 block_intermediate_prefix_x, \
                 commutations, \
@@ -217,18 +218,18 @@ namespace QuaSARQ {
                 pass_1_blocksize\
             )
 
-    void call_injectcx_pass_1_kernel(
-                Tableau<DeviceAllocator>& targets, 
-                Tableau<DeviceAllocator>& input,
+	void call_injectcx_pass_1_kernel(
+                Tableau& 			targets, 
+                Tableau& 			input,
                 word_std_t *        block_intermediate_prefix_z,
                 word_std_t *        block_intermediate_prefix_x,
-        const   Commutation *       commutations,
-        const   uint32              pivot,
-        const   size_t              total_targets,
-        const   size_t              num_words_major,
-        const   size_t              num_words_minor,
-        const   size_t              num_qubits_padded,
-        const   size_t              max_blocks,
+                ConstCommsPointer   commutations,
+        const   uint32&             pivot,
+        const   size_t&             total_targets,
+        const   size_t&             num_words_major,
+        const   size_t&             num_words_minor,
+        const   size_t&             num_qubits_padded,
+        const   size_t&             max_blocks,
         const   dim3&               currentblock,
         const   dim3&               currentgrid,
         const   cudaStream_t&       stream) {
@@ -236,19 +237,19 @@ namespace QuaSARQ {
         GENERATE_SWITCH_FOR_CALL(CALL_INJECTCX_PASS_1_FOR_BLOCK)
     }
 
-    void call_injectcx_pass_2_kernel(
-                Tableau<DeviceAllocator>& targets, 
-                Tableau<DeviceAllocator>& input,
-        const   word_std_t *        block_intermediate_prefix_z,
-        const   word_std_t *        block_intermediate_prefix_x,
-        const   Commutation *       commutations,
-        const   uint32              pivot,
-        const   size_t              total_targets,
-        const   size_t              num_words_major,
-        const   size_t              num_words_minor,
-        const   size_t              num_qubits_padded,
-        const   size_t              max_blocks,
-        const   size_t              pass_1_blocksize,
+	void call_injectcx_pass_2_kernel(
+                Tableau& 			targets, 
+                Tableau& 			input,
+                ConstWordsPointer   block_intermediate_prefix_z,
+                ConstWordsPointer   block_intermediate_prefix_x,
+                ConstCommsPointer   commutations,
+        const   uint32&             pivot,
+        const   size_t&             total_targets,
+        const   size_t&             num_words_major,
+        const   size_t&             num_words_minor,
+        const   size_t&             num_qubits_padded,
+        const   size_t&             max_blocks,
+        const   size_t&             pass_1_blocksize,
         const   dim3&               currentblock,
         const   dim3&               currentgrid,
         const   cudaStream_t&       stream) {
@@ -258,7 +259,7 @@ namespace QuaSARQ {
 
     // We need to compute prefix-xor of t-th destabilizer in X,Z for t = c+1, c+2, ... c+n-1
     // so that later we can xor every prefix-xor with controlled destabilizer.
-    void Prefix::inject_CX(Tableau<DeviceAllocator>& input, const Commutation* commutations, const uint32& pivot, const qubit_t& qubit, const cudaStream_t& stream) {
+    void Prefix::inject_CX(Tableau& input, const Commutation* commutations, const uint32& pivot, const qubit_t& qubit, const cudaStream_t& stream) {
         assert(num_qubits > pivot);
         assert(nextPow2(MIN_BLOCK_INTERMEDIATE_SIZE) == MIN_BLOCK_INTERMEDIATE_SIZE);
         

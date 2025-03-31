@@ -10,10 +10,9 @@
 
 namespace QuaSARQ {
 
-	template <class ALLOCATOR>
 	class DeviceCircuit {
 
-		ALLOCATOR& allocator;
+		DeviceAllocator& allocator;
 
 		pivot_t* _pivots;
 		bucket_t* _buckets;
@@ -45,7 +44,7 @@ namespace QuaSARQ {
 
 	public:
 
-		INLINE_ALL DeviceCircuit(ALLOCATOR& allocator) : 
+		INLINE_ALL DeviceCircuit(DeviceAllocator& allocator) : 
 			allocator(allocator)
 		,	_pivots(nullptr)
 		,	_buckets(nullptr)
@@ -81,17 +80,17 @@ namespace QuaSARQ {
 			if (this->max_references < max_references) {
 				LOGN2(2, "Resizing a (pinned) window for %lld references.. ", int64(max_references));
 				this->max_references = max_references;
-				_pivots = allocator.template allocate<pivot_t>(max_references);
-				allocator.template resize_pinned<pivot_t>(_pinned_pivots, max_references);
-				_references = allocator.template allocate<gate_ref_t>(max_references);
-				allocator.template resize_pinned<gate_ref_t>(_pinned_references, max_references);
+				_pivots = allocator.allocate<pivot_t>(max_references);
+				allocator.resize_pinned<pivot_t>(_pinned_pivots, max_references);
+				_references = allocator.allocate<gate_ref_t>(max_references);
+				allocator.resize_pinned<gate_ref_t>(_pinned_references, max_references);
 				LOGDONE(2, 3);
 			}
 			if (this->max_buckets < max_buckets) {
 				LOGN2(2, "Resizing a (pinned) window for %lld buckets.. ", int64(max_buckets));
 				this->max_buckets = max_buckets;
-				_buckets = allocator.template allocate<bucket_t>(max_buckets);
-				allocator.template resize_pinned<bucket_t>(_pinned_buckets, max_buckets);
+				_buckets = allocator.allocate<bucket_t>(max_buckets);
+				allocator.resize_pinned<bucket_t>(_pinned_buckets, max_buckets);
 				LOGDONE(2, 3);
 			}
 			this->max_qubits = max_qubits;

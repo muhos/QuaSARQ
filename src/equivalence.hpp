@@ -14,8 +14,8 @@ namespace QuaSARQ {
         size_t                          other_num_partitions;
         depth_t                         other_depth;
 		Circuit 						other_circuit;
-		Tableau<DeviceAllocator>        other_tableau;
-        DeviceCircuit<DeviceAllocator>  other_gpu_circuit;
+		Tableau        					other_tableau;
+        DeviceCircuit 					other_gpu_circuit;
 		Statistics                      other_stats;
 		cudaStream_t*                   other_custreams;
 		WindowInfo                      other_wininfo;

@@ -1,10 +1,23 @@
 #include "simulator.hpp"
-#include "measurement.cuh"
 #include "prefix.cuh"
 #include "tuner.cuh"
 #include "access.cuh"
+#include "operators.cuh"
 
 namespace QuaSARQ {;
+
+    #define do_YZ_Swap(X, Z, S) \
+    { \
+        const word_std_t x = X, z = Z; \
+        X = x ^ z; \
+        S ^= (x & ~z); \
+    }
+
+    #define do_XZ_Swap(X, Z, S) \
+    { \
+        do_SWAP(X, Z); \
+        S ^= word_std_t(X & Z); \
+    }
 
     __global__ 
     void check_x_destab(
@@ -24,14 +37,14 @@ namespace QuaSARQ {;
 
     __global__ 
     void inject_swap_k(
-                Table*          inv_xs, 
-                Table*          inv_zs,
-                Signs*          inv_ss, 
-        const   Commutation*    commutations, 
-        const   pivot_t         pivot,
-        const   size_t          num_words_major, 
-        const   size_t          num_words_minor,
-        const   size_t          num_qubits_padded) 
+                Table*              inv_xs, 
+                Table*              inv_zs,
+                Signs*              inv_ss, 
+                ConstCommsPointer   commutations, 
+        const   pivot_t             pivot,
+        const   size_t              num_words_major, 
+        const   size_t              num_words_minor,
+        const   size_t              num_qubits_padded) 
     {
         assert(pivot != INVALID_PIVOT);
         word_t* xs = inv_xs->data();

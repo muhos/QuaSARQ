@@ -35,21 +35,20 @@ namespace QuaSARQ {
     }
 
     bool PrefixChecker::check_prefix_pass_1(
-        Tableau<DeviceAllocator>& other_targets,
-        Tableau<DeviceAllocator>& other_input,
-        const   Commutation* other_commutations,
-        const   word_std_t*  other_zs,
-        const   word_std_t*  other_xs,
-        const   qubit_t      qubit, 
-        const   uint32       pivot,
-        const   size_t       total_targets,
-        const   size_t       num_words_major,
-        const   size_t       num_words_minor,
-        const   size_t       num_qubits_padded,
-        const   size_t       max_blocks,
-        const   size_t       pass_1_blocksize,
-        const   size_t       pass_1_gridsize
-    ) 
+                Tableau&        other_targets,
+                Tableau&        other_input,
+        const   Commutation*    other_commutations,
+        const   word_std_t*     other_zs,
+        const   word_std_t*     other_xs,
+        const   qubit_t&        qubit, 
+        const   uint32&         pivot,
+        const   size_t&         total_targets,
+        const   size_t&         num_words_major,
+        const   size_t&         num_words_minor,
+        const   size_t&         num_qubits_padded,
+        const   size_t&         max_blocks,
+        const   size_t&         pass_1_blocksize,
+        const   size_t&         pass_1_gridsize) 
     {
         SYNCALL;
 
@@ -150,12 +149,11 @@ namespace QuaSARQ {
     bool PrefixChecker::check_prefix_intermediate_pass(
         const   word_std_t*     other_zs,
         const   word_std_t*     other_xs,
-        const   qubit_t         qubit, 
-        const   uint32          pivot,
-        const   size_t          num_words_minor,
-        const   size_t	        max_blocks,
-        const 	size_t          pass_1_gridsize
-    ) {
+        const   qubit_t&        qubit, 
+        const   uint32&         pivot,
+        const   size_t&         num_words_minor,
+        const   size_t&	        max_blocks,
+        const 	size_t&         pass_1_gridsize) {
         SYNCALL;
         LOGN1("  Checking pass-x prefix for qubit %d and pivot %d.. ", qubit, pivot);
 
@@ -196,17 +194,16 @@ namespace QuaSARQ {
     }
 
     bool PrefixChecker::check_prefix_pass_2(
-        Tableau<DeviceAllocator>& other_targets, 
-        Tableau<DeviceAllocator>& other_input,
-        const   qubit_t 		qubit, 
-        const   uint32   		pivot,
-        const   size_t          total_targets,
-        const   size_t          num_words_major,
-        const   size_t          num_words_minor,
-        const   size_t          num_qubits_padded,
-        const   size_t          max_blocks,
-        const   size_t          pass_1_blocksize
-    ) {
+                Tableau& 		other_targets, 
+                Tableau& 		other_input,
+        const   qubit_t& 		qubit, 
+        const   uint32&   		pivot,
+        const   size_t&         total_targets,
+        const   size_t&         num_words_major,
+        const   size_t&         num_words_minor,
+        const   size_t&         num_qubits_padded,
+        const   size_t&         max_blocks,
+        const   size_t&         pass_1_blocksize) {
         SYNCALL;
 
         LOGN1("  Checking pass-2 prefix for qubit %d and pivot %d.. ", qubit, pivot);

@@ -1,6 +1,8 @@
 #include "simulator.hpp"
 #include "commutation.cuh"
+#include "datatypes.cuh"
 #include "access.cuh"
+#include "tuner.cuh"
 
 namespace QuaSARQ {
 

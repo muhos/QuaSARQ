@@ -28,25 +28,24 @@ namespace QuaSARQ {
 
 	};
 
-	template <class ALLOCATOR>
 	class Locker {
 
-		ALLOCATOR& allocator;
+		DeviceAllocator& allocator;
 
 		DeviceLocker* _dlocker;
 		int* _mutex;
 
 	public:
 
-		Locker(ALLOCATOR& allocator) : 
+		Locker(DeviceAllocator& allocator) : 
             	allocator(allocator) 
 			, 	_dlocker(nullptr)
 			,	_mutex(nullptr)
 			{}
 
 		void alloc() {
-			_dlocker = allocator.template allocate<DeviceLocker>(1);
-			_mutex = allocator.template allocate<int>(1);
+			_dlocker = allocator.allocate<DeviceLocker>(1);
+			_mutex = allocator.allocate<int>(1);
 
 			DeviceLocker *tmp = new DeviceLocker();
 			assert(_mutex != nullptr);

@@ -35,10 +35,9 @@ namespace QuaSARQ {
 
 #ifdef INTERLEAVE_XZ
 
-    template <class ALLOCATOR>
     class Tableau {
 
-        ALLOCATOR& allocator;
+        DeviceAllocator& allocator;
 
         Table* _ps;
         Signs* _ss;
@@ -110,21 +109,21 @@ namespace QuaSARQ {
             assert(_num_partitions == 1 && _num_words_major == get_num_words(num_qubits)
                 || _num_partitions > 1 && _num_partitions * _num_words_major <= _num_qubits_padded);
             // Create host pinned-memory objects to hold GPU pointers.
-            Table *h_ps = new (allocator.template allocate_pinned<Table>(1)) Table();
+            Table *h_ps = new (allocator.allocate_pinned<Table>(1)) Table();
             assert(h_ps != nullptr);
-            Signs *h_ss = new (allocator.template allocate_pinned<Signs>(1)) Signs();
+            Signs *h_ss = new (allocator.allocate_pinned<Signs>(1)) Signs();
             assert(h_ss != nullptr);
 
             // Create CUDA memory for GPU pointers.
-            _ps = allocator.template allocate<Table>(1);
+            _ps = allocator.allocate<Table>(1);
             assert(_ps != nullptr);
-            _ps_data = allocator.template allocate<word_t>(_num_words * 2);
+            _ps_data = allocator.allocate<word_t>(_num_words * 2);
             assert(_ps_data != nullptr);
 
-            _ss = allocator.template allocate<Signs>(1);
+            _ss = allocator.allocate<Signs>(1);
             assert(_ss != nullptr);
             const size_t num_sign_words = _num_words_major;
-            _ss_data = allocator.template allocate<sign_t>(num_sign_words);        
+            _ss_data = allocator.allocate<sign_t>(num_sign_words);        
             assert(_ss_data != nullptr);
 
             // bind the allocated GPU pointers to the host object,
@@ -177,10 +176,9 @@ namespace QuaSARQ {
 
 #else
 
-    template <class ALLOCATOR>
     class Tableau {
 
-        ALLOCATOR& allocator;
+        DeviceAllocator& allocator;
 
         Table* _xs, * _zs;
         Signs* _ss;
@@ -220,7 +218,7 @@ namespace QuaSARQ {
 
     public:
 
-        Tableau(ALLOCATOR& allocator) : 
+        Tableau(DeviceAllocator& allocator) : 
             allocator(allocator) 
         ,   _xs(nullptr)
         ,   _zs(nullptr)
@@ -295,26 +293,26 @@ namespace QuaSARQ {
                 || _num_partitions > 1 && _num_partitions * _num_words_major >= num_words_major_whole_tableau);
             
             // Create host pinned-memory objects to hold GPU pointers.
-            _h_xs = new (allocator.template allocate_pinned<Table>(1)) Table();
+            _h_xs = new (allocator.allocate_pinned<Table>(1)) Table();
             assert(_h_xs != nullptr);
-            _h_zs = new (allocator.template allocate_pinned<Table>(1)) Table();
+            _h_zs = new (allocator.allocate_pinned<Table>(1)) Table();
             assert(_h_zs != nullptr);
             if (!prefix && alloc_signs) {
-                _h_ss = new (allocator.template allocate_pinned<Signs>(1)) Signs();
+                _h_ss = new (allocator.allocate_pinned<Signs>(1)) Signs();
                 assert(_h_ss != nullptr);
             }
 
             // Create CUDA memory for GPU pointers.
-            _xs = allocator.template allocate<Table>(1);
+            _xs = allocator.allocate<Table>(1);
             assert(_xs != nullptr);
-            _xs_data = allocator.template allocate<word_t>(_num_words);
+            _xs_data = allocator.allocate<word_t>(_num_words);
             assert(_xs_data != nullptr);
-            _zs = allocator.template allocate<Table>(1);
+            _zs = allocator.allocate<Table>(1);
             assert(_zs != nullptr);
-            _zs_data = allocator.template allocate<word_t>(_num_words);
+            _zs_data = allocator.allocate<word_t>(_num_words);
             assert(_zs_data != nullptr);
             if (!prefix && alloc_signs) {
-                _ss = allocator.template allocate<Signs>(1);
+                _ss = allocator.allocate<Signs>(1);
                 assert(_ss != nullptr);
             }
 
@@ -325,7 +323,7 @@ namespace QuaSARQ {
             assert(_h_xs->size() == _num_words);
             assert(_h_zs->size() == _num_words);
             if (!prefix && alloc_signs) {
-                _ss_data = allocator.template allocate<sign_t>(_num_sign_words);        
+                _ss_data = allocator.allocate<sign_t>(_num_sign_words);        
                 assert(_ss_data != nullptr);
                 _h_ss->alloc(_ss_data, _num_qubits_padded, _num_sign_words, false);
                 CHECK(cudaMemcpyAsync(_ss, _h_ss, sizeof(Signs), cudaMemcpyHostToDevice));

@@ -11,7 +11,7 @@ namespace QuaSARQ {
     __global__ 
     void find_all_pivots(
                 pivot_t*            pivots, 
-                bucket_t*           measurements, 
+                ConstBucketsPointer measurements, 
                 ConstRefsPointer    refs, 
                 ConstTablePointer   inv_xs, 
         const   size_t              num_gates, 
@@ -55,7 +55,7 @@ namespace QuaSARQ {
     void find_new_pivot_and_mark(
                 Commutation*        commutations, 
                 pivot_t*            pivots, 
-                bucket_t*           measurements, 
+                ConstBucketsPointer measurements, 
                 ConstRefsPointer    refs, 
                 ConstTablePointer   inv_xs, 
         const   size_t              gate_index, 
@@ -121,7 +121,7 @@ namespace QuaSARQ {
         }
     }
 
-    void Simulator::find_pivots(Tableau<DeviceAllocator>& tab, const size_t& num_pivots_or_index, const bool& bulky, const cudaStream_t& stream) {
+    void Simulator::find_pivots(Tableau& tab, const size_t& num_pivots_or_index, const bool& bulky, const cudaStream_t& stream) {
         const size_t num_words_major = tab.num_words_major();
         const size_t num_words_minor = tab.num_words_minor();
         const size_t num_qubits_padded = tableau.num_qubits_padded();

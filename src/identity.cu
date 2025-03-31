@@ -71,7 +71,7 @@ namespace QuaSARQ {
 
 #endif
     
-    void Simulator::identity(Tableau<DeviceAllocator>& tab, const size_t& offset_per_partition, const size_t& num_qubits_per_partition, const cudaStream_t* streams, const InitialState& istate) {
+    void Simulator::identity(Tableau& tab, const size_t& offset_per_partition, const size_t& num_qubits_per_partition, const cudaStream_t* streams, const InitialState& istate) {
         if (options.tune_identity) {
             if (measuring)
                 tune_kernel_m(identity_Z_extended_1D, "Identity", bestblockidentity, bestgrididentity, offset_per_partition, num_qubits_per_partition, XZ_TABLE(tab));

@@ -54,7 +54,7 @@ namespace QuaSARQ {
 			d_ss.alloc_host(num_qubits_padded, num_words_major);
 		}
 
-		bool copy_input(Tableau<DeviceAllocator>& other, const bool& to_device = false) {
+		bool copy_input(Tableau& other, const bool& to_device = false) {
 			SYNCALL;
 			Table& dest_xs = to_device ? d_xs : h_xs;
 			Table& dest_zs = to_device ? d_zs : h_zs;
@@ -64,7 +64,7 @@ namespace QuaSARQ {
 			return true;
 		}
 
-		bool copy_prefix(Tableau<DeviceAllocator>& other) {
+		bool copy_prefix(Tableau& other) {
 			SYNCALL;
 			d_prefix_xs.flag_rowmajor(), d_prefix_zs.flag_rowmajor();
 			other.copy_to_host(&d_prefix_xs, &d_prefix_zs);
@@ -88,43 +88,41 @@ namespace QuaSARQ {
 		}
 
 		bool check_prefix_intermediate_pass(
-			const   word_std_t* other_zs,
-			const   word_std_t* other_xs,
-			const   qubit_t  qubit, 
-			const   uint32   pivot,
-			const   size_t   num_words_minor,
-			const   size_t	 max_blocks,
-			const 	size_t   pass_1_gridsize);
+			const   word_std_t*     other_zs,
+			const   word_std_t*     other_xs,
+			const   qubit_t&        qubit, 
+			const   uint32&         pivot,
+			const   size_t&         num_words_minor,
+			const   size_t&	        max_blocks,
+			const 	size_t&         pass_1_gridsize);
 		
 		bool check_prefix_pass_1(
-			Tableau<DeviceAllocator>& other_targets,
-			Tableau<DeviceAllocator>& other_input,
-			const   Commutation* other_commutations,
-			const   word_std_t*  other_zs,
-			const   word_std_t*  other_xs,
-			const   qubit_t      qubit, 
-			const   uint32       pivot,
-			const   size_t       total_targets,
-			const   size_t       num_words_major,
-			const   size_t       num_words_minor,
-			const   size_t       num_qubits_padded,
-			const   size_t       max_blocks,
-			const   size_t       pass_1_blocksize,
-			const   size_t       pass_1_gridsize
-		);
+					Tableau&        other_targets,
+					Tableau&        other_input,
+			const   Commutation*    other_commutations,
+			const   word_std_t*     other_zs,
+			const   word_std_t*     other_xs,
+			const   qubit_t&        qubit, 
+			const   uint32&         pivot,
+			const   size_t&         total_targets,
+			const   size_t&         num_words_major,
+			const   size_t&         num_words_minor,
+			const   size_t&         num_qubits_padded,
+			const   size_t&         max_blocks,
+			const   size_t&         pass_1_blocksize,
+			const   size_t&         pass_1_gridsize);
 
 		bool check_prefix_pass_2(
-			Tableau<DeviceAllocator>& other_targets, 
-			Tableau<DeviceAllocator>& other_input,
-			const   qubit_t 		qubit, 
-			const   uint32   		pivot,
-			const   size_t          total_targets,
-			const   size_t          num_words_major,
-			const   size_t          num_words_minor,
-			const   size_t          num_qubits_padded,
-			const   size_t          max_blocks,
-			const   size_t          pass_1_blocksize
-		);
+					Tableau& 		other_targets, 
+					Tableau& 		other_input,
+			const   qubit_t& 		qubit, 
+			const   uint32&   		pivot,
+			const   size_t&         total_targets,
+			const   size_t&         num_words_major,
+			const   size_t&         num_words_minor,
+			const   size_t&         num_qubits_padded,
+			const   size_t&         max_blocks,
+			const   size_t&         pass_1_blocksize);
 
 	};
 	

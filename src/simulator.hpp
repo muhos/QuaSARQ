@@ -36,10 +36,10 @@ namespace QuaSARQ {
         Vec<qubit_t, size_t>            shuffled;
         Vec<byte_t, size_t>             locked;
         DeviceAllocator                 gpu_allocator;
-        DeviceCircuit<DeviceAllocator>  gpu_circuit;
-        Locker<DeviceAllocator>         locker;
-        Tableau<DeviceAllocator>        tableau;
-        Tableau<DeviceAllocator>        inv_tableau;
+        DeviceCircuit                   gpu_circuit;
+        Locker                          locker;
+        Tableau                         tableau;
+        Tableau                         inv_tableau;
         Commutation*                    commutations;
         Prefix                          prefix;
         Statistics                      stats;
@@ -84,7 +84,7 @@ namespace QuaSARQ {
         void simulate(const size_t& p, const bool& reversed);
 
         // Launch a kernel to make identity tableau.
-        void identity(Tableau<DeviceAllocator>& tab, const size_t& offset_per_partition, const size_t& num_qubits_per_partition, const cudaStream_t* streams, const InitialState& istate = Zero);
+        void identity(Tableau& tab, const size_t& offset_per_partition, const size_t& num_qubits_per_partition, const cudaStream_t* streams, const InitialState& istate = Zero);
 
         // Advances the simulation by 1-time step.
         void step(const size_t& p, const depth_t& depth_level, const bool& reversed = false);
@@ -92,17 +92,17 @@ namespace QuaSARQ {
         // Do measurements in a single simulation step.
         void transpose(const bool& row_major, const cudaStream_t& stream);
         void reset_pivots(const size_t& num_pivots, const cudaStream_t& stream);
-        void find_pivots(Tableau<DeviceAllocator>& tab, const size_t& num_pivots_or_index, const bool& bulky, const cudaStream_t& stream);
+        void find_pivots(Tableau& tab, const size_t& num_pivots_or_index, const bool& bulky, const cudaStream_t& stream);
         void mark_commutations(const qubit_t& qubit, const cudaStream_t& stream);
         void inject_swap(const pivot_t& new_pivot, const qubit_t& qubit, const cudaStream_t& stream);
         int64 measure_indeterminate(const depth_t& depth_level, const cudaStream_t& stream = 0);
         void measure(const size_t& p, const depth_t& depth_level, const bool& reversed = false);
 
         // Printers.
-        void print_tableau(const Tableau<DeviceAllocator>& tab, const depth_t& depth_level, const bool& reverse, const bool& prefix = false);
-        void print_paulis(const Tableau<DeviceAllocator>& tab, const depth_t& depth_level, const bool& reversed);
-        void print_gates(const DeviceCircuit<DeviceAllocator>& gates, const gate_ref_t& num_gates, const depth_t& depth_level);
-        void print_measurements(const DeviceCircuit<DeviceAllocator>& gates, const gate_ref_t& num_gates, const depth_t& depth_level);
+        void print_tableau(const Tableau& tab, const depth_t& depth_level, const bool& reverse, const bool& prefix = false);
+        void print_paulis(const Tableau& tab, const depth_t& depth_level, const bool& reversed);
+        void print_gates(const DeviceCircuit& gates, const gate_ref_t& num_gates, const depth_t& depth_level);
+        void print_measurements(const DeviceCircuit& gates, const gate_ref_t& num_gates, const depth_t& depth_level);
 
         // Progress report.
         inline void print_progress_header() {

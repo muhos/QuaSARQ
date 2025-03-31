@@ -6,6 +6,8 @@
 #include "signs.cuh"
 #include "pivot.cuh"
 #include "gate.cuh"
+#include "word.cuh"
+#include "commutation.cuh"
 
 namespace QuaSARQ {
 
@@ -14,6 +16,9 @@ namespace QuaSARQ {
     typedef const pivot_t* __restrict__ ConstPivotsPointer;
 	typedef const bucket_t* __restrict__ ConstBucketsPointer;
     typedef const gate_ref_t* __restrict__ ConstRefsPointer;
+    typedef const word_std_t* __restrict__ ConstWordsPointer;
+    typedef const Commutation* __restrict__ ConstCommsPointer;
+
 
 }
 

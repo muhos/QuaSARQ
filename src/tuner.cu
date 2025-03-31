@@ -638,7 +638,7 @@ namespace QuaSARQ {
 	void tune_kernel_m(
 		void (*kernel)(
 				pivot_t*,
-				bucket_t*,
+				ConstBucketsPointer,
 				ConstRefsPointer,
 				ConstTablePointer,
 		const 	size_t,
@@ -654,7 +654,7 @@ namespace QuaSARQ {
 		const 	size_t& 			data_size_in_x,
 		const 	size_t& 			data_size_in_y,
 				pivot_t* 			pivots,
-				bucket_t* 			measurements,
+				ConstBucketsPointer measurements,
 				ConstRefsPointer 	refs,
 				ConstTablePointer 	inv_xs,
 		const 	size_t 				num_gates,
@@ -671,7 +671,7 @@ namespace QuaSARQ {
 		void (*kernel)(
 				Commutation* 		commutations,
 				pivot_t*,
-				bucket_t*,
+				ConstBucketsPointer,
 				ConstRefsPointer,
 				ConstTablePointer,
 		const 	size_t,
@@ -685,7 +685,7 @@ namespace QuaSARQ {
 		const 	size_t& 			shared_element_bytes,
 				Commutation* 		commutations,
 				pivot_t* 			pivots,
-				bucket_t* 			measurements,
+				ConstBucketsPointer measurements,
 				ConstRefsPointer 	refs,
 				ConstTablePointer 	inv_xs,
 		const 	size_t& 			gate_index,
@@ -711,11 +711,11 @@ namespace QuaSARQ {
 				dim3&		 		bestGrid,
 				Commutation*		commutations,
 				ConstTablePointer 	inv_xs,
-		const 	qubit_t 			qubit,
-		const 	size_t 				size,
-		const 	size_t 				num_words_major,
-		const 	size_t 				num_words_minor,
-		const 	size_t 				num_qubits_padded)
+		const 	qubit_t& 			qubit,
+		const 	size_t& 			size,
+		const 	size_t& 			num_words_major,
+		const 	size_t& 			num_words_minor,
+		const 	size_t& 			num_qubits_padded)
 	{
 		size_t shared_element_bytes = 0;
 		TUNE_1D(commutations, inv_xs, qubit, size, num_words_major, num_words_minor, num_qubits_padded);
@@ -761,15 +761,15 @@ namespace QuaSARQ {
 				Table*, 
 		const 	size_t, 
 		const 	size_t),
-				dim3& 	bestBlockTransposeBits, 
-				dim3& 	bestGridTransposeBits,
-				dim3& 	bestBlockTransposeSwap, 
-				dim3& 	bestGridTransposeSwap,
-				Table*	xs, 
-				Table* 	zs,
-        const 	size_t& num_words_major, 
-		const 	size_t& num_words_minor, 
-		const 	bool& 	row_major) 
+				dim3& 		bestBlockTransposeBits, 
+				dim3& 		bestGridTransposeBits,
+				dim3& 		bestBlockTransposeSwap, 
+				dim3& 		bestGridTransposeSwap,
+				Table*		xs, 
+				Table* 		zs,
+        const 	size_t& 	num_words_major, 
+		const 	size_t& 	num_words_minor, 
+		const 	bool& 		row_major) 
 	{
 		int64 threadsX = WORD_BITS;
 		bool shared_size_yextend = true;
@@ -830,8 +830,8 @@ namespace QuaSARQ {
 		const   size_t&         shared_element_bytes, 
 		const   size_t&         data_size_in_x, 
 		const   size_t&         data_size_in_y,
-				Tableau<DeviceAllocator>& targets, 
-				Tableau<DeviceAllocator>& input, 
+				Tableau& 		targets, 
+				Tableau& 		input, 
 				word_std_t *    block_intermediate_prefix_z,
 				word_std_t *    block_intermediate_prefix_x,
 		const   Commutation*    commutations,
@@ -870,19 +870,19 @@ namespace QuaSARQ {
 		const 	size_t, 
 		const 	size_t, 
 		const 	size_t),
-				dim3& 		bestBlock, 
-				dim3& 		bestGrid,
-		const 	size_t& 	data_size_in_x, 
-		const 	size_t& 	data_size_in_y,
-				word_std_t* block_intermediate_prefix_z,
-				word_std_t* block_intermediate_prefix_x,
-		const 	word_std_t* subblocks_prefix_z, 
-		const 	word_std_t* subblocks_prefix_x,
-		const 	size_t& 	num_blocks,
-		const 	size_t& 	num_words_minor,
-		const 	size_t& 	max_blocks,
-		const 	size_t& 	max_sub_blocks,
-		const 	size_t& 	pass_1_blocksize) 
+				dim3& 			bestBlock, 
+				dim3& 			bestGrid,
+		const 	size_t& 		data_size_in_x, 
+		const 	size_t& 		data_size_in_y,
+				word_std_t* 	block_intermediate_prefix_z,
+				word_std_t* 	block_intermediate_prefix_x,
+		const 	word_std_t* 	subblocks_prefix_z, 
+		const 	word_std_t* 	subblocks_prefix_x,
+		const 	size_t& 		num_blocks,
+		const 	size_t& 		num_words_minor,
+		const 	size_t& 		max_blocks,
+		const 	size_t& 		max_sub_blocks,
+		const 	size_t& 		pass_1_blocksize) 
 	{
 		const char* opname = "prefix pass 2";
 		const size_t shared_element_bytes = 0;
@@ -905,8 +905,8 @@ namespace QuaSARQ {
 		const 	size_t& 		shared_element_bytes, 
 		const 	size_t& 		data_size_in_x, 
 		const 	size_t& 		data_size_in_y,
-				Tableau<DeviceAllocator>& targets, 
-				Tableau<DeviceAllocator>& input, 
+				Tableau& 		targets, 
+				Tableau& 		input, 
         const 	word_std_t *	block_intermediate_prefix_z,
         const 	word_std_t *	block_intermediate_prefix_x,
 		const 	Commutation* 	commutations,
@@ -938,17 +938,16 @@ namespace QuaSARQ {
 	}
 
 	void tune_single_pass(
-				dim3&       bestBlock, 
-				dim3&       bestGrid,
-		const   size_t&     shared_element_bytes, 
-		const   size_t&     data_size_in_x, 
-		const   size_t&     data_size_in_y,
-				word_std_t* block_intermediate_prefix_z, 
-				word_std_t* block_intermediate_prefix_x,
-		const   size_t      num_chunks,
-		const   size_t      num_words_minor,
-		const   size_t      max_blocks
-	)
+				dim3&       	bestBlock, 
+				dim3&       	bestGrid,
+		const   size_t&     	shared_element_bytes, 
+		const   size_t&     	data_size_in_x, 
+		const   size_t&     	data_size_in_y,
+				word_std_t* 	block_intermediate_prefix_z, 
+				word_std_t* 	block_intermediate_prefix_x,
+		const   size_t&     	num_chunks,
+		const   size_t&     	num_words_minor,
+		const   size_t&     	max_blocks)
 	{
 		const char* opname = "scan single pass";
 		TUNE_2D_PREFIX_SINGLE_CUB(

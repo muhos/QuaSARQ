@@ -3,6 +3,7 @@
 #include "prefixdim.cuh"
 #include "timer.cuh"
 #include "access.cuh"
+#include "datatypes.cuh"
 #include <cub/block/block_scan.cuh>
 
 namespace QuaSARQ {
@@ -128,15 +129,15 @@ namespace QuaSARQ {
 
     __global__
     void scan_blocks_pass_2(
-                word_std_t* block_intermediate_prefix_z,
-                word_std_t* block_intermediate_prefix_x,
-        const   word_std_t* subblocks_prefix_z,
-        const   word_std_t* subblocks_prefix_x,
-        const   size_t      num_blocks,
-        const   size_t      num_words_minor,
-        const   size_t      max_blocks,
-		const   size_t      max_sub_blocks,
-        const   size_t      pass_1_blocksize) {
+                word_std_t*         block_intermediate_prefix_z,
+                word_std_t*         block_intermediate_prefix_x,
+                ConstWordsPointer   subblocks_prefix_z,
+                ConstWordsPointer   subblocks_prefix_x,
+        const   size_t              num_blocks,
+        const   size_t              num_words_minor,
+        const   size_t              max_blocks,
+		const   size_t              max_sub_blocks,
+        const   size_t              pass_1_blocksize) {
 
         for_parallel_y(w, num_words_minor) {
 
@@ -158,7 +159,7 @@ namespace QuaSARQ {
         }
     }
 
-    void Prefix::alloc(const Tableau<DeviceAllocator>& input, const size_t& config_qubits, const size_t& max_window_bytes) {
+    void Prefix::alloc(const Tableau& input, const size_t& config_qubits, const size_t& max_window_bytes) {
         this->config_qubits = config_qubits;
         num_qubits = input.num_qubits();
         num_words_major = input.num_words_major();
@@ -195,7 +196,7 @@ namespace QuaSARQ {
         checker.alloc(num_qubits);
     }
 
-    void Prefix::resize(const Tableau<DeviceAllocator>& input, const size_t& max_window_bytes) {
+    void Prefix::resize(const Tableau& input, const size_t& max_window_bytes) {
         assert(num_qubits <= input.num_qubits());
         assert(config_qubits != 0);
         num_qubits = input.num_qubits();
@@ -218,9 +219,9 @@ namespace QuaSARQ {
     void call_single_pass_kernel(
                 word_std_t *        intermediate_prefix_z,
                 word_std_t *        intermediate_prefix_x,
-        const   size_t              num_chunks,
-        const   size_t              num_words_minor,
-        const   size_t              max_blocks,
+        const   size_t&             num_chunks,
+        const   size_t&             num_words_minor,
+        const   size_t&             max_blocks,
         const   dim3&               currentblock,
         const   dim3&               currentgrid,
         const   cudaStream_t&       stream) {
@@ -229,17 +230,17 @@ namespace QuaSARQ {
         }
 
     void call_scan_blocks_pass_1_kernel(
-                word_std_t*     block_intermediate_prefix_z,
-                word_std_t*     block_intermediate_prefix_x,
-                word_std_t*     subblocks_prefix_z, 
-                word_std_t*     subblocks_prefix_x, 
-        const   size_t          num_blocks,
-        const   size_t          num_words_minor,
-        const   size_t          max_blocks,
-        const   size_t          max_sub_blocks,
-        const   dim3&           currentblock,
-        const   dim3&           currentgrid,
-        const   cudaStream_t&   stream) {
+                word_std_t*     	block_intermediate_prefix_z,
+                word_std_t*     	block_intermediate_prefix_x,
+                word_std_t*     	subblocks_prefix_z, 
+                word_std_t*     	subblocks_prefix_x, 
+        const   size_t&         	num_blocks,
+        const   size_t&         	num_words_minor,
+        const   size_t&         	max_blocks,
+        const   size_t&         	max_sub_blocks,
+        const   dim3&           	currentblock,
+        const   dim3&           	currentgrid,
+        const   cudaStream_t&   	stream) {
 
             GENERATE_SWITCH_FOR_CALL(CALL_PREFIX_PASS_1_FOR_BLOCK)
         }
