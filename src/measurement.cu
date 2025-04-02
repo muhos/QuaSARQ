@@ -69,7 +69,7 @@ namespace QuaSARQ {;
         }
     }
 
-    bool check_inject_swap(
+    void check_inject_swap(
                 Table&          h_xs, 
                 Table&          h_zs,
                 Signs&          h_ss, 
@@ -95,8 +95,7 @@ namespace QuaSARQ {;
         const bool commuting = bool(qubit_word & q_mask);
 
         if (commuting != d_commutations[pivot].commuting) {
-            LOGERRORN("Commuting bit not identical at pivot(%lld)", pivot);
-            return false;
+            LOGERROR("Commuting bit not identical at pivot(%lld)", pivot);
         }
 
         for (size_t w = 0; w < num_words_minor; w++) { 
@@ -120,26 +119,20 @@ namespace QuaSARQ {;
             const size_t c_destab = TABLEAU_INDEX(w, pivot);
             const size_t c_stab = c_destab + TABLEAU_STAB_OFFSET;
             if (h_xs[c_destab] != d_xs[c_destab]) {
-                LOGERRORN("X-Stabilizer failed at w(%lld), pivot(%lld)", w, pivot);
-                return false;
+                LOGERROR("X-Stabilizer failed at w(%lld), pivot(%lld)", w, pivot);
             }
             if (h_zs[c_destab] != d_zs[c_destab]) {
-                LOGERRORN("Z-Stabilizer failed at w(%lld), pivot(%lld)", w, pivot);
-                return false;
+                LOGERROR("Z-Stabilizer failed at w(%lld), pivot(%lld)", w, pivot);
             }
             if (h_ss[w] != d_ss[w]) {
-                LOGERRORN("Destabilizer signs failed at w(%lld)", w);
-                return false;
+                LOGERROR("Destabilizer signs failed at w(%lld)", w);
             }
             if (h_ss[w + num_words_minor] != d_ss[w + num_words_minor]) {
-                LOGERRORN("Stabilizer signs failed at w(%lld)", w + num_words_minor);
-                return false;
+                LOGERROR("Stabilizer signs failed at w(%lld)", w + num_words_minor);
             }
         }
 
         LOG0("PASSED");
-        
-        return true;
     }
 
     void Simulator::inject_swap(const pivot_t& pivot, const qubit_t& qubit, const cudaStream_t& stream) {
@@ -187,22 +180,24 @@ namespace QuaSARQ {;
             cutimer.stop(stream);
             LOGENDING(2, 4, "(time %.3f ms)", cutimer.time());
         } else LOGDONE(2, 4);
-        assert(prefix.get_checker().copy_commutations(commutations, num_qubits));
-        assert(prefix.get_checker().copy_input(tableau, true));
-        assert(check_inject_swap(
-            prefix.get_checker().h_xs,
-            prefix.get_checker().h_zs,
-            prefix.get_checker().h_ss,
-            prefix.get_checker().d_xs,
-            prefix.get_checker().d_zs,
-            prefix.get_checker().d_ss,
-            prefix.get_checker().d_commutations,
-            qubit,
-            pivot,
-            num_words_major,
-            num_words_minor,
-            num_qubits_padded
-        ));
+        if (options.check_measurement) {
+            prefix.get_checker().copy_commutations(commutations, num_qubits);
+            prefix.get_checker().copy_input(tableau, true);
+            check_inject_swap(
+                prefix.get_checker().h_xs,
+                prefix.get_checker().h_zs,
+                prefix.get_checker().h_ss,
+                prefix.get_checker().d_xs,
+                prefix.get_checker().d_zs,
+                prefix.get_checker().d_ss,
+                prefix.get_checker().d_commutations,
+                qubit,
+                pivot,
+                num_words_major,
+                num_words_minor,
+                num_qubits_padded
+            );
+        }
     }
 
     #define DEBUG_INJECT_CX 0

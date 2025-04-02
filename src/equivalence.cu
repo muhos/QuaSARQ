@@ -154,9 +154,9 @@ namespace QuaSARQ {
 
 #endif // End of debug/release mode.
 
-            if (options.print_step_tableau && p < num_partitions && d < depth)
+            if (options.print_steptableau && p < num_partitions && d < depth)
                 print_tableau(tableau, d, false);
-            if (options.print_step_tableau && p < other_num_partitions && d < other_depth)
+            if (options.print_steptableau && p < other_num_partitions && d < other_depth)
                 print_tableau(other_tableau, d, false);
 
         } // END of depth loop.

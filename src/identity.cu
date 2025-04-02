@@ -110,7 +110,7 @@ namespace QuaSARQ {
             LOG2(1, "done in %f ms.", itime);
         }
         else LOGDONE(1, 3);
-        if (options.print_initial_tableau) 
+        if (options.print_initialtableau) 
             print_tableau(tab, -1, false);
     }
 

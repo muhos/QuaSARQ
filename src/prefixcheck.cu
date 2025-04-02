@@ -34,7 +34,10 @@ namespace QuaSARQ {
         return blockSum;
     }
 
-    bool PrefixChecker::check_prefix_pass_1(
+     // If skip_checking_device is set to 1, checking with device
+     // will be slipped but CPU computations would proceed normally.
+     // Useful to determine the largest number of targets.
+    void PrefixChecker::check_prefix_pass_1(
                 Tableau&        other_targets,
                 Tableau&        other_input,
         const   Commutation*    other_commutations,
@@ -48,17 +51,21 @@ namespace QuaSARQ {
         const   size_t&         num_qubits_padded,
         const   size_t&         max_blocks,
         const   size_t&         pass_1_blocksize,
-        const   size_t&         pass_1_gridsize) 
+        const   size_t&         pass_1_gridsize,
+        const   bool&           skip_checking_device) 
     {
         SYNCALL;
 
-        LOGN1("  Checking pass-1 prefix for qubit %d and pivot %d.. ", qubit, pivot);
+        const char * title = skip_checking_device ? "Performing" : "Checking"; 
+        LOGN1("  %s pass-1 prefix for qubit %d and pivot %d.. ", title, qubit, pivot);
 
         if (h_xs.is_colmajor()) // Do the copy only the first time.
             copy_input(other_input);
-        copy_prefix(other_targets);
-        copy_prefix_blocks(other_xs, other_zs, max_blocks * num_words_minor);
-        copy_commutations(other_commutations, other_input.num_qubits());
+        if (!skip_checking_device) {
+            copy_prefix(other_targets);
+            copy_prefix_blocks(other_xs, other_zs, max_blocks * num_words_minor);
+            copy_commutations(other_commutations, other_input.num_qubits());
+        }
 
         const size_t q_w = WORD_OFFSET(qubit);
         const word_std_t q_mask = BITMASK_GLOBAL(qubit);
@@ -69,9 +76,8 @@ namespace QuaSARQ {
             const size_t word_idx = TABLEAU_INDEX(q_w, t) + TABLEAU_STAB_OFFSET;
             const word_std_t qubit_word = h_xs[word_idx];
             h_commutations[t].anti_commuting = bool(qubit_word & q_mask);
-            if (h_commutations[t].anti_commuting != d_commutations[t].anti_commuting) {
-                LOGERRORN("Pass-1 FAILED at commutations[%lld].anti_commuting", t);
-                return false;
+            if (!skip_checking_device && h_commutations[t].anti_commuting != d_commutations[t].anti_commuting) {
+                LOGERROR("Pass-1 FAILED at commutations[%lld].anti_commuting", t);
             }
         }
 
@@ -114,13 +120,11 @@ namespace QuaSARQ {
                             size_t word_idx = PREFIX_TABLEAU_INDEX(w, tid_x);
                             h_prefix_zs[word_idx] = word_std_t(h_zs[c_destab]) ^ t_prefix_z[tx];
                             h_prefix_xs[word_idx] = word_std_t(h_xs[c_destab]) ^ t_prefix_x[tx];
-                            if (d_prefix_xs[word_idx] != h_prefix_xs[word_idx]) {
-                                LOGERRORN("Pass-1 FAILED at prefix-x[w: %lld, tid: %lld]", w, tid_x);
-                                return false;
+                            if (!skip_checking_device && d_prefix_xs[word_idx] != h_prefix_xs[word_idx]) {
+                                LOGERROR("Pass-1 FAILED at prefix-x[w: %lld, tid: %lld]", w, tid_x);
                             }
-                            if (d_prefix_zs[word_idx] != h_prefix_zs[word_idx]) {
-                                LOGERRORN("Pass-1 FAILED at prefix-z[w: %lld, tid: %lld]", w, tid_x);
-                                return false;
+                            if (!skip_checking_device && d_prefix_zs[word_idx] != h_prefix_zs[word_idx]) {
+                                LOGERROR("Pass-1 FAILED at prefix-z[w: %lld, tid: %lld]", w, tid_x);
                             }
                         }
                     }
@@ -129,13 +133,11 @@ namespace QuaSARQ {
                     size_t bid = PREFIX_INTERMEDIATE_INDEX(w, bx);
                     h_block_intermediate_prefix_z[bid] = blockSum_z;
                     h_block_intermediate_prefix_x[bid] = blockSum_x;
-                    if (h_block_intermediate_prefix_x[bid] != d_block_intermediate_prefix_x[bid]) {
-                        LOGERRORN("Pass-1 FAILED at block-prefix-x[w: %lld, bx: %lld]", w, bx);
-                        return false;
+                    if (!skip_checking_device && h_block_intermediate_prefix_x[bid] != d_block_intermediate_prefix_x[bid]) {
+                        LOGERROR("Pass-1 FAILED at block-prefix-x[w: %lld, bx: %lld]", w, bx);
                     }
-                    if (h_block_intermediate_prefix_z[bid] != d_block_intermediate_prefix_z[bid]) {
-                        LOGERRORN("Pass-1 FAILED at block-prefix-z[w: %lld, bx: %lld]", w, bx);
-                        return false;
+                    if (!skip_checking_device && h_block_intermediate_prefix_z[bid] != d_block_intermediate_prefix_z[bid]) {
+                        LOGERROR("Pass-1 FAILED at block-prefix-z[w: %lld, bx: %lld]", w, bx);
                     }
                 }
                 
@@ -143,21 +145,23 @@ namespace QuaSARQ {
         }
 
         LOG0("PASSED");
-        return true;
     }
 
-    bool PrefixChecker::check_prefix_intermediate_pass(
+    void PrefixChecker::check_prefix_intermediate_pass(
         const   word_std_t*     other_zs,
         const   word_std_t*     other_xs,
         const   qubit_t&        qubit, 
         const   uint32&         pivot,
         const   size_t&         num_words_minor,
         const   size_t&	        max_blocks,
-        const 	size_t&         pass_1_gridsize) {
+        const 	size_t&         pass_1_gridsize,
+        const   bool&           skip_checking_device) {
+        
         SYNCALL;
-        LOGN1("  Checking pass-x prefix for qubit %d and pivot %d.. ", qubit, pivot);
+        const char * title = skip_checking_device ? "Performing" : "Checking"; 
+        LOGN1("  %s pass-x prefix for qubit %d and pivot %d.. ", title, qubit, pivot);
 
-        copy_prefix_blocks(other_xs, other_zs, max_blocks * num_words_minor);
+        if (!skip_checking_device) copy_prefix_blocks(other_xs, other_zs, max_blocks * num_words_minor);
 
         const int nextpow2_blocksize = nextPow2(pass_1_gridsize);
         Vec<word_std_t> block_z(nextpow2_blocksize);
@@ -179,21 +183,18 @@ namespace QuaSARQ {
                 size_t bid = PREFIX_INTERMEDIATE_INDEX(w, tx);
                 h_block_intermediate_prefix_z[bid] = block_z[tx];
                 h_block_intermediate_prefix_x[bid] = block_x[tx];
-                if (h_block_intermediate_prefix_x[bid] != d_block_intermediate_prefix_x[bid]) {
-                    LOGERRORN("Pass-x FAILED at block-prefix-x[w: %lld, tx: %lld]", w, tx);
-                    return false;
+                if (!skip_checking_device && h_block_intermediate_prefix_x[bid] != d_block_intermediate_prefix_x[bid]) {
+                    LOGERROR("Pass-x FAILED at block-prefix-x[w: %lld, tx: %lld]", w, tx);
                 }
-                if (h_block_intermediate_prefix_z[bid] != d_block_intermediate_prefix_z[bid]) {
-                    LOGERRORN("Pass-x FAILED at block-prefix-z[w: %lld, tx: %lld]", w, tx);
-                    return false;
+                if (!skip_checking_device && h_block_intermediate_prefix_z[bid] != d_block_intermediate_prefix_z[bid]) {
+                    LOGERROR("Pass-x FAILED at block-prefix-z[w: %lld, tx: %lld]", w, tx);
                 }
             }
         }    
         LOG0("PASSED");
-        return true;
     }
 
-    bool PrefixChecker::check_prefix_pass_2(
+    void PrefixChecker::check_prefix_pass_2(
                 Tableau& 		other_targets, 
                 Tableau& 		other_input,
         const   qubit_t& 		qubit, 
@@ -203,12 +204,14 @@ namespace QuaSARQ {
         const   size_t&         num_words_minor,
         const   size_t&         num_qubits_padded,
         const   size_t&         max_blocks,
-        const   size_t&         pass_1_blocksize) {
+        const   size_t&         pass_1_blocksize,
+        const   bool&           skip_checking_device) {
+        
         SYNCALL;
+        const char * title = skip_checking_device ? "Performing" : "Checking"; 
+        LOGN1("  %s pass-2 prefix for qubit %d and pivot %d.. ", title, qubit, pivot);
 
-        LOGN1("  Checking pass-2 prefix for qubit %d and pivot %d.. ", qubit, pivot);
-
-        copy_input(other_input, true);
+        if (!skip_checking_device) copy_input(other_input, true);
 
         for (size_t w = 0; w < num_words_minor; w++) {
             const size_t c_destab = TABLEAU_INDEX(w, pivot);
@@ -234,16 +237,16 @@ namespace QuaSARQ {
                     const size_t bid = PREFIX_INTERMEDIATE_INDEX(w, (tid_x / pass_1_blocksize));
                     zc_xor_zt ^= h_block_intermediate_prefix_z[bid];
                     xc_xor_xt ^= h_block_intermediate_prefix_x[bid];
-                    d_zc_xor_zt ^= d_block_intermediate_prefix_z[bid];
-                    d_xc_xor_xt ^= d_block_intermediate_prefix_x[bid];
 
-                    if (d_xc_xor_xt != xc_xor_xt) {
-                        LOGERRORN("Pass-2 FAILED at prefix-x[w: %lld, tid: %lld]", w, tid_x);
-                        return false;
-                    }
-                    if (d_zc_xor_zt != zc_xor_zt) {
-                        LOGERRORN("Pass-2 FAILED at prefix-z[w: %lld, tid: %lld]", w, tid_x);
-                        return false;
+                    if (!skip_checking_device) {
+                        d_zc_xor_zt ^= d_block_intermediate_prefix_z[bid];
+                        d_xc_xor_xt ^= d_block_intermediate_prefix_x[bid];
+                        if (d_xc_xor_xt != xc_xor_xt) {
+                            LOGERROR("Pass-2 FAILED at prefix-x[w: %lld, tid: %lld]", w, tid_x);
+                        }
+                        if (d_zc_xor_zt != zc_xor_zt) {
+                            LOGERROR("Pass-2 FAILED at prefix-z[w: %lld, tid: %lld]", w, tid_x);
+                        }
                     }
 
                     // Compute the CX expression for Z.
@@ -268,38 +271,33 @@ namespace QuaSARQ {
                     h_xs[t_stab] ^= c_stab_word;
                     h_xs[c_destab] ^= t_destab_word;
 
-                    if (h_xs[t_stab] != d_xs[t_stab]) {
-                        LOGERRORN("Pass-2 FAILED at stab-x[w: %lld, tid: %lld]", w, tid_x);
-                        return false;
+                    if (!skip_checking_device && h_xs[t_stab] != d_xs[t_stab]) {
+                        LOGERROR("Pass-2 FAILED at stab-x[w: %lld, tid: %lld]", w, tid_x);
                     }
-                    if (h_zs[t_stab] != d_zs[t_stab]) {
-                        LOGERRORN("Pass-2 FAILED at stab-z[w: %lld, tid: %lld]", w, tid_x);
-                        return false;
+                    if (!skip_checking_device && h_zs[t_stab] != d_zs[t_stab]) {
+                        LOGERROR("Pass-2 FAILED at stab-z[w: %lld, tid: %lld]", w, tid_x);
                     }
                 }
             }
 
-            if (h_xs[c_destab] != d_xs[c_destab]) {
-                LOGERRORN("Pass-2 FAILED at destab-x[w: %lld, pivot: %lld]", w, pivot);
-                return false;
-            }
-            if (h_zs[c_destab] != d_zs[c_destab]) {
-                LOGERRORN("Pass-2 FAILED at destab-z[w: %lld, pivot: %lld]", w, pivot);
-                return false;
-            }
+            if (!skip_checking_device) {
+                if (h_xs[c_destab] != d_xs[c_destab]) {
+                    LOGERROR("Pass-2 FAILED at destab-x[w: %lld, pivot: %lld]", w, pivot);
+                }
+                if (h_zs[c_destab] != d_zs[c_destab]) {
+                    LOGERROR("Pass-2 FAILED at destab-z[w: %lld, pivot: %lld]", w, pivot);
+                }
 
-            if (h_ss[w] != d_ss[w]) {
-                LOGERRORN("Pass-2 FAILED at destab-s[w: %lld]", w);
-                return false;
-            }
-            if (h_ss[w + num_words_minor] != d_ss[w + num_words_minor]) {
-                LOGERRORN("Pass-2 FAILED at   stab-s[w: %lld]", w + num_words_minor);
-                return false;
+                if (h_ss[w] != d_ss[w]) {
+                    LOGERROR("Pass-2 FAILED at destab-s[w: %lld]", w);
+                }
+                if (h_ss[w + num_words_minor] != d_ss[w + num_words_minor]) {
+                    LOGERROR("Pass-2 FAILED at   stab-s[w: %lld]", w + num_words_minor);
+                }
             }
         }
 
         LOG0("PASSED");
-        return true;
     }
 
 }

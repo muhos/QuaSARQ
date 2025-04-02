@@ -197,24 +197,21 @@ namespace QuaSARQ {
         }
     }
 
-    bool check_transpose(const Table& x1, const Table& z1, const Table& x2, const Table& z2) {
-        LOGN0(" Checking its correctness.. ");
-        if (x1.size() != x2.size()) return false;
-        if (z1.size() != z2.size()) return false;
+    void check_transpose(const Table& x1, const Table& z1, const Table& x2, const Table& z2) {
+        LOGN0(" Checking transpose correctness.. ");
+        if (x1.size() != x2.size()) LOGERROR("x1 and x2 sizes do not match");
+        if (z1.size() != z2.size()) LOGERROR("z1 and z2 sizes do not match");
         for (size_t i = 0; i < x1.size(); i++) {
             if (x1[i] != x2[i]) {
-                LOGERRORN("FAILED for x1 or x2 at word %lld.", i);
-                return false;
+                LOGERROR("FAILED for x1 or x2 at word %lld.", i);
             }
         }
         for (size_t i = 0; i < z1.size(); i++) {
             if (z1[i] != z2[i]) {
-                LOGERRORN("FAILED for z1 or z2 at word %lld.", i);
-                return false;
+                LOGERROR("FAILED for z1 or z2 at word %lld.", i);
             }
         }
         LOG0("PASSED");
-        return true;
     }
 
     void transpose_to_colmajor_cpu(Table& xs, Table& zs, const Table& inv_xs, const Table& inv_zs) {
@@ -242,7 +239,7 @@ namespace QuaSARQ {
         }
     }
 
-    bool check_transpose(Tableau& d_tab, Tableau& d_inv_tab) {
+    void check_transpose(Tableau& d_tab, Tableau& d_inv_tab) {
         SYNCALL;
 
         Table d_xs, d_zs;
@@ -257,7 +254,7 @@ namespace QuaSARQ {
         h_zs.alloc_host(d_tab.num_qubits_padded(), d_tab.num_words_major(), d_tab.num_words_minor());
         transpose_to_colmajor_cpu(h_xs, h_zs, d_inv_xs, d_inv_zs);
 
-        return check_transpose(h_xs, h_zs, d_xs, d_zs);
+        check_transpose(h_xs, h_zs, d_xs, d_zs);
     }
 
     #if ROW_MAJOR
@@ -294,7 +291,7 @@ namespace QuaSARQ {
             }
             LOGDONE(2, 4);
             tableau.swap_tableaus(inv_tableau);
-            assert(check_transpose(inv_tableau, tableau));
+            if (options.check_transpose) check_transpose(inv_tableau, tableau);
         }
         else {
             tableau.swap_tableaus(inv_tableau);

@@ -5,44 +5,55 @@
 
 namespace QuaSARQ {
 
-    #define CONFIG2INPUT(CONFIG) \
+    /* Checking options */
+    #define CONFIG2CHECKINPUT(CONFIG) \
+        BOOL_OPT opt_check_ ## CONFIG ## _en("check-"#CONFIG, "check "#CONFIG" (parallel) procedure for logical errors", false);
+
+    #define CONFIG2CHECKASSIGN(CONFIG) \
+        check_ ## CONFIG = opt_check_ ## CONFIG ## _en;
+
+    #define CHECK_ALL(CONFIG) \
+        check_ ## CONFIG |= check_all;
+
+    /* Printing options */
+    #define CONFIG2PRINTINPUT(CONFIG, MSG) \
+        BOOL_OPT opt_print_ ## CONFIG ## _en("print-"#CONFIG, "print "#MSG" on screen", false);
+
+    #define CONFIG2PRINTASSIGN(CONFIG, MSG) \
+        print_ ## CONFIG = opt_print_ ## CONFIG ## _en;
+
+    /* Tuning options */
+    #define CONFIG2TUNEINPUT(CONFIG, BLOCKX, BLOCKY, GRIDX, GRIDY) \
         BOOL_OPT opt_tune_ ## CONFIG ## _en("tune-"#CONFIG, "tune "#CONFIG" kernels", false);
 
-    #define CONFIG2ASSIGN(CONFIG) \
+    #define CONFIG2TUNEASSIGN(CONFIG, BLOCKX, BLOCKY, GRIDX, GRIDY) \
         tune_ ## CONFIG = opt_tune_ ## CONFIG ## _en;
 
-    #define ENABLE_TUNER(CONFIG) \
+    #define ENABLE_TUNER(CONFIG, BLOCKX, BLOCKY, GRIDX, GRIDY) \
         tuner_en |= tune_ ## CONFIG;
 
-    #define TUNE_ALL(CONFIG) \
+    #define TUNE_ALL(CONFIG, BLOCKX, BLOCKY, GRIDX, GRIDY) \
         tune_ ## CONFIG |= tune_all;
 
-    // Default frequency of some gates will be changed later.
-    #define GATE2INPUT(GATE) \
+    /* Gate frequency options */
+    #define GATE2FREQINPUT(GATE) \
         DOUBLE_OPT opt_ ## GATE ## _prob(#GATE, "Frequency of " #GATE " gates in a generated random circuit", (1.0 / NR_GATETYPES), FP64R(0,1));
 
-    #define GATE2ASSIGN(GATE) \
+    #define GATE2FREQASSIGN(GATE) \
         GATE ## _p = opt_ ## GATE ## _prob;
 
     BOOL_OPT opt_quiet_en("q", "be quiet", false);
     BOOL_OPT opt_report_en("report", "report statistics", true);
     BOOL_OPT opt_progress_en("progress", "report progress", true);
     BOOL_OPT opt_equivalence_en("equivalence", "do equivalence checking", false);
-    BOOL_OPT opt_checkparallelgates_en("check-parallel-gates", "check parallel gates independency", false);
-    BOOL_OPT opt_checkintegrity_en("check-integrity", "check circuit integrity for possible logical errors", false);
-    BOOL_OPT opt_print_tableau_step("print-step-tableau", "print tableau after every simulation step on screen in binary format", false);
-    BOOL_OPT opt_print_tableau_final("print-final-tableau", "print final tableau after simulation ends on screen in binary format", false);
-    BOOL_OPT opt_print_tableau_initial("print-initial-tableau", "print initial tableau before simulation on screen in binary format", false);
-    BOOL_OPT opt_print_step_state("print-step-state", "print step state in form of Pauli strings on screen", false);
-    BOOL_OPT opt_print_final_state("print-final-state", "print final state in form of Pauli strings on screen", false);
-    BOOL_OPT opt_print_gates("print-gates", "print gates in every step on screen", false);
-    BOOL_OPT opt_print_measurements("print-measurements", "print gates in every step on screen", false);
     BOOL_OPT opt_sync("sync", "synchronize all kernels and data transfers", false);
     BOOL_OPT opt_profile_equivalence("profile-equivalence", "profile equivalence checking", false);
     BOOL_OPT opt_disable_concurrency("disable-concurrency", "disable concurrency in equivalence checking", false);
     BOOL_OPT opt_tune_all("tune-all", "enable tuning for all kernels", false);
-
-    FOREACH_CONFIG(CONFIG2INPUT);
+    BOOL_OPT opt_check_all("check-all", "enable checking for all supported procedures", false);
+    FOREACH_CONFIG(CONFIG2TUNEINPUT);
+    FOREACH_CHECK(CONFIG2CHECKINPUT);
+    FOREACH_PRINT(CONFIG2PRINTINPUT);
 
     INT_OPT opt_initialstate("initial", "set initial quantum state (0: 0 state, 1: + state, 2: i state)", 0, INT32R(0, 2));
     INT_OPT opt_streams("streams", "number of GPU streams to create", 4, INT32R(4, 32));
@@ -54,7 +65,7 @@ namespace QuaSARQ {
     INT64_OPT opt_num_qubits("qubits", "set number of qubits for random generation (if no input file given)", 1000, INT64R(1, UINT32_MAX));
     INT64_OPT opt_depth("depth", "set circuit depth for random generation (if no input file given)", 2, INT64R(1, UINT32_MAX));
 
-    FOREACH_GATE(GATE2INPUT);
+    FOREACH_GATE(GATE2FREQINPUT);
 
     STRING_OPT opt_configpath("config-path", "Set the path of the kernel configuration file", "kernel.config");
 
@@ -82,40 +93,25 @@ namespace QuaSARQ {
         profile_equivalence = opt_profile_equivalence;
         disable_concurrency = opt_disable_concurrency;
 
-        check_parallel_gates = opt_checkparallelgates_en;
-        check_integrity = opt_checkintegrity_en;
-        checker_en = check_parallel_gates || check_integrity;
-
-        sync = opt_sync;
-
         tuner_initial_qubits = opt_tuneinitial_qubits;
         tuner_step_qubits = opt_tunestep_qubits;
         tune_all = opt_tune_all;
-        FOREACH_CONFIG(CONFIG2ASSIGN);
+        tuner_en |= tune_all;
+        check_all |= opt_check_all;
+        FOREACH_CONFIG(CONFIG2TUNEASSIGN);
         FOREACH_CONFIG(ENABLE_TUNER);
         FOREACH_CONFIG(TUNE_ALL);
-        tuner_en |= tune_all;
-        
-
-        print_final_state = opt_print_final_state;
-        print_step_state = opt_print_step_state;
-        print_gates = opt_print_gates;
-        print_measurements= opt_print_measurements;
-        print_step_tableau = opt_print_tableau_step;
-        print_final_tableau = opt_print_tableau_final;
-        print_initial_tableau = opt_print_tableau_initial;
-        write_rc = opt_write_rc;
-
-        opt_H_prob = 0.08;
-        opt_S_prob = 0.08;
-        opt_CX_prob = 0.09;
-        opt_M_prob = 0.09;
-        FOREACH_GATE(GATE2ASSIGN);
+        FOREACH_PRINT(CONFIG2PRINTASSIGN);
+        FOREACH_GATE(GATE2FREQASSIGN);
+        FOREACH_CHECK(CONFIG2CHECKASSIGN);
+        FOREACH_CHECK(CHECK_ALL);
 
         initialstate = InitialState(int(opt_initialstate));
         num_qubits = opt_num_qubits;
         depth = opt_depth;
         streams = opt_streams;
+        sync = opt_sync;
+        write_rc = opt_write_rc;
 
         std::memcpy(configpath, opt_configpath, opt_configpath.length());
     }
@@ -130,7 +126,6 @@ namespace QuaSARQ {
         }
         if (equivalence_en) {
             tuner_en = false;
-            checker_en = false;
         }
         if (tuner_en && tuner_step_qubits > num_qubits) {
             LOG2(1, "%s  Stepwise qubits %s%zd%s is downsized to %s%zd%s maximum.%s", CARGDEFAULT, CARGVALUE, tuner_step_qubits, CARGDEFAULT, CARGVALUE, num_qubits, CARGDEFAULT, CNORMAL);

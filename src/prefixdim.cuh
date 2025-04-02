@@ -133,6 +133,38 @@ namespace QuaSARQ {
             } \
             break;
 
+    #define POW2_Y_DIM_64(CALL) \
+        case 64: \
+            switch (currentblock.x) { \
+                FOREACH_X_DIM_MAX_16(CALL, 64); \
+                DEFAULT_CASE_X_DIM; \
+            } \
+            break;
+
+    #define POW2_Y_DIM_128(CALL) \
+        case 128: \
+            switch (currentblock.x) { \
+                FOREACH_X_DIM_MAX_8(CALL, 128); \
+                DEFAULT_CASE_X_DIM; \
+            } \
+            break;
+
+    #define POW2_Y_DIM_256(CALL) \
+        case 256: \
+            switch (currentblock.x) { \
+                FOREACH_X_DIM_MAX_4(CALL, 256); \
+                DEFAULT_CASE_X_DIM; \
+            } \
+            break;
+
+    #define POW2_Y_DIM_512(CALL) \
+        case 512: \
+            switch (currentblock.x) { \
+                FOREACH_X_DIM_MAX_2(CALL, 512); \
+                DEFAULT_CASE_X_DIM; \
+            } \
+            break;
+
     #define GENERATE_SWITCH_FOR_CALL(CALL) \
         switch (currentblock.y) { \
             POW2_Y_DIM_1(CALL); \
@@ -141,6 +173,10 @@ namespace QuaSARQ {
             POW2_Y_DIM_8(CALL); \
             POW2_Y_DIM_16(CALL); \
             POW2_Y_DIM_32(CALL); \
+            POW2_Y_DIM_64(CALL); \
+            POW2_Y_DIM_128(CALL); \
+            POW2_Y_DIM_256(CALL); \
+            POW2_Y_DIM_512(CALL); \
             default: \
                 LOGERROR("unknown y-block size (%lld) of prefix kernel", currentblock.y); \
                 break; \

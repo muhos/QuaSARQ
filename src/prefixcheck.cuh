@@ -54,49 +54,46 @@ namespace QuaSARQ {
 			d_ss.alloc_host(num_qubits_padded, num_words_major);
 		}
 
-		bool copy_input(Tableau& other, const bool& to_device = false) {
+		void copy_input(Tableau& other, const bool& to_device = false) {
 			SYNCALL;
 			Table& dest_xs = to_device ? d_xs : h_xs;
 			Table& dest_zs = to_device ? d_zs : h_zs;
 			Signs& dest_ss = to_device ? d_ss : h_ss;
 			dest_xs.flag_rowmajor(), dest_zs.flag_rowmajor();
 			other.copy_to_host(&dest_xs, &dest_zs, &dest_ss);
-			return true;
 		}
 
-		bool copy_prefix(Tableau& other) {
+		void copy_prefix(Tableau& other) {
 			SYNCALL;
 			d_prefix_xs.flag_rowmajor(), d_prefix_zs.flag_rowmajor();
 			other.copy_to_host(&d_prefix_xs, &d_prefix_zs);
-			return true;
 		}
 
-		bool copy_prefix_blocks(const word_std_t* other_xs, const word_std_t* other_zs, const size_t& size) {
+		void copy_prefix_blocks(const word_std_t* other_xs, const word_std_t* other_zs, const size_t& size) {
 			SYNCALL;
 			d_block_intermediate_prefix_x.resize(size);
 			d_block_intermediate_prefix_z.resize(size);
 			CHECK(cudaMemcpy(d_block_intermediate_prefix_x.data(), other_xs, sizeof(word_std_t) * size, cudaMemcpyDeviceToHost));
 			CHECK(cudaMemcpy(d_block_intermediate_prefix_z.data(), other_zs, sizeof(word_std_t) * size, cudaMemcpyDeviceToHost));
-			return true;
 		}
 
-		bool copy_commutations(const Commutation* other, const size_t& size) {
+		void copy_commutations(const Commutation* other, const size_t& size) {
 			SYNCALL;
 			assert(size <= d_commutations.size());
 			CHECK(cudaMemcpy(d_commutations.data(), other, sizeof(Commutation) * size, cudaMemcpyDeviceToHost));
-			return true;
 		}
 
-		bool check_prefix_intermediate_pass(
+		void check_prefix_intermediate_pass(
 			const   word_std_t*     other_zs,
 			const   word_std_t*     other_xs,
 			const   qubit_t&        qubit, 
 			const   uint32&         pivot,
 			const   size_t&         num_words_minor,
 			const   size_t&	        max_blocks,
-			const 	size_t&         pass_1_gridsize);
+			const 	size_t&         pass_1_gridsize,
+			const   bool&           skip_checking_device = false);
 		
-		bool check_prefix_pass_1(
+		void check_prefix_pass_1(
 					Tableau&        other_targets,
 					Tableau&        other_input,
 			const   Commutation*    other_commutations,
@@ -110,9 +107,10 @@ namespace QuaSARQ {
 			const   size_t&         num_qubits_padded,
 			const   size_t&         max_blocks,
 			const   size_t&         pass_1_blocksize,
-			const   size_t&         pass_1_gridsize);
+			const   size_t&         pass_1_gridsize,
+			const   bool&           skip_checking_device = false);
 
-		bool check_prefix_pass_2(
+		void check_prefix_pass_2(
 					Tableau& 		other_targets, 
 					Tableau& 		other_input,
 			const   qubit_t& 		qubit, 
@@ -122,7 +120,8 @@ namespace QuaSARQ {
 			const   size_t&         num_words_minor,
 			const   size_t&         num_qubits_padded,
 			const   size_t&         max_blocks,
-			const   size_t&         pass_1_blocksize);
+			const   size_t&         pass_1_blocksize,
+			const   bool&           skip_checking_device = false);
 
 	};
 	

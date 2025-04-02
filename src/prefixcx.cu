@@ -325,36 +325,38 @@ namespace QuaSARQ {
         } else LOGDONE(2, 4);
 
         // Verify pass-1 prefix.
-        assert(checker.check_prefix_pass_1(
-            targets,
-            input,
-            commutations,
-            zblocks(), 
-            xblocks(),
-            qubit,
-            pivot,
-            total_targets,
-            num_words_major,
-            num_words_minor,
-            num_qubits_padded,
-            max_intermediate_blocks,
-            pass_1_blocksize,
-            pass_1_gridsize
-        ));
+        if (options.check_measurement) {
+            checker.check_prefix_pass_1(
+                targets,
+                input,
+                commutations,
+                zblocks(), 
+                xblocks(),
+                qubit,
+                pivot,
+                total_targets,
+                num_words_major,
+                num_words_minor,
+                num_qubits_padded,
+                max_intermediate_blocks,
+                pass_1_blocksize,
+                pass_1_gridsize);
+        }
 
         // Intermeditae scan of blocks resulted in pass 1.
         scan_blocks(nextPow2(pass_1_gridsize), pass_1_blocksize, stream);
 
         // Verify intermediate-pass prefix.
-        assert(checker.check_prefix_intermediate_pass(
-            zblocks(), 
-            xblocks(),
-            qubit,
-            pivot,
-            num_words_minor,
-            max_intermediate_blocks,
-            pass_1_gridsize
-        ));
+        if (options.check_measurement) {
+            checker.check_prefix_intermediate_pass(
+                zblocks(), 
+                xblocks(),
+                qubit,
+                pivot,
+                num_words_minor,
+                max_intermediate_blocks,
+                pass_1_gridsize);
+        }
 
         // Second phase of injecting CX.
         if (options.tune_injectfinal) {
@@ -410,18 +412,19 @@ namespace QuaSARQ {
         } else LOGDONE(2, 4);
 
         // Verify pass-2 prefix.
-        assert(checker.check_prefix_pass_2(
-            targets, 
-            input,
-            qubit,
-            pivot, 
-            total_targets, 
-            num_words_major, 
-            num_words_minor, 
-            num_qubits_padded,
-            max_intermediate_blocks,
-            pass_1_blocksize
-        ));
+        if (options.check_measurement) {
+            checker.check_prefix_pass_2(
+                targets, 
+                input,
+                qubit,
+                pivot, 
+                total_targets, 
+                num_words_major, 
+                num_words_minor, 
+                num_qubits_padded,
+                max_intermediate_blocks,
+                pass_1_blocksize);
+        }
     }
 
 }

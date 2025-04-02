@@ -270,9 +270,9 @@ namespace QuaSARQ {
 		if (!options.sync) SYNCALL;
 		if (depth_level == -1) 
 			LOGHEADER(0, 3, "Initial state");
-		else if (options.print_step_state)
+		else if (options.print_stepstate)
 			LOG2(0, "State after %d-step", depth_level);
-		else if (options.print_final_state)
+		else if (options.print_finalstate)
 			LOGHEADER(0, 3, "Final state");
 		if (num_qubits > 100) {
             LOGWARNING("State is too large to print.");

@@ -302,9 +302,9 @@ namespace QuaSARQ {
 
             #endif // DEBUG MACRO.
 
-            if (options.print_step_tableau)
+            if (options.print_steptableau)
                 print_tableau(tableau, depth_level, reversed);
-            if (options.print_step_state)
+            if (options.print_stepstate)
                 print_paulis(tableau, depth_level, reversed);
         } // END of non-measuring simulation.
         else {

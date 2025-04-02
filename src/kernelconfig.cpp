@@ -3,16 +3,16 @@
 
 namespace QuaSARQ {
 
-	FOREACH_CONFIG_INIT(CONFIG2INITIAL);
+	FOREACH_CONFIG(CONFIG2INITIAL);
 
-	#define CONFIG2BOOL(NAME) \
+	#define CONFIG2BOOL(NAME, BLOCKX, BLOCKY, GRIDX, GRIDY) \
 		bool fetched ## NAME = false;
 
-	#define CONFIG2FETCHED(CONFIG) \
+	#define CONFIG2FETCHED(CONFIG, BLOCKX, BLOCKY, GRIDX, GRIDY) \
 		dim3 bestblock ## CONFIG ## Fetched; \
 		dim3 bestgrid ## CONFIG ## Fetched;
 
-	#define CONFIG2FETCHED_LOGIC(NAME) \
+	#define CONFIG2FETCHED_LOGIC(NAME, BLOCKX, BLOCKY, GRIDX, GRIDY) \
 	{ \
 		size_t count = 0; \
 		if (count = hasstr(line, #NAME)) { \
@@ -26,13 +26,13 @@ namespace QuaSARQ {
 		} \
 	}
 
-	#define CONFIG2APPLY(CONFIG) \
+	#define CONFIG2APPLY(CONFIG, BLOCKX, BLOCKY, GRIDX, GRIDY) \
 		if (fetched ## CONFIG) { \
 			bestblock ## CONFIG = bestblock ## CONFIG ## Fetched; \
 			bestgrid ## CONFIG = bestgrid ## CONFIG ## Fetched; \
 		}
 
-	#define CONFIG2PRINT(CONFIG) \
+	#define CONFIG2PRINT(CONFIG, BLOCKX, BLOCKY, GRIDX, GRIDY) \
 		if (fetched ## CONFIG) { \
 			LOG2(1, " read " #CONFIG " configuration with %lld distance: grid(%d, %d), block(%d, %d)", min_diff, bestgrid ## CONFIG.x, bestgrid ## CONFIG.y, bestblock ## CONFIG.x, bestblock ## CONFIG.y); \
 		}

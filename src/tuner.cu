@@ -22,7 +22,7 @@ namespace QuaSARQ {
 	int64 initThreadsPerBlockX = 2;
 	int64 initThreadsPerBlockY = 2;
 
-	#define CONFIG2STRING(CONFIG) \
+	#define CONFIG2STRING(CONFIG, BLOCKX, BLOCKY, GRIDX, GRIDY) \
 		if (options.tune_ ## CONFIG) { \
 			config += " "; \
 			config += #CONFIG; \
@@ -78,6 +78,10 @@ namespace QuaSARQ {
 			// Tune identity.
 			identity(tableau, 0, num_qubits, custreams, options.initialstate);
 			// Start step-wise simulation.
+
+			// TODO:setup up a special flag to trigger finding the largest targets first, then proceeed normaly with tuing
+
+
 			simulate(0, false);
 			// Write configurations.
 			write();
@@ -128,13 +132,14 @@ namespace QuaSARQ {
 	do { \
 		if (TIME < MIN) { \
 			if ((MIN - TIME) <= PRECISION && !--min_precision_hits) { \
-				LOG2(1, " Found slightly better GPU Time for block(x:%u, y:%u) and grid(x:%u, y:%u): %f ms", block.x, block.y, grid.x, grid.y, TIME); \
+				LOG2(1, "  Found slightly better GPU Time for block(x:%u, y:%u) and grid(x:%u, y:%u): %f ms", block.x, block.y, grid.x, grid.y, TIME); \
 				BAILOUT = true; \
 			} \
 			MIN = TIME; \
 			BESTBLOCK = block; \
 			BESTGRID = grid; \
-			if (!BAILOUT) LOG2(1, " Found better GPU Time for block(x:%u, y:%u) and grid(x:%u, y:%u): %f ms", block.x, block.y, grid.x, grid.y, TIME); \
+			if (!BAILOUT) LOG2(1, "  Found better GPU Time for block(x:%u, y:%u) and grid(x:%u, y:%u): %f ms", \
+				block.x, block.y, grid.x, grid.y, TIME); \
 		} \
 	} while(0)
 
@@ -166,9 +171,7 @@ namespace QuaSARQ {
 					BEST_CONFIG(avgRuntime, minRuntime, bestGrid, bestBlock, early_exit); \
 				} \
 			} \
-			LOG0(""); \
-			LOG2(1, "Best GPU time for %s operation using block(%d, 1), and grid(%d, 1): %f ms", opname, bestBlock.x, bestGrid.x, minRuntime); \
-			LOG0(""); \
+			LOG2(1, " Best GPU time for %s operation using block(%d, 1), and grid(%d, 1): %f ms", opname, bestBlock.x, bestGrid.x, minRuntime); \
 			fflush(stdout); \
 		} \
 	} while(0)
@@ -198,9 +201,7 @@ namespace QuaSARQ {
 				BENCHMARK_KERNEL(avgRuntime, NSAMPLES, shared_size, ## __VA_ARGS__); \
 				BEST_CONFIG(avgRuntime, minRuntime, bestGrid, bestBlock, early_exit); \
 			} \
-			LOG0(""); \
-			LOG2(1, "Best GPU time for %s operation using block(%d, 1), and grid(%d, 1): %f ms", opname, bestBlock.x, bestGrid.x, minRuntime); \
-			LOG0(""); \
+			LOG2(1, " Best GPU time for %s operation using block(%d, 1), and grid(%d, 1): %f ms", opname, bestBlock.x, bestGrid.x, minRuntime); \
 			fflush(stdout); \
 		} \
 	} while(0)
@@ -245,11 +246,10 @@ namespace QuaSARQ {
 					} \
 				} \
 			} \
-			LOG2(1, "Best %s configuration found after %zd trials:", opname, trials); \
+			LOG2(1, " Best %s configuration found after %zd trials:", opname, trials); \
 			LOG2(1, " Block (%-4u, %4u)", bestBlock.x, bestBlock.y); \
 			LOG2(1, " Grid  (%-4u, %4u)", bestGrid.x, bestGrid.y); \
 			LOG2(1, " Min time: %.4f ms", minRuntime); \
-			LOG0(""); \
 			fflush(stdout); \
 		} \
 	} while(0)
@@ -290,11 +290,10 @@ namespace QuaSARQ {
 					} \
 				} \
 			} \
-			LOG2(1, "Best %s configuration found after %zd trials:", opname, trials); \
+			LOG2(1, " Best %s configuration found after %zd trials:", opname, trials); \
 			LOG2(1, " Block (%-4u, %4u)", bestBlock.x, bestBlock.y); \
 			LOG2(1, " Grid  (%-4u, %4u)", bestGrid.x, bestGrid.y); \
 			LOG2(1, " Min time: %.4f ms", minRuntime); \
-			LOG0(""); \
 			fflush(stdout); \
 		} \
 	} while(0)
@@ -335,11 +334,10 @@ namespace QuaSARQ {
 					} \
 				} \
 			} \
-			LOG2(1, "Best %s configuration found after %zd trials:", opname, trials); \
+			LOG2(1, " Best %s configuration found after %zd trials:", opname, trials); \
 			LOG2(1, " Block (%-4u, %4u)", bestBlock.x, bestBlock.y); \
 			LOG2(1, " Grid  (%-4u, %4u)", bestGrid.x, bestGrid.y); \
 			LOG2(1, " Min time: %.4f ms", minRuntime); \
-			LOG0(""); \
 			fflush(stdout); \
 		} \
 	} while(0)
@@ -384,11 +382,10 @@ namespace QuaSARQ {
 					} \
 				} \
 			} \
-			LOG2(1, "Best %s configuration found after %zd trials:", opname, trials); \
+			LOG2(1, " Best %s configuration found after %zd trials:", opname, trials); \
 			LOG2(1, " Block (%-4u, %4u)", bestBlock.x, bestBlock.y); \
 			LOG2(1, " Grid  (%-4u, %4u)", bestGrid.x, bestGrid.y); \
 			LOG2(1, " Min time: %.4f ms", minRuntime); \
-			LOG0(""); \
 			fflush(stdout); \
 		} \
 	} while(0)
@@ -441,11 +438,10 @@ namespace QuaSARQ {
 					} \
 				} \
 			} \
-			LOG2(1, "Best %s configuration found after %zd trials:", opname, trials); \
+			LOG2(1, " Best %s configuration found after %zd trials:", opname, trials); \
 			LOG2(1, " Block (%-4u, %4u)", bestBlock.x, bestBlock.y); \
 			LOG2(1, " Grid  (%-4u, %4u)", bestGrid.x, bestGrid.y); \
 			LOG2(1, " Min time: %.4f ms", minRuntime); \
-			LOG0(""); \
 			fflush(stdout); \
 		} \
 	} while(0)
@@ -485,11 +481,10 @@ namespace QuaSARQ {
 					BEST_CONFIG(avgRuntime, minRuntime, bestGrid, bestBlock, early_exit); \
 				} \
 			} \
-			LOG2(1, "Best %s configuration found after %zd trials:", opname, trials); \
+			LOG2(1, " Best %s configuration found after %zd trials:", opname, trials); \
 			LOG2(1, " Block (%-4u, %4u)", bestBlock.x, bestBlock.y); \
 			LOG2(1, " Grid  (%-4u, %4u)", bestGrid.x, bestGrid.y); \
 			LOG2(1, " Min time: %.4f ms", minRuntime); \
-			LOG0(""); \
 			fflush(stdout); \
 		} \
 	} while(0)

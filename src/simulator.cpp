@@ -108,7 +108,7 @@ void Simulator::simulate(const size_t& p, const bool& reversed) {
         LOGERRORN("cannot run simulation without allocating the tableau.");
         throw GPU_memory_exception();
     }
-    if (!options.check_integrity) {
+    if (!options.check_tableau) {
         if (reversed) { LOGHEADER(1, 3, "Reversed Simulation"); }
         else { LOGHEADER(1, 3, "Simulation"); }
     }
@@ -123,8 +123,8 @@ void Simulator::simulate(const size_t& p, const bool& reversed) {
         for (depth_t d = 0; d < depth; d++)
             step(p, d);
     }
-    if (options.print_final_tableau) print_tableau(tableau, depth, reversed);
-    if (options.print_final_state) print_paulis(tableau, depth, reversed);
+    if (options.print_finaltableau) print_tableau(tableau, depth, reversed);
+    if (options.print_finalstate) print_paulis(tableau, depth, reversed);
 }
 
 void Simulator::simulate() {

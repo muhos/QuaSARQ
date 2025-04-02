@@ -9,8 +9,30 @@
 
 namespace QuaSARQ {
 
-    #define CONFIG2OPTION(CONFIG) \
+    #define FOREACH_CHECK(CONFIG) \
+        CONFIG(scheduler) \
+        CONFIG(tableau) \
+        CONFIG(transpose) \
+        CONFIG(measurement) \
+
+    #define FOREACH_PRINT(CONFIG) \
+        CONFIG(gates, "gates") \
+        CONFIG(measurements, "measurements") \
+        CONFIG(initialstate, "initial state (in Pauli strings)") \
+        CONFIG(stepstate, "step state (in Pauli strings)") \
+        CONFIG(finalstate, "final state (in Pauli strings)") \
+        CONFIG(initialtableau, "initial tableau (in binary)") \
+        CONFIG(steptableau, "step tableau (in binary)") \
+        CONFIG(finaltableau, "final tableau (in binary)") \
+
+    #define CONFIG2PRINTOPTION(CONFIG, MSG) \
+        bool print_ ## CONFIG;
+
+    #define CONFIG2TUNEOPTION(CONFIG, BLOCKX, BLOCKY, GRIDX, GRIDY) \
         bool tune_ ## CONFIG;
+
+    #define CONFIG2CHECKOPTION(CONFIG) \
+        bool check_ ## CONFIG;
 
     #define GATE2OPTION(GATE) \
         double GATE ## _p;
@@ -25,27 +47,17 @@ namespace QuaSARQ {
         bool report_en;
         bool progress_en;
 
-        bool equivalence_en;
-        bool checker_en;
-        bool check_parallel_gates;
-        bool check_integrity;
-
+        bool check_all;
         bool tuner_en;
-        FOREACH_CONFIG(CONFIG2OPTION);
+        bool tune_all;
+        FOREACH_CONFIG(CONFIG2TUNEOPTION);
+        FOREACH_CHECK(CONFIG2CHECKOPTION);
+        FOREACH_PRINT(CONFIG2PRINTOPTION);
 
-        bool print_gates;
-        bool print_step_tableau;
-        bool print_final_tableau;
-        bool print_initial_tableau;
-        bool print_step_state;
-        bool print_final_state;
-        bool print_measurements;
-        bool print_tableau_decimal;
-
+        bool equivalence_en;
         bool profile_equivalence;
         bool disable_concurrency;
         bool sync;
-        bool tune_all;
 
         size_t tuner_initial_qubits;
         size_t tuner_step_qubits;

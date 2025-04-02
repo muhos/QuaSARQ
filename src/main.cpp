@@ -1,7 +1,6 @@
 ﻿
 #include "equivalence.hpp"
 #include "simulator.hpp"
-#include "checker.hpp"
 #include "banner.hpp"
 #include "tuner.cuh"
 #include "input.hpp"
@@ -26,13 +25,7 @@ int main(int argc, char** argv) {
 
 		signal_handler(handler_terminate);
 
-        if (options.checker_en) {
-            Checker* checker = has_input_file ? new Checker(string(argv[1])) : new Checker();
-            checker->run();
-		    LOGHEADER(0, 3, "Exit");
-			delete checker;
-        }
-		else if (options.equivalence_en) {
+        if (options.equivalence_en) {
 			Equivalence* equivalence = has_input_file == 2 ? new Equivalence(string(argv[1]), string(argv[2])) : new Equivalence();
 			equivalence->check();
 			LOGHEADER(0, 3, "Exit");

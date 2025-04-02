@@ -36,7 +36,7 @@ void Checker::check_parallel_gates() {
 }
 
 void Checker::check_random_circuit() {
-    if (!options.check_parallel_gates) return;
+    if (!options.check_scheduler) return;
     LOG2(1, "");
     LOGN2(1, "Checking parallelism in %s circuit.. ", 
         circuit_mode == RANDOM_CIRCUIT ? "generated random" : "parsed");
@@ -82,7 +82,7 @@ void Checker::check_transpose() {
 }
 
 void Checker::check_integrity() {
-    if (!options.check_integrity) return;
+    if (!options.check_tableau) return;
     LOG2(1, "");
     LOG2(1, "Checking tableau integrity.. ");
     LOG2(1, "");
