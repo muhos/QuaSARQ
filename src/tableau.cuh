@@ -469,7 +469,7 @@ namespace QuaSARQ {
             return tmp_xs.is_identity() && tmp_zs.is_identity();
         }
 
-        void copy_to_host(Table* h_xs, Table* h_zs, Signs* h_ss = nullptr) {
+        void copy_to_host(Table* h_xs, Table* h_zs, Signs* h_ss = nullptr) const {
             SYNCALL;
             if (h_xs != nullptr) {
                 h_xs->alloc_host(_num_qubits_padded, _num_words_major, _num_words_minor);

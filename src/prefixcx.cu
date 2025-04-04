@@ -90,7 +90,7 @@ namespace QuaSARQ {
                 commutations, \
                 pivot, \
                 total_targets, \
-                num_words_major, \ 
+                num_words_major, \
                 num_words_minor, \
                 num_qubits_padded, \
                 max_blocks \
@@ -107,7 +107,7 @@ namespace QuaSARQ {
                 ConstWordsPointer   block_intermediate_prefix_z,
                 ConstWordsPointer   block_intermediate_prefix_x,
                 ConstCommsPointer   commutations,
-        const   uint32              pivot,
+        const   pivot_t             pivot,
         const   size_t              total_targets,
         const   size_t              num_words_major,
         const   size_t              num_words_minor,
@@ -211,7 +211,7 @@ namespace QuaSARQ {
                 commutations, \
                 pivot, \
                 total_targets, \
-                num_words_major, \ 
+                num_words_major, \
                 num_words_minor, \
                 num_qubits_padded, \
                 max_blocks, \
@@ -224,7 +224,7 @@ namespace QuaSARQ {
                 word_std_t *        block_intermediate_prefix_z,
                 word_std_t *        block_intermediate_prefix_x,
                 ConstCommsPointer   commutations,
-        const   uint32&             pivot,
+        const   pivot_t&            pivot,
         const   size_t&             total_targets,
         const   size_t&             num_words_major,
         const   size_t&             num_words_minor,
@@ -243,7 +243,7 @@ namespace QuaSARQ {
                 ConstWordsPointer   block_intermediate_prefix_z,
                 ConstWordsPointer   block_intermediate_prefix_x,
                 ConstCommsPointer   commutations,
-        const   uint32&             pivot,
+        const   pivot_t&            pivot,
         const   size_t&             total_targets,
         const   size_t&             num_words_major,
         const   size_t&             num_words_minor,
@@ -259,11 +259,16 @@ namespace QuaSARQ {
 
     // We need to compute prefix-xor of t-th destabilizer in X,Z for t = c+1, c+2, ... c+n-1
     // so that later we can xor every prefix-xor with controlled destabilizer.
-    void Prefix::inject_CX(Tableau& input, const Commutation* commutations, const uint32& pivot, const qubit_t& qubit, const cudaStream_t& stream) {
+    void Prefix::inject_CX(Tableau& input, const Commutation* commutations, const pivot_t& pivot, const qubit_t& qubit, const cudaStream_t& stream) {
         assert(num_qubits > pivot);
         assert(nextPow2(MIN_BLOCK_INTERMEDIATE_SIZE) == MIN_BLOCK_INTERMEDIATE_SIZE);
-        
         const size_t num_qubits_padded = input.num_qubits_padded();
+
+        if (options.check_measurement) {
+            checker.find_new_pivot(qubit, input);
+            if (pivot != checker.pivot)
+                LOGERROR("pivots do not match");
+        }
 
         // Calculate number of target generators.
         const size_t total_targets = num_qubits - pivot - 1;
@@ -271,36 +276,17 @@ namespace QuaSARQ {
 
         // Do the first phase of prefix.
         dim3 currentblock, currentgrid;
-        if (options.tune_injectprepare) {
-            SYNCALL;
-            tune_inject_pass_1(
-                bestblockinjectprepare, bestgridinjectprepare,
-                2 * sizeof(word_std_t), // used to skip very large blocks.
-                total_targets,
-                num_words_minor,
-                targets, 
-                input, 
-                zblocks(), 
-                xblocks(),
-                commutations, 
-                pivot,
-                total_targets, 
-                num_words_major, 
-                num_words_minor,
-                num_qubits_padded,
-                max_intermediate_blocks
-            );
-            SYNCALL;
-        }
+        if (bestblockinjectprepare.x == 1)
+            LOGERROR("x-block size in inject-cx is 1");
         TRIM_Y_BLOCK_IN_DEBUG_MODE(bestblockinjectprepare, bestgridinjectprepare, num_words_minor);
         currentblock = bestblockinjectprepare, currentgrid = bestgridinjectprepare;
-        TRIM_GRID_IN_XY(total_targets, num_words_minor);
+        FORCE_TRIM_GRID_IN_XY(total_targets, num_words_minor);
         const size_t pass_1_blocksize = currentblock.x;
         const size_t pass_1_gridsize = ROUNDUP(total_targets, pass_1_blocksize);
         if (pass_1_gridsize > max_intermediate_blocks)
-            LOGERROR("too many blocks for intermediate arrays.");
-        LOGN2(2, " Running pass-1 kernel with block(x:%u, y:%u) and grid(x:%u, y:%u).. ",
-            currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
+            LOGERROR("too many blocks for intermediate arrays");
+        LOGN2(2, " Running pass-1 kernel with block(x:%u, y:%u) and grid(x:%u, y:%u, z:%u).. ",
+            currentblock.x, currentblock.y, currentgrid.x, currentgrid.y, currentgrid.z);
         if (options.sync) cutimer.start(stream);
         call_injectcx_pass_1_kernel(
             targets, 
@@ -328,16 +314,10 @@ namespace QuaSARQ {
         if (options.check_measurement) {
             checker.check_prefix_pass_1(
                 targets,
-                input,
                 commutations,
                 zblocks(), 
                 xblocks(),
-                qubit,
-                pivot,
                 total_targets,
-                num_words_major,
-                num_words_minor,
-                num_qubits_padded,
                 max_intermediate_blocks,
                 pass_1_blocksize,
                 pass_1_gridsize);
@@ -351,40 +331,14 @@ namespace QuaSARQ {
             checker.check_prefix_intermediate_pass(
                 zblocks(), 
                 xblocks(),
-                qubit,
-                pivot,
-                num_words_minor,
                 max_intermediate_blocks,
                 pass_1_gridsize);
         }
 
         // Second phase of injecting CX.
-        if (options.tune_injectfinal) {
-            SYNCALL;
-            tune_inject_pass_2(
-                bestblockinjectfinal, bestgridinjectfinal,
-                4 * sizeof(word_std_t),
-                total_targets,
-                num_words_minor,
-                targets, 
-                input,
-                zblocks(), 
-                xblocks(), 
-                commutations, 
-                pivot, 
-                total_targets, 
-                num_words_major, 
-                num_words_minor, 
-                num_qubits_padded,
-                max_intermediate_blocks,
-                pass_1_blocksize
-            );
-            SYNCALL;
-        }
         TRIM_BLOCK_IN_DEBUG_MODE(bestblockinjectfinal, bestgridinjectfinal, total_targets, num_words_minor);
         currentblock = bestblockinjectfinal, currentgrid = bestgridinjectfinal;
-        TRIM_GRID_IN_XY(total_targets, num_words_minor);
-        OPTIMIZESHARED(finalize_prefix_smem_size, currentblock.y * currentblock.x, 4 * sizeof(word_std_t));
+        FORCE_TRIM_GRID_IN_XY(total_targets, num_words_minor);
         LOGN2(2, " Running pass-2 kernel with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", \
             currentblock.x, currentblock.y, currentgrid.x, currentgrid.y); \
         if (options.sync) cutimer.start(stream);
@@ -416,14 +370,69 @@ namespace QuaSARQ {
             checker.check_prefix_pass_2(
                 targets, 
                 input,
-                qubit,
-                pivot, 
                 total_targets, 
+                max_intermediate_blocks,
+                pass_1_blocksize);
+        }
+    }
+
+    void Prefix::tune_inject_cx(Tableau& input, const Commutation* commutations) {
+        assert(num_qubits > min_pivot);
+        assert(nextPow2(MIN_BLOCK_INTERMEDIATE_SIZE) == MIN_BLOCK_INTERMEDIATE_SIZE);
+        const size_t num_qubits_padded = input.num_qubits_padded();
+
+        // Calculate number of target generators.
+        const size_t max_targets = num_qubits - min_pivot - 1;
+        if (!max_targets) return;
+
+        // Do the first phase of prefix.
+        if (options.tune_injectprepare) {
+            SYNCALL;
+            tune_inject_pass_1(
+                bestblockinjectprepare, bestgridinjectprepare,
+                2 * sizeof(word_std_t), // used to skip very large blocks.
+                max_targets,
+                num_words_minor,
+                targets, 
+                input, 
+                zblocks(), 
+                xblocks(),
+                commutations, 
+                min_pivot,
+                max_targets, 
+                num_words_major, 
+                num_words_minor,
+                num_qubits_padded,
+                max_intermediate_blocks
+            );
+            SYNCALL;
+        }
+
+        const size_t pass_1_blocksize = bestblockinjectprepare.x;
+        const size_t pass_1_gridsize = ROUNDUP(max_targets, pass_1_blocksize);
+        tune_scan_blocks(nextPow2(pass_1_gridsize), pass_1_blocksize);
+
+        if (options.tune_injectfinal) {
+            SYNCALL;
+            tune_inject_pass_2(
+                bestblockinjectfinal, bestgridinjectfinal,
+                4 * sizeof(word_std_t),
+                max_targets,
+                num_words_minor,
+                targets, 
+                input,
+                zblocks(), 
+                xblocks(), 
+                commutations, 
+                min_pivot, 
+                max_targets, 
                 num_words_major, 
                 num_words_minor, 
                 num_qubits_padded,
                 max_intermediate_blocks,
-                pass_1_blocksize);
+                pass_1_blocksize
+            );
+            SYNCALL;
         }
     }
 

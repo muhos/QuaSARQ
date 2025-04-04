@@ -118,6 +118,14 @@ namespace QuaSARQ {
             } \
         }
 
+	#define FORCE_TRIM_GRID_IN_XY(DATALEN_X, DATALEN_Y) \
+		if (size_t(currentgrid.x) * size_t(currentblock.x) > (DATALEN_X)) { \
+			OPTIMIZEBLOCKS2D(currentgrid.x, (DATALEN_X), currentblock.x); \
+		} \
+		if (size_t(currentgrid.y) * size_t(currentblock.y) > (DATALEN_Y)) { \
+			OPTIMIZEBLOCKS2D(currentgrid.y, (DATALEN_Y), currentblock.y); \
+		} \
+
 }
 
 #endif

@@ -11,6 +11,7 @@
 #include "grid.cuh"
 #include "memory.cuh"
 #include "tableau.cuh"
+#include "pivot.cuh"
 #include "vector.hpp"
 
 namespace QuaSARQ {
@@ -43,14 +44,14 @@ namespace QuaSARQ {
 
 		size_t max_intermediate_blocks;
 		size_t max_sub_blocks;
-		size_t min_blocksize_y;
 
 		size_t num_qubits;
 		size_t config_qubits;
 		size_t num_words_major;
 		size_t num_words_minor;
 
-		uint32 pivot;
+		size_t max_targets;
+		pivot_t min_pivot;
 
 	public:
 
@@ -63,23 +64,30 @@ namespace QuaSARQ {
 		,	subblocks_prefix_x(nullptr)
 		,	max_intermediate_blocks(0)
 		,	max_sub_blocks(0)
-		,	min_blocksize_y(0)
 		,   num_qubits(0)
 		,	config_qubits(0)
 		,   num_words_major(0)
 		,   num_words_minor(0)
-		,   pivot(0)
+		,	max_targets(0)
+		, 	min_pivot(INVALID_PIVOT)
 		{}
 
-		PrefixChecker& get_checker		() { return checker; }
+		PrefixChecker& get_checker	() { return checker; }
 
 		word_std_t* zblocks			() { assert(block_intermediate_prefix_z != nullptr); return block_intermediate_prefix_z; }
 		word_std_t* xblocks			() { assert(block_intermediate_prefix_x != nullptr); return block_intermediate_prefix_x; }
 
+		void 		set_min_pivot	(const pivot_t& min_pivot, const size_t& max_targets) { 
+			this->min_pivot = min_pivot; 
+			this->max_targets = max_targets;
+		}
+
 		void 		alloc			(const Tableau& input, const size_t& config_qubits, const size_t& max_window_bytes);
 		void 		resize			(const Tableau& input, const size_t& max_window_bytes);
 		void 		scan_blocks		(const size_t& num_blocks, const size_t& inject_pass_1_blocksize, const cudaStream_t& stream);
-		void 		inject_CX		(Tableau& input,  const Commutation* commutations, const uint32& pivot, const qubit_t& qubit, const cudaStream_t& stream);
+		void 		tune_scan_blocks(const size_t& num_blocks, const size_t& inject_pass_1_blocksize);
+		void 		inject_CX		(Tableau& input,  const Commutation* commutations, const pivot_t& pivot, const qubit_t& qubit, const cudaStream_t& stream);
+		void		tune_inject_cx	(Tableau& input,  const Commutation* commutations);
 
 	};
 
@@ -112,7 +120,7 @@ namespace QuaSARQ {
                 word_std_t *        block_intermediate_prefix_z,
                 word_std_t *        block_intermediate_prefix_x,
         const   Commutation *       commutations,
-        const   uint32&             pivot,
+        const   pivot_t&            pivot,
         const   size_t&             total_targets,
         const   size_t&             num_words_major,
         const   size_t&             num_words_minor,
@@ -128,7 +136,7 @@ namespace QuaSARQ {
         const   word_std_t *        block_intermediate_prefix_z,
         const   word_std_t *        block_intermediate_prefix_x,
         const   Commutation *       commutations,
-        const   uint32&             pivot,
+        const   pivot_t&            pivot,
         const   size_t&             total_targets,
         const   size_t&             num_words_major,
         const   size_t&             num_words_minor,
@@ -203,7 +211,7 @@ namespace QuaSARQ {
                 word_std_t *    block_intermediate_prefix_z,
                 word_std_t *    block_intermediate_prefix_x,
 		const   Commutation*    commutations,
-		const   uint32&         pivot,
+		const   pivot_t&        pivot,
 		const   size_t&         total_targets,
 		const   size_t&         num_words_major,
 		const   size_t&         num_words_minor,
@@ -221,7 +229,7 @@ namespace QuaSARQ {
         const 	word_std_t *	block_intermediate_prefix_z,
         const 	word_std_t *	block_intermediate_prefix_x,
 		const 	Commutation* 	commutations,
-		const 	uint32& 		pivot,
+		const 	pivot_t& 		pivot,
 		const 	size_t& 		total_targets,
 		const 	size_t& 		num_words_major,
 		const 	size_t& 		num_words_minor,

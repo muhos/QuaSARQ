@@ -105,6 +105,9 @@ namespace QuaSARQ {
         FOREACH_GATE(GATE2FREQASSIGN);
         FOREACH_CHECK(CONFIG2CHECKASSIGN);
         FOREACH_CHECK(CHECK_ALL);
+        tune_measurement |= (tune_injectprepare || tune_injectfinal ||
+                        tune_prefixprepare || tune_prefixfinal ||
+                        tune_prefixsingle);
 
         initialstate = InitialState(int(opt_initialstate));
         num_qubits = opt_num_qubits;

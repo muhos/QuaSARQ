@@ -210,6 +210,7 @@ namespace QuaSARQ {
 		
 		void write();
 		void run();
+
 	};
 
 }

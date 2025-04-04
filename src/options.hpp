@@ -50,6 +50,7 @@ namespace QuaSARQ {
         bool check_all;
         bool tuner_en;
         bool tune_all;
+        bool tune_measurement;
         FOREACH_CONFIG(CONFIG2TUNEOPTION);
         FOREACH_CHECK(CONFIG2CHECKOPTION);
         FOREACH_PRINT(CONFIG2PRINTOPTION);

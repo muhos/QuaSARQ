@@ -5,50 +5,41 @@
 namespace QuaSARQ {
 
     inline 
-    word_std_t scan_block_exclusive_cpu(word_std_t *data, int n) {
-        int offset = 1;
-        for (int d = (n >> 1); d > 0; d >>= 1) {
-            for (int tid = 0; tid < d; tid++) {
-                int i = offset * (2 * tid + 1) - 1;
-                int j = offset * (2 * tid + 2) - 1;
-                assert(i < n);
-                assert(j < n);
-                data[j] ^= data[i];
-            }
-            offset <<= 1; 
+    word_std_t scan_block_exclusive_cpu(word_std_t *data, const int& n) {
+        word_std_t sum = 0; 
+        for (int i = 0; i < n; i++) {
+            word_std_t tmp = data[i];
+            data[i] = sum;
+            sum ^= tmp;
         }
-        word_std_t blockSum = data[n - 1];
-        data[n - 1] = 0;
-        for (int d = 1; d < n; d <<= 1) {
-            offset >>= 1;  // offset /= 2
-            for (int tid = 0; tid < d; tid++) {
-                int i = offset * (2 * tid + 1) - 1;
-                int j = offset * (2 * tid + 2) - 1;
-                assert(i < n);
-                assert(j < n);
-                word_std_t temp = data[i];
-                data[i]         = data[j];
-                data[j]        ^= temp;
+        return sum;
+    }
+
+    void PrefixChecker::find_new_pivot(const qubit_t& qubit, const Tableau& other_input) {
+        this->qubit = qubit;
+        if (h_xs.is_colmajor()) // Do the copy only the first time.
+            copy_input(other_input);
+        const size_t q_w = WORD_OFFSET(qubit);
+        const word_std_t q_mask = BITMASK_GLOBAL(qubit);
+        pivot = INVALID_PIVOT;
+        for(size_t i = 0; i < num_qubits; i++) {
+            const size_t word_idx = TABLEAU_INDEX(q_w, i) + TABLEAU_STAB_OFFSET;
+            const word_std_t qubit_word = h_xs[word_idx];
+            if (qubit_word & q_mask) {
+                pivot = MIN(pivot_t(i), pivot);
             }
         }
-        return blockSum;
     }
 
      // If skip_checking_device is set to 1, checking with device
      // will be slipped but CPU computations would proceed normally.
      // Useful to determine the largest number of targets.
     void PrefixChecker::check_prefix_pass_1(
-                Tableau&        other_targets,
-                Tableau&        other_input,
+        const   Tableau&        other_targets,
         const   Commutation*    other_commutations,
         const   word_std_t*     other_zs,
         const   word_std_t*     other_xs,
-        const   qubit_t&        qubit, 
-        const   uint32&         pivot,
         const   size_t&         total_targets,
-        const   size_t&         num_words_major,
-        const   size_t&         num_words_minor,
-        const   size_t&         num_qubits_padded,
         const   size_t&         max_blocks,
         const   size_t&         pass_1_blocksize,
         const   size_t&         pass_1_gridsize,
@@ -57,19 +48,18 @@ namespace QuaSARQ {
         SYNCALL;
 
         const char * title = skip_checking_device ? "Performing" : "Checking"; 
-        LOGN1("  %s pass-1 prefix for qubit %d and pivot %d.. ", title, qubit, pivot);
+        LOGN2(2, "  %s pass-1 prefix for qubit %d and pivot %d.. ", title, qubit, pivot);
 
-        if (h_xs.is_colmajor()) // Do the copy only the first time.
-            copy_input(other_input);
         if (!skip_checking_device) {
+            assert(num_qubits == other_targets.num_qubits());
             copy_prefix(other_targets);
             copy_prefix_blocks(other_xs, other_zs, max_blocks * num_words_minor);
-            copy_commutations(other_commutations, other_input.num_qubits());
+            copy_commutations(other_commutations, num_qubits);
         }
 
         const size_t q_w = WORD_OFFSET(qubit);
         const word_std_t q_mask = BITMASK_GLOBAL(qubit);
-        for(size_t i = 0; i < other_input.num_qubits(); i++)
+        for(size_t i = 0; i < num_qubits; i++)
             h_commutations[i].reset();
         for(size_t i = 0; i < total_targets; i++) {
             const size_t t = i + pivot + 1;
@@ -144,22 +134,19 @@ namespace QuaSARQ {
             }
         }
 
-        LOG0("PASSED");
+        LOG2(2, "PASSED");
     }
 
     void PrefixChecker::check_prefix_intermediate_pass(
         const   word_std_t*     other_zs,
         const   word_std_t*     other_xs,
-        const   qubit_t&        qubit, 
-        const   uint32&         pivot,
-        const   size_t&         num_words_minor,
         const   size_t&	        max_blocks,
         const 	size_t&         pass_1_gridsize,
         const   bool&           skip_checking_device) {
         
         SYNCALL;
         const char * title = skip_checking_device ? "Performing" : "Checking"; 
-        LOGN1("  %s pass-x prefix for qubit %d and pivot %d.. ", title, qubit, pivot);
+        LOGN2(2, "  %s pass-x prefix for qubit %d and pivot %d.. ", title, qubit, pivot);
 
         if (!skip_checking_device) copy_prefix_blocks(other_xs, other_zs, max_blocks * num_words_minor);
 
@@ -191,33 +178,26 @@ namespace QuaSARQ {
                 }
             }
         }    
-        LOG0("PASSED");
+        LOG2(2, "PASSED");
     }
 
     void PrefixChecker::check_prefix_pass_2(
-                Tableau& 		other_targets, 
-                Tableau& 		other_input,
-        const   qubit_t& 		qubit, 
-        const   uint32&   		pivot,
+        const   Tableau& 		other_targets, 
+        const   Tableau& 		other_input,
         const   size_t&         total_targets,
-        const   size_t&         num_words_major,
-        const   size_t&         num_words_minor,
-        const   size_t&         num_qubits_padded,
         const   size_t&         max_blocks,
         const   size_t&         pass_1_blocksize,
         const   bool&           skip_checking_device) {
         
         SYNCALL;
         const char * title = skip_checking_device ? "Performing" : "Checking"; 
-        LOGN1("  %s pass-2 prefix for qubit %d and pivot %d.. ", title, qubit, pivot);
+        LOGN2(2, "  %s pass-2 prefix for qubit %d and pivot %d.. ", title, qubit, pivot);
 
         if (!skip_checking_device) copy_input(other_input, true);
 
         for (size_t w = 0; w < num_words_minor; w++) {
             const size_t c_destab = TABLEAU_INDEX(w, pivot);
             const size_t c_stab = c_destab + TABLEAU_STAB_OFFSET;
-            word_std_t zc_destab = 0;
-            word_std_t xc_destab = 0;
             word_std_t xc_and_zt = 0;
             word_std_t not_zc_xor_xt = 0;
             for (size_t tid_x = 0; tid_x < total_targets; tid_x++) {
@@ -297,7 +277,7 @@ namespace QuaSARQ {
             }
         }
 
-        LOG0("PASSED");
+        LOG2(2, "PASSED");
     }
 
 }

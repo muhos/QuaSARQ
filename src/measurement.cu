@@ -3,21 +3,9 @@
 #include "tuner.cuh"
 #include "access.cuh"
 #include "operators.cuh"
+#include "swapcheck.cuh"
 
 namespace QuaSARQ {;
-
-    #define do_YZ_Swap(X, Z, S) \
-    { \
-        const word_std_t x = X, z = Z; \
-        X = x ^ z; \
-        S ^= (x & ~z); \
-    }
-
-    #define do_XZ_Swap(X, Z, S) \
-    { \
-        do_SWAP(X, Z); \
-        S ^= word_std_t(X & Z); \
-    }
 
     __global__ 
     void check_x_destab(
@@ -69,72 +57,6 @@ namespace QuaSARQ {;
         }
     }
 
-    void check_inject_swap(
-                Table&          h_xs, 
-                Table&          h_zs,
-                Signs&          h_ss, 
-                Table&          d_xs, 
-                Table&          d_zs,
-                Signs&          d_ss, 
-        const   Vec<Commutation>& d_commutations,
-        const   qubit_t         qubit,
-        const   pivot_t         pivot,
-        const   size_t          num_words_major, 
-        const   size_t          num_words_minor,
-        const   size_t          num_qubits_padded) 
-    {
-        SYNCALL;
-
-        LOGN1("  Checking inject-swap for qubit %d and pivot %d.. ", qubit, pivot);
-
-        assert(pivot != INVALID_PIVOT);
-        const size_t q_w = WORD_OFFSET(qubit);
-        const word_std_t q_mask = BITMASK_GLOBAL(qubit);
-        const size_t word_idx = TABLEAU_INDEX(q_w, pivot);
-        const word_std_t qubit_word = h_xs[word_idx];
-        const bool commuting = bool(qubit_word & q_mask);
-
-        if (commuting != d_commutations[pivot].commuting) {
-            LOGERROR("Commuting bit not identical at pivot(%lld)", pivot);
-        }
-
-        for (size_t w = 0; w < num_words_minor; w++) { 
-            const size_t c_destab = TABLEAU_INDEX(w, pivot);
-            const size_t c_stab = c_destab + TABLEAU_STAB_OFFSET;
-            assert(c_destab < h_zs.size());
-            assert(c_stab < h_zs.size());
-            assert(c_destab < h_xs.size());
-            assert(c_stab < h_xs.size());
-            if (commuting) {
-                do_YZ_Swap(h_zs[c_stab], h_zs[c_destab], h_ss[w]);
-                do_YZ_Swap(h_xs[c_stab], h_xs[c_destab], h_ss[w + num_words_minor]);
-            }
-            else {
-                do_XZ_Swap(h_zs[c_stab], h_zs[c_destab], h_ss[w]);
-                do_XZ_Swap(h_xs[c_stab], h_xs[c_destab], h_ss[w + num_words_minor]);
-            }
-        }
-
-        for (size_t w = 0; w < num_words_minor; w++) { 
-            const size_t c_destab = TABLEAU_INDEX(w, pivot);
-            const size_t c_stab = c_destab + TABLEAU_STAB_OFFSET;
-            if (h_xs[c_destab] != d_xs[c_destab]) {
-                LOGERROR("X-Stabilizer failed at w(%lld), pivot(%lld)", w, pivot);
-            }
-            if (h_zs[c_destab] != d_zs[c_destab]) {
-                LOGERROR("Z-Stabilizer failed at w(%lld), pivot(%lld)", w, pivot);
-            }
-            if (h_ss[w] != d_ss[w]) {
-                LOGERROR("Destabilizer signs failed at w(%lld)", w);
-            }
-            if (h_ss[w + num_words_minor] != d_ss[w + num_words_minor]) {
-                LOGERROR("Stabilizer signs failed at w(%lld)", w + num_words_minor);
-            }
-        }
-
-        LOG0("PASSED");
-    }
-
     void Simulator::inject_swap(const pivot_t& pivot, const qubit_t& qubit, const cudaStream_t& stream) {
         const size_t num_words_minor = tableau.num_words_minor();
         const size_t num_words_major = tableau.num_words_major();
@@ -149,18 +71,6 @@ namespace QuaSARQ {;
             num_words_major,
             num_qubits_padded
         );
-        if (options.tune_injectswap) {
-            SYNCALL;
-            tune_kernel_m(inject_swap_k, "injecting swap", 
-                        bestblockinjectswap, bestgridinjectswap, 
-                        XZ_TABLE(tableau),
-                        tableau.signs(),
-                        commutations,
-                        pivot,
-                        num_words_major,
-                        num_words_minor,
-                        num_qubits_padded);
-        }
         TRIM_BLOCK_IN_DEBUG_MODE(bestblockinjectswap, bestgridinjectswap, num_words_minor, 0);
         dim3 currentblock = bestblockinjectswap, currentgrid = bestgridinjectswap;
         TRIM_GRID_IN_1D(num_words_minor, x);
@@ -234,10 +144,100 @@ namespace QuaSARQ {;
         // Sync pivots wth host.
         SYNC(kernel_stream1);
 
-        int64 random_measures = measure_indeterminate(depth_level, kernel_stream1);
+        if (options.tune_measurement)
+            tune_assuming_maximum_targets(depth_level);
+        else {
+            int64 random_measures = measure_indeterminate(depth_level, kernel_stream1);
+            stats.circuit.measure_stats.random += random_measures;
+            stats.circuit.measure_stats.random_per_window = MAX(random_measures, stats.circuit.measure_stats.random_per_window);
+        }
 
         transpose(false, kernel_stream1);
     }
+
+    void Simulator::tune_assuming_maximum_targets(const depth_t& depth_level) {
+		const size_t num_words_minor = tableau.num_words_minor();
+        const size_t num_words_major = tableau.num_words_major();
+        const size_t num_qubits_padded = tableau.num_qubits_padded();
+        const size_t num_gates_per_window = circuit[depth_level].size();
+		PrefixChecker& checker = prefix.get_checker();
+		const size_t pass_1_blocksize = 512;
+		const size_t max_intermediate_blocks = nextPow2(ROUNDUP(num_qubits, MIN_BLOCK_INTERMEDIATE_SIZE));
+		Tableau dummy_input(gpu_allocator);
+		Tableau dummy_targets(gpu_allocator);
+		size_t max_targets = 0;
+        pivot_t min_pivot = INVALID_PIVOT;
+        // for(size_t i = 0; i < num_gates_per_window; i++) {
+        //     const Gate& curr_gate = circuit.gate(depth_level, i);
+        //     const qubit_t qubit = curr_gate.wires[0];
+		// 	checker.find_new_pivot(qubit, tableau);
+		// 	const pivot_t pivot = checker.pivot;
+		// 	if (checker.pivot != INVALID_PIVOT) {
+		// 		LOG2(2, "Meauring qubit %d using pivot %d.. ", qubit, pivot);
+		// 		const size_t total_targets = num_qubits - pivot - 1;
+		// 		if (!total_targets) continue;
+		// 		if (max_targets < total_targets) {
+        //             max_targets = total_targets;
+        //             min_pivot = pivot;
+        //         }
+		// 		const size_t pass_1_gridsize = ROUNDUP(total_targets, pass_1_blocksize);
+		// 		checker.check_prefix_pass_1(
+		// 		dummy_targets,
+		// 		nullptr,
+		// 		nullptr, 
+		// 		nullptr,
+		// 		total_targets,
+		// 		max_intermediate_blocks,
+		// 		pass_1_blocksize,
+		// 		pass_1_gridsize,
+        //         true);
+
+		// 		checker.check_prefix_intermediate_pass(
+		// 			nullptr, 
+		// 			nullptr,
+		// 			max_intermediate_blocks,
+		// 			pass_1_gridsize,
+        //             true);
+
+		// 		checker.check_prefix_pass_2(
+		// 			dummy_targets, 
+		// 			dummy_input,
+		// 			total_targets, 
+		// 			max_intermediate_blocks,
+		// 			pass_1_blocksize,
+        //             true);
+
+		// 		inject_swap_cpu(
+		// 			checker.h_xs,
+		// 			checker.h_zs,
+		// 			checker.h_ss,
+		// 			qubit,
+		// 			pivot,
+		// 			num_words_major,
+		// 			num_words_minor,
+		// 			num_qubits_padded
+		// 		);
+		// 	}
+		// }
+        LOG2(2, "Maximum targets is %lld for minimum pivot %d", max_targets, min_pivot);
+
+        min_pivot = 43, max_targets = num_qubits - min_pivot - 1;
+
+        prefix.set_min_pivot(min_pivot, max_targets);
+        prefix.tune_inject_cx(tableau, commutations);
+        if (options.tune_injectswap) {
+            SYNCALL;
+            tune_kernel_m(inject_swap_k, "injecting swap", 
+                        bestblockinjectswap, bestgridinjectswap, 
+                        XZ_TABLE(tableau),
+                        tableau.signs(),
+                        commutations,
+                        min_pivot,
+                        num_words_major,
+                        num_words_minor,
+                        num_qubits_padded);
+        }
+	}
 
     int64 Simulator::measure_indeterminate(const depth_t& depth_level, const cudaStream_t& stream) {
         const size_t num_words_minor = tableau.num_words_minor();

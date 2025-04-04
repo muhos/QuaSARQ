@@ -1,6 +1,7 @@
 #include "simulator.hpp"
 #include "tuner.cuh"
 #include "transpose.cuh"
+#include "swapcheck.cuh"
 
 namespace QuaSARQ {
 
@@ -15,8 +16,8 @@ namespace QuaSARQ {
 	int64 maxThreadsPerBlockX = 64;
 #else
 	int64 maxThreadsPerBlock = 1024;
-	int64 maxThreadsPerBlockY = 512;
-	int64 maxThreadsPerBlockX = 512;
+	int64 maxThreadsPerBlockY = 1024;
+	int64 maxThreadsPerBlockX = 1024;
 #endif
 	int64 initThreadsPerBlock1D = 2;
 	int64 initThreadsPerBlockX = 2;
@@ -78,10 +79,6 @@ namespace QuaSARQ {
 			// Tune identity.
 			identity(tableau, 0, num_qubits, custreams, options.initialstate);
 			// Start step-wise simulation.
-
-			// TODO:setup up a special flag to trigger finding the largest targets first, then proceeed normaly with tuing
-
-
 			simulate(0, false);
 			// Write configurations.
 			write();
@@ -440,7 +437,7 @@ namespace QuaSARQ {
 			} \
 			LOG2(1, " Best %s configuration found after %zd trials:", opname, trials); \
 			LOG2(1, " Block (%-4u, %4u)", bestBlock.x, bestBlock.y); \
-			LOG2(1, " Grid  (%-4u, %4u)", bestGrid.x, bestGrid.y); \
+			LOG2(1, " Grid  (%-4u, %4u, %4u)", bestGrid.x, bestGrid.y, bestGrid.z); \
 			LOG2(1, " Min time: %.4f ms", minRuntime); \
 			fflush(stdout); \
 		} \
@@ -739,9 +736,25 @@ namespace QuaSARQ {
 				ConstTablePointer 	zs2,
         const 	size_t& 			num_words_major, 
 		const 	size_t& 			num_words_minor, 
-		const 	size_t& 			num_qubits_padded) 
+		const 	size_t& 			num_qubits_padded,
+		const 	bool&	 			row_major) 
 	{
+		const int64 _initThreadsPerBlockX = initThreadsPerBlockX;
+		const int64 _initThreadsPerBlockY = initThreadsPerBlockY;
+		const int64 _maxThreadsPerBlockY = maxThreadsPerBlockY;
+		const int64 _maxThreadsPerBlockX = maxThreadsPerBlockX;
+		if (row_major) {
+			initThreadsPerBlockX = 64;
+			maxThreadsPerBlockY = 32;
+		} else {
+			initThreadsPerBlockY = 32;
+			maxThreadsPerBlockX = 32;
+		}
 		TUNE_2D(xs1, zs1, xs2, zs2, num_words_major, num_words_minor, num_qubits_padded);
+		initThreadsPerBlockX = _initThreadsPerBlockX;
+		initThreadsPerBlockY = _initThreadsPerBlockY;
+		maxThreadsPerBlockY = _maxThreadsPerBlockY;
+		maxThreadsPerBlockX = _maxThreadsPerBlockX;
 	}
 
 	void tune_inplace_transpose(
@@ -806,6 +819,8 @@ namespace QuaSARQ {
 		const   size_t&     max_sub_blocks) 
 	{
 		const char* opname = "prefix pass 1";
+		size_t _initThreadsPerBlockY = initThreadsPerBlockY;
+		initThreadsPerBlockY = 1;
 		TUNE_2D_PREFIX_CUB(
 			false,
 			call_scan_blocks_pass_1_kernel,
@@ -817,6 +832,7 @@ namespace QuaSARQ {
 			num_words_minor,
 			max_blocks,
 			max_sub_blocks);
+		initThreadsPerBlockY = _initThreadsPerBlockY;
 	}
 
 	void tune_inject_pass_1(
@@ -838,6 +854,8 @@ namespace QuaSARQ {
 		const   size_t&         max_blocks)
 	{
 		const char* opname = "inject-cx pass 1";
+		size_t _initThreadsPerBlockY = initThreadsPerBlockY;
+		initThreadsPerBlockY = 1;
 		TUNE_2D_PREFIX_CUB(
 			false,
 			call_injectcx_pass_1_kernel,
@@ -852,6 +870,33 @@ namespace QuaSARQ {
 			num_words_minor,
 			num_qubits_padded,
 			max_blocks);
+		initThreadsPerBlockY = _initThreadsPerBlockY;
+	}
+
+	void tune_single_pass(
+				dim3&       	bestBlock, 
+				dim3&       	bestGrid,
+		const   size_t&     	shared_element_bytes, 
+		const   size_t&     	data_size_in_x, 
+		const   size_t&     	data_size_in_y,
+				word_std_t* 	block_intermediate_prefix_z, 
+				word_std_t* 	block_intermediate_prefix_x,
+		const   size_t&     	num_chunks,
+		const   size_t&     	num_words_minor,
+		const   size_t&     	max_blocks)
+	{
+		const char* opname = "scan single pass";
+		size_t _initThreadsPerBlockY = initThreadsPerBlockY;
+		initThreadsPerBlockY = 1;
+		TUNE_2D_PREFIX_SINGLE_CUB(
+			call_single_pass_kernel,
+			block_intermediate_prefix_z, 
+			block_intermediate_prefix_x, 
+			num_chunks, 
+			num_words_minor,
+			max_blocks
+		);
+		initThreadsPerBlockY = _initThreadsPerBlockY;
 	}
 
 	void tune_prefix_pass_2(
@@ -931,30 +976,6 @@ namespace QuaSARQ {
 			pass_1_blocksize
 		);
 	}
-
-	void tune_single_pass(
-				dim3&       	bestBlock, 
-				dim3&       	bestGrid,
-		const   size_t&     	shared_element_bytes, 
-		const   size_t&     	data_size_in_x, 
-		const   size_t&     	data_size_in_y,
-				word_std_t* 	block_intermediate_prefix_z, 
-				word_std_t* 	block_intermediate_prefix_x,
-		const   size_t&     	num_chunks,
-		const   size_t&     	num_words_minor,
-		const   size_t&     	max_blocks)
-	{
-		const char* opname = "scan single pass";
-		TUNE_2D_PREFIX_SINGLE_CUB(
-			call_single_pass_kernel,
-			block_intermediate_prefix_z, 
-			block_intermediate_prefix_x, 
-			num_chunks, 
-			num_words_minor,
-			max_blocks
-		);
-	}
-
 
 }
 

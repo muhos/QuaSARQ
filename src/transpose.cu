@@ -272,7 +272,7 @@ namespace QuaSARQ {
                 0, false,        // shared size, extend?
                 num_words_major, // x-dim
                 2 * num_qubits_padded,  // y-dim 
-                XZ_TABLE(inv_tableau), XZ_TABLE(tableau), num_words_major, num_words_minor, num_qubits_padded);
+                XZ_TABLE(inv_tableau), XZ_TABLE(tableau), num_words_major, num_words_minor, num_qubits_padded, true);
             }
             TRIM_BLOCK_IN_DEBUG_MODE(bestblocktransposec2r, bestgridtransposec2r, 2 * num_qubits_padded, num_words_minor);
             currentblock = bestblocktransposec2r, currentgrid = bestgridtransposec2r;
@@ -302,7 +302,7 @@ namespace QuaSARQ {
                 0, false,        // shared size, extend?
                 num_words_major, // x-dim
                 num_qubits_padded,      // y-dim 
-                XZ_TABLE(tableau), XZ_TABLE(inv_tableau), num_words_major, num_words_minor, num_qubits_padded);
+                XZ_TABLE(tableau), XZ_TABLE(inv_tableau), num_words_major, num_words_minor, num_qubits_padded, false);
             }
             TRIM_BLOCK_IN_DEBUG_MODE(bestblocktransposer2c, bestgridtransposer2c, num_words_major, num_qubits_padded);
             currentblock = bestblocktransposer2c, currentgrid = bestgridtransposer2c;     
