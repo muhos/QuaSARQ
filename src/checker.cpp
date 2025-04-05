@@ -122,7 +122,7 @@ void Checker::check_integrity() {
 }
 
 void Checker::run() {
-    LOGHEADER(1, 3, "Checker");
+    LOGHEADER(1, 4, "Checker");
     check_random_circuit();
     check_integrity();
     report();

@@ -9,6 +9,101 @@
 
 namespace QuaSARQ {
 
+    __global__ void step_2D_atomic(ConstRefsPointer refs, ConstBucketsPointer gates, const size_t num_gates, const size_t num_words_major, 
+    #ifdef INTERLEAVE_XZ
+    Table* ps, 
+    #else
+    Table* xs, Table* zs,
+    #endif
+    Signs* ss) {
+        sign_t* signs = ss->data();
+
+        for_parallel_y(w, num_words_major) {
+
+            sign_t signs_word = signs[w];
+
+            #ifdef INTERLEAVE_XZ
+                #ifdef INTERLEAVE_WORDS
+                word_t* generators = ps->data() + X_OFFSET(w);
+                #else
+                word_t* generators = ps->data() + w;
+                #endif
+            #else
+            word_t* x_gens_word = xs->data() + w;
+            word_t* z_gens_word = zs->data() + w;
+            #endif
+
+            for_parallel_x(i, num_gates) {
+
+                const gate_ref_t r = refs[i];
+
+                assert(r < NO_REF);
+
+                const Gate& gate = (Gate&) gates[r];
+
+                assert(gate.size <= 2);
+
+                const size_t q1 = gate.wires[0];
+                const size_t q2 = gate.wires[gate.size - 1];
+
+                assert(q1 < MAX_QUBITS);
+                assert(q2 < MAX_QUBITS);
+
+                const size_t q1_x_word_idx = X_OFFSET(q1) * num_words_major;
+                const size_t q2_x_word_idx = X_OFFSET(q2) * num_words_major;
+                #ifdef INTERLEAVE_WORDS
+                const size_t q1_z_word_idx = Z_OFFSET(q1) * num_words_major + 1;
+                const size_t q2_z_word_idx = Z_OFFSET(q2) * num_words_major + 1;
+                #else
+                const size_t q1_z_word_idx = Z_OFFSET(q1) * num_words_major;
+                const size_t q2_z_word_idx = Z_OFFSET(q2) * num_words_major;
+                #endif
+
+                #ifdef INTERLEAVE_XZ
+                assert(q1_x_word_idx + w < ps->size()), assert(q1_z_word_idx + w < ps->size());
+                assert(q2_x_word_idx + w < ps->size()), assert(q2_z_word_idx + w < ps->size());
+                word_t& x_words_q1 = generators[q1_x_word_idx];
+                word_t& x_words_q2 = generators[q2_x_word_idx];
+                word_t& z_words_q1 = generators[q1_z_word_idx];
+                word_t& z_words_q2 = generators[q2_z_word_idx];
+                #else
+                assert(q1_x_word_idx + w < xs->size()), assert(q1_z_word_idx + w < zs->size());
+                assert(q2_x_word_idx + w < xs->size()), assert(q2_z_word_idx + w < zs->size());
+                word_t& x_words_q1 = x_gens_word[q1_x_word_idx];
+                word_t& x_words_q2 = x_gens_word[q2_x_word_idx];
+                word_t& z_words_q1 = z_gens_word[q1_z_word_idx];
+                word_t& z_words_q2 = z_gens_word[q2_z_word_idx];
+                #endif
+
+                #if DEBUG_STEP
+                LOGGPU("  word(%-4lld): Gate(%-5s, r:%-4u, s:%d), qubits(%-3lld, %-3lld)\n", w, G2S[gate.type], r, gate.size, q1, q2);
+                #endif
+
+                switch (gate.type) {
+                case I: { break; }
+                case H: { do_H(signs_word, words_q1); break; }
+                case S: { do_S(signs_word, words_q1); break; }
+                case S_DAG: { do_Sdg(signs_word, words_q1); break; }
+                case Z: { sign_update_X_or_Z(signs_word, x_words_q1); break; }
+                case X: { sign_update_X_or_Z(signs_word, z_words_q1); break; }
+                case Y: { sign_update_Y(signs_word, x_words_q1, z_words_q1); break; }
+                case CX: { do_CX(signs_word, q1, q2); break; }
+                case CZ: { do_CZ(signs_word, q1, q2); break; }
+                case CY: { do_CY(signs_word, q1, q2); break; }
+                case SWAP: { do_SWAP(x_words_q1, x_words_q2); do_SWAP(z_words_q1, z_words_q2); break; }
+                case ISWAP: { do_iSWAP(signs_word, q1, q2); break; }
+                default: break;
+                }
+            }
+
+            if (signs_word) {
+                atomicXOR(signs + w, signs_word);
+            }
+
+        }
+
+    }
+
     __global__ void step_2D(ConstRefsPointer refs, ConstBucketsPointer gates, const size_t num_gates, const size_t num_words_major, 
     #ifdef INTERLEAVE_XZ
     Table* ps, 
@@ -288,17 +383,20 @@ namespace QuaSARQ {
             LOGN2(2, "Running step with block(x:%u, y:%u) and grid(x:%u, y:%u) per depth level %d %s.. ", bestblockstep.x, bestblockstep.y, bestgridstep.x, bestgridstep.y, depth_level, sync ? "synchroneously" : "asynchroneously");
 
             // Run simulation.
-            if (bestblockstep.x > maxWarpSize)
-                step_2D << < bestgridstep, bestblockstep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs());
-            else
+            if (options.sync) cutimer.start(kernel_stream);
+
+            if (bestblockstep.x == 1)
+                step_2D << < bestgridstep, bestblockstep, 0, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs());
+            else if (bestblockstep.x <= maxWarpSize)
                 step_2D_warped << < bestgridstep, bestblockstep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs());
+            else
+                step_2D << < bestgridstep, bestblockstep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs());
 
             if (options.sync) { 
                 LASTERR("failed to launch step kernel");
-                SYNC(kernel_stream);
-            }
-
-            LOGDONE(2, 4);
+                cutimer.stop(kernel_stream);
+                LOGENDING(2, 4, "(time %.3f ms)", cutimer.time());
+            } else LOGDONE(2, 4);
 
             #endif // DEBUG MACRO.
 

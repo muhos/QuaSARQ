@@ -112,6 +112,39 @@ namespace QuaSARQ {
     }
 
     __global__ 
+    void find_new_pivot_and_mark_atomic(
+                Commutation*        commutations, 
+                pivot_t*            pivots, 
+                ConstBucketsPointer measurements, 
+                ConstRefsPointer    refs, 
+                ConstTablePointer   inv_xs, 
+        const   size_t              gate_index, 
+        const   size_t              num_qubits, 
+        const   size_t              num_words_major, 
+        const   size_t              num_words_minor,
+        const   size_t              num_qubits_padded) 
+    {
+        const gate_ref_t r = refs[gate_index];
+        assert(r < NO_REF);
+        const Gate& m = (Gate&) measurements[r];
+        assert(m.size == 1);
+        const qubit_t q = m.wires[0];
+        const size_t q_w = WORD_OFFSET(q);
+        const word_std_t q_mask = BITMASK_GLOBAL(q);
+        for_parallel_x(g, num_qubits) {
+            const size_t word_idx = TABLEAU_INDEX(q_w, g) + TABLEAU_STAB_OFFSET;
+            const word_std_t qubit_word = (*inv_xs)[word_idx];
+            if (qubit_word & q_mask) {
+                commutations[g].anti_commuting = true;
+                atomicMin(pivots + gate_index, pivot_t(g));
+            }
+            else {
+                commutations[g].reset();
+            }
+        }
+    }
+
+    __global__ 
     void find_new_pivot_and_mark(
                 Commutation*        commutations, 
                 pivot_t*            pivots, 
@@ -185,28 +218,45 @@ namespace QuaSARQ {
         const size_t num_words_major = tab.num_words_major();
         const size_t num_words_minor = tab.num_words_minor();
         const size_t num_qubits_padded = tableau.num_qubits_padded();
-
         dim3 currentblock, currentgrid;
+        if (options.tune_allpivots) {
+            SYNCALL;
+            tune_kernel_m(find_all_pivots, "Find all pivots", 
+                            bestblockallpivots, bestgridallpivots, 
+                            sizeof(pivot_t), true,   // shared size, extend?
+                            num_qubits,             // x-dim
+                            num_pivots_or_index,    // y-dim 
+                            gpu_circuit.pivots(), 
+                            gpu_circuit.gates(), 
+                            gpu_circuit.references(), 
+                            tab.xtable(), 
+                            num_pivots_or_index, 
+                            num_qubits, 
+                            num_words_major, 
+                            num_words_minor,
+                            num_qubits_padded);
+            reset_all_pivots <<<bestgridreset, bestblockreset>>> (gpu_circuit.pivots(), num_pivots_or_index);
+            SYNCALL;
+        }
+        if (options.tune_newpivots) {
+            SYNCALL;
+            tune_kernel_m(find_new_pivot_and_mark, "New pivots", 
+                bestblocknewpivots, bestgridnewpivots, 
+                sizeof(pivot_t),
+                commutations,
+                gpu_circuit.pivots(), 
+                gpu_circuit.gates(), 
+                gpu_circuit.references(), 
+                tab.xtable(), 
+                0, 
+                num_qubits,
+                num_words_major, 
+                num_words_minor,
+                num_qubits_padded);
+            reset_all_pivots <<<bestgridreset, bestblockreset>>> (gpu_circuit.pivots(), num_pivots_or_index);
+            SYNCALL;
+        }
         if (bulky) {
-            if (options.tune_allpivots) {
-                SYNCALL;
-                tune_kernel_m(find_all_pivots, "Find all pivots", 
-                                bestblockallpivots, bestgridallpivots, 
-                                sizeof(pivot_t), true,   // shared size, extend?
-                                num_qubits,             // x-dim
-                                num_pivots_or_index,    // y-dim 
-                                gpu_circuit.pivots(), 
-                                gpu_circuit.gates(), 
-                                gpu_circuit.references(), 
-                                tab.xtable(), 
-                                num_pivots_or_index, 
-                                num_qubits, 
-                                num_words_major, 
-                                num_words_minor,
-                                num_qubits_padded);
-                reset_all_pivots <<<bestgridreset, bestblockreset>>> (gpu_circuit.pivots(), num_pivots_or_index);
-                SYNCALL;
-            }
             TRIM_BLOCK_IN_DEBUG_MODE(bestblockallpivots, bestgridallpivots, num_qubits, num_pivots_or_index);
             currentblock = bestblockallpivots, currentgrid = bestgridallpivots;
             TRIM_GRID_IN_XY(num_qubits, num_pivots_or_index);
@@ -231,28 +281,13 @@ namespace QuaSARQ {
         }
         else {
             const size_t pivot_index = num_pivots_or_index;
-            if (options.tune_newpivots) {
-                SYNCALL;
-                tune_kernel_m(find_new_pivot_and_mark, "New pivots", 
-                    bestblocknewpivots, bestgridnewpivots, 
-                    sizeof(pivot_t),
-                    commutations,
-                    gpu_circuit.pivots(), 
-                    gpu_circuit.gates(), 
-                    gpu_circuit.references(), 
-                    tab.xtable(), 
-                    pivot_index, 
-                    num_qubits,
-                    num_words_major, 
-                    num_words_minor,
-                    num_qubits_padded);
-                reset_all_pivots <<<bestgridreset, bestblockreset>>> (gpu_circuit.pivots(), num_pivots_or_index);
-                SYNCALL;
-            }
             TRIM_BLOCK_IN_DEBUG_MODE(bestblocknewpivots, bestgridnewpivots, num_qubits, 0);
             currentblock = bestblocknewpivots, currentgrid = bestgridnewpivots;
             TRIM_GRID_IN_1D(num_qubits, x);
             OPTIMIZESHARED(smem_size, currentblock.x, sizeof(pivot_t));
+            if (currentblock.y > 1) {
+                LOGERROR("Kernel launch with 2D grid is not supported for find_new_pivot_and_mark kernel");
+            }
             LOGN2(2, "Finding new pivot with marking using block(x:%u, y:%u) and grid(x:%u, y:%u).. ", currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
             if (options.sync) cutimer.start(stream);
             find_new_pivot_and_mark <<< currentgrid, currentblock, smem_size, stream >>> (

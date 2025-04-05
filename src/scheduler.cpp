@@ -228,6 +228,27 @@ size_t Simulator::parse(Statistics& stats, const char* path) {
     return max_qubits;
 }
 
+struct WindowSorter 
+{
+    const Circuit& circuit;
+
+    WindowSorter(const Circuit& c) : circuit(c) { }
+
+    inline
+    bool operator() (const gate_ref_t& a, const gate_ref_t& b) {
+        const Gate& ga = circuit.gate(a);
+        const Gate& gb = circuit.gate(b);
+        return (ga.wires[0] != gb.wires[0]) ? (ga.wires[0] < gb.wires[0]) :
+               // Compare second wire if both have size 2
+               (ga.size == 2 && gb.size == 2 && ga.wires[1] != gb.wires[1]) ? (ga.wires[1] < gb.wires[1]) :
+               // Prioritize type over size
+               (ga.type != gb.type) ? (ga.type < gb.type) :
+               // Compare size if types are equal
+               (ga.size < gb.size);
+    }
+};
+
+
 size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
     LOGN2(1, "Scheduling %s%zd%s gates for parallel simulation.. ", CREPORTVAL, stats.circuit.num_gates, CNORMAL);
     LOG2(2, "");
@@ -276,12 +297,7 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
             if (c == t) {
                 if (is_c_unlocked) {
                     circuit_io.circuit_queue.pop_front();
-                    // if (gate.type == M) {
-                    //     measurements.push(c);
-                    //     measuring = true;
-                    // }
-                    // else     
-                        circuit.addGate(max_depth, gate.type, 1, c);
+                    circuit.addGate(max_depth, gate.type, 1, c);
                     locked_qubits.push(c);
                     locked[c] = 1;
                     if (gate.type != I) {
@@ -356,8 +372,6 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
         assert(max_depth == circuit.depth());
     }
     
-    timer.stop();
-    stats.time.schedule = timer.time();
     assert(max_depth == circuit.depth());
     assert(circuit.num_gates() == stats.circuit.num_gates);
     stats.circuit.num_gates = MAX(stats.circuit.num_gates, circuit.num_gates());
@@ -365,6 +379,12 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
     locked.clear(true);
     locked_qubits.clear(true);
     circuit_io.destroy();
+    // Sort gates in each depth level.
+    for (depth_t d = 0; d < circuit.depth(); d++) {
+        std::sort(circuit[d].data(), circuit[d].end(), WindowSorter(circuit));
+    }
+    timer.stop();
+    stats.time.schedule = timer.time();
     LOGDONE(1, 2);
     LOG2(1, "Scheduled %s%zd%s gates with a maximum of %s%zd%s parallel gates and %s%zd%s depth levels in %s%.3f%s ms.",
         CREPORTVAL, stats.circuit.num_gates, CNORMAL,
@@ -373,6 +393,7 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
         CREPORTVAL, stats.time.schedule, CNORMAL);
     if (options.verbose > 2)
         circuit.print();
+
     return max_depth;
 }
 

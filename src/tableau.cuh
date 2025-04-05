@@ -137,7 +137,7 @@ namespace QuaSARQ {
             assert(cap_before > cap_after);
             size_t alloced = cap_before - cap_after;
             SYNCALL;
-            LOGENDING(1, 3, "(reserved %zd MB, %zd partitions).", ratio(alloced, MB), _num_partitions);
+            LOGENDING(1, 4, "(reserved %zd MB, %zd partitions).", ratio(alloced, MB), _num_partitions);
             assert(_num_partitions);
             return _num_partitions;
         }
@@ -335,7 +335,7 @@ namespace QuaSARQ {
             assert(cap_before > cap_after);
             size_t alloced = cap_before - cap_after;
             SYNCALL;
-            LOGENDING(1, 3, "(reserved %zd MB, %zd partitions).", ratio(alloced, MB), _num_partitions);
+            LOGENDING(1, 4, "(reserved %zd MB, %zd partitions).", ratio(alloced, MB), _num_partitions);
             assert(_num_partitions);
             return _num_partitions;
         }
@@ -412,7 +412,7 @@ namespace QuaSARQ {
             assert(cap_before >= cap_after);
             size_t alloced = cap_before - cap_after;
             SYNCALL;
-            LOGENDING(1, 3, "(reserved %zd MB, %zd partitions).", ratio(alloced, MB), _num_partitions);
+            LOGENDING(1, 4, "(reserved %zd MB, %zd partitions).", ratio(alloced, MB), _num_partitions);
             assert(_num_partitions);
             return _num_partitions;
         }

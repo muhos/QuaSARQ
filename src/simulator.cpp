@@ -65,10 +65,10 @@ Simulator::Simulator(const string& path) :
 }
 
 void Simulator::initialize() {
-    LOGHEADER(1, 3, "Build");
+    LOGHEADER(1, 4, "Build");
     getCPUInfo();
     getGPUInfo();
-    LOGHEADER(1, 3, "Initial");
+    LOGHEADER(1, 4, "Initial");
     gpu_allocator.create_gpu_pool();
     parse();
     // Creating CPU pool (pinned memory)
@@ -97,7 +97,7 @@ void Simulator::create_streams(cudaStream_t*& streams) {
         copy_streams[1] = streams[1];
         kernel_streams[0] = streams[2];
         kernel_streams[1] = streams[3];
-        LOGDONE(1, 3);
+        LOGDONE(1, 4);
     }
 }
 
@@ -109,8 +109,8 @@ void Simulator::simulate(const size_t& p, const bool& reversed) {
         throw GPU_memory_exception();
     }
     if (!options.check_tableau) {
-        if (reversed) { LOGHEADER(1, 3, "Reversed Simulation"); }
-        else { LOGHEADER(1, 3, "Simulation"); }
+        if (reversed) { LOGHEADER(1, 4, "Reversed Simulation"); }
+        else { LOGHEADER(1, 4, "Simulation"); }
     }
     if (options.progress_en) print_progress_header();
     if (reversed) {

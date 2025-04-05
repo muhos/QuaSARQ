@@ -65,7 +65,7 @@ namespace QuaSARQ {
 		    LOGN2(2, "Initializing offset of window buckets to %lld.. ", int64(buckets_offset));
 			assert(buckets_offset < NO_REF);
 			this->buckets_offset = buckets_offset;
-			LOGDONE(2, 3);
+			LOGDONE(2, 4);
 			LOG2(2, "");
 		} 
 
@@ -84,14 +84,14 @@ namespace QuaSARQ {
 				allocator.resize_pinned<pivot_t>(_pinned_pivots, max_references);
 				_references = allocator.allocate<gate_ref_t>(max_references);
 				allocator.resize_pinned<gate_ref_t>(_pinned_references, max_references);
-				LOGDONE(2, 3);
+				LOGDONE(2, 4);
 			}
 			if (this->max_buckets < max_buckets) {
 				LOGN2(2, "Resizing a (pinned) window for %lld buckets.. ", int64(max_buckets));
 				this->max_buckets = max_buckets;
 				_buckets = allocator.allocate<bucket_t>(max_buckets);
 				allocator.resize_pinned<bucket_t>(_pinned_buckets, max_buckets);
-				LOGDONE(2, 3);
+				LOGDONE(2, 4);
 			}
 			this->max_qubits = max_qubits;
 		}
@@ -144,7 +144,7 @@ namespace QuaSARQ {
 			else {
 				buckets_offset += (gate_ref_t) curr_num_buckets;
 			}
-			if (!sync) LOGDONE(2, 3);
+			if (!sync) LOGDONE(2, 4);
 		}
 
 		inline
@@ -155,7 +155,7 @@ namespace QuaSARQ {
 				LOGERROR("buckets offset overflow during gates transfer to host.");
 			LOGN2(2, "Copying back %lld buckets to host per depth level %lld synchroneously.. ", int64(curr_num_buckets), int64(depth_level));
 			CHECK(cudaMemcpy(circuit.data(prev_buckets_offset), _buckets, BUCKETSIZE * curr_num_buckets, cudaMemcpyDeviceToHost));
-			LOGDONE(2, 3);
+			LOGDONE(2, 4);
 		}
 
 		inline
@@ -164,7 +164,7 @@ namespace QuaSARQ {
 			assert(num_pivots <= max_qubits);
 			LOGN2(2, "Copying back %lld pivots to host asynchroneously.. ", int64(num_pivots));
 			CHECK(cudaMemcpyAsync(_pinned_pivots, _pivots, sizeof(pivot_t) * num_pivots, cudaMemcpyDeviceToHost, stream));
-			LOGDONE(2, 3);
+			LOGDONE(2, 4);
 		}
 
 		inline
@@ -178,7 +178,7 @@ namespace QuaSARQ {
 			if (options.verbose >= 2) host_gate->print(true);
 			LOGN2(2, " to host asynchroneously.. ");
 			CHECK(cudaMemcpyAsync(circuit.data(host_ref), _buckets + device_ref, BUCKETSIZE * num_buckets, cudaMemcpyDeviceToHost, stream));
-			LOGDONE(2, 3);
+			LOGDONE(2, 4);
 		}
 
 		inline

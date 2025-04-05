@@ -17,7 +17,7 @@ int main(int argc, char** argv) {
 		int has_input_file = parseArguments(argc, argv);
         options.initialize();
 		if (!options.quiet_en && options.verbose) {
-			LOGHEADER(1, 3, "Banner");
+			LOGHEADER(1, 4, "Banner");
 			LOGFANCYBANNER(version());
 			printArguments(argc - 1 > has_input_file);
 		}
@@ -28,19 +28,19 @@ int main(int argc, char** argv) {
         if (options.equivalence_en) {
 			Equivalence* equivalence = has_input_file == 2 ? new Equivalence(string(argv[1]), string(argv[2])) : new Equivalence();
 			equivalence->check();
-			LOGHEADER(0, 3, "Exit");
+			LOGHEADER(0, 4, "Exit");
 			delete equivalence;
 		}
 		else if (options.tuner_en) {
 			Tuner* tuner = has_input_file ? new Tuner(string(argv[1])) : new Tuner();
 			tuner->run();
-			LOGHEADER(0, 3, "Exit");
+			LOGHEADER(0, 4, "Exit");
 			delete tuner;
 		}
         else {
 			Simulator* sim = has_input_file ? new Simulator(string(argv[1])) : new Simulator();
             sim->simulate();
-		    LOGHEADER(0, 3, "Exit");
+		    LOGHEADER(0, 4, "Exit");
 			delete sim;
         }
 

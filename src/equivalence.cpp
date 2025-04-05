@@ -117,7 +117,7 @@ bool Equivalence::check(const InitialState& istate, const size_t& num_qubits_per
 }
 
 void Equivalence::check() {
-    LOGHEADER(1, 3, "Equivalence checking");
+    LOGHEADER(1, 4, "Equivalence checking");
     if (num_qubits != other_num_qubits) {
         LOG2(1, "%s NOT EQUIVALENT%s due to misaligned qubits.", CRED, CNORMAL);
     }

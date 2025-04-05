@@ -222,8 +222,9 @@ namespace QuaSARQ {;
         LOG2(2, "Maximum targets is %lld for minimum pivot %d", max_targets, min_pivot);
 
         min_pivot = 43, max_targets = num_qubits - min_pivot - 1;
-
+        
         prefix.set_min_pivot(min_pivot, max_targets);
+        mark_commutations(min_pivot, 0);
         prefix.tune_inject_cx(tableau, commutations);
         if (options.tune_injectswap) {
             SYNCALL;

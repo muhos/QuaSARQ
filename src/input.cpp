@@ -7,9 +7,9 @@ namespace QuaSARQ {
 
     void printUsage(const int& argc, char **argv, bool verbose)
     {
-        LOGHEADER(0, 3, "Banner");
+        LOGHEADER(0, 4, "Banner");
         LOGFANCYBANNER(version());
-        LOGHEADER(0, 3, "Build");
+        LOGHEADER(0, 4, "Build");
         getCPUInfo();
         getBuildInfo();
         getGPUInfo();
@@ -82,7 +82,7 @@ namespace QuaSARQ {
     void printArguments(const bool& has_options) {
         const AvailOptions& avail_opts = ARG::opts();
         if (has_options) {
-            LOGHEADER(1, 3, "Options");
+            LOGHEADER(1, 4, "Options");
             int i = 0, j = 0;
             const int MAX_PER_LINE = 4;
             int last_parsed = 0;

@@ -223,8 +223,8 @@ namespace QuaSARQ {
 			initBlocksPerGridX = (int64) ceil(initBlocksPerGridX / 1.0); \
 			const int64 maxBlocksPerGridY = maxGPUBlocks2D << 1; \
 			const int64 maxBlocksPerGridX = maxGPUBlocks2D << 1; \
-			for (int64 blocksY = initBlocksPerGridY; (blocksY <= maxBlocksPerGridY) && !early_exit && trials < TRIALS; blocksY += 8, trials++) { \
-				for (int64 blocksX = initBlocksPerGridX; (blocksX <= maxBlocksPerGridX) && !early_exit && trials < TRIALS; blocksX += 8, trials++) { \
+			for (int64 blocksY = initBlocksPerGridY; (blocksY <= maxBlocksPerGridY) && !early_exit && trials < TRIALS; blocksY += 4, trials++) { \
+				for (int64 blocksX = initBlocksPerGridX; (blocksX <= maxBlocksPerGridX) && !early_exit && trials < TRIALS; blocksX += 4, trials++) { \
 					for (int64 threadsY = maxThreadsPerBlockY; (threadsY >= initThreadsPerBlockY) && !early_exit && trials < TRIALS; threadsY >>= 1) { \
 						for (int64 threadsX = maxThreadsPerBlockX; (threadsX >= initThreadsPerBlockX) && !early_exit && trials < TRIALS; threadsX >>= 1) { \
 							const int64 threadsPerBlock = threadsX * threadsY; \
@@ -565,7 +565,10 @@ namespace QuaSARQ {
 				Signs *ss)
 	{
 		assert(gate_ref_t(data_size_in_x) == data_size_in_x);
+		size_t _initThreadsPerBlockX = initThreadsPerBlockX;
+		initThreadsPerBlockX = 1;
 		TUNE_2D(gate_refs, gate_buckets, data_size_in_x, data_size_in_y, TUNE_XZ_TABLES, ss);
+		initThreadsPerBlockX = _initThreadsPerBlockX;
 	}
 	
 	void tune_kernel_m(
