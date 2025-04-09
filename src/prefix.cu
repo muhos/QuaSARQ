@@ -183,20 +183,16 @@ namespace QuaSARQ {
             if (block_intermediate_prefix_x == nullptr)
                 block_intermediate_prefix_x = allocator.allocate<word_std_t>(max_array_size);
             LOGDONE(2, 4);
-            if (max_intermediate_blocks > MIN_SINGLE_PASS_THRESHOLD ||
-                (options.tune_prefixprepare || options.tune_prefixfinal)) {
-                max_sub_blocks = max_intermediate_blocks >> 1;
-                max_array_size = max_sub_blocks * num_words_minor;
-                LOGN2(2, "allocating memory for %lld sub-blocks.. ", int64(max_sub_blocks));
-                if (subblocks_prefix_z == nullptr)
-                    subblocks_prefix_z = allocator.allocate<word_std_t>(max_array_size);
-                if (subblocks_prefix_x == nullptr)
-                    subblocks_prefix_x = allocator.allocate<word_std_t>(max_array_size);
-                LOGDONE(2, 4);
-            }
+            max_sub_blocks = MAX(1, (max_intermediate_blocks >> 1));
+            max_array_size = max_sub_blocks * num_words_minor;
+            LOGN2(2, "allocating memory for %lld sub-blocks.. ", int64(max_sub_blocks));
+            if (subblocks_prefix_z == nullptr)
+                subblocks_prefix_z = allocator.allocate<word_std_t>(max_array_size);
+            if (subblocks_prefix_x == nullptr)
+                subblocks_prefix_x = allocator.allocate<word_std_t>(max_array_size);
+            LOGDONE(2, 4);
         }
         targets.alloc(num_qubits, max_window_bytes, true, false, false);
-        checker.alloc(num_qubits);
     }
 
     void Prefix::resize(const Tableau& input, const size_t& max_window_bytes) {
@@ -217,8 +213,6 @@ namespace QuaSARQ {
             max_sub_blocks = max_intermediate_blocks >> 1;
         }
         targets.resize(num_qubits, max_window_bytes, true, false, false);
-        checker.destroy();
-        checker.alloc(num_qubits);
     }
 
     void call_single_pass_kernel(

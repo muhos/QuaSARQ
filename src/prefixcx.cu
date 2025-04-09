@@ -11,6 +11,12 @@
 
 namespace QuaSARQ {
 
+
+    // wecan do everything in one kernel using prefix, if active targets < 1024 threads
+    // which usually does.
+
+
+
     template <int BLOCKX, int BLOCKY>
     __global__ 
     void scan_targets_pass_1(
@@ -20,14 +26,15 @@ namespace QuaSARQ {
                 word_std_t *        block_intermediate_prefix_x,
                 ConstTablePointer   inv_xs, 
                 ConstTablePointer   inv_zs,
-                ConstCommsPointer   commutations,
-        const   uint32              pivot,
-        const   size_t              total_targets,
+        const   pivot_t*            pivots,
+        const   size_t              active_targets,
         const   size_t              num_words_major,
         const   size_t              num_words_minor,
         const   size_t              num_qubits_padded,
         const   size_t              max_blocks) {
-            
+
+        assert(active_targets > 0);
+
         typedef cub::BlockScan<word_std_t, BLOCKX, cub::BLOCK_SCAN_RAKING> BlockScan;
 
         __shared__ typename BlockScan::TempStorage temp_storage_z[BLOCKY];
@@ -36,7 +43,7 @@ namespace QuaSARQ {
         for_parallel_y_tiled(by, num_words_minor) {
             const grid_t w = threadIdx.y + by * blockDim.y;
 
-            for_parallel_x_tiled(bx, total_targets) {
+            for_parallel_x_tiled(bx, active_targets) {
                 const grid_t tid_x = threadIdx.x + bx * blockDim.x;
                 
                 word_std_t z = 0;
@@ -44,16 +51,18 @@ namespace QuaSARQ {
                 word_std_t init_z = 0;
                 word_std_t init_x = 0;
 
-                if (w < num_words_minor && tid_x < total_targets) {
-                    const size_t t = tid_x + pivot + 1;
-                    if (commutations[t].anti_commuting) {
-                        const size_t t_destab = TABLEAU_INDEX(w, t);
-                        z = (*inv_zs)[t_destab];
-                        x = (*inv_xs)[t_destab];
-                        const size_t c_destab = TABLEAU_INDEX(w, pivot);
-                        init_z = (*inv_zs)[c_destab];
-                        init_x = (*inv_xs)[c_destab];
-                    }
+                if (w < num_words_minor && tid_x < active_targets) {
+                    const pivot_t pivot = pivots[0];
+                    assert(pivot != INVALID_PIVOT);
+                    const size_t t = pivots[tid_x + 1];
+                    assert(t != pivot);
+                    assert(t != INVALID_PIVOT);
+                    const size_t t_destab = TABLEAU_INDEX(w, t);
+                    z = (*inv_zs)[t_destab];
+                    x = (*inv_xs)[t_destab];
+                    const size_t c_destab = TABLEAU_INDEX(w, pivot);
+                    init_z = (*inv_zs)[c_destab];
+                    init_x = (*inv_xs)[c_destab];
                 }
 
                 word_std_t blockSum_z;
@@ -62,7 +71,7 @@ namespace QuaSARQ {
                 BlockScan(temp_storage_z[threadIdx.y]).ExclusiveScan(z, z, 0, XOROP(), blockSum_z);
                 BlockScan(temp_storage_x[threadIdx.y]).ExclusiveScan(x, x, 0, XOROP(), blockSum_x);
 
-                if (w < num_words_minor && tid_x < total_targets) {
+                if (w < num_words_minor && tid_x < active_targets) {
                     const size_t word_idx = PREFIX_TABLEAU_INDEX(w, tid_x);
                     assert(word_idx < prefix_zs->size());
                     assert(word_idx < prefix_xs->size());
@@ -87,9 +96,8 @@ namespace QuaSARQ {
                 block_intermediate_prefix_z, \
                 block_intermediate_prefix_x, \
                 XZ_TABLE(input), \
-                commutations, \
-                pivot, \
-                total_targets, \
+                pivots, \
+                active_targets, \
                 num_words_major, \
                 num_words_minor, \
                 num_qubits_padded, \
@@ -106,9 +114,8 @@ namespace QuaSARQ {
                 ConstTablePointer   prefix_zs, 
                 ConstWordsPointer   block_intermediate_prefix_z,
                 ConstWordsPointer   block_intermediate_prefix_x,
-                ConstCommsPointer   commutations,
-        const   pivot_t             pivot,
-        const   size_t              total_targets,
+        const   pivot_t*            pivots,
+        const   size_t              active_targets,
         const   size_t              num_words_major,
         const   size_t              num_words_minor,
         const   size_t              num_qubits_padded,
@@ -120,9 +127,6 @@ namespace QuaSARQ {
 
         for_parallel_y(w, num_words_minor) {
 
-            const size_t c_destab = TABLEAU_INDEX(w, pivot);
-            const size_t c_stab = c_destab + TABLEAU_STAB_OFFSET;
-
             word_std_t zc_destab = 0;
             word_std_t xc_destab = 0;
             word_std_t xc_and_zt = 0;
@@ -130,49 +134,51 @@ namespace QuaSARQ {
             word_std_t local_destab_sign = 0;
             word_std_t local_stab_sign = 0;
 
-            for_parallel_x(tid_x, total_targets) {
+            for_parallel_x(tid_x, active_targets) {
+                const pivot_t pivot = pivots[0];
+                assert(pivot != INVALID_PIVOT);
+                const size_t t = pivots[tid_x + 1];
+                assert(t != pivot);
+                assert(t != INVALID_PIVOT);
 
-                size_t t = tid_x + pivot + 1;
+                const size_t c_destab = TABLEAU_INDEX(w, pivot);
+                const size_t c_stab = c_destab + TABLEAU_STAB_OFFSET;
+                const size_t t_destab = TABLEAU_INDEX(w, t);
+                const size_t t_stab = t_destab + TABLEAU_STAB_OFFSET;
 
-                if (commutations[t].anti_commuting) {
+                assert(c_destab < inv_zs->size());
+                assert(t_destab < inv_zs->size());
 
-                    const size_t t_destab = TABLEAU_INDEX(w, t);
-                    const size_t t_stab = t_destab + TABLEAU_STAB_OFFSET;
+                const size_t word_idx = PREFIX_TABLEAU_INDEX(w, tid_x);
+                word_std_t zc_xor_zt = (*prefix_zs)[word_idx];
+                word_std_t xc_xor_xt = (*prefix_xs)[word_idx];
 
-                    assert(c_destab < inv_zs->size());
-                    assert(t_destab < inv_zs->size());
+                // Compute final prefixes and hence final {x,z}'c = {x,z}'c ^ {x,z}'t expressions.
+                const size_t bid = PREFIX_INTERMEDIATE_INDEX(w, (tid_x / pass_1_blocksize));
+                zc_xor_zt ^= block_intermediate_prefix_z[bid];
+                xc_xor_xt ^= block_intermediate_prefix_x[bid];
 
-                    const size_t word_idx = PREFIX_TABLEAU_INDEX(w, tid_x);
-                    word_std_t zc_xor_zt = (*prefix_zs)[word_idx];
-                    word_std_t xc_xor_xt = (*prefix_xs)[word_idx];
+                // Compute the CX expression for Z.
+                word_std_t c_stab_word = zs[c_stab];
+                word_std_t t_destab_word = zs[t_destab];
+                xc_and_zt = (c_stab_word & t_destab_word);
+                not_zc_xor_xt = ~(zc_xor_zt ^ zs[t_stab]);
+                local_destab_sign ^= xc_and_zt & not_zc_xor_xt;
+                
+                // Update Z tableau.
+                zs[t_stab] ^= c_stab_word;
+                zc_destab ^= t_destab_word; // requires collapse.
 
-                    // Compute final prefixes and hence final {x,z}'c = {x,z}'c ^ {x,z}'t expressions.
-                    const size_t bid = PREFIX_INTERMEDIATE_INDEX(w, (tid_x / pass_1_blocksize));
-                    zc_xor_zt ^= block_intermediate_prefix_z[bid];
-                    xc_xor_xt ^= block_intermediate_prefix_x[bid];
+                // Compute the CX expression for X.
+                c_stab_word = xs[c_stab];
+                t_destab_word = xs[t_destab];
+                xc_and_zt = (c_stab_word & t_destab_word);
+                not_zc_xor_xt = ~(xc_xor_xt ^ xs[t_stab]);
+                local_stab_sign ^= xc_and_zt & not_zc_xor_xt;
 
-                    // Compute the CX expression for Z.
-                    word_std_t c_stab_word = zs[c_stab];
-                    word_std_t t_destab_word = zs[t_destab];
-                    xc_and_zt = (c_stab_word & t_destab_word);
-                    not_zc_xor_xt = ~(zc_xor_zt ^ zs[t_stab]);
-                    local_destab_sign ^= xc_and_zt & not_zc_xor_xt;
-                    
-                    // Update Z tableau.
-                    zs[t_stab] ^= c_stab_word;
-                    zc_destab ^= t_destab_word; // requires collapse.
-
-                    // Compute the CX expression for X.
-                    c_stab_word = xs[c_stab];
-                    t_destab_word = xs[t_destab];
-                    xc_and_zt = (c_stab_word & t_destab_word);
-                    not_zc_xor_xt = ~(xc_xor_xt ^ xs[t_stab]);
-                    local_stab_sign ^= xc_and_zt & not_zc_xor_xt;
-
-                    // Update X tableau.
-                    xs[t_stab] ^= c_stab_word;
-                    xc_destab ^= t_destab_word; // requires collapse.
-                }
+                // Update X tableau.
+                xs[t_stab] ^= c_stab_word;
+                xc_destab ^= t_destab_word; // requires collapse.
             }
 
             typedef cub::BlockReduce<word_std_t, BLOCKSX> BlockReduce;
@@ -187,7 +193,9 @@ namespace QuaSARQ {
             word_std_t block_local_destab_sign = BlockReduce(temp_storage_destab_sign[threadIdx.y]).Reduce(local_destab_sign, XOROP());
             word_std_t block_local_stab_sign = BlockReduce(temp_storage_stab_sign[threadIdx.y]).Reduce(local_stab_sign, XOROP());
 
-            if (threadIdx.x == 0) {
+            if (!threadIdx.x) {
+                const pivot_t pivot = pivots[0];
+                const size_t c_destab = TABLEAU_INDEX(w, pivot);
                 if (block_zc_destab)
                     atomicXOR(zs + c_destab, block_zc_destab);
                 if (block_xc_destab)
@@ -208,9 +216,8 @@ namespace QuaSARQ {
                 XZ_TABLE(targets), \
                 block_intermediate_prefix_z, \
                 block_intermediate_prefix_x, \
-                commutations, \
-                pivot, \
-                total_targets, \
+                pivots, \
+                active_targets, \
                 num_words_major, \
                 num_words_minor, \
                 num_qubits_padded, \
@@ -223,9 +230,8 @@ namespace QuaSARQ {
                 Tableau& 			input,
                 word_std_t *        block_intermediate_prefix_z,
                 word_std_t *        block_intermediate_prefix_x,
-                ConstCommsPointer   commutations,
-        const   pivot_t&            pivot,
-        const   size_t&             total_targets,
+        const   pivot_t*            pivots,
+        const   size_t&             active_targets,
         const   size_t&             num_words_major,
         const   size_t&             num_words_minor,
         const   size_t&             num_qubits_padded,
@@ -242,9 +248,8 @@ namespace QuaSARQ {
                 Tableau& 			input,
                 ConstWordsPointer   block_intermediate_prefix_z,
                 ConstWordsPointer   block_intermediate_prefix_x,
-                ConstCommsPointer   commutations,
-        const   pivot_t&            pivot,
-        const   size_t&             total_targets,
+        const   pivot_t*            pivots,
+        const   size_t&             active_targets,
         const   size_t&             num_words_major,
         const   size_t&             num_words_minor,
         const   size_t&             num_qubits_padded,
@@ -259,20 +264,10 @@ namespace QuaSARQ {
 
     // We need to compute prefix-xor of t-th destabilizer in X,Z for t = c+1, c+2, ... c+n-1
     // so that later we can xor every prefix-xor with controlled destabilizer.
-    void Prefix::inject_CX(Tableau& input, const Commutation* commutations, const pivot_t& pivot, const qubit_t& qubit, const cudaStream_t& stream) {
-        assert(num_qubits > pivot);
+    void Prefix::inject_CX(Tableau& input, const pivot_t* pivots, const size_t& active_targets, const cudaStream_t& stream) {
+        assert(active_targets);
         assert(nextPow2(MIN_BLOCK_INTERMEDIATE_SIZE) == MIN_BLOCK_INTERMEDIATE_SIZE);
         const size_t num_qubits_padded = input.num_qubits_padded();
-
-        if (options.check_measurement) {
-            checker.find_new_pivot(qubit, input);
-            if (pivot != checker.pivot)
-                LOGERROR("pivots do not match");
-        }
-
-        // Calculate number of target generators.
-        const size_t total_targets = num_qubits - pivot - 1;
-        if (!total_targets) return;
 
         // Do the first phase of prefix.
         dim3 currentblock, currentgrid;
@@ -280,9 +275,12 @@ namespace QuaSARQ {
             LOGERROR("x-block size in inject-cx is 1");
         TRIM_Y_BLOCK_IN_DEBUG_MODE(bestblockinjectprepare, bestgridinjectprepare, num_words_minor);
         currentblock = bestblockinjectprepare, currentgrid = bestgridinjectprepare;
-        FORCE_TRIM_GRID_IN_XY(total_targets, num_words_minor);
+        if (currentblock.x > active_targets) {
+            currentblock.x = MIN(currentblock.x, nextPow2(active_targets));
+        }
+        FORCE_TRIM_GRID_IN_XY(active_targets, num_words_minor);
         const size_t pass_1_blocksize = currentblock.x;
-        const size_t pass_1_gridsize = ROUNDUP(total_targets, pass_1_blocksize);
+        const size_t pass_1_gridsize = ROUNDUP(active_targets, pass_1_blocksize);
         if (pass_1_gridsize > max_intermediate_blocks)
             LOGERROR("too many blocks for intermediate arrays");
         LOGN2(2, " Running pass-1 kernel with block(x:%u, y:%u) and grid(x:%u, y:%u, z:%u).. ",
@@ -293,9 +291,8 @@ namespace QuaSARQ {
             input, 
             zblocks(), 
             xblocks(),
-            commutations, 
-            pivot,
-            total_targets, 
+            pivots,
+            active_targets, 
             num_words_major, 
             num_words_minor,
             num_qubits_padded,
@@ -314,10 +311,10 @@ namespace QuaSARQ {
         if (options.check_measurement) {
             checker.check_prefix_pass_1(
                 targets,
-                commutations,
+                pivots,
                 zblocks(), 
                 xblocks(),
-                total_targets,
+                active_targets,
                 max_intermediate_blocks,
                 pass_1_blocksize,
                 pass_1_gridsize);
@@ -336,9 +333,12 @@ namespace QuaSARQ {
         }
 
         // Second phase of injecting CX.
-        TRIM_BLOCK_IN_DEBUG_MODE(bestblockinjectfinal, bestgridinjectfinal, total_targets, num_words_minor);
+        TRIM_BLOCK_IN_DEBUG_MODE(bestblockinjectfinal, bestgridinjectfinal, active_targets, num_words_minor);
         currentblock = bestblockinjectfinal, currentgrid = bestgridinjectfinal;
-        FORCE_TRIM_GRID_IN_XY(total_targets, num_words_minor);
+        if (currentblock.x > active_targets) {
+            currentblock.x = MIN(currentblock.x, nextPow2(active_targets));
+        }
+        FORCE_TRIM_GRID_IN_XY(active_targets, num_words_minor);
         LOGN2(2, " Running pass-2 kernel with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", \
             currentblock.x, currentblock.y, currentgrid.x, currentgrid.y); \
         if (options.sync) cutimer.start(stream);
@@ -347,9 +347,8 @@ namespace QuaSARQ {
             input,
             zblocks(), 
             xblocks(), 
-            commutations, 
-            pivot, 
-            total_targets, 
+            pivots, 
+            active_targets, 
             num_words_major, 
             num_words_minor, 
             num_qubits_padded,
@@ -370,20 +369,16 @@ namespace QuaSARQ {
             checker.check_prefix_pass_2(
                 targets, 
                 input,
-                total_targets, 
+                active_targets, 
                 max_intermediate_blocks,
                 pass_1_blocksize);
         }
     }
 
-    void Prefix::tune_inject_cx(Tableau& input, const Commutation* commutations) {
+    void Prefix::tune_inject_cx(Tableau& input, const pivot_t* pivots, const size_t& max_active_targets) {
         assert(num_qubits > min_pivot);
         assert(nextPow2(MIN_BLOCK_INTERMEDIATE_SIZE) == MIN_BLOCK_INTERMEDIATE_SIZE);
         const size_t num_qubits_padded = input.num_qubits_padded();
-
-        // Calculate number of target generators.
-        const size_t max_targets = num_qubits - min_pivot - 1;
-        if (!max_targets) return;
 
         // Do the first phase of prefix.
         if (options.tune_injectprepare) {
@@ -391,15 +386,14 @@ namespace QuaSARQ {
             tune_inject_pass_1(
                 bestblockinjectprepare, bestgridinjectprepare,
                 2 * sizeof(word_std_t), // used to skip very large blocks.
-                max_targets,
+                max_active_targets,
                 num_words_minor,
                 targets, 
                 input, 
                 zblocks(), 
                 xblocks(),
-                commutations, 
-                min_pivot,
-                max_targets, 
+                pivots,
+                max_active_targets, 
                 num_words_major, 
                 num_words_minor,
                 num_qubits_padded,
@@ -409,7 +403,7 @@ namespace QuaSARQ {
         }
 
         const size_t pass_1_blocksize = bestblockinjectprepare.x;
-        const size_t pass_1_gridsize = ROUNDUP(max_targets, pass_1_blocksize);
+        const size_t pass_1_gridsize = ROUNDUP(max_active_targets, pass_1_blocksize);
         tune_scan_blocks(nextPow2(pass_1_gridsize), pass_1_blocksize);
 
         if (options.tune_injectfinal) {
@@ -417,15 +411,14 @@ namespace QuaSARQ {
             tune_inject_pass_2(
                 bestblockinjectfinal, bestgridinjectfinal,
                 4 * sizeof(word_std_t),
-                max_targets,
+                max_active_targets,
                 num_words_minor,
                 targets, 
                 input,
                 zblocks(), 
                 xblocks(), 
-                commutations, 
-                min_pivot, 
-                max_targets, 
+                pivots, 
+                max_active_targets, 
                 num_words_major, 
                 num_words_minor, 
                 num_qubits_padded,

@@ -122,19 +122,6 @@ namespace QuaSARQ {
         do_S(SIGNS, words_ ## C); \
         do_S(SIGNS, words_ ## T); \
     }
-
-    #define do_YZ_Swap(X, Z, S) \
-    { \
-        const word_std_t x = X, z = Z; \
-        X = x ^ z; \
-        S ^= (x & ~z); \
-    }
-
-    #define do_XZ_Swap(X, Z, S) \
-    { \
-        do_SWAP(X, Z); \
-        S ^= word_std_t(X & Z); \
-    }
         
 }
 

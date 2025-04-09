@@ -3,8 +3,8 @@
 #include "tuner.cuh"
 #include "datatypes.cuh"
 #include "shared.cuh"
-#include "commutation.cuh"
 #include "access.cuh"
+#include <cub/device/device_select.cuh>
 
 namespace QuaSARQ {
 
@@ -112,37 +112,46 @@ namespace QuaSARQ {
     }
 
     __global__ 
-    void find_new_pivot_and_mark_atomic(
-                Commutation*        commutations, 
-                pivot_t*            pivots, 
-                ConstBucketsPointer measurements, 
-                ConstRefsPointer    refs, 
-                ConstTablePointer   inv_xs, 
-        const   size_t              gate_index, 
-        const   size_t              num_qubits, 
-        const   size_t              num_words_major, 
-        const   size_t              num_words_minor,
-        const   size_t              num_qubits_padded) 
-    {
-        const gate_ref_t r = refs[gate_index];
-        assert(r < NO_REF);
-        const Gate& m = (Gate&) measurements[r];
-        assert(m.size == 1);
-        const qubit_t q = m.wires[0];
-        const size_t q_w = WORD_OFFSET(q);
-        const word_std_t q_mask = BITMASK_GLOBAL(q);
+    void anti_commuting_pivots (
+                pivot_t*              scatter,
+                ConstTablePointer     inv_xs, 
+        const   qubit_t               qubit, 
+        const   size_t                num_qubits, 
+        const   size_t                num_words_major, 
+        const   size_t                num_words_minor,
+        const   size_t                num_qubits_padded) {
+        const size_t q_w = WORD_OFFSET(qubit);
+        const word_std_t q_mask = BITMASK_GLOBAL(qubit);
         for_parallel_x(g, num_qubits) {
             const size_t word_idx = TABLEAU_INDEX(q_w, g) + TABLEAU_STAB_OFFSET;
             const word_std_t qubit_word = (*inv_xs)[word_idx];
-            if (qubit_word & q_mask) {
-                commutations[g].anti_commuting = true;
-                atomicMin(pivots + gate_index, pivot_t(g));
-            }
-            else {
-                commutations[g].reset();
-            }
+            scatter[g] = (qubit_word & q_mask) ? pivot_t(g) : INVALID_PIVOT;
+            //if (qubit_word & q_mask) printf("scatter[%lld] = %u\n", g, scatter[g]);
         }
     }
+
+    #if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
+    __global__ 
+    void compact_pivots_seq(
+                pivot_t*              pivots,
+                uint32*               num_compacted,
+                ConstTablePointer     inv_xs, 
+        const   qubit_t               qubit, 
+        const   size_t                num_qubits, 
+        const   size_t                num_words_major, 
+        const   size_t                num_words_minor,
+        const   size_t                num_qubits_padded) {
+        const size_t q_w = WORD_OFFSET(qubit);
+        const word_std_t q_mask = BITMASK_GLOBAL(qubit);
+        *num_compacted = 0;
+        for (size_t g = 0; g < num_qubits; g++) {
+            const size_t word_idx = TABLEAU_INDEX(q_w, g) + TABLEAU_STAB_OFFSET;
+            const word_std_t qubit_word = (*inv_xs)[word_idx];
+            if (qubit_word & q_mask) 
+                pivots[(*num_compacted)++] = pivot_t(g);
+        }
+    }
+    #endif
 
     __global__ 
     void find_new_pivot_and_mark(
@@ -177,6 +186,7 @@ namespace QuaSARQ {
             if (qubit_word & q_mask) {
                 commutations[g].anti_commuting = true;
                 local_min = MIN(pivot_t(g), local_min);
+                printf("g = %lld\n", g);
             }
             else {
                 commutations[g].reset();
@@ -199,24 +209,45 @@ namespace QuaSARQ {
         }
     }
 
+    __global__
+    void print_compacted(const pivot_t* pivots, const uint32* num_compacted) {
+        LOGGPU("num_compacted = %u\n", *num_compacted);
+        for (uint32 i = 0; i < *num_compacted; i++) {
+            LOGGPU("pivots[%u] = %u\n", i, pivots[i]);
+        }
+    }
+
+    void Commutations::compact_pivots(const cudaStream_t& stream) {
+        if (!auxiliary_bytes) {
+            assert(auxiliary == nullptr);
+            cub::DeviceSelect::If(nullptr, auxiliary_bytes, pivots, d_active_pivots, num_qubits, *this, stream);
+            auxiliary = allocator.allocate<byte_t>(auxiliary_bytes);
+        }
+        if (auxiliary == nullptr) {
+            LOGERROR("auxiliary buffer is not allocated");
+        }
+        cub::DeviceSelect::If(auxiliary,  auxiliary_bytes, pivots, d_active_pivots, num_qubits, *this, stream);
+        CHECK(cudaMemcpyAsync(h_active_pivots, d_active_pivots, sizeof(uint32), cudaMemcpyDeviceToHost, stream));
+    }
+
     void Simulator::reset_pivots(const size_t& num_pivots, const cudaStream_t& stream) {
         if (options.tune_reset) {
             SYNCALL;
-            tune_kernel_m(reset_all_pivots, "Resetting pivots", bestblockreset, bestgridreset, gpu_circuit.pivots(), num_pivots);
+            tune_kernel_m(reset_all_pivots, "Resetting pivots", bestblockreset, bestgridreset, commuting.pivots, num_pivots);
         }
         TRIM_BLOCK_IN_DEBUG_MODE(bestblockreset, bestgridreset, num_pivots, 0);
         dim3 currentblock = bestblockreset, currentgrid = bestgridreset;
         TRIM_GRID_IN_1D(num_pivots, x);
-        reset_all_pivots <<<currentgrid, currentblock, 0, stream>>> (gpu_circuit.pivots(), num_pivots);
+        reset_all_pivots <<<currentgrid, currentblock, 0, stream>>> (commuting.pivots, num_pivots);
         if (options.sync) {
             LASTERR("failed to launch reset_all_pivots kernel");
             SYNC(stream);
         }
     }
 
-    void Simulator::find_pivots(Tableau& tab, const size_t& num_pivots_or_index, const bool& bulky, const cudaStream_t& stream) {
-        const size_t num_words_major = tab.num_words_major();
-        const size_t num_words_minor = tab.num_words_minor();
+    void Simulator::find_pivots(const size_t& num_pivots, const cudaStream_t& stream) {
+        const size_t num_words_major = tableau.num_words_major();
+        const size_t num_words_minor = tableau.num_words_minor();
         const size_t num_qubits_padded = tableau.num_qubits_padded();
         dim3 currentblock, currentgrid;
         if (options.tune_allpivots) {
@@ -225,88 +256,100 @@ namespace QuaSARQ {
                             bestblockallpivots, bestgridallpivots, 
                             sizeof(pivot_t), true,   // shared size, extend?
                             num_qubits,             // x-dim
-                            num_pivots_or_index,    // y-dim 
-                            gpu_circuit.pivots(), 
+                            num_pivots,              // y-dim 
+                            commuting.pivots, 
                             gpu_circuit.gates(), 
                             gpu_circuit.references(), 
-                            tab.xtable(), 
-                            num_pivots_or_index, 
+                            tableau.xtable(), 
+                            num_pivots, 
                             num_qubits, 
                             num_words_major, 
                             num_words_minor,
                             num_qubits_padded);
-            reset_all_pivots <<<bestgridreset, bestblockreset>>> (gpu_circuit.pivots(), num_pivots_or_index);
+            reset_all_pivots <<<bestgridreset, bestblockreset>>> (commuting.pivots, num_pivots);
             SYNCALL;
         }
+        TRIM_BLOCK_IN_DEBUG_MODE(bestblockallpivots, bestgridallpivots, num_qubits, num_pivots);
+        currentblock = bestblockallpivots, currentgrid = bestgridallpivots;
+        TRIM_GRID_IN_XY(num_qubits, num_pivots);
+        OPTIMIZESHARED(smem_size, currentblock.y * currentblock.x, sizeof(pivot_t));
+        LOGN2(2, "Finding all pivots with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
+        if (options.sync) cutimer.start(stream);
+        find_all_pivots <<< currentgrid, currentblock, smem_size, stream >>> (
+            commuting.pivots, 
+            gpu_circuit.gates(), 
+            gpu_circuit.references(), 
+            tableau.xtable(), 
+            num_pivots, 
+            num_qubits, 
+            num_words_major, 
+            num_words_minor,
+            num_qubits_padded);
+        if (options.sync) {
+            LASTERR("failed to launch find_all_pivots kernel");
+            cutimer.stop(stream);
+            LOGENDING(2, 4, "(time %.3f ms)", cutimer.time());
+        } else LOGDONE(2, 4);
+    }
+
+    void Simulator::compact_targets(const qubit_t& qubit, const cudaStream_t& stream) {
+        const size_t num_words_major = tableau.num_words_major();
+        const size_t num_words_minor = tableau.num_words_minor();
+        const size_t num_qubits_padded = tableau.num_qubits_padded();
+        dim3 currentblock, currentgrid;
         if (options.tune_newpivots) {
             SYNCALL;
-            tune_kernel_m(find_new_pivot_and_mark, "New pivots", 
+            tune_kernel_m(anti_commuting_pivots, "New pivots", 
                 bestblocknewpivots, bestgridnewpivots, 
                 sizeof(pivot_t),
-                commutations,
-                gpu_circuit.pivots(), 
-                gpu_circuit.gates(), 
-                gpu_circuit.references(), 
-                tab.xtable(), 
-                0, 
-                num_qubits,
+                commuting.pivots, 
+                tableau.xtable(), 
+                qubit, 
+                num_qubits, 
                 num_words_major, 
                 num_words_minor,
                 num_qubits_padded);
-            reset_all_pivots <<<bestgridreset, bestblockreset>>> (gpu_circuit.pivots(), num_pivots_or_index);
+            reset_all_pivots <<<bestgridreset, bestblockreset>>> (commuting.pivots, num_qubits);
             SYNCALL;
         }
-        if (bulky) {
-            TRIM_BLOCK_IN_DEBUG_MODE(bestblockallpivots, bestgridallpivots, num_qubits, num_pivots_or_index);
-            currentblock = bestblockallpivots, currentgrid = bestgridallpivots;
-            TRIM_GRID_IN_XY(num_qubits, num_pivots_or_index);
-            OPTIMIZESHARED(smem_size, currentblock.y * currentblock.x, sizeof(pivot_t));
-            LOGN2(2, "Finding all pivots with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
-            if (options.sync) cutimer.start(stream);
-            find_all_pivots <<< currentgrid, currentblock, smem_size, stream >>> (
-                gpu_circuit.pivots(), 
-                gpu_circuit.gates(), 
-                gpu_circuit.references(), 
-                tab.xtable(), 
-                num_pivots_or_index, 
-                num_qubits, 
-                num_words_major, 
-                num_words_minor,
-                num_qubits_padded);
-            if (options.sync) {
-                LASTERR("failed to launch find_all_pivots kernel");
-                cutimer.stop(stream);
-                LOGENDING(2, 4, "(time %.3f ms)", cutimer.time());
-            } else LOGDONE(2, 4);
+        TRIM_BLOCK_IN_DEBUG_MODE(bestblocknewpivots, bestgridnewpivots, num_qubits, 0);
+        currentblock = bestblocknewpivots, currentgrid = bestgridnewpivots;
+        TRIM_GRID_IN_1D(num_qubits, x);
+        OPTIMIZESHARED(smem_size, currentblock.x, sizeof(pivot_t));
+        if (currentblock.y > 1) {
+            LOGERROR("Kernel launch with 2D grid is not supported for anti_commuting_pivots kernel");
         }
-        else {
-            const size_t pivot_index = num_pivots_or_index;
-            TRIM_BLOCK_IN_DEBUG_MODE(bestblocknewpivots, bestgridnewpivots, num_qubits, 0);
-            currentblock = bestblocknewpivots, currentgrid = bestgridnewpivots;
-            TRIM_GRID_IN_1D(num_qubits, x);
-            OPTIMIZESHARED(smem_size, currentblock.x, sizeof(pivot_t));
-            if (currentblock.y > 1) {
-                LOGERROR("Kernel launch with 2D grid is not supported for find_new_pivot_and_mark kernel");
-            }
-            LOGN2(2, "Finding new pivot with marking using block(x:%u, y:%u) and grid(x:%u, y:%u).. ", currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
-            if (options.sync) cutimer.start(stream);
-            find_new_pivot_and_mark <<< currentgrid, currentblock, smem_size, stream >>> (
-                commutations, 
-                gpu_circuit.pivots(), 
-                gpu_circuit.gates(), 
-                gpu_circuit.references(), 
-                tab.xtable(), 
-                pivot_index, 
-                num_qubits, 
-                num_words_major, 
-                num_words_minor,
-                num_qubits_padded);
-            if (options.sync) {
-                LASTERR("failed to launch find_new_pivot_and_mark kernel");
-                cutimer.stop(stream);
-                LOGENDING(2, 4, "(time %.3f ms)", cutimer.time());
-            } else LOGDONE(2, 4);
-        }
+        if (options.sync) cutimer.start(stream);
+        #if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
+        LOGN2(2, "Finding new pivots sequentially.. ");
+        compact_pivots_seq <<<1, 1, 0, stream>>> (
+            commuting.pivots,
+            commuting.d_active_pivots,
+            tableau.xtable(), 
+            qubit, 
+            num_qubits, 
+            num_words_major, 
+            num_words_minor,
+            num_qubits_padded);
+        CHECK(cudaMemcpyAsync(commuting.h_active_pivots, commuting.d_active_pivots, sizeof(uint32), cudaMemcpyDeviceToHost, stream));
+        #else 
+        LOGN2(2, "Finding new pivots using block(x:%u, y:%u) and grid(x:%u, y:%u).. ", currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
+        anti_commuting_pivots <<< currentgrid, currentblock, 0, stream >>> (
+            commuting.pivots,
+            tableau.xtable(), 
+            qubit, 
+            num_qubits, 
+            num_words_major, 
+            num_words_minor,
+            num_qubits_padded);
+        commuting.compact_pivots(stream);
+        #endif
+        //print_compacted <<<1, 1, 0, stream>>> (commuting.pivots, commuting.d_active_pivots);
+        if (options.sync) {
+            LASTERR("failed to launch find_new_pivot_and_mark kernel");
+            cutimer.stop(stream);
+            LOGENDING(2, 4, "(pivots: %d, time %.3f ms)", *(commuting.h_active_pivots), cutimer.time());
+        } else LOGDONE(2, 4);
     }
 }
 

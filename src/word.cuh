@@ -36,6 +36,7 @@ namespace QuaSARQ {
     typedef uint32 qubit_t;
 
     constexpr qubit_t MAX_QUBITS = UINT32_MAX;
+    constexpr qubit_t INVALID_QUBIT = UINT32_MAX;
     constexpr size_t MAX_WORDS = size_t(MAX_QUBITS - 1) * size_t(MAX_QUBITS - 1) / 2;
 
     #define BITMASK_GLOBAL(VAL) (word_std_t(1) << word_std_t(VAL & WORD_MASK))

@@ -1,17 +1,36 @@
+
 {
+
     "configurations": [
+
         {
+
             "name": "Linux",
+
             "includePath": [
+
                 "${workspaceFolder}/**",
+
+                "/home/muhos/quantum/github/QuaSARQ/src",
+
                 "/usr/local/cuda/include"
+
             ],
+
             "defines": [],
-            "compilerPath": "/opt/rh/devtoolset-9/root/usr/bin/gcc",
-            "cStandard": "c17",
-            "cppStandard": "gnu++17",
+
+            "compilerPath": "/usr/bin/g++",
+
+            "cStandard": "c11",
+
+            "cppStandard": "c++17",
+
             "intelliSenseMode": "linux-gcc-x64"
+
         }
+
     ],
+
     "version": 4
+
 }

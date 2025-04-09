@@ -16,7 +16,7 @@ namespace QuaSARQ {
         const   size_t              num_words_minor,
         const   size_t              num_qubits_padded) 
     {
-        assert(qubit < MAX_QUBITS);
+        assert(qubit != INVALID_QUBIT);
         const size_t q_w = WORD_OFFSET(qubit);
         const word_std_t q_mask = BITMASK_GLOBAL(qubit);
         for_parallel_x(t, num_qubits) {

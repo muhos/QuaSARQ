@@ -14,11 +14,9 @@ namespace QuaSARQ {
 
 		DeviceAllocator& allocator;
 
-		pivot_t* _pivots;
 		bucket_t* _buckets;
 		gate_ref_t* _references;
 
-		pivot_t* _pinned_pivots;
 		bucket_t* _pinned_buckets;
 		gate_ref_t* _pinned_references;
 
@@ -46,10 +44,8 @@ namespace QuaSARQ {
 
 		INLINE_ALL DeviceCircuit(DeviceAllocator& allocator) : 
 			allocator(allocator)
-		,	_pivots(nullptr)
 		,	_buckets(nullptr)
 		,	_references(nullptr)
-		,	_pinned_pivots(nullptr)
 		,	_pinned_buckets(nullptr)
 		,	_pinned_references(nullptr)
 		,	max_references(0)
@@ -80,8 +76,6 @@ namespace QuaSARQ {
 			if (this->max_references < max_references) {
 				LOGN2(2, "Resizing a (pinned) window for %lld references.. ", int64(max_references));
 				this->max_references = max_references;
-				_pivots = allocator.allocate<pivot_t>(max_references);
-				allocator.resize_pinned<pivot_t>(_pinned_pivots, max_references);
 				_references = allocator.allocate<gate_ref_t>(max_references);
 				allocator.resize_pinned<gate_ref_t>(_pinned_references, max_references);
 				LOGDONE(2, 4);
@@ -159,15 +153,6 @@ namespace QuaSARQ {
 		}
 
 		inline
-		void 		copypivots		(const cudaStream_t& stream, const size_t& num_pivots) {
-			assert(num_pivots <= num_gates);
-			assert(num_pivots <= max_qubits);
-			LOGN2(2, "Copying back %lld pivots to host asynchroneously.. ", int64(num_pivots));
-			CHECK(cudaMemcpyAsync(_pinned_pivots, _pivots, sizeof(pivot_t) * num_pivots, cudaMemcpyDeviceToHost, stream));
-			LOGDONE(2, 4);
-		}
-
-		inline
 		void 		copygateto 		(Circuit& circuit, const gate_ref_t& host_ref, const depth_t& depth_level, const cudaStream_t& stream) {
 			const size_t prev_buckets_offset = circuit.reference(depth_level, 0);
 			assert(host_ref >= prev_buckets_offset);
@@ -180,23 +165,6 @@ namespace QuaSARQ {
 			CHECK(cudaMemcpyAsync(circuit.data(host_ref), _buckets + device_ref, BUCKETSIZE * num_buckets, cudaMemcpyDeviceToHost, stream));
 			LOGDONE(2, 4);
 		}
-
-		inline
-		void 		copypivotto 	(pivot_t& pivot, const uint32& gate_index, const cudaStream_t& stream) {
-			CHECK(cudaMemcpyAsync(&(pivot), _pivots + gate_index, sizeof(pivot_t), cudaMemcpyDeviceToHost, stream));
-		}
-
-		inline
-		pivot_t*    	 pivots			(const size_t& idx = 0) { return _pivots + idx; }
-
-		inline const
-		pivot_t*    	 pivots			(const size_t& idx = 0) const { return _pivots + idx; }
-
-		inline
-		pivot_t*    	 host_pivots	() { return _pinned_pivots; }
-
-		inline const
-		pivot_t*    	 host_pivots	() const { return _pinned_pivots; }
 
 		inline
 		bucket_t*    gates			() { return _buckets; }

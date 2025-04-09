@@ -1,6 +1,7 @@
 #include "simulator.hpp"
 #include "print.cuh"
 #include "access.cuh"
+#include "pivot.cuh"
 
 namespace QuaSARQ {
 
@@ -262,7 +263,7 @@ namespace QuaSARQ {
                 m.measurement != UNMEASURED ? char(((m.measurement % 4 + 4) % 4 >> 1) + 48) : 'U',
                 pivots[i] == INVALID_PIVOT ? "definite" : "random");
             // LOGGPU(" %8d     %10s    %2d\n", m.wires[0], 
-            // 	m.pivot == MAX_QUBITS ? "definite" : "random",  
+            // 	m.pivot == INVALID_PIVOT ? "definite" : "random",  
             // 	m.measurement != UNMEASURED ? m.measurement : -1);
         }
 	}
@@ -304,7 +305,7 @@ namespace QuaSARQ {
 		if (!options.print_gates) return;
 		if (!options.sync) SYNCALL;
 		LOG2(0, " Gates on GPU for %d-time step:", depth_level);
-		print_gates_k << <1, 1 >> > (gpu_circuit.references(), gpu_circuit.gates(), gpu_circuit.pivots(), num_gates);
+		print_gates_k << <1, 1 >> > (gpu_circuit.references(), gpu_circuit.gates(), commuting.pivots, num_gates);
 		LASTERR("failed to launch print_gates_k kernel");
 		SYNCALL;
 		fflush(stdout);
@@ -318,7 +319,7 @@ namespace QuaSARQ {
         else SETCOLOR(CLBLUE, stdout);
         uint32 currentblock = 256, currentgrid;
         OPTIMIZEBLOCKS(currentgrid, num_gates, currentblock);
-		print_measurements_k <<< currentgrid, currentblock >>> (gpu_circuit.references(), gpu_circuit.gates(), gpu_circuit.pivots(), num_gates);
+		print_measurements_k <<< currentgrid, currentblock >>> (gpu_circuit.references(), gpu_circuit.gates(), commuting.pivots, num_gates);
 		LASTERR("failed to launch print_measurements_k kernel");
 		SYNCALL;
         SETCOLOR(CNORMAL, stdout);

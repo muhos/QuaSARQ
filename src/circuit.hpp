@@ -243,7 +243,7 @@ namespace QuaSARQ {
         }
 
         inline
-        Gate*       addGate     (const depth_t& depth_level, const byte_t& type, const input_size_t size, const qubit_t& c, const qubit_t& t = MAX_QUBITS) {
+        Gate*       addGate     (const depth_t& depth_level, const byte_t& type, const input_size_t size, const qubit_t& c, const qubit_t& t = INVALID_QUBIT) {
             assert(depth_level < MAX_DEPTH);
             const size_t buckets = NBUCKETS(size);
             gate_ref_t r = (gate_ref_t)buckets_container::alloc(buckets);
@@ -259,7 +259,7 @@ namespace QuaSARQ {
             windows[depth_level].push(r);
             nbuckets[depth_level] += buckets;
             assert(nbuckets[depth_level] <= num_buckets());
-            if (t != MAX_QUBITS) {
+            if (t != INVALID_QUBIT) {
                 assert(size > 1);
                 gate->wires[1] = t;
                 gate->size = size;

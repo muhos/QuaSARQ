@@ -152,13 +152,10 @@ namespace QuaSARQ {
 		const 	size_t 				num_qubits_padded);
 	
 	void tune_kernel_m(
-		void (*kernel)(
-				Commutation* 		commutations,
+				void (*kernel)(
 				pivot_t*,
-				ConstBucketsPointer,
-				ConstRefsPointer,
 				ConstTablePointer,
-		const 	size_t,
+		const 	qubit_t,
 		const 	size_t,
 		const 	size_t,
 		const 	size_t,
@@ -167,12 +164,9 @@ namespace QuaSARQ {
 				dim3& 				bestBlock,
 				dim3& 				bestGrid,
 		const 	size_t& 			shared_element_bytes,
-				Commutation* 		commutations,
 				pivot_t* 			pivots,
-				ConstBucketsPointer measurements,
-				ConstRefsPointer 	refs,
 				ConstTablePointer 	inv_xs,
-		const 	size_t& 			gate_index,
+		const 	qubit_t& 			qubit,
 		const 	size_t& 			size,
 		const 	size_t 				num_words_major,
 		const 	size_t 				num_words_minor,

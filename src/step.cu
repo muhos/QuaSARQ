@@ -46,8 +46,8 @@ namespace QuaSARQ {
                 const size_t q1 = gate.wires[0];
                 const size_t q2 = gate.wires[gate.size - 1];
 
-                assert(q1 < MAX_QUBITS);
-                assert(q2 < MAX_QUBITS);
+                assert(q1 != INVALID_QUBIT);
+                assert(q2 != INVALID_QUBIT);
 
                 const size_t q1_x_word_idx = X_OFFSET(q1) * num_words_major;
                 const size_t q2_x_word_idx = X_OFFSET(q2) * num_words_major;
@@ -146,8 +146,8 @@ namespace QuaSARQ {
                 const size_t q1 = gate.wires[0];
                 const size_t q2 = gate.wires[gate.size - 1];
 
-                assert(q1 < MAX_QUBITS);
-                assert(q2 < MAX_QUBITS);
+                assert(q1 != INVALID_QUBIT);
+                assert(q2 != INVALID_QUBIT);
 
                 const size_t q1_x_word_idx = X_OFFSET(q1) * num_words_major;
                 const size_t q2_x_word_idx = X_OFFSET(q2) * num_words_major;
@@ -260,8 +260,8 @@ namespace QuaSARQ {
                 const size_t q1 = gate.wires[0];
                 const size_t q2 = gate.wires[gate.size - 1];
 
-                assert(q1 < MAX_QUBITS);
-                assert(q2 < MAX_QUBITS);
+                assert(q1 != INVALID_QUBIT);
+                assert(q2 != INVALID_QUBIT);
 
                 const size_t q1_x_word_idx = X_OFFSET(q1) * num_words_major;
                 const size_t q2_x_word_idx = X_OFFSET(q2) * num_words_major;
@@ -373,6 +373,8 @@ namespace QuaSARQ {
                     , gpu_circuit.references(), gpu_circuit.gates(), XZ_TABLE(tableau), tableau.signs()
                 );
             }
+
+            TRIM_BLOCK_IN_DEBUG_MODE(bestblockstep, bestgridstep, num_gates_per_window, num_words_major);
 
             OPTIMIZESHARED(reduce_smem_size, bestblockstep.y * bestblockstep.x, shared_element_bytes);
 

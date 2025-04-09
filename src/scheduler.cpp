@@ -33,6 +33,26 @@ inline void NORMALIZE_PROBS() {
     FOREACH_GATE(NORM_PROBS);
 }
 
+struct WindowSorter 
+{
+    const Circuit& circuit;
+
+    WindowSorter(const Circuit& c) : circuit(c) { }
+
+    inline
+    bool operator() (const gate_ref_t& a, const gate_ref_t& b) {
+        const Gate& ga = circuit.gate(a);
+        const Gate& gb = circuit.gate(b);
+        return (ga.wires[0] != gb.wires[0]) ? (ga.wires[0] < gb.wires[0]) :
+               // Compare second wire if both have size 2
+               (ga.size == 2 && gb.size == 2 && ga.wires[1] != gb.wires[1]) ? (ga.wires[1] < gb.wires[1]) :
+               // Prioritize type over size
+               (ga.type != gb.type) ? (ga.type < gb.type) :
+               // Compare size if types are equal
+               (ga.size < gb.size);
+    }
+};
+
 // Inside-out variant of Fisher-Yates algorithm.
 void Simulator::shuffle_qubits() {
     shuffled.resize(num_qubits);
@@ -184,6 +204,10 @@ void Simulator::generate() {
     shuffled.clear(true);
     locked.clear(true);
     measurements.clear(true);
+    // Sort gates in each depth level.
+    for (depth_t d = 0; d < circuit.depth(); d++) {
+        std::sort(circuit[d].data(), circuit[d].end(), WindowSorter(circuit));
+    }
     timer.stop();
     stats.time.schedule = timer.time();
     LOGDONE(1, 2);
@@ -227,27 +251,6 @@ size_t Simulator::parse(Statistics& stats, const char* path) {
     stats.time.initial += timer.time();
     return max_qubits;
 }
-
-struct WindowSorter 
-{
-    const Circuit& circuit;
-
-    WindowSorter(const Circuit& c) : circuit(c) { }
-
-    inline
-    bool operator() (const gate_ref_t& a, const gate_ref_t& b) {
-        const Gate& ga = circuit.gate(a);
-        const Gate& gb = circuit.gate(b);
-        return (ga.wires[0] != gb.wires[0]) ? (ga.wires[0] < gb.wires[0]) :
-               // Compare second wire if both have size 2
-               (ga.size == 2 && gb.size == 2 && ga.wires[1] != gb.wires[1]) ? (ga.wires[1] < gb.wires[1]) :
-               // Prioritize type over size
-               (ga.type != gb.type) ? (ga.type < gb.type) :
-               // Compare size if types are equal
-               (ga.size < gb.size);
-    }
-};
-
 
 size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
     LOGN2(1, "Scheduling %s%zd%s gates for parallel simulation.. ", CREPORTVAL, stats.circuit.num_gates, CNORMAL);

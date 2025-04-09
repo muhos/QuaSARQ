@@ -1,16 +1,58 @@
 
-#ifndef __CU_PREFIXCHECK_H
-#define __CU_PREFIXCHECK_H
+#pragma once
 
 #include "definitions.hpp"
 #include "commutation.cuh"
 #include "tableau.cuh"
 #include "pivot.cuh"
+#include "access.cuh"
+#include "operators.cuh"
 #include "vector.hpp"
+#include "circuit.hpp"
 
 namespace QuaSARQ {
 
-	struct PrefixChecker {
+	// Xc: xs/zs[c_stab], Zc: xs/zs[c_destab], Xt: xs/zs[t_stab], Zt: xs/zs[t_destab]
+    #define do_CX_sharing_control(Xc, Zc, Xt, Zt, s) \
+    { \
+        const word_std_t xc = Xc, zc = Zc, xt = Xt, zt = Zt; \
+        Xt = xt ^ xc; \
+        Zc = zc ^ zt; \
+        const word_std_t xc_and_zt = xc & zt; \
+        const word_std_t not_zc_xor_xt = ~(zc ^ xt); \
+        s ^= (xc_and_zt & not_zc_xor_xt); \
+    }
+
+	#define do_YZ_Swap(X, Z, S) \
+    { \
+        const word_std_t x = X, z = Z; \
+        X = x ^ z; \
+        S ^= (x & ~z); \
+    }
+
+    #define do_XZ_Swap(X, Z, S) \
+    { \
+        do_SWAP(X, Z); \
+        S ^= word_std_t(X & Z); \
+    }
+
+	bool is_commuting_cpu(
+		const 	Table&          h_xs, 
+		const   qubit_t         qubit,
+		const   pivot_t         pivot,
+		const   size_t          num_words_major, 
+        const   size_t          num_words_minor,
+        const   size_t          num_qubits_padded);
+
+	bool is_anti_commuting_cpu(
+		const 	Table&          h_xs, 
+		const   qubit_t         qubit,
+		const   pivot_t         pivot,
+		const   size_t          num_words_major, 
+        const   size_t          num_words_minor,
+        const   size_t          num_qubits_padded);
+	
+	struct MeasurementChecker {
 		Table h_xs, h_zs;
 		Table d_xs, d_zs;
 
@@ -20,8 +62,9 @@ namespace QuaSARQ {
 		Signs h_ss;
 		Signs d_ss;
 
-		Vec<Commutation> h_commutations;
-		Vec<Commutation> d_commutations;
+		Vec<pivot_t> h_compact_pivots;
+		Vec<pivot_t> d_compact_pivots;
+		Vec<bool> anticommuting;
 
 		Vec<word_std_t> h_block_intermediate_prefix_z;
         Vec<word_std_t> h_block_intermediate_prefix_x;
@@ -36,24 +79,27 @@ namespace QuaSARQ {
 		pivot_t pivot;
 		qubit_t qubit;
 
-		PrefixChecker() : 
+		bool input_copied;
+
+		MeasurementChecker() : 
 			num_qubits(0) 
 			, num_qubits_padded(0)
 			, num_words_major(0)
 			, num_words_minor(0)
 			, pivot(INVALID_PIVOT)
-			, qubit(0)
+			, qubit(INVALID_QUBIT)
+			, input_copied(false)
 			{}
 
-		~PrefixChecker() { destroy();}
+		~MeasurementChecker() { destroy();}
 
 		void destroy() {
 			h_block_intermediate_prefix_z.clear(true);
       		h_block_intermediate_prefix_x.clear(true);
 			d_block_intermediate_prefix_z.clear(true);
         	d_block_intermediate_prefix_x.clear(true);
-			h_commutations.clear(true);
-			d_commutations.clear(true);
+			h_compact_pivots.clear(true);
+			d_compact_pivots.clear(true);
 			h_prefix_xs.destroy();
 			h_prefix_zs.destroy();
 			d_prefix_xs.destroy();
@@ -69,13 +115,11 @@ namespace QuaSARQ {
 			num_words_major = 0;
 			num_words_minor = 0;
 			pivot = INVALID_PIVOT;
-			qubit = 0;
+			qubit = INVALID_QUBIT;
 		}
 
 		void alloc(const size_t& num_qubits) {
 			this->num_qubits = num_qubits;
-			h_commutations.resize(num_qubits);
-			d_commutations.resize(num_qubits);
 			num_qubits_padded = get_num_padded_bits(num_qubits);
 			num_words_minor = get_num_words(num_qubits);
 			num_words_major = num_words_minor * 2;
@@ -89,13 +133,24 @@ namespace QuaSARQ {
 			d_ss.alloc_host(num_qubits_padded, num_words_major);
 		}
 
+		void copy_pivots(const pivot_t* other_pivots, const size_t& num_pivots) {
+			SYNCALL;
+            assert(num_pivots <= num_qubits);
+			d_compact_pivots.resize(num_pivots);
+			CHECK(cudaMemcpy(d_compact_pivots.data(), other_pivots, sizeof(pivot_t) * num_pivots, cudaMemcpyDeviceToHost));
+		}
+
 		void copy_input(const Tableau& other, const bool& to_device = false) {
 			SYNCALL;
+			if (input_copied && !to_device)
+				return;
 			Table& dest_xs = to_device ? d_xs : h_xs;
 			Table& dest_zs = to_device ? d_zs : h_zs;
 			Signs& dest_ss = to_device ? d_ss : h_ss;
 			dest_xs.flag_rowmajor(), dest_zs.flag_rowmajor();
 			other.copy_to_host(&dest_xs, &dest_zs, &dest_ss);
+			if (!to_device) 
+				input_copied = true;
 		}
 
 		void copy_prefix(const Tableau& other) {
@@ -112,13 +167,13 @@ namespace QuaSARQ {
 			CHECK(cudaMemcpy(d_block_intermediate_prefix_z.data(), other_zs, sizeof(word_std_t) * size, cudaMemcpyDeviceToHost));
 		}
 
-		void copy_commutations(const Commutation* other, const size_t& size) {
-			SYNCALL;
-			assert(size <= d_commutations.size());
-			CHECK(cudaMemcpy(d_commutations.data(), other, sizeof(Commutation) * size, cudaMemcpyDeviceToHost));
-		}
+		void find_min_pivot(const qubit_t& qubit, const bool& store_pivots = false);
 
-		void find_new_pivot(const qubit_t& qubit, const Tableau& other_input);
+		void check_min_pivot(const pivot_t& other_pivot);
+
+		void check_compact_pivots(const qubit_t& qubit, const pivot_t* other_pivots, const size_t& other_num_pivots);
+
+		void check_initial_pivots(const Circuit& circuit, const depth_t& depth_level, const pivot_t* other_pivots, const size_t& other_num_pivots);
 
 		void check_prefix_intermediate_pass(
 			const   word_std_t*     other_zs,
@@ -129,10 +184,10 @@ namespace QuaSARQ {
 		
 		void check_prefix_pass_1(
 			const 	Tableau&        other_targets,
-			const   Commutation*    other_commutations,
+			const   pivot_t*    	other_pivots,
 			const   word_std_t*     other_zs,
 			const   word_std_t*     other_xs,
-			const   size_t&         total_targets,
+			const   size_t&         active_targets,
 			const   size_t&         max_blocks,
 			const   size_t&         pass_1_blocksize,
 			const   size_t&         pass_1_gridsize,
@@ -141,15 +196,17 @@ namespace QuaSARQ {
 		void check_prefix_pass_2(
 			const 	Tableau& 		other_targets, 
 			const 	Tableau& 		other_input,
-			const   size_t&         total_targets,
+			const   size_t&         active_targets,
 			const   size_t&         max_blocks,
 			const   size_t&         pass_1_blocksize,
 			const   bool&           skip_checking_device = false);
 
-		
+		void check_inject_cx(const Tableau& other_input);
+
+		void check_inject_swap(const Tableau& other_input, const pivot_t* other_pivots, const size_t& num_pivots);
+
+		void inject_swap_cpu();
 
 	};
 	
 }
-
-#endif
