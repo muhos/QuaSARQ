@@ -115,30 +115,6 @@ namespace QuaSARQ {
         }
     }
 
-    void Prefix::tune_grid_size	(dim3& currentblock, dim3& currentgrid, const size_t& pow2_active_targets) {
-		assert(num_words_minor);
-		assert(maxGPUThreads);
-        currentblock.x = pow2_active_targets;
-        if (prev_active_targets == pow2_active_targets || 
-            ROUNDUP(num_words_minor, min_yblock_size) == prev_ygrid_size) {
-            currentblock.y = prev_yblock_size;
-            currentgrid.y = prev_ygrid_size;
-        }
-        else {
-            currentblock.y = 1024 / currentblock.x;
-            currentgrid.y = ROUNDUP(num_words_minor, currentblock.y);
-            while (currentblock.y > min_yblock_size &&
-                    currentgrid.y < maxGPUBlocks) {
-                currentblock.y >>= 1;
-                currentgrid.y = ROUNDUP(num_words_minor, currentblock.y);
-            }
-            currentgrid.y = MIN(currentgrid.y, maxGPUBlocks);\
-            prev_active_targets = pow2_active_targets;
-            prev_yblock_size = currentblock.y;
-            prev_ygrid_size = currentgrid.y;
-        }
-    }
-
     void Prefix::scan_warp(Tableau& input, const pivot_t* pivots, const size_t& active_targets, const cudaStream_t& stream) {
         const size_t num_qubits_padded = input.num_qubits_padded();
         const size_t pow2_active_targets = nextPow2(active_targets);

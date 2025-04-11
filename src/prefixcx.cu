@@ -260,8 +260,10 @@ namespace QuaSARQ {
 
     // We need to compute prefix-xor of t-th destabilizer in X,Z for t = c+1, c+2, ... c+n-1
     // so that later we can xor every prefix-xor with controlled destabilizer.
-    void Prefix::inject_CX(Tableau& input, const pivot_t* pivots, const size_t& active_targets, const cudaStream_t& stream) {
-        assert(active_targets);
+    void Prefix::scan_large(Tableau& input, const pivot_t* pivots, const size_t& active_targets, const cudaStream_t& stream) {
+        if (active_targets <= 1024) {
+            LOGERROR("active targets %d are too low for large scanning", active_targets);
+        }
         assert(nextPow2(MIN_BLOCK_INTERMEDIATE_SIZE) == MIN_BLOCK_INTERMEDIATE_SIZE);
         const size_t num_qubits_padded = input.num_qubits_padded();
 
@@ -271,9 +273,6 @@ namespace QuaSARQ {
             LOGERROR("x-block size in inject-cx is 1");
         TRIM_Y_BLOCK_IN_DEBUG_MODE(bestblockinjectprepare, bestgridinjectprepare, num_words_minor);
         currentblock = bestblockinjectprepare, currentgrid = bestgridinjectprepare;
-        if (currentblock.x > active_targets) {
-            currentblock.x = active_targets == 1 ? 2 : MIN(currentblock.x, nextPow2(active_targets));
-        }
         FORCE_TRIM_GRID_IN_XY(active_targets, num_words_minor);
         const size_t pass_1_blocksize = currentblock.x;
         const size_t pass_1_gridsize = ROUNDUP(active_targets, pass_1_blocksize);

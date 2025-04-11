@@ -320,8 +320,8 @@ namespace QuaSARQ {
             LOGERROR("Kernel launch with 2D grid is not supported for anti_commuting_pivots kernel");
         }
         if (options.sync) cutimer.start(stream);
-        #if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
-        LOGN2(2, "Finding new pivots sequentially.. ");
+        #if	defined(_DEBUG) || defined(DEBUG)
+        LOGN2(2, "Finding new pivots for qubit %d sequentially.. ", qubit);
         compact_pivots_seq <<<1, 1, 0, stream>>> (
             commuting.pivots,
             commuting.d_active_pivots,
@@ -333,7 +333,8 @@ namespace QuaSARQ {
             num_qubits_padded);
         CHECK(cudaMemcpyAsync(commuting.h_active_pivots, commuting.d_active_pivots, sizeof(uint32), cudaMemcpyDeviceToHost, stream));
         #else 
-        LOGN2(2, "Finding new pivots using block(x:%u, y:%u) and grid(x:%u, y:%u).. ", currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
+        LOGN2(2, "Finding new pivots for qubit %d using block(x:%u, y:%u) and grid(x:%u, y:%u).. ", 
+            qubit, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
         anti_commuting_pivots <<< currentgrid, currentblock, 0, stream >>> (
             commuting.pivots,
             tableau.xtable(), 

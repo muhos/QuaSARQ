@@ -98,9 +98,32 @@ namespace QuaSARQ {
 		void 		tune_scan_blocks(const size_t& num_blocks, const size_t& inject_pass_1_blocksize);
 		void 		scan_warp 		(Tableau& input, const pivot_t* pivots, const size_t& active_targets, const cudaStream_t& stream);
 		void 		scan_block 		(Tableau& input, const pivot_t* pivots, const size_t& active_targets, const cudaStream_t& stream);
-		void 		inject_CX		(Tableau& input, const pivot_t* pivots, const size_t& active_targets, const cudaStream_t& stream);
+		void 		scan_large		(Tableau& input, const pivot_t* pivots, const size_t& active_targets, const cudaStream_t& stream);
 		void		tune_inject_cx	(Tableau& input, const pivot_t* pivots, const size_t& max_active_targets);
-		void 		tune_grid_size	(dim3& currentblock, dim3& currentgrid, const size_t& active_targets);
+		void 		tune_grid_size	(dim3& currentblock, dim3& currentgrid, const size_t& pow2_active_targets) {
+			assert(num_words_minor);
+			assert(maxGPUThreads);
+			currentblock.x = pow2_active_targets;
+			if (currentblock.x < 1024 &&
+				(prev_active_targets == pow2_active_targets || 
+				ROUNDUP(num_words_minor, min_yblock_size) == prev_ygrid_size)) {
+				currentblock.y = prev_yblock_size;
+				currentgrid.y = prev_ygrid_size;
+			}
+			else {
+				currentblock.y = 1024 / currentblock.x;
+				currentgrid.y = ROUNDUP(num_words_minor, currentblock.y);
+				while (currentblock.y > min_yblock_size &&
+						currentgrid.y < maxGPUBlocks) {
+					currentblock.y >>= 1;
+					currentgrid.y = ROUNDUP(num_words_minor, currentblock.y);
+				}
+				currentgrid.y = MIN(currentgrid.y, maxGPUBlocks);\
+				prev_active_targets = pow2_active_targets;
+				prev_yblock_size = currentblock.y;
+				prev_ygrid_size = currentgrid.y;
+			}
+		}
 
 	};
 

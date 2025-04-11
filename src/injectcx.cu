@@ -9,7 +9,7 @@ namespace QuaSARQ {
 
     void Simulator::inject_cx(const uint32& active_targets, const cudaStream_t& stream) {
         if (active_targets > 1024)
-            prefix.inject_CX(tableau, commuting.pivots, active_targets, stream);
+            prefix.scan_large(tableau, commuting.pivots, active_targets, stream);
         else if (active_targets > 32)
             prefix.scan_block(tableau, commuting.pivots, active_targets, stream);
         else
@@ -17,6 +17,7 @@ namespace QuaSARQ {
     }
 
     void MeasurementChecker::check_inject_cx(const Tableau& other_input) {
+        
         SYNCALL;
 
         if (!input_copied) {
