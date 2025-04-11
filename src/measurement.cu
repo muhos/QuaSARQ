@@ -52,7 +52,6 @@ namespace QuaSARQ {
         const size_t num_words_major = tableau.num_words_major();
         const size_t num_qubits_padded = tableau.num_qubits_padded();
         const size_t num_gates_per_window = circuit[depth_level].size();
-		MeasurementChecker& checker = prefix.get_checker();
 		const size_t pass_1_blocksize = 512;
 		const size_t max_intermediate_blocks = nextPow2(ROUNDUP(num_qubits, MIN_BLOCK_INTERMEDIATE_SIZE));
 		Tableau dummy_input(gpu_allocator);
@@ -155,7 +154,7 @@ namespace QuaSARQ {
                     mchecker.check_compact_pivots(qubit, commuting.pivots, active_pivots);
                 if (active_pivots) {
                     if (active_pivots > 1)
-                        inject_cx(active_pivots - 1, stream);
+                        inject_cx(active_pivots - 1/*active_pivots - 1*/, stream);
                     inject_swap(qubit, stream);
                     random_measures++;
                 }

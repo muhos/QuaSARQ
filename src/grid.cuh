@@ -85,8 +85,9 @@ namespace QuaSARQ {
 				} \
             }
 		#define TRIM_Y_BLOCK_IN_DEBUG_MODE(BLOCK, GRID, DATALEN_Y) \
-            if (BLOCK.x * BLOCK.y == 1024) { \
-				BLOCK.y = (1024 / BLOCK.x) / 2; \
+            if (BLOCK.x * BLOCK.y >= 512) { \
+				BLOCK.y = (512 / BLOCK.x) / 2; \
+				BLOCK.y = MAX(1, BLOCK.y); \
 				OPTIMIZEBLOCKS2D(GRID.y, DATALEN_Y, BLOCK.y); \
             }
     #else

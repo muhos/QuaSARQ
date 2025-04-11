@@ -6,15 +6,11 @@
 #include "print.cuh"
 #include "prefixdim.cuh"
 #include "datatypes.cuh"
+#include "warp.cuh"
 #include <cub/block/block_scan.cuh>
 #include <cub/block/block_reduce.cuh>
 
 namespace QuaSARQ {
-
-
-    // wecan do everything in one kernel using prefix, if active targets < 1024 threads
-    // which usually does.
-
 
 
     template <int BLOCKX, int BLOCKY>
@@ -104,7 +100,7 @@ namespace QuaSARQ {
                 max_blocks \
             )
 
-    template <int BLOCKSX, int BLOCKSY>
+    template <int BLOCKX, int BLOCKY>
     __global__ 
     void scan_targets_pass_2(
                 Table *             inv_xs, 
@@ -181,12 +177,12 @@ namespace QuaSARQ {
                 xc_destab ^= t_destab_word; // requires collapse.
             }
 
-            typedef cub::BlockReduce<word_std_t, BLOCKSX> BlockReduce;
+            typedef cub::BlockReduce<word_std_t, BLOCKX> BlockReduce;
 
-            __shared__ typename BlockReduce::TempStorage temp_storage_zc[BLOCKSY];
-            __shared__ typename BlockReduce::TempStorage temp_storage_xc[BLOCKSY];
-            __shared__ typename BlockReduce::TempStorage temp_storage_destab_sign[BLOCKSY];
-            __shared__ typename BlockReduce::TempStorage temp_storage_stab_sign[BLOCKSY];
+            __shared__ typename BlockReduce::TempStorage temp_storage_zc[BLOCKY];
+            __shared__ typename BlockReduce::TempStorage temp_storage_xc[BLOCKY];
+            __shared__ typename BlockReduce::TempStorage temp_storage_destab_sign[BLOCKY];
+            __shared__ typename BlockReduce::TempStorage temp_storage_stab_sign[BLOCKY];
 
             word_std_t block_zc_destab = BlockReduce(temp_storage_zc[threadIdx.y]).Reduce(zc_destab, XOROP());
             word_std_t block_xc_destab = BlockReduce(temp_storage_xc[threadIdx.y]).Reduce(xc_destab, XOROP());
@@ -276,15 +272,15 @@ namespace QuaSARQ {
         TRIM_Y_BLOCK_IN_DEBUG_MODE(bestblockinjectprepare, bestgridinjectprepare, num_words_minor);
         currentblock = bestblockinjectprepare, currentgrid = bestgridinjectprepare;
         if (currentblock.x > active_targets) {
-            currentblock.x = MIN(currentblock.x, nextPow2(active_targets));
+            currentblock.x = active_targets == 1 ? 2 : MIN(currentblock.x, nextPow2(active_targets));
         }
         FORCE_TRIM_GRID_IN_XY(active_targets, num_words_minor);
         const size_t pass_1_blocksize = currentblock.x;
         const size_t pass_1_gridsize = ROUNDUP(active_targets, pass_1_blocksize);
         if (pass_1_gridsize > max_intermediate_blocks)
             LOGERROR("too many blocks for intermediate arrays");
-        LOGN2(2, " Running pass-1 kernel with block(x:%u, y:%u) and grid(x:%u, y:%u, z:%u).. ",
-            currentblock.x, currentblock.y, currentgrid.x, currentgrid.y, currentgrid.z);
+        LOGN2(2, " Running pass-1 kernel for %d targets with block(x:%u, y:%u) and grid(x:%u, y:%u).. ",
+            active_targets, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
         if (options.sync) cutimer.start(stream);
         call_injectcx_pass_1_kernel(
             targets, 
@@ -336,11 +332,11 @@ namespace QuaSARQ {
         TRIM_BLOCK_IN_DEBUG_MODE(bestblockinjectfinal, bestgridinjectfinal, active_targets, num_words_minor);
         currentblock = bestblockinjectfinal, currentgrid = bestgridinjectfinal;
         if (currentblock.x > active_targets) {
-            currentblock.x = MIN(currentblock.x, nextPow2(active_targets));
+            currentblock.x = active_targets == 1 ? 2 : MIN(currentblock.x, nextPow2(active_targets));
         }
         FORCE_TRIM_GRID_IN_XY(active_targets, num_words_minor);
-        LOGN2(2, " Running pass-2 kernel with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", \
-            currentblock.x, currentblock.y, currentgrid.x, currentgrid.y); \
+        LOGN2(2, " Running pass-2 kernel for %d targets with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", \
+            active_targets, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y); \
         if (options.sync) cutimer.start(stream);
         call_injectcx_pass_2_kernel(
             targets, 
@@ -376,7 +372,6 @@ namespace QuaSARQ {
     }
 
     void Prefix::tune_inject_cx(Tableau& input, const pivot_t* pivots, const size_t& max_active_targets) {
-        assert(num_qubits > min_pivot);
         assert(nextPow2(MIN_BLOCK_INTERMEDIATE_SIZE) == MIN_BLOCK_INTERMEDIATE_SIZE);
         const size_t num_qubits_padded = input.num_qubits_padded();
 

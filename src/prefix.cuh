@@ -25,6 +25,20 @@ namespace QuaSARQ {
         }
     };
 
+	INLINE_DEVICE 
+    void compute_local_sign_per_block(
+                sign_t&     local_sign, 
+                word_std_t& target_word, 
+        const   word_std_t& prefix,
+        const   word_std_t& xc,
+        const   word_std_t& zt) 
+    {
+        const word_std_t tab_t_stab = target_word;
+        const word_std_t not_zc_xor_xt = ~(prefix ^ tab_t_stab);
+        local_sign = (xc & zt & not_zc_xor_xt);
+        target_word = tab_t_stab ^ xc;
+    }
+
 	class Prefix {
 
 		DeviceAllocator& allocator;
@@ -45,8 +59,10 @@ namespace QuaSARQ {
 		size_t num_words_major;
 		size_t num_words_minor;
 
-		size_t max_targets;
-		pivot_t min_pivot;
+		size_t prev_active_targets;
+		uint32 prev_yblock_size;
+		uint32 prev_ygrid_size;
+		uint32 min_yblock_size;
 
 	public:
 
@@ -64,11 +80,11 @@ namespace QuaSARQ {
 		,	config_qubits(0)
 		,   num_words_major(0)
 		,   num_words_minor(0)
-		,	max_targets(0)
-		, 	min_pivot(INVALID_PIVOT)
+		,	prev_active_targets(0)
+		,	prev_yblock_size(0)
+		,	prev_ygrid_size(0)
+		,	min_yblock_size(2)
 		{}
-
-		MeasurementChecker& get_checker	() { return checker; }
 
 		size_t 		max_intermediate_size() const { return max_intermediate_blocks * num_words_minor; }
 		word_std_t* zblocks			() { assert(block_intermediate_prefix_z != nullptr); return block_intermediate_prefix_z; }
@@ -76,17 +92,15 @@ namespace QuaSARQ {
 		word_std_t* zsubblocks		() { assert(subblocks_prefix_z != nullptr); return subblocks_prefix_z; }
 		word_std_t* xsubblocks		() { assert(subblocks_prefix_x != nullptr); return subblocks_prefix_x; }
 
-		void 		set_min_pivot	(const pivot_t& min_pivot, const size_t& max_targets) { 
-			this->min_pivot = min_pivot; 
-			this->max_targets = max_targets;
-		}
-
 		void 		alloc			(const Tableau& input, const size_t& config_qubits, const size_t& max_window_bytes);
 		void 		resize			(const Tableau& input, const size_t& max_window_bytes);
 		void 		scan_blocks		(const size_t& num_blocks, const size_t& inject_pass_1_blocksize, const cudaStream_t& stream);
 		void 		tune_scan_blocks(const size_t& num_blocks, const size_t& inject_pass_1_blocksize);
+		void 		scan_warp 		(Tableau& input, const pivot_t* pivots, const size_t& active_targets, const cudaStream_t& stream);
+		void 		scan_block 		(Tableau& input, const pivot_t* pivots, const size_t& active_targets, const cudaStream_t& stream);
 		void 		inject_CX		(Tableau& input, const pivot_t* pivots, const size_t& active_targets, const cudaStream_t& stream);
 		void		tune_inject_cx	(Tableau& input, const pivot_t* pivots, const size_t& max_active_targets);
+		void 		tune_grid_size	(dim3& currentblock, dim3& currentgrid, const size_t& active_targets);
 
 	};
 

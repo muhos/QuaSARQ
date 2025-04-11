@@ -398,7 +398,7 @@ namespace QuaSARQ {
         }
         
         // Now, assume max blocks we could get and tune for it the multiple passes.
-        const size_t max_blocks = ROUNDUP(max_targets, MIN_BLOCK_INTERMEDIATE_SIZE);
+        const size_t max_blocks = MIN(1, max_intermediate_blocks / 2);
         if (options.tune_prefixprepare) {
             SYNCALL;
             tune_prefix_pass_1(
