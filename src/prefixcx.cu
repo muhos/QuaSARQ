@@ -4,7 +4,7 @@
 #include "access.cuh"
 #include "vector.hpp"
 #include "print.cuh"
-#include "prefixdim.cuh"
+#include "templatedim.cuh"
 #include "datatypes.cuh"
 #include "warp.cuh"
 #include <cub/block/block_scan.cuh>

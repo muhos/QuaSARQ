@@ -1,9 +1,11 @@
 #include "simulator.hpp"
 #include "prefix.cuh"
 #include "collapse.cuh"
+#include "templatedim.cuh"
 
 namespace QuaSARQ {
 
+    template<int B>
     INLINE_DEVICE 
     word_std_t warp_exclusive_xor(
                 word_std_t      target, 
@@ -12,11 +14,21 @@ namespace QuaSARQ {
     {
         unsigned mask = __activemask();
         word_std_t prev, in = target;
-        prev = __shfl_up_sync(mask, target, 1); if (threadIdx.x >= 1) target ^= prev;
-        prev = __shfl_up_sync(mask, target, 2); if (threadIdx.x >= 2) target ^= prev;
-        prev = __shfl_up_sync(mask, target, 4); if (threadIdx.x >= 4) target ^= prev;
-        prev = __shfl_up_sync(mask, target, 8); if (threadIdx.x >= 8) target ^= prev;
-        prev = __shfl_up_sync(mask, target, 16); if (threadIdx.x >= 16) target ^= prev;
+        if (B >= 2) {
+            prev = __shfl_up_sync(mask, target, 1); if (threadIdx.x >= 1) target ^= prev;
+        }
+        if (B >= 4) {
+            prev = __shfl_up_sync(mask, target, 2); if (threadIdx.x >= 2) target ^= prev;
+        }
+        if (B >= 8) {
+            prev = __shfl_up_sync(mask, target, 4); if (threadIdx.x >= 4) target ^= prev;
+        }
+        if (B >= 16) {
+            prev = __shfl_up_sync(mask, target, 8); if (threadIdx.x >= 8) target ^= prev;
+        }
+        if (B >= 32) {
+            prev = __shfl_up_sync(mask, target, 16); if (threadIdx.x >= 16) target ^= prev;
+        }
         word_std_t warp_prefix = !threadIdx.x ? initial_control : initial_control ^ target ^ in;
         if (threadIdx.x == active_targets - 1) {
             initial_control ^= target;
@@ -64,6 +76,7 @@ namespace QuaSARQ {
         }
     }
 
+    template<int B>
     __global__ 
     void inject_cx_warp(
         Table* inv_xs, 
@@ -94,8 +107,8 @@ namespace QuaSARQ {
                 zt_destab = zs[t_destab];
                 xt_destab = xs[t_destab];
             }
-            word_std_t prefix_zc = warp_exclusive_xor(zt_destab, zs[c_destab], active_targets);
-            word_std_t prefix_xc = warp_exclusive_xor(xt_destab, xs[c_destab], active_targets);
+            word_std_t prefix_zc = warp_exclusive_xor<B>(zt_destab, zs[c_destab], active_targets);
+            word_std_t prefix_xc = warp_exclusive_xor<B>(xt_destab, xs[c_destab], active_targets);
             sign_t local_destab_s = 0;
             sign_t local_stab_s = 0;
             if (tid < active_targets) {
@@ -106,14 +119,23 @@ namespace QuaSARQ {
                 compute_local_sign_per_block(local_destab_s, zs[t_stab], prefix_zc, zs[c_stab], zt_destab);
                 compute_local_sign_per_block(local_stab_s, xs[t_stab], prefix_xc, xs[c_stab], xt_destab);
             }
-            collapse_warp_only(local_destab_s);
-            collapse_warp_only(local_stab_s);
+            collapse_warp_dual_template<B>(local_destab_s, local_stab_s);
             if (!tid) {
                 ss[w] ^= local_destab_s;
                 ss[w + num_words_minor] ^= local_stab_s;
             }
         }
     }
+
+    #define CALL_INJECT_CX_WARP(B, YDIM) \
+        inject_cx_warp<B> <<<currentgrid, currentblock, 0, stream>>> ( \
+            XZ_TABLE(input), \
+            input.signs(), \
+            pivots, \
+            active_targets, \
+            num_words_major, \
+            num_words_minor, \
+            num_qubits_padded);
 
     void Prefix::scan_warp(Tableau& input, const pivot_t* pivots, const size_t& active_targets, const cudaStream_t& stream) {
         const size_t num_qubits_padded = input.num_qubits_padded();
@@ -143,14 +165,11 @@ namespace QuaSARQ {
             LOGN2(2, "Injecting CX for %d targets using warp(x:%u, y:%u) and grid(x:%u, y:%u).. ",
             active_targets, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
             if (options.sync) cutimer.start(stream);
-            inject_cx_warp<<<currentgrid, currentblock, 0, stream>>> (
-                XZ_TABLE(input),
-                input.signs(),
-                pivots,
-                active_targets,
-                num_words_major,
-                num_words_minor,
-                num_qubits_padded);
+            switch (currentblock.x) {
+                FOREACH_X_DIM_MAX_32(CALL_INJECT_CX_WARP, currentblock.y);
+                default:
+                    break;
+            }
         }
         if (options.sync) {
             LASTERR("failed to launch inject_cx_warp kernel");

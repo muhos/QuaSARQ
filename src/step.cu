@@ -3,8 +3,7 @@
 #include "tuner.cuh"
 #include "operators.cuh"
 #include "macros.cuh"
-#include "locker.cuh"
-#include "warp.cuh"
+#include "templatedim.cuh"
 
 
 namespace QuaSARQ {
@@ -115,12 +114,12 @@ namespace QuaSARQ {
         grid_t BX = blockDim.x;
         grid_t global_offset = blockIdx.x * BX;
         grid_t collapse_tid = threadIdx.y * BX + tx;
-        word_std_t* shared_signs = SharedMemory<word_std_t>();
+        sign_t* shared_signs = SharedMemory<sign_t>();
         sign_t* signs = ss->data();
 
         for_parallel_y(w, num_words_major) {
 
-            word_std_t signs_word = signs[w];
+            sign_t signs_word = signs[w];
 
             #ifdef INTERLEAVE_XZ
                 #ifdef INTERLEAVE_WORDS
@@ -215,7 +214,9 @@ namespace QuaSARQ {
 
     }
 
-    __global__ void step_2D_warped(ConstRefsPointer refs, ConstBucketsPointer gates, const size_t num_gates, const size_t num_words_major, 
+    template<int B>
+    __global__ 
+    void step_2D_warped(ConstRefsPointer refs, ConstBucketsPointer gates, const size_t num_gates, const size_t num_words_major, 
     #ifdef INTERLEAVE_XZ
     Table* ps, 
     #else
@@ -225,12 +226,11 @@ namespace QuaSARQ {
         grid_t tx = threadIdx.x;
         grid_t BX = blockDim.x;
         grid_t global_offset = blockIdx.x * BX;
-        word_std_t* shared_signs = SharedMemory<word_std_t>();
         sign_t* signs = ss->data();
 
         for_parallel_y(w, num_words_major) {
 
-            word_std_t signs_word = signs[w];
+            sign_t signs_word = signs[w];
 
             #ifdef INTERLEAVE_XZ
                 #ifdef INTERLEAVE_WORDS
@@ -311,7 +311,7 @@ namespace QuaSARQ {
             }
 
             assert(BX <= 32);
-            collapse_warp_only(signs_word);
+            collapse_warp_only<B>(signs_word);
 
             // Atomically collapse all blocks.
             if (!tx && global_offset < num_gates && signs_word) {
@@ -321,6 +321,16 @@ namespace QuaSARQ {
         }
 
     }
+
+    #define CALL_STEP_2D_WARPED(B, YDIM) \
+        step_2D_warped<B> <<<bestgridstep, bestblockstep, 0, kernel_stream>>> ( \
+            gpu_circuit.references(), \
+            gpu_circuit.gates(), \
+            num_gates_per_window, \
+            num_words_major, \
+            XZ_TABLE(tableau), \
+            tableau.signs() \
+        );
 
     void Simulator::step(const size_t& p, const depth_t& depth_level, const bool& reversed) {
         assert(options.streams >= 3);
@@ -387,12 +397,25 @@ namespace QuaSARQ {
             // Run simulation.
             if (options.sync) cutimer.start(kernel_stream);
 
-            if (bestblockstep.x == 1)
-                step_2D << < bestgridstep, bestblockstep, 0, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs());
-            else if (bestblockstep.x <= maxWarpSize)
-                step_2D_warped << < bestgridstep, bestblockstep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs());
-            else
+            if (bestblockstep.x == 1) {
+                step_2D_atomic << < bestgridstep, bestblockstep, 0, kernel_stream >> > (
+                    gpu_circuit.references(), 
+                    gpu_circuit.gates(), 
+                    num_gates_per_window, 
+                    num_words_major, 
+                    XZ_TABLE(tableau), 
+                    tableau.signs());
+            }
+            else if (bestblockstep.x <= maxWarpSize) {
+                switch (bestblockstep.x) {
+                    FOREACH_X_DIM_MAX_32(CALL_STEP_2D_WARPED, bestblockstep.y);
+                    default:
+                        break;
+                }
+            }
+            else {
                 step_2D << < bestgridstep, bestblockstep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs());
+            }
 
             if (options.sync) { 
                 LASTERR("failed to launch step kernel");

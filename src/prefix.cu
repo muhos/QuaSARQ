@@ -1,6 +1,6 @@
 
 #include "prefix.cuh"
-#include "prefixdim.cuh"
+#include "templatedim.cuh"
 #include "timer.cuh"
 #include "access.cuh"
 #include "datatypes.cuh"
