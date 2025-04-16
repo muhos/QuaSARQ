@@ -25,7 +25,7 @@ namespace QuaSARQ {
                 Table*              inv_xs, 
                 Table*              inv_zs,
                 Signs*              inv_ss, 
-        const   pivot_t*            pivots,
+                CPivotsPtr          pivots,
         const   size_t              num_words_major, 
         const   size_t              num_words_minor,
         const   size_t              num_qubits_padded) 

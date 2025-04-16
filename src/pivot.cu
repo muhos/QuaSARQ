@@ -126,7 +126,6 @@ namespace QuaSARQ {
             const size_t word_idx = TABLEAU_INDEX(q_w, g) + TABLEAU_STAB_OFFSET;
             const word_std_t qubit_word = (*inv_xs)[word_idx];
             scatter[g] = (qubit_word & q_mask) ? pivot_t(g) : INVALID_PIVOT;
-            //if (qubit_word & q_mask) printf("scatter[%lld] = %u\n", g, scatter[g]);
         }
     }
 
@@ -161,9 +160,9 @@ namespace QuaSARQ {
 
     __global__
     void print_compacted(const pivot_t* pivots, const uint32* num_compacted) {
-        LOGGPU("num_compacted = %u\n", *num_compacted);
+        LOGGPU("\nCompacted pivots:\n");
         for (uint32 i = 0; i < *num_compacted; i++) {
-            LOGGPU("pivots[%u] = %u\n", i, pivots[i]);
+            LOGGPU(" pivots[%u] = %u\n", i, pivots[i]);
         }
     }
 
@@ -295,7 +294,6 @@ namespace QuaSARQ {
             num_qubits_padded);
         pivoting.compact_pivots(stream);
         #endif
-        //print_compacted <<<1, 1, 0, stream>>> (pivoting.pivots, pivoting.d_active_pivots);
         if (options.sync) {
             LASTERR("failed to launch find_new_pivot_and_mark kernel");
             cutimer.stop(stream);

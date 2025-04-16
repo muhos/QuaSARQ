@@ -41,6 +41,7 @@ namespace QuaSARQ {
         else {
             int64 random_measures = measure_indeterminate(depth_level, kernel_stream1);
             stats.circuit.measure_stats.random += random_measures;
+            stats.circuit.measure_stats.definite += num_gates_per_window - random_measures;
             stats.circuit.measure_stats.random_per_window = MAX(random_measures, stats.circuit.measure_stats.random_per_window);
         }
 

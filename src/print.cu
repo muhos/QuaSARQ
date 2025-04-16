@@ -265,7 +265,7 @@ namespace QuaSARQ {
 	}
 
 
-	__global__ void print_gates_k(ConstRefsPointer refs, ConstBucketsPointer gates, ConstPivotsPointer pivots, const gate_ref_t num_gates) {
+	__global__ void print_gates_k(ConstRefsPointer refs, ConstBucketsPointer gates, CPivotsPtr pivots, const gate_ref_t num_gates) {
 		if (!global_tx) {
 			for (gate_ref_t i = 0; i < num_gates; i++) {
 				const gate_ref_t r = refs[i];
@@ -280,7 +280,7 @@ namespace QuaSARQ {
 		}
 	}
 
-	__global__ void print_measurements_k(ConstRefsPointer refs, ConstBucketsPointer measurements, ConstPivotsPointer pivots, const gate_ref_t num_gates) {
+	__global__ void print_measurements_k(ConstRefsPointer refs, ConstBucketsPointer measurements, CPivotsPtr pivots, const gate_ref_t num_gates) {
         for_parallel_x(i, num_gates) {
             const gate_ref_t r = refs[i];
             const Gate &m = (Gate &)measurements[r];

@@ -38,14 +38,14 @@ namespace QuaSARQ {
 
      __global__ 
     void inject_cx_warp_1(
-        Table* inv_xs, 
-        Table* inv_zs, 
-        Signs* inv_ss, 
-        const pivot_t* pivots,
-        const size_t active_targets, 
-        const size_t num_words_major, 
-        const size_t num_words_minor,
-        const size_t num_qubits_padded) 
+                Table*      inv_xs, 
+                Table*      inv_zs, 
+                Signs*      inv_ss, 
+                CPivotsPtr  pivots,
+        const   size_t      active_targets, 
+        const   size_t      num_words_major, 
+        const   size_t      num_words_minor,
+        const   size_t      num_qubits_padded) 
     {
         assert(active_targets == 1);
         word_std_t *xs = inv_xs->words();

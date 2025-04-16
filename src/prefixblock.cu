@@ -10,14 +10,14 @@ namespace QuaSARQ {
     template <int BLOCKX, int BLOCKY>
     __global__
     void inject_cx_block(
-                Table *      inv_xs,
-                Table *      inv_zs,
-                Signs *      inv_ss,
-        const   pivot_t*     pivots,
-        const   size_t       active_targets,
-        const   size_t       num_words_major,
-        const   size_t       num_words_minor,
-        const   size_t       num_qubits_padded)
+                Table *         inv_xs,
+                Table *         inv_zs,
+                Signs *         inv_ss,
+                CPivotsPtr      pivots,
+        const   size_t          active_targets,
+        const   size_t          num_words_major,
+        const   size_t          num_words_minor,
+        const   size_t          num_qubits_padded)
     {
         word_std_t *xs = inv_xs->words();
         word_std_t *zs = inv_zs->words();
@@ -73,8 +73,8 @@ namespace QuaSARQ {
                 const size_t c_stab = c_destab + TABLEAU_STAB_OFFSET;
                 prefix_zc ^= init_z;
                 prefix_xc ^= init_x;
-                compute_local_sign_single_block(local_destab_s, zs[t_stab], prefix_zc, zs[c_stab], z);
-                compute_local_sign_single_block(local_stab_s  , xs[t_stab], prefix_xc, xs[c_stab], x);
+                compute_local_sign_per_block(local_destab_s, zs[t_stab], prefix_zc, zs[c_stab], z);
+                compute_local_sign_per_block(local_stab_s  , xs[t_stab], prefix_xc, xs[c_stab], x);
             }
 
             local_destab_s = ReduceType(smem.destab_ss[threadIdx.y]).Reduce(local_destab_s, XOROP());

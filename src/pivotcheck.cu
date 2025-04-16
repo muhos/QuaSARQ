@@ -73,7 +73,8 @@ namespace QuaSARQ {
         LOGN2(2, " Checking initial pivots for depth level %d.. ", depth_level);
         const auto num_gates = circuit[depth_level].size();
         if (num_gates != other_num_pivots)
-            LOGERROR("number of initial pivots does not match");
+            LOGERROR("number of initial pivots %llu does not match number of gates %llu", 
+                other_num_pivots, num_gates);
         for (auto i = 0; i < num_gates; i++) {
             const Gate& m = circuit.gate(depth_level, i);
             assert(m.size == 1);
@@ -95,7 +96,8 @@ namespace QuaSARQ {
         this->qubit = qubit;
         find_min_pivot(qubit, true);
         if (h_compact_pivots.size() != other_num_pivots)
-            LOGERROR("number of compact pivots does not match");
+            LOGERROR("number of compact pivots %u does not match cpu-based number %u", 
+                other_num_pivots, h_compact_pivots.size());
         copy_pivots(other_pivots, other_num_pivots);
         for (size_t i = 0; i < h_compact_pivots.size(); i++) {
             if (h_compact_pivots[i] != d_compact_pivots[i])

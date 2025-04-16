@@ -4,6 +4,7 @@
 
 #include "definitions.cuh"
 #include "measurement.cuh"
+#include "datatypes.cuh"
 #include "shared.cuh"
 #include "word.cuh"
 #include "grid.cuh"

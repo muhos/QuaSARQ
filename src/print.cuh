@@ -33,10 +33,10 @@ namespace QuaSARQ {
     __global__ void print_paulis_k(ConstTablePointer ps, ConstSignsPointer ss, const size_t num_words_major, const size_t num_qubits, const bool extended);
 
     // Print gates.
-    __global__ void print_gates_k(ConstRefsPointer refs, ConstBucketsPointer gates, ConstPivotsPointer pivots, const gate_ref_t num_gates);
+    __global__ void print_gates_k(ConstRefsPointer refs, ConstBucketsPointer gates, CPivotsPtr pivots, const gate_ref_t num_gates);
 
     // Print measurements.
-    __global__ void print_measurements_k(ConstRefsPointer refs, ConstBucketsPointer measurements, ConstPivotsPointer pivots, const gate_ref_t num_gates);
+    __global__ void print_measurements_k(ConstRefsPointer refs, ConstBucketsPointer measurements, CPivotsPtr pivots, const gate_ref_t num_gates);
 
 }
 
