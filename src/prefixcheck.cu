@@ -87,8 +87,8 @@ namespace QuaSARQ {
                     }
                 }
 
-                word_std_t blockSum_z = scan_block_exclusive_cpu(t_prefix_z.data(), int(pass_1_blocksize));
-                word_std_t blockSum_x = scan_block_exclusive_cpu(t_prefix_x.data(), int(pass_1_blocksize));
+                word_std_t blocksum_z = scan_block_exclusive_cpu(t_prefix_z.data(), int(pass_1_blocksize));
+                word_std_t blocksum_x = scan_block_exclusive_cpu(t_prefix_x.data(), int(pass_1_blocksize));
 
                 for (size_t tx = 0; tx < pass_1_blocksize; tx++) {
                     size_t tid_x = bx * pass_1_blocksize + tx;
@@ -107,8 +107,8 @@ namespace QuaSARQ {
                 }
                 if (pass_1_blocksize > 0 && pass_1_gridsize > 1) {
                     size_t bid = PREFIX_INTERMEDIATE_INDEX(w, bx);
-                    h_block_intermediate_prefix_z[bid] = blockSum_z;
-                    h_block_intermediate_prefix_x[bid] = blockSum_x;
+                    h_block_intermediate_prefix_z[bid] = blocksum_z;
+                    h_block_intermediate_prefix_x[bid] = blocksum_x;
                     if (!skip_checking_device && h_block_intermediate_prefix_x[bid] != d_block_intermediate_prefix_x[bid]) {
                         LOGERROR("Pass-1 FAILED at block-prefix-x[w: %lld, bx: %lld]", w, bx);
                     }

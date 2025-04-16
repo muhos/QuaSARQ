@@ -62,8 +62,8 @@ namespace QuaSARQ {
 
     INT64_OPT opt_tuneinitial_qubits("tune-initial-qubits", "set the initial number of qubits to start with in the tuner", 1000, INT64R(1, UINT32_MAX));
     INT64_OPT opt_tunestep_qubits("tune-step-qubits", "set the increase of qubits", 1000, INT64R(1, UINT32_MAX));
-    INT64_OPT opt_num_qubits("qubits", "set number of qubits for random generation (if no input file given)", 1000, INT64R(1, UINT32_MAX));
-    INT64_OPT opt_depth("depth", "set circuit depth for random generation (if no input file given)", 2, INT64R(1, UINT32_MAX));
+    INT64_OPT opt_num_qubits("qubits", "set number of qubits for random generation (if no input file given)", 1, INT64R(1, UINT32_MAX));
+    INT64_OPT opt_depth("depth", "set circuit depth for random generation (if no input file given)", 1, INT64R(1, UINT32_MAX));
 
     FOREACH_GATE(GATE2FREQINPUT);
 
@@ -129,6 +129,10 @@ namespace QuaSARQ {
         }
         if (equivalence_en) {
             tuner_en = false;
+        }
+        if (verbose > 1) {
+            LOG2(1, "%s  Enabled synchronization mode with verbosity level %s%zd%s.%s", CARGDEFAULT, CARGVALUE, verbose, CARGDEFAULT, CNORMAL);
+            sync = true;
         }
         if (tuner_en && tuner_step_qubits > num_qubits) {
             LOG2(1, "%s  Stepwise qubits %s%zd%s is downsized to %s%zd%s maximum.%s", CARGDEFAULT, CARGVALUE, tuner_step_qubits, CARGDEFAULT, CARGVALUE, num_qubits, CARGDEFAULT, CNORMAL);

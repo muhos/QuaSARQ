@@ -10,10 +10,10 @@ namespace QuaSARQ {
         CONFIG(reset, 4, 1, 500, 1) \
         CONFIG(identity, 4, 1, 500, 1) \
         CONFIG(step, 2, 128, 103, 52) \
-        CONFIG(transposebits, 64, 16, 33, 1) \
-        CONFIG(transposeswap, 64, 16, 33, 1) \
-        CONFIG(transposec2r, 32, 16, 33, 1) \
-        CONFIG(transposer2c, 32, 16, 33, 1) \
+        CONFIG(transposebits, 64, 8, 50, 100) \
+        CONFIG(transposeswap, 64, 8, 50, 100) \
+        CONFIG(transposec2r, 32, 16, 50, 50) \
+        CONFIG(transposer2c, 32, 16, 50, 50) \
         CONFIG(allpivots, 256, 2, 100, 16) \
         CONFIG(newpivots, 256, 1, 100, 1) \
         CONFIG(marking, 256, 1, 100, 1) \

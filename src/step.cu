@@ -3,6 +3,7 @@
 #include "tuner.cuh"
 #include "operators.cuh"
 #include "macros.cuh"
+#include "collapse.cuh"
 #include "templatedim.cuh"
 
 
@@ -103,18 +104,20 @@ namespace QuaSARQ {
 
     }
 
-    __global__ void step_2D(ConstRefsPointer refs, ConstBucketsPointer gates, const size_t num_gates, const size_t num_words_major, 
+    template<int B>
+    __global__ 
+    void step_2D(ConstRefsPointer refs, ConstBucketsPointer gates, const size_t num_gates, const size_t num_words_major, 
     #ifdef INTERLEAVE_XZ
     Table* ps, 
     #else
     Table* xs, Table* zs,
     #endif
     Signs* ss) {
-        grid_t tx = threadIdx.x;
+        int tx = threadIdx.x;
         grid_t BX = blockDim.x;
         grid_t global_offset = blockIdx.x * BX;
-        grid_t collapse_tid = threadIdx.y * BX + tx;
-        sign_t* shared_signs = SharedMemory<sign_t>();
+        sign_t* smem = SharedMemory<sign_t>();
+        sign_t* shared_signs = smem + threadIdx.y * BX;
         sign_t* signs = ss->data();
 
         for_parallel_y(w, num_words_major) {
@@ -195,15 +198,9 @@ namespace QuaSARQ {
                 }
             }
 
-            // Only blocks >= 64 use shared memory, < 64 use warp communications.
-            if (BX >= 64) {
-			    shared_signs[collapse_tid] = (tx < num_gates) ? signs_word : 0;
-			    __syncthreads();
-		    }
-
-            collapse_load_shared(shared_signs, signs_word, collapse_tid, num_gates);
-            collapse_shared(shared_signs, signs_word, collapse_tid);
-            collapse_warp(shared_signs, signs_word, collapse_tid);
+            collapse_load_shared(shared_signs, signs_word, tx, num_gates);
+            collapse_shared<B, sign_t>(shared_signs, signs_word, tx);
+            collapse_warp<B, sign_t>(signs_word, tx);
 
             // Atomically collapse all blocks.
             if (!tx && global_offset < num_gates && signs_word) {
@@ -311,7 +308,7 @@ namespace QuaSARQ {
             }
 
             assert(BX <= 32);
-            collapse_warp_only<B>(signs_word);
+            collapse_warp<B, sign_t>(signs_word, tx);
 
             // Atomically collapse all blocks.
             if (!tx && global_offset < num_gates && signs_word) {
@@ -331,6 +328,34 @@ namespace QuaSARQ {
             XZ_TABLE(tableau), \
             tableau.signs() \
         );
+
+    #define CALL_STEP_2D(B, YDIM) \
+        step_2D<B> <<<currentgrid, currentblock, shared_size, stream>>> ( \
+            refs, \
+            gates, \
+            num_gates_per_window, \
+            num_words_major, \
+            XZ_TABLE(tableau), \
+            tableau.signs() \
+        );
+
+    void call_step_2D(
+                ConstRefsPointer    refs,
+                ConstBucketsPointer gates,
+                Tableau&            tableau,
+        const   size_t              num_gates_per_window,
+        const   size_t              num_words_major,
+        const   dim3&               currentblock,
+        const   dim3&               currentgrid,
+        const   size_t              shared_size,
+        const   cudaStream_t&       stream)
+    {
+        switch (currentblock.x) {
+            FOREACH_X_DIM_MAX_1024(CALL_STEP_2D, currentblock.y);
+            default:
+                break;
+        }
+    }
 
     void Simulator::step(const size_t& p, const depth_t& depth_level, const bool& reversed) {
         assert(options.streams >= 3);
@@ -366,13 +391,8 @@ namespace QuaSARQ {
             #else
 
             if (options.tune_step) {
-                tune_kernel
-                (
-                #if TUNE_WARPED_VERSION
-                    step_2D_warped, "step warped"
-                #else
-                    step_2D, "step"
-                #endif
+                tune_step(
+                    "step"
                     // best kernel config to be found. 
                     , bestblockstep, bestgridstep
                     // shared memory size.
@@ -380,7 +400,7 @@ namespace QuaSARQ {
                     // data length.         
                     , num_gates_per_window, num_words_major
                     // kernel arguments.
-                    , gpu_circuit.references(), gpu_circuit.gates(), XZ_TABLE(tableau), tableau.signs()
+                    , gpu_circuit.references(), gpu_circuit.gates(), tableau
                 );
             }
 
@@ -414,7 +434,16 @@ namespace QuaSARQ {
                 }
             }
             else {
-                step_2D << < bestgridstep, bestblockstep, reduce_smem_size, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs());
+                call_step_2D(
+                    gpu_circuit.references(), 
+                    gpu_circuit.gates(), 
+                    tableau, 
+                    num_gates_per_window, 
+                    num_words_major, 
+                    bestblockstep, 
+                    bestgridstep, 
+                    reduce_smem_size, 
+                    kernel_stream);
             }
 
             if (options.sync) { 

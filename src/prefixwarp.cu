@@ -8,32 +8,32 @@ namespace QuaSARQ {
     template<int B>
     INLINE_DEVICE 
     word_std_t warp_exclusive_xor(
-                word_std_t      target, 
-                word_std_t&     initial_control, 
+        const   word_std_t&     target,
+                word_std_t&     prefix, 
+        const   word_std_t&     initial_control, 
         const   uint32&         active_targets) 
     {
+        prefix = target;
         unsigned mask = __activemask();
-        word_std_t prev, in = target;
+        word_std_t prev;
         if (B >= 2) {
-            prev = __shfl_up_sync(mask, target, 1); if (threadIdx.x >= 1) target ^= prev;
+            prev = __shfl_up_sync(mask, prefix, 1); if (threadIdx.x >= 1) prefix ^= prev;
         }
         if (B >= 4) {
-            prev = __shfl_up_sync(mask, target, 2); if (threadIdx.x >= 2) target ^= prev;
+            prev = __shfl_up_sync(mask, prefix, 2); if (threadIdx.x >= 2) prefix ^= prev;
         }
         if (B >= 8) {
-            prev = __shfl_up_sync(mask, target, 4); if (threadIdx.x >= 4) target ^= prev;
+            prev = __shfl_up_sync(mask, prefix, 4); if (threadIdx.x >= 4) prefix ^= prev;
         }
         if (B >= 16) {
-            prev = __shfl_up_sync(mask, target, 8); if (threadIdx.x >= 8) target ^= prev;
+            prev = __shfl_up_sync(mask, prefix, 8); if (threadIdx.x >= 8) prefix ^= prev;
         }
         if (B >= 32) {
-            prev = __shfl_up_sync(mask, target, 16); if (threadIdx.x >= 16) target ^= prev;
+            prev = __shfl_up_sync(mask, prefix, 16); if (threadIdx.x >= 16) prefix ^= prev;
         }
-        word_std_t warp_prefix = !threadIdx.x ? initial_control : initial_control ^ target ^ in;
-        if (threadIdx.x == active_targets - 1) {
-            initial_control ^= target;
-        }
-        return warp_prefix;
+        word_std_t sum = prefix;
+        prefix ^= (initial_control ^ target);
+        return sum;
     }
 
      __global__ 
@@ -59,20 +59,16 @@ namespace QuaSARQ {
             assert(t != INVALID_PIVOT);
             const size_t c_destab = TABLEAU_INDEX(w, pivot);
             const size_t t_destab = TABLEAU_INDEX(w, t);
-            word_std_t zt_destab = zs[t_destab];
-            word_std_t xt_destab = xs[t_destab];
-            word_std_t prefix_zc = zs[c_destab];
-            word_std_t prefix_xc = xs[c_destab];
+            const word_std_t zt_destab = zs[t_destab];
+            const word_std_t xt_destab = xs[t_destab];
+            const word_std_t prefix_zc = zs[c_destab];
+            const word_std_t prefix_xc = xs[c_destab];
             zs[c_destab] ^= zt_destab;
             xs[c_destab] ^= xt_destab;
-            sign_t local_destab_s = 0;
-            sign_t local_stab_s = 0;
             const size_t t_stab = t_destab + TABLEAU_STAB_OFFSET;
             const size_t c_stab = c_destab + TABLEAU_STAB_OFFSET;
-            compute_local_sign_per_block(local_destab_s, zs[t_stab], prefix_zc, zs[c_stab], zt_destab);
-            compute_local_sign_per_block(local_stab_s, xs[t_stab], prefix_xc, xs[c_stab], xt_destab);
-            ss[w] ^= local_destab_s;
-            ss[w + num_words_minor] ^= local_stab_s;
+            compute_local_sign_per_block(ss[w], zs[t_stab], prefix_zc, zs[c_stab], zt_destab);
+            compute_local_sign_per_block(ss[w + num_words_minor], xs[t_stab], prefix_xc, xs[c_stab], xt_destab);
         }
     }
 
@@ -96,19 +92,29 @@ namespace QuaSARQ {
             const pivot_t pivot = pivots[0];
             assert(pivot != INVALID_PIVOT);
             const size_t c_destab = TABLEAU_INDEX(w, pivot);
-            word_std_t xt_destab = 0;
-            word_std_t zt_destab = 0;
-            grid_t tid = threadIdx.x;
-            if (tid < active_targets) {
+            word_std_t prefix_zc = 0;
+            word_std_t prefix_xc = 0;
+            word_std_t init_z = 0;
+            word_std_t init_x = 0;
+            word_std_t z = 0;
+            word_std_t x = 0;
+            int tid = threadIdx.x;
+            if (tid < int(active_targets)) {
                 const size_t t = pivots[tid + 1];
                 assert(t != pivot);
                 assert(t != INVALID_PIVOT);
                 const size_t t_destab = TABLEAU_INDEX(w, t);
-                zt_destab = zs[t_destab];
-                xt_destab = xs[t_destab];
+                z = zs[t_destab];
+                x = xs[t_destab];             
+                init_z = zs[c_destab];
+                init_x = xs[c_destab];
             }
-            word_std_t prefix_zc = warp_exclusive_xor<B>(zt_destab, zs[c_destab], active_targets);
-            word_std_t prefix_xc = warp_exclusive_xor<B>(xt_destab, xs[c_destab], active_targets);
+            word_std_t warpsum_z = warp_exclusive_xor<B>(z, prefix_zc, init_z, active_targets);
+            word_std_t warpsum_x = warp_exclusive_xor<B>(x, prefix_xc, init_x, active_targets);
+            if (tid == active_targets - 1) {
+                zs[c_destab] ^= warpsum_z;
+                xs[c_destab] ^= warpsum_x;
+            }
             sign_t local_destab_s = 0;
             sign_t local_stab_s = 0;
             if (tid < active_targets) {
@@ -116,10 +122,10 @@ namespace QuaSARQ {
                 const size_t t_destab = TABLEAU_INDEX(w, t);
                 const size_t t_stab = t_destab + TABLEAU_STAB_OFFSET;
                 const size_t c_stab = c_destab + TABLEAU_STAB_OFFSET;
-                compute_local_sign_per_block(local_destab_s, zs[t_stab], prefix_zc, zs[c_stab], zt_destab);
-                compute_local_sign_per_block(local_stab_s, xs[t_stab], prefix_xc, xs[c_stab], xt_destab);
+                compute_local_sign_per_block(local_destab_s, zs[t_stab], prefix_zc, zs[c_stab], z);
+                compute_local_sign_per_block(local_stab_s, xs[t_stab], prefix_xc, xs[c_stab], x);
             }
-            collapse_warp_dual_template<B>(local_destab_s, local_stab_s);
+            collapse_warp_dual<B, sign_t>(local_destab_s, local_stab_s, tid);
             if (!tid) {
                 ss[w] ^= local_destab_s;
                 ss[w + num_words_minor] ^= local_stab_s;

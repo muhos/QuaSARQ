@@ -30,7 +30,7 @@ Simulator::Simulator() :
     , locker(gpu_allocator)
     , tableau(gpu_allocator)
     , inv_tableau(gpu_allocator)
-    , commuting(gpu_allocator)
+    , pivoting(gpu_allocator)
     , prefix(gpu_allocator, mchecker)
 	, config_file(nullptr)
     , config_qubits(0)
@@ -54,7 +54,7 @@ Simulator::Simulator(const string& path) :
     , locker(gpu_allocator)
     , tableau(gpu_allocator)
     , inv_tableau(gpu_allocator)
-    , commuting(gpu_allocator)
+    , pivoting(gpu_allocator)
     , prefix(gpu_allocator, mchecker)
     , config_file(nullptr)
     , config_qubits(0)
@@ -135,10 +135,11 @@ void Simulator::simulate() {
     timer.start();
     num_partitions = tableau.alloc(num_qubits, winfo.max_window_bytes, false, measuring, true);
     if (measuring) {
+        #if ROW_MAJOR
         inv_tableau.alloc(num_qubits, winfo.max_window_bytes, false, measuring, false);
+        #endif
         prefix.alloc(tableau, config_qubits, winfo.max_window_bytes);
-        commutations = gpu_allocator.allocate<Commutation>(num_qubits);
-        commuting.alloc(num_qubits);
+        pivoting.alloc(num_qubits);
         if (options.check_measurement)
             mchecker.alloc(num_qubits);
     }

@@ -2,7 +2,6 @@
 #pragma once
 
 #include "definitions.hpp"
-#include "commutation.cuh"
 #include "tableau.cuh"
 #include "pivot.cuh"
 #include "access.cuh"

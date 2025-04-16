@@ -28,7 +28,7 @@ namespace QuaSARQ {
         find_pivots(num_gates_per_window, kernel_stream1);
 
         // Copy source pivots to host.
-        commuting.copypivots(kernel_stream1, num_gates_per_window);
+        pivoting.copypivots(kernel_stream1, num_gates_per_window);
 
         // Reset pivots on device side.
         reset_pivots(num_gates_per_window, kernel_stream1);
@@ -116,7 +116,7 @@ namespace QuaSARQ {
         // then send them to the GPU.
 
 
-        //prefix.tune_inject_cx(tableau, commuting.pivots, max_targets);
+        //prefix.tune_inject_cx(tableau, pivoting.pivots, max_targets);
         // if (options.tune_injectswap) {
         //     SYNCALL;
         //     tune_kernel_m(inject_swap_k, "injecting swap", 
@@ -136,7 +136,7 @@ namespace QuaSARQ {
         const size_t num_words_major = tableau.num_words_major();
         const size_t num_gates_per_window = circuit[depth_level].size();
         const size_t num_qubits_padded = tableau.num_qubits_padded();
-        pivot_t* host_pivots = commuting.host_pivots;
+        pivot_t* host_pivots = pivoting.host_pivots;
         if (options.check_measurement) {
             mchecker.copy_input(tableau);
             mchecker.check_initial_pivots(circuit, depth_level, host_pivots, num_gates_per_window);
@@ -149,9 +149,9 @@ namespace QuaSARQ {
             if (curr_pivot != INVALID_PIVOT) {
                 compact_targets(qubit, stream);
                 SYNC(stream);
-                const uint32 active_pivots = commuting.h_active_pivots[0];
+                const uint32 active_pivots = pivoting.h_active_pivots[0];
                 if (options.check_measurement)
-                    mchecker.check_compact_pivots(qubit, commuting.pivots, active_pivots);
+                    mchecker.check_compact_pivots(qubit, pivoting.pivots, active_pivots);
                 if (active_pivots) {
                     if (active_pivots > 1)
                         inject_cx(active_pivots - 1/*active_pivots - 1*/, stream);

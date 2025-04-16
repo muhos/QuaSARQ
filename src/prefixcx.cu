@@ -20,8 +20,8 @@ namespace QuaSARQ {
                 Table *             prefix_zs, 
                 word_std_t *        block_intermediate_prefix_z,
                 word_std_t *        block_intermediate_prefix_x,
-                ConstTablePointer   inv_xs, 
-                ConstTablePointer   inv_zs,
+                Table*   inv_xs, 
+                Table*   inv_zs,
         const   pivot_t*            pivots,
         const   size_t              active_targets,
         const   size_t              num_words_major,
@@ -30,17 +30,14 @@ namespace QuaSARQ {
         const   size_t              max_blocks) {
 
         assert(active_targets > 0);
-
-        typedef cub::BlockScan<word_std_t, BLOCKX, cub::BLOCK_SCAN_RAKING> BlockScan;
-
-        __shared__ typename BlockScan::TempStorage temp_storage_z[BLOCKY];
-        __shared__ typename BlockScan::TempStorage temp_storage_x[BLOCKY];
+        assert(BLOCKX == blockDim.x);
+        assert(BLOCKY == blockDim.y);
 
         for_parallel_y_tiled(by, num_words_minor) {
-            const grid_t w = threadIdx.y + by * blockDim.y;
+            const grid_t w = threadIdx.y + by * BLOCKY;
 
             for_parallel_x_tiled(bx, active_targets) {
-                const grid_t tid_x = threadIdx.x + bx * blockDim.x;
+                const grid_t tid_x = threadIdx.x + bx * BLOCKX;
                 
                 word_std_t z = 0;
                 word_std_t x = 0;
@@ -61,11 +58,16 @@ namespace QuaSARQ {
                     init_x = (*inv_xs)[c_destab];
                 }
 
-                word_std_t blockSum_z;
-                word_std_t blockSum_x;
+                typedef cub::BlockScan<word_std_t, BLOCKX, cub::BLOCK_SCAN_RAKING> BlockScan;
 
-                BlockScan(temp_storage_z[threadIdx.y]).ExclusiveScan(z, z, 0, XOROP(), blockSum_z);
-                BlockScan(temp_storage_x[threadIdx.y]).ExclusiveScan(x, x, 0, XOROP(), blockSum_x);
+                __shared__ typename BlockScan::TempStorage shared_prefix_zs[BLOCKY];
+                __shared__ typename BlockScan::TempStorage shared_prefix_xs[BLOCKY];
+
+                word_std_t blocksum_z;
+                word_std_t blocksum_x;
+
+                BlockScan(shared_prefix_zs[threadIdx.y]).ExclusiveScan(z, z, 0, XOROP(), blocksum_z);
+                BlockScan(shared_prefix_xs[threadIdx.y]).ExclusiveScan(x, x, 0, XOROP(), blocksum_x);
 
                 if (w < num_words_minor && tid_x < active_targets) {
                     const size_t word_idx = PREFIX_TABLEAU_INDEX(w, tid_x);
@@ -75,11 +77,16 @@ namespace QuaSARQ {
                     (*prefix_xs)[word_idx] = init_x ^ x;
                 }
 
-                if (w < num_words_minor && threadIdx.x == blockDim.x - 1) {
+                if (w < num_words_minor && threadIdx.x == BLOCKX - 1) {
                     assert((blockIdx.x * num_words_minor + w) < gridDim.x * num_words_minor);
                     const size_t bid = PREFIX_INTERMEDIATE_INDEX(w, bx);
-                    block_intermediate_prefix_z[bid] = blockSum_z;
-                    block_intermediate_prefix_x[bid] = blockSum_x;
+                    block_intermediate_prefix_z[bid] = blocksum_z;
+                    block_intermediate_prefix_x[bid] = blocksum_x;
+                    const size_t c_destab = TABLEAU_INDEX(w, pivots[0]);
+                    if (blocksum_z)
+                        atomicXOR(inv_zs->words() + c_destab, blocksum_z);
+                    if (blocksum_x)
+                        atomicXOR(inv_xs->words() + c_destab, blocksum_x);
                 }
             }
         }
@@ -118,17 +125,15 @@ namespace QuaSARQ {
         const   size_t              max_blocks,
         const   size_t              pass_1_blocksize)
     { 
+        assert(BLOCKX == blockDim.x);
+        assert(BLOCKY == blockDim.y);
         word_std_t *xs = inv_xs->words();
         word_std_t *zs = inv_zs->words();
 
         for_parallel_y(w, num_words_minor) {
 
-            word_std_t zc_destab = 0;
-            word_std_t xc_destab = 0;
-            word_std_t xc_and_zt = 0;
-            word_std_t not_zc_xor_xt = 0;
-            word_std_t local_destab_sign = 0;
-            word_std_t local_stab_sign = 0;
+            sign_t local_destab_sign = 0;
+            sign_t local_stab_sign = 0;
 
             for_parallel_x(tid_x, active_targets) {
                 const pivot_t pivot = pivots[0];
@@ -137,69 +142,36 @@ namespace QuaSARQ {
                 assert(t != pivot);
                 assert(t != INVALID_PIVOT);
 
-                const size_t c_destab = TABLEAU_INDEX(w, pivot);
-                const size_t c_stab = c_destab + TABLEAU_STAB_OFFSET;
+                const size_t c_stab = TABLEAU_INDEX(w, pivot) + TABLEAU_STAB_OFFSET;
                 const size_t t_destab = TABLEAU_INDEX(w, t);
                 const size_t t_stab = t_destab + TABLEAU_STAB_OFFSET;
 
-                assert(c_destab < inv_zs->size());
-                assert(t_destab < inv_zs->size());
-
                 const size_t word_idx = PREFIX_TABLEAU_INDEX(w, tid_x);
-                word_std_t zc_xor_zt = (*prefix_zs)[word_idx];
-                word_std_t xc_xor_xt = (*prefix_xs)[word_idx];
+                word_std_t zc_xor_prefix = (*prefix_zs)[word_idx];
+                word_std_t xc_xor_prefix = (*prefix_xs)[word_idx];
 
                 // Compute final prefixes and hence final {x,z}'c = {x,z}'c ^ {x,z}'t expressions.
                 const size_t bid = PREFIX_INTERMEDIATE_INDEX(w, (tid_x / pass_1_blocksize));
-                zc_xor_zt ^= block_intermediate_prefix_z[bid];
-                xc_xor_xt ^= block_intermediate_prefix_x[bid];
+                zc_xor_prefix ^= block_intermediate_prefix_z[bid];
+                xc_xor_prefix ^= block_intermediate_prefix_x[bid];
 
-                // Compute the CX expression for Z.
-                word_std_t c_stab_word = zs[c_stab];
-                word_std_t t_destab_word = zs[t_destab];
-                xc_and_zt = (c_stab_word & t_destab_word);
-                not_zc_xor_xt = ~(zc_xor_zt ^ zs[t_stab]);
-                local_destab_sign ^= xc_and_zt & not_zc_xor_xt;
-                
-                // Update Z tableau.
-                zs[t_stab] ^= c_stab_word;
-                zc_destab ^= t_destab_word; // requires collapse.
-
-                // Compute the CX expression for X.
-                c_stab_word = xs[c_stab];
-                t_destab_word = xs[t_destab];
-                xc_and_zt = (c_stab_word & t_destab_word);
-                not_zc_xor_xt = ~(xc_xor_xt ^ xs[t_stab]);
-                local_stab_sign ^= xc_and_zt & not_zc_xor_xt;
-
-                // Update X tableau.
-                xs[t_stab] ^= c_stab_word;
-                xc_destab ^= t_destab_word; // requires collapse.
+                compute_local_sign_per_block(local_destab_sign, zs[t_stab], zc_xor_prefix, zs[c_stab], zs[t_destab]);
+                compute_local_sign_per_block(local_stab_sign, xs[t_stab], xc_xor_prefix, xs[c_stab], xs[t_destab]);
             }
 
-            typedef cub::BlockReduce<word_std_t, BLOCKX> BlockReduce;
+            typedef cub::BlockReduce<sign_t, BLOCKX> BlockReduce;
 
-            __shared__ typename BlockReduce::TempStorage temp_storage_zc[BLOCKY];
-            __shared__ typename BlockReduce::TempStorage temp_storage_xc[BLOCKY];
-            __shared__ typename BlockReduce::TempStorage temp_storage_destab_sign[BLOCKY];
-            __shared__ typename BlockReduce::TempStorage temp_storage_stab_sign[BLOCKY];
+            __shared__ typename BlockReduce::TempStorage shared_destab_ss[BLOCKY];
+            __shared__ typename BlockReduce::TempStorage shared_stab_ss  [BLOCKY];
 
-            word_std_t block_zc_destab = BlockReduce(temp_storage_zc[threadIdx.y]).Reduce(zc_destab, XOROP());
-            word_std_t block_xc_destab = BlockReduce(temp_storage_xc[threadIdx.y]).Reduce(xc_destab, XOROP());
-            word_std_t block_local_destab_sign = BlockReduce(temp_storage_destab_sign[threadIdx.y]).Reduce(local_destab_sign, XOROP());
-            word_std_t block_local_stab_sign = BlockReduce(temp_storage_stab_sign[threadIdx.y]).Reduce(local_stab_sign, XOROP());
+            sign_t block_destab_sign = BlockReduce(shared_destab_ss[threadIdx.y]).Reduce(local_destab_sign, XOROP());
+            sign_t block_stab_sign   = BlockReduce(shared_stab_ss  [threadIdx.y]).Reduce(local_stab_sign,   XOROP());
 
             if (!threadIdx.x) {
-                const pivot_t pivot = pivots[0];
-                const size_t c_destab = TABLEAU_INDEX(w, pivot);
-                if (block_zc_destab)
-                    atomicXOR(zs + c_destab, block_zc_destab);
-                if (block_xc_destab)
-                    atomicXOR(xs + c_destab, block_xc_destab);
-                if (block_local_destab_sign)
-                    atomicXOR(inv_ss->data(w), block_local_destab_sign);
-                if (block_local_stab_sign)
-                    atomicXOR(inv_ss->data(w + num_words_minor), block_local_stab_sign);
+                if (block_destab_sign)
+                    atomicXOR(inv_ss->data(w), block_destab_sign);
+                if (block_stab_sign)
+                    atomicXOR(inv_ss->data(w + num_words_minor), block_stab_sign);
             }
         }
     }
@@ -261,9 +233,6 @@ namespace QuaSARQ {
     // We need to compute prefix-xor of t-th destabilizer in X,Z for t = c+1, c+2, ... c+n-1
     // so that later we can xor every prefix-xor with controlled destabilizer.
     void Prefix::scan_large(Tableau& input, const pivot_t* pivots, const size_t& active_targets, const cudaStream_t& stream) {
-        if (active_targets <= 1024) {
-            LOGERROR("active targets %d are too low for large scanning", active_targets);
-        }
         assert(nextPow2(MIN_BLOCK_INTERMEDIATE_SIZE) == MIN_BLOCK_INTERMEDIATE_SIZE);
         const size_t num_qubits_padded = input.num_qubits_padded();
 

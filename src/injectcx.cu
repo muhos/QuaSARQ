@@ -8,12 +8,12 @@
 namespace QuaSARQ {
 
     void Simulator::inject_cx(const uint32& active_targets, const cudaStream_t& stream) {
-        if (active_targets > 1024)
-            prefix.scan_large(tableau, commuting.pivots, active_targets, stream);
-        else if (active_targets > 32)
-            prefix.scan_block(tableau, commuting.pivots, active_targets, stream);
+        if (active_targets <= 32)
+            prefix.scan_warp(tableau, pivoting.pivots, active_targets, stream);   
+        else if (active_targets > 32 && active_targets <= 1024)
+            prefix.scan_block(tableau, pivoting.pivots, active_targets, stream);
         else
-            prefix.scan_warp(tableau, commuting.pivots, active_targets, stream);
+            prefix.scan_large(tableau, pivoting.pivots, active_targets, stream);
     }
 
     void MeasurementChecker::check_inject_cx(const Tableau& other_input) {
@@ -65,8 +65,6 @@ namespace QuaSARQ {
                     assert(c_stab < h_xs.size());
                     assert(t_stab < h_xs.size());
                     do_CX_sharing_control(h_xs[c_stab], h_xs[c_destab], h_xs[t_stab], h_xs[t_destab], h_ss[w + num_words_minor]);
-                    //LOGGPU("d_xs[w: %lld, t: %lld] = " B2B_STR "  \n", w, t, RB2B(word_std_t(d_xs[t_stab])));
-                    //LOGGPU("h_xs[w: %lld, t: %lld] = " B2B_STR "  \n", w, t, RB2B(word_std_t(h_xs[t_stab])));
                     if (h_xs[t_stab] != d_xs[t_stab]) {
                         LOGERROR("injecting CX FAILED at stab-x[w: %lld, t: %lld]", w, t);
                     }
@@ -75,12 +73,14 @@ namespace QuaSARQ {
                     }
                 }
             }
+            
             if (h_xs[c_destab] != d_xs[c_destab]) {
                 LOGERROR("injecting CX FAILED at destab-x[w: %lld, pivot: %lld]", w, pivot);
             }
             if (h_zs[c_destab] != d_zs[c_destab]) {
                 LOGERROR("injecting CX FAILED at destab-z[w: %lld, pivot: %lld]", w, pivot);
             }
+
             if (h_ss[w] != d_ss[w]) {
                 LOGERROR("injecting CX FAILED at destab-s[w: %lld]", w);
             }

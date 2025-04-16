@@ -2,27 +2,26 @@
 #include "checker.hpp"
 #include "identity.cuh"
 #include "collapse.cuh"
+#include "templatedim.cuh"
 
 namespace QuaSARQ {
 
-    dim3 bestBlockCheckIdentity(2, 128); 
-    dim3 bestGridCheckIdentity(89, 17);
-
     __managed__ uint64 checksum;
 
-    __global__ void check_identity_Z_2D(const size_t offset, const size_t num_qubits, const size_t num_words_major, 
+    template<int B>
+    __global__ 
+    void check_identity_Z_2D(const size_t offset, const size_t num_qubits, const size_t num_words_major, 
     #ifdef INTERLEAVE_XZ
     Table* ps
     #else
     Table* xs, Table* zs
     #endif
     ) {
-
-        word_std_t* shared_xored = SharedMemory<word_std_t>();
-        grid_t tx = threadIdx.x;
+        word_std_t* smem = SharedMemory<word_std_t>();
+        int tx = threadIdx.x;
         grid_t BX = blockDim.x;
+        sign_t* shared_xored = smem + threadIdx.y * BX;
         grid_t global_offset = blockIdx.x * blockDim.x;
-        grid_t collapse_tid = threadIdx.y * blockDim.x + tx;
 
         for_parallel_y(w, num_words_major) {
 
@@ -56,11 +55,11 @@ namespace QuaSARQ {
 
             word_std_t xored = xored_x ^ xored_z;
 
-            collapse_load_shared(shared_xored, xored, collapse_tid, num_qubits);
+            collapse_load_shared(shared_xored, xored, tx, num_qubits);
 
-            collapse_shared(shared_xored, xored, collapse_tid);
+            collapse_shared<B, sign_t>(shared_xored, xored, tx);
 
-            collapse_warp(shared_xored, xored, collapse_tid);
+            collapse_warp<B, sign_t>(xored, tx);
 
             if (!tx && global_offset < num_qubits) {     
                 atomicAdd(&checksum, __popcll(uint64(xored)));
@@ -69,7 +68,9 @@ namespace QuaSARQ {
         }
     }
 
-    __global__ void check_identity_X_2D(const size_t offset, const size_t num_qubits, const size_t num_words_major, 
+    template<int B>
+    __global__ 
+    void check_identity_X_2D(const size_t offset, const size_t num_qubits, const size_t num_words_major, 
     #ifdef INTERLEAVE_XZ
     Table* ps
     #else
@@ -77,11 +78,11 @@ namespace QuaSARQ {
     #endif
     ) {
 
-        word_std_t* shared_xored = SharedMemory<word_std_t>();
-        grid_t tx = threadIdx.x;
+        word_std_t* smem = SharedMemory<word_std_t>();
+        int tx = threadIdx.x;
         grid_t BX = blockDim.x;
-        grid_t global_offset = blockIdx.x * BX;
-        grid_t collapse_tid = threadIdx.y * BX + tx;
+        sign_t* shared_xored = smem + threadIdx.y * BX;
+        grid_t global_offset = blockIdx.x * blockDim.x;
 
         for_parallel_y(w, num_words_major) {
 
@@ -114,11 +115,11 @@ namespace QuaSARQ {
 
             word_std_t xored = xored_x ^ xored_z;
 
-            collapse_load_shared(shared_xored, xored, collapse_tid, num_qubits);
+            collapse_load_shared(shared_xored, xored, tx, num_qubits);
 
-            collapse_shared(shared_xored, xored, collapse_tid);
+            collapse_shared<B, sign_t>(shared_xored, xored, tx);
 
-            collapse_warp(shared_xored, xored, collapse_tid);
+            collapse_warp<B, sign_t>(xored, tx);
 
             if (!tx && global_offset < num_qubits) {
                 atomicAdd(&checksum, __popcll(uint64(xored)));
@@ -127,7 +128,9 @@ namespace QuaSARQ {
         }
     }
 
-    __global__ void check_identity_2D(const size_t offset, const size_t num_qubits, const size_t num_words_major, 
+    template<int B>
+    __global__ 
+    void check_identity_2D(const size_t offset, const size_t num_qubits, const size_t num_words_major, 
     #ifdef INTERLEAVE_XZ
     Table* ps
     #else
@@ -135,11 +138,11 @@ namespace QuaSARQ {
     #endif
     ) {
 
-        word_std_t* shared_xored = SharedMemory<word_std_t>();
-        grid_t tx = threadIdx.x;
+        word_std_t* smem = SharedMemory<word_std_t>();
+        int tx = threadIdx.x;
         grid_t BX = blockDim.x;
+        sign_t* shared_xored = smem + threadIdx.y * BX;
         grid_t global_offset = blockIdx.x * blockDim.x;
-        grid_t collapse_tid = threadIdx.y * blockDim.x + tx;
 
         for_parallel_y(w, num_words_major) {
 
@@ -176,11 +179,11 @@ namespace QuaSARQ {
     #endif
             word_std_t xored = xored_x ^ xored_z;
 
-            collapse_load_shared(shared_xored, xored, collapse_tid, num_qubits);
+            collapse_load_shared(shared_xored, xored, tx, num_qubits);
 
-            collapse_shared(shared_xored, xored, collapse_tid);
+            collapse_shared<B, sign_t>(shared_xored, xored, tx);
 
-            collapse_warp(shared_xored, xored, collapse_tid);
+            collapse_warp<B, sign_t>(xored, tx);
 
             if (!tx && global_offset < num_qubits) {
                 atomicAdd(&checksum, __popcll(uint64(xored)));
@@ -189,13 +192,17 @@ namespace QuaSARQ {
         }
     }
 
+    #define XBLOCKSIZE 2
+
     bool Checker::check_identity(const size_t& offset_per_partition, const size_t& num_qubits_per_partition) {
         assert(num_qubits_per_partition <= tableau.num_qubits_padded());
         SYNCALL;
+        dim3 bestBlockCheckIdentity(XBLOCKSIZE, 128); 
+        dim3 bestGridCheckIdentity(89, 17);
         if (options.initialstate == Zero) {         
             OPTIMIZESHARED(reduce_smem_size, bestBlockCheckIdentity.y * bestBlockCheckIdentity.x, sizeof(word_std_t));
             checksum = 0;
-            check_identity_Z_2D << < bestGridCheckIdentity, bestBlockCheckIdentity, reduce_smem_size >> > (offset_per_partition, num_qubits_per_partition, tableau.num_words_major(), XZ_TABLE(tableau));
+            check_identity_Z_2D<XBLOCKSIZE> << < bestGridCheckIdentity, bestBlockCheckIdentity, reduce_smem_size >> > (offset_per_partition, num_qubits_per_partition, tableau.num_words_major(), XZ_TABLE(tableau));
             LASTERR("failed to launch identity kernel");
             // Call is_table_identity() is blocking, thus it's
             // safe to read checksum on host afterwards.
@@ -204,7 +211,7 @@ namespace QuaSARQ {
         else if (options.initialstate == Plus) {
             OPTIMIZESHARED(reduce_smem_size, bestBlockCheckIdentity.y * bestBlockCheckIdentity.x, sizeof(word_std_t));
             checksum = 0;
-            check_identity_X_2D << < bestGridCheckIdentity, bestBlockCheckIdentity, reduce_smem_size >> > (offset_per_partition, num_qubits_per_partition, tableau.num_words_major(), XZ_TABLE(tableau));
+            check_identity_X_2D<XBLOCKSIZE> << < bestGridCheckIdentity, bestBlockCheckIdentity, reduce_smem_size >> > (offset_per_partition, num_qubits_per_partition, tableau.num_words_major(), XZ_TABLE(tableau));
             LASTERR("failed to launch identity kernel");
             // Call is_table_identity() is blocking, thus it's
             // safe to read checksum on host afterwards.
@@ -214,7 +221,7 @@ namespace QuaSARQ {
             assert(options.initialstate == Imag);
             OPTIMIZESHARED(reduce_smem_size, bestBlockCheckIdentity.y * bestBlockCheckIdentity.x, sizeof(word_std_t));
             checksum = 0;
-            check_identity_2D << < bestGridCheckIdentity, bestBlockCheckIdentity, reduce_smem_size >> > (offset_per_partition, num_qubits_per_partition, tableau.num_words_major(), XZ_TABLE(tableau));
+            check_identity_2D<XBLOCKSIZE> << < bestGridCheckIdentity, bestBlockCheckIdentity, reduce_smem_size >> > (offset_per_partition, num_qubits_per_partition, tableau.num_words_major(), XZ_TABLE(tableau));
             LASTERR("failed to launch identity kernel");
             // Call is_table_identity() is blocking, thus it's
             // safe to read checksum on host afterwards.

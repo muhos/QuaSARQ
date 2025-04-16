@@ -5,11 +5,13 @@
 
 namespace QuaSARQ {
 
+    #define PRINT_HEX 1
+
 	NOINLINE_DEVICE void REPCH_GPU(const char* ch, const size_t& size, const size_t& off) {
         for (size_t i = off; i < size; i++) LOGGPU("%s", ch);
     }
 
-        NOINLINE_ALL void print_table_interleave(const Table& t) {
+    NOINLINE_ALL void print_table_interleave(const Table& t) {
         const bool is_rowmajor = t.is_rowmajor();
         const size_t size = t.size();
         const size_t major_end = t.num_words_major();
@@ -49,18 +51,31 @@ namespace QuaSARQ {
         constexpr int ROWMAJOR_STEP = 2;
         if (t.is_rowmajor()) {
             LOGGPU("%-3s ", "g\\q ");
+            #if PRINT_HEX
+            bits = num_words_minor;
+            #else
             bits = num_words_minor * WORD_BITS;
+            #endif
             rows = total_targets ? total_targets : 2 * num_qubits_padded, cols = num_words_minor;
         }
         else {
             LOGGPU("%-3s ", "q\\g ");
+            #if PRINT_HEX
+            bits = num_words_major;
+            #else
             bits = num_words_major * WORD_BITS;
+            #endif
             rows = num_qubits_padded, cols = num_words_major;
         }
         for (size_t q = 0; q < bits; q++) {
+            #if PRINT_HEX
+            LOGGPU("%-16lld ", q);
+            #else
             if (q > 0 && q % WORD_BITS == 0)
                 LOGGPU("  ");
             LOGGPU("%-3lld", q);
+            #endif
+            if (q > 64) break;
         }
         LOGGPU("\n\n");
         if (t.is_rowmajor()) {
@@ -68,11 +83,16 @@ namespace QuaSARQ {
                 LOGGPU("%-3lld  ", q);
                 for (size_t w = 0; w < cols; w++) {
                     const size_t word_idx = q + w * rows;
+                    #if PRINT_HEX
+                    if (word_std_t(t[word_idx]))
+                        LOGGPU("%-16llX ", uint64(t[word_idx]));
+                    #else 
                     #if defined(WORD_SIZE_64)
                     LOGGPU(B2B_STR, RB2B(uint32(word_std_t(t[word_idx]) & 0xFFFFFFFFUL)));
                     LOGGPU(B2B_STR "  ", RB2B(uint32((word_std_t(t[word_idx]) >> 32) & 0xFFFFFFFFUL)));
                     #else
                     LOGGPU(B2B_STR "  ", RB2B(word_std_t(t[word_idx])));
+                    #endif
                     #endif
                 }
                 LOGGPU("\n");
@@ -83,11 +103,16 @@ namespace QuaSARQ {
                 LOGGPU("%-3lld  ", q);
                 for (size_t w = 0; w < cols; w++) {
                     const size_t word_idx = q * cols + w;
+                    #if PRINT_HEX
+                    if (word_std_t(t[word_idx]))
+                        LOGGPU("%-16llX ", uint64(t[word_idx]));
+                    #else 
                     #if defined(WORD_SIZE_64)
                     LOGGPU(B2B_STR, RB2B(uint32(word_std_t(t[word_idx]) & 0xFFFFFFFFUL)));
                     LOGGPU(B2B_STR "  ", RB2B(uint32((word_std_t(t[word_idx]) >> 32) & 0xFFFFFFFFUL)));
                     #else
                     LOGGPU(B2B_STR "  ", RB2B(word_std_t(t[word_idx])));
+                    #endif
                     #endif
                 }
                 LOGGPU("\n");
@@ -305,7 +330,7 @@ namespace QuaSARQ {
 		if (!options.print_gates) return;
 		if (!options.sync) SYNCALL;
 		LOG2(0, " Gates on GPU for %d-time step:", depth_level);
-		print_gates_k << <1, 1 >> > (gpu_circuit.references(), gpu_circuit.gates(), commuting.pivots, num_gates);
+		print_gates_k << <1, 1 >> > (gpu_circuit.references(), gpu_circuit.gates(), pivoting.pivots, num_gates);
 		LASTERR("failed to launch print_gates_k kernel");
 		SYNCALL;
 		fflush(stdout);
@@ -319,7 +344,7 @@ namespace QuaSARQ {
         else SETCOLOR(CLBLUE, stdout);
         uint32 currentblock = 256, currentgrid;
         OPTIMIZEBLOCKS(currentgrid, num_gates, currentblock);
-		print_measurements_k <<< currentgrid, currentblock >>> (gpu_circuit.references(), gpu_circuit.gates(), commuting.pivots, num_gates);
+		print_measurements_k <<< currentgrid, currentblock >>> (gpu_circuit.references(), gpu_circuit.gates(), pivoting.pivots, num_gates);
 		LASTERR("failed to launch print_measurements_k kernel");
 		SYNCALL;
         SETCOLOR(CNORMAL, stdout);

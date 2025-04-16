@@ -40,8 +40,7 @@ namespace QuaSARQ {
         Locker                          locker;
         Tableau                         tableau;
         Tableau                         inv_tableau;
-        Commutation*                    commutations;
-        Commutations                    commuting; 
+        Pivoting                        pivoting; 
         MeasurementChecker              mchecker;
         Prefix                          prefix;
         Statistics                      stats;

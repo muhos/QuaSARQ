@@ -1,13 +1,10 @@
-
-#ifndef __CU_DATATYPES_H
-#define __CU_DATATYPES_H
+#pragma once
 
 #include "table.cuh"
 #include "signs.cuh"
 #include "pivot.cuh"
 #include "gate.cuh"
 #include "word.cuh"
-#include "commutation.cuh"
 
 namespace QuaSARQ {
 
@@ -17,9 +14,5 @@ namespace QuaSARQ {
 	typedef const bucket_t* __restrict__ ConstBucketsPointer;
     typedef const gate_ref_t* __restrict__ ConstRefsPointer;
     typedef const word_std_t* __restrict__ ConstWordsPointer;
-    typedef const Commutation* __restrict__ ConstCommsPointer;
-
 
 }
-
-#endif

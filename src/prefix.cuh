@@ -26,17 +26,17 @@ namespace QuaSARQ {
     };
 
 	INLINE_DEVICE 
-    void compute_local_sign_per_block(
+    void compute_local_sign_per_block(                
                 sign_t&     local_sign, 
-                word_std_t& target_word, 
-        const   word_std_t& prefix,
-        const   word_std_t& xc,
-        const   word_std_t& zt) 
+                word_std_t& t_stab_word_ref,
+		const   word_std_t& zc_xor_prefix,
+        const   word_std_t& c_stab_word,
+        const   word_std_t& t_destab_word) 
     {
-        const word_std_t tab_t_stab = target_word;
-        const word_std_t not_zc_xor_xt = ~(prefix ^ tab_t_stab);
-        local_sign = (xc & zt & not_zc_xor_xt);
-        target_word = tab_t_stab ^ xc;
+        const word_std_t t_stab_word = t_stab_word_ref;
+        const word_std_t not_zc_xor_prefix = ~(zc_xor_prefix ^ t_stab_word);
+        local_sign ^= (c_stab_word & t_destab_word & not_zc_xor_prefix);
+        t_stab_word_ref = t_stab_word ^ c_stab_word;
     }
 
 	class Prefix {

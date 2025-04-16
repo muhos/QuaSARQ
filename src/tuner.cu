@@ -1,6 +1,7 @@
 #include "simulator.hpp"
 #include "tuner.cuh"
 #include "transpose.cuh"
+#include "step.cuh"
 
 namespace QuaSARQ {
 
@@ -48,7 +49,9 @@ namespace QuaSARQ {
 		if (num_qubits < tableau.num_qubits()) {
 			tableau.resize(num_qubits, winfo.max_window_bytes, false, measuring, true);
 			if (measuring) {
+				#if ROW_MAJOR
 				inv_tableau.resize(num_qubits, winfo.max_window_bytes, false, measuring, false);
+				#endif
 				prefix.resize(tableau, winfo.max_window_bytes);
 				if (options.check_measurement) {
 					mchecker.destroy();
@@ -66,10 +69,11 @@ namespace QuaSARQ {
 		num_partitions = 1;
 		tableau.alloc(max_num_qubits, winfo.max_window_bytes, false, measuring, true);
 		if (measuring) {
+			#if ROW_MAJOR
 			inv_tableau.alloc(num_qubits, winfo.max_window_bytes, false, measuring, false);
+			#endif
 			prefix.alloc(tableau, config_qubits, winfo.max_window_bytes);
-			commutations = gpu_allocator.allocate<Commutation>(num_qubits);
-			commuting.alloc(num_qubits);
+			pivoting.alloc(num_qubits);
 		}
 		gpu_circuit.initiate(num_qubits, winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
 		// Start tuning simulation with max qubits.
@@ -105,6 +109,20 @@ namespace QuaSARQ {
 		for (size_t sample = 0; sample < NSAMPLES; sample++) { \
 			cutimer.start(); \
 			kernel <<< grid, block, SHAREDSIZE >>> ( __VA_ARGS__ ); \
+			LASTERR("failed to launch kernel for benchmarking"); \
+			SYNCALL; \
+			cutimer.stop(); \
+			runtime += cutimer.time(); \
+		} \
+		AVGTIME = (runtime / NSAMPLES); \
+	} while(0)
+
+	#define BENCHMARK_CALL(AVGTIME, NSAMPLES, SHAREDSIZE, CALL, ...) \
+	do { \
+		double runtime = 0; \
+		for (size_t sample = 0; sample < NSAMPLES; sample++) { \
+			cutimer.start(); \
+			CALL(__VA_ARGS__, block, grid, SHAREDSIZE, 0); \
 			LASTERR("failed to launch kernel for benchmarking"); \
 			SYNCALL; \
 			cutimer.stop(); \
@@ -241,6 +259,54 @@ namespace QuaSARQ {
 							dim3 grid((uint32)blocksX, (uint32)blocksY); \
 							double avgRuntime = 0; \
 							BENCHMARK_KERNEL(avgRuntime, NSAMPLES, extended_shared_size, ## __VA_ARGS__); \
+							if (PRINT_PROGRESS_2D) LOG2(1, "  GPU Time for block(x:%u, y:%u) and grid(x:%u, y:%u): %f ms", block.x, block.y, grid.x, grid.y, avgRuntime); fflush(stdout); fflush(stderr); \
+							BEST_CONFIG(avgRuntime, minRuntime, bestGrid, bestBlock, early_exit); \
+						} \
+					} \
+				} \
+			} \
+			LOG2(1, " Best %s configuration found after %zd trials:", opname, trials); \
+			LOG2(1, " Block (%-4u, %4u)", bestBlock.x, bestBlock.y); \
+			LOG2(1, " Grid  (%-4u, %4u)", bestGrid.x, bestGrid.y); \
+			LOG2(1, " Min time: %.4f ms", minRuntime); \
+			fflush(stdout); \
+		} \
+	} while(0)
+
+	#define TUNE_2D_CALL(CALL, ...) \
+	do { \
+		if (bestBlock.x > 1 || bestGrid.x > 1 || bestBlock.y > 1 || bestGrid.y > 1) { \
+			LOG2(3, "\nBest configuration: block(%d, %d), grid(%d, %d) will be used without tuning.", bestBlock.x, bestBlock.y, bestGrid.x, bestGrid.y); \
+		} \
+		else { \
+			LOG0(""); \
+			LOG2(1, "Tunning %s kernel with maximum of %zd trials and %-.5f milliseconds precision...", opname, TRIALS, PRECISION); \
+			int min_precision_hits = MIN_PRECISION_HITS; \
+			const bool x_warped = (bool) hasstr(opname, "warped"); \
+			int64 initBlocksPerGridX = 0, initBlocksPerGridY = 0; \
+			OPTIMIZEBLOCKS2D(initBlocksPerGridY, data_size_in_y, maxThreadsPerBlockY); \
+			OPTIMIZEBLOCKS2D(initBlocksPerGridX, data_size_in_x, maxThreadsPerBlockX); \
+			double minRuntime = double(UINTMAX_MAX); \
+			bool early_exit = false; \
+			size_t trials = 0; \
+			initBlocksPerGridY = (int64) ceil(initBlocksPerGridY / 1.0); \
+			initBlocksPerGridX = (int64) ceil(initBlocksPerGridX / 1.0); \
+			const int64 maxBlocksPerGridY = maxGPUBlocks2D << 1; \
+			const int64 maxBlocksPerGridX = maxGPUBlocks2D << 1; \
+			for (int64 blocksY = initBlocksPerGridY; (blocksY <= maxBlocksPerGridY) && !early_exit && trials < TRIALS; blocksY += 4, trials++) { \
+				for (int64 blocksX = initBlocksPerGridX; (blocksX <= maxBlocksPerGridX) && !early_exit && trials < TRIALS; blocksX += 4, trials++) { \
+					for (int64 threadsY = maxThreadsPerBlockY; (threadsY >= initThreadsPerBlockY) && !early_exit && trials < TRIALS; threadsY >>= 1) { \
+						for (int64 threadsX = maxThreadsPerBlockX; (threadsX >= initThreadsPerBlockX) && !early_exit && trials < TRIALS; threadsX >>= 1) { \
+							const int64 threadsPerBlock = threadsX * threadsY; \
+							const size_t extended_shared_size = shared_size_yextend ? shared_element_bytes * threadsPerBlock : shared_element_bytes * threadsX; \
+							if (x_warped && threadsX > maxWarpSize) continue; \
+							if (extended_shared_size > maxGPUSharedMem || threadsPerBlock > maxThreadsPerBlock) continue; \
+							/* Avoid deadloack due to warp divergence. */ \
+							if (threadsPerBlock % maxWarpSize != 0) continue; \
+							dim3 block((uint32)threadsX, (uint32)threadsY); \
+							dim3 grid((uint32)blocksX, (uint32)blocksY); \
+							double avgRuntime = 0; \
+							BENCHMARK_CALL(avgRuntime, NSAMPLES, extended_shared_size, CALL, ## __VA_ARGS__); \
 							if (PRINT_PROGRESS_2D) LOG2(1, "  GPU Time for block(x:%u, y:%u) and grid(x:%u, y:%u): %f ms", block.x, block.y, grid.x, grid.y, avgRuntime); fflush(stdout); fflush(stderr); \
 							BEST_CONFIG(avgRuntime, minRuntime, bestGrid, bestBlock, early_exit); \
 						} \
@@ -538,19 +604,7 @@ namespace QuaSARQ {
 		TUNE_1D(size, TUNE_XZ_TABLES, ss);
 	}
 	
-	void tune_kernel(
-		void (*kernel)(
-				ConstRefsPointer,
-				ConstBucketsPointer,
-		const 	size_t,
-		const 	size_t,
-#ifdef INTERLEAVE_XZ
-				Table*,
-#else
-				Table*,
-				Table*,
-#endif
-				Signs *),
+	void tune_step(
 		const 	char* 				opname,
 				dim3& 				bestBlock,
 				dim3& 				bestGrid,
@@ -560,18 +614,18 @@ namespace QuaSARQ {
 		const 	size_t& 			data_size_in_y,
 				ConstRefsPointer 	gate_refs,
 				ConstBucketsPointer gate_buckets,
-	#ifdef INTERLEAVE_XZ
-				Table* ps,
-	#else
-				Table* xs,
-				Table* zs,
-	#endif
-				Signs *ss)
+				Tableau& 			tableau)
 	{
 		assert(gate_ref_t(data_size_in_x) == data_size_in_x);
 		size_t _initThreadsPerBlockX = initThreadsPerBlockX;
 		initThreadsPerBlockX = 1;
-		TUNE_2D(gate_refs, gate_buckets, data_size_in_x, data_size_in_y, TUNE_XZ_TABLES, ss);
+		TUNE_2D_CALL(
+			call_step_2D,
+			gate_refs, 
+			gate_buckets,
+			tableau,
+			data_size_in_x, 
+			data_size_in_y);
 		initThreadsPerBlockX = _initThreadsPerBlockX;
 	}
 	
@@ -605,33 +659,6 @@ namespace QuaSARQ {
 	{
 		size_t shared_element_bytes = 0;
 		TUNE_1D(pivots, size);
-	}
-	
-	void tune_kernel_m(
-		void (*kernel)(
-				Table*,
-				Table*,
-				Signs*,
-		const 	Commutation* 	commutations,
-		const 	pivot_t,
-		const 	size_t,
-		const 	size_t,
-		const 	size_t),
-		const 	char* 			opname,
-				dim3& 			bestBlock,
-				dim3& 			bestGrid,
-				Table* 			inv_xs,
-				Table* 			inv_zs,
-				Signs* 			ss,
-		const 	Commutation* 	commutations,
-		const 	pivot_t 		new_pivot,
-		const 	size_t 			num_words_major,
-		const 	size_t 			num_words_minor,
-		const 	size_t 			num_qubits_padded)
-	{
-		size_t shared_element_bytes = 0;
-		size_t size = num_words_minor;
-		TUNE_1D(inv_xs, inv_zs, ss, commutations, new_pivot, num_words_major, num_words_minor, num_qubits_padded);
 	}
 	
 	void tune_kernel_m(
@@ -689,31 +716,6 @@ namespace QuaSARQ {
 	{
 		TUNE_1D(pivots, inv_xs, qubit, size, num_words_major, num_words_minor, num_qubits_padded);
 	}
-	
-	void tune_marking(
-		void (*kernel)(
-				Commutation*,
-				ConstTablePointer,
-		const 	qubit_t,
-		const 	size_t,
-		const 	size_t,
-		const 	size_t,
-		const 	size_t),
-		const 	char* 				opname,
-				dim3& 				bestBlock,
-				dim3&		 		bestGrid,
-				Commutation*		commutations,
-				ConstTablePointer 	inv_xs,
-		const 	qubit_t& 			qubit,
-		const 	size_t& 			size,
-		const 	size_t& 			num_words_major,
-		const 	size_t& 			num_words_minor,
-		const 	size_t& 			num_qubits_padded)
-	{
-		size_t shared_element_bytes = 0;
-		TUNE_1D(commutations, inv_xs, qubit, size, num_words_major, num_words_minor, num_qubits_padded);
-	}
-	
 
 	void tune_outplace_transpose(
 		void (*kernel)(

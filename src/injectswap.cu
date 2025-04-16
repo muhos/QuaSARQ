@@ -60,7 +60,7 @@ namespace QuaSARQ {
         const size_t num_words_major = tableau.num_words_major();
         const size_t num_qubits_padded = tableau.num_qubits_padded();
         check_x_destab<<<1, 1, 0, stream>>> (
-            commuting.pivots,
+            pivoting.pivots,
             tableau.xtable(),
             qubit,
             num_words_major,
@@ -74,7 +74,7 @@ namespace QuaSARQ {
         inject_swap_k<<<currentgrid, currentblock, 0, stream>>> (
             XZ_TABLE(tableau),
             tableau.signs(),
-            commuting.pivots,
+            pivoting.pivots,
             num_words_major,
             num_words_minor,
             num_qubits_padded);
@@ -84,7 +84,7 @@ namespace QuaSARQ {
             LOGENDING(2, 4, "(time %.3f ms)", cutimer.time());
         } else LOGDONE(2, 4);
         if (options.check_measurement) {
-            mchecker.check_inject_swap(tableau, commuting.pivots, 2);
+            mchecker.check_inject_swap(tableau, pivoting.pivots, 2);
         }
     }
 

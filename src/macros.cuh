@@ -10,7 +10,8 @@
 #define WORD_SIZE_64
 #endif
 
+#define FULL_WARP 0xFFFFFFFF
+
 #define DEBUG_STEP 0
-#define TUNE_WARPED_VERSION 0
 
 #endif

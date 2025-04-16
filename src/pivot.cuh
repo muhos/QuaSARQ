@@ -11,7 +11,7 @@ namespace QuaSARQ {
 
     constexpr pivot_t INVALID_PIVOT = UINT32_MAX;
 
-    struct Commutations {
+    struct Pivoting {
 
         DeviceAllocator& allocator;
 
@@ -24,7 +24,7 @@ namespace QuaSARQ {
         size_t num_qubits;
         size_t auxiliary_bytes;
         
-        Commutations(DeviceAllocator& allocator) :
+        Pivoting(DeviceAllocator& allocator) :
                 allocator(allocator)
             ,	pivots(nullptr)
 		    ,   auxiliary(nullptr)

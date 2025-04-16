@@ -92,11 +92,11 @@ namespace QuaSARQ {
                     x = block_intermediate_prefix_x[bid];
                 }
 
-                word_std_t blockSum_z;
-                word_std_t blockSum_x;
+                word_std_t blocksum_z;
+                word_std_t blocksum_x;
 
-                BlockScan(temp_storage_z[threadIdx.y]).ExclusiveScan(z, z, 0, XOROP(), blockSum_z);
-                BlockScan(temp_storage_x[threadIdx.y]).ExclusiveScan(x, x, 0, XOROP(), blockSum_x);
+                BlockScan(temp_storage_z[threadIdx.y]).ExclusiveScan(z, z, 0, XOROP(), blocksum_z);
+                BlockScan(temp_storage_x[threadIdx.y]).ExclusiveScan(x, x, 0, XOROP(), blocksum_x);
 
                 if (w < num_words_minor && tid_x < num_blocks) {
                     const size_t bid = PREFIX_INTERMEDIATE_INDEX(w, tid_x);
@@ -109,8 +109,8 @@ namespace QuaSARQ {
                     assert((blockIdx.x * num_words_minor + w) < gridDim.x * num_words_minor);
                     grid_t sub_bid = PREFIX_SUBINTERMEDIATE_INDEX(w, bx);
                     assert(bx < max_sub_blocks);
-                    subblocks_prefix_z[sub_bid] = blockSum_z;
-                    subblocks_prefix_x[sub_bid] = blockSum_x;
+                    subblocks_prefix_z[sub_bid] = blocksum_z;
+                    subblocks_prefix_x[sub_bid] = blocksum_x;
                 }
             }
 		}

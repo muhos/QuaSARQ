@@ -75,10 +75,10 @@ namespace QuaSARQ {
     __global__ void transpose_tiles_kernel(Table* xs, Table* zs, const size_t num_words_major, const size_t num_words_minor, const bool row_major) {
         word_std_t* shared = SharedMemory<word_std_t>();
         Table& t = blockIdx.z == 0 ? *xs : *zs;
-        word_std_t* data = reinterpret_cast<word_std_t*>(t.data());
-        // if (!blockIdx.x && !blockIdx.y && !threadIdx.x) {
-        //     t.flag_orientation(row_major);
-        // }
+        word_std_t* data = t.words();
+        if (!blockIdx.x && !blockIdx.y && !threadIdx.x) {
+            t.flag_orientation(row_major);
+        }
         for_parallel_y(a, num_words_minor) {
             for (size_t b = blockIdx.x; b < num_words_major; b += gridDim.x) {
                 // Inline transpose a tile of WORD_BITS words, each word has WORD_BITS bits.
@@ -106,7 +106,7 @@ namespace QuaSARQ {
     __global__ void swap_tiles_kernel(Table* xs, Table* zs, const size_t num_words_major, const size_t num_words_minor) {
         word_std_t* shared = SharedMemory<word_std_t>();
         Table& t = blockIdx.z == 0 ? *xs : *zs;
-        word_std_t* data = reinterpret_cast<word_std_t*>(t.data());
+        word_std_t* data = t.words();
         for_parallel_y(a, num_words_minor) {
             for (size_t b = blockIdx.x; b < num_words_minor; b += gridDim.x) {
                 // Only swap words above diagonal
@@ -239,7 +239,7 @@ namespace QuaSARQ {
         }
     }
 
-    void check_transpose(Tableau& d_tab, Tableau& d_inv_tab) {
+    void check_outplace_transpose(Tableau& d_tab, Tableau& d_inv_tab) {
         SYNCALL;
 
         Table d_xs, d_zs;
@@ -253,6 +253,53 @@ namespace QuaSARQ {
         h_xs.alloc_host(d_tab.num_qubits_padded(), d_tab.num_words_major(), d_tab.num_words_minor());
         h_zs.alloc_host(d_tab.num_qubits_padded(), d_tab.num_words_major(), d_tab.num_words_minor());
         transpose_to_colmajor_cpu(h_xs, h_zs, d_inv_xs, d_inv_zs);
+
+        check_transpose(h_xs, h_zs, d_xs, d_zs);
+    }
+
+    void check_inplace_transpose(Tableau& d_tab, const bool& row_major) {
+        SYNCALL;
+
+        Table h_xs, h_zs;
+        h_xs.flag_orientation(row_major);
+        h_zs.flag_orientation(row_major);
+        d_tab.copy_to_host(&h_xs, &h_zs);
+
+        const size_t num_words_minor = d_tab.num_words_minor();
+        const size_t num_words_major = d_tab.num_words_major();
+        const size_t num_qubits_padded = d_tab.num_qubits_padded();
+
+        OPTIMIZESHARED(transpose_smem_size, bestblocktransposebits.y * bestblocktransposebits.x, sizeof(word_std_t));
+        OPTIMIZESHARED(swap_smem_size, bestblocktransposeswap.y * bestblocktransposeswap.x, 2 * sizeof(word_std_t));
+
+        transpose_tiles_kernel 
+        <<< bestgridtransposebits, bestblocktransposebits, transpose_smem_size, 0 >>> (
+            XZ_TABLE(d_tab), 
+            num_words_major, 
+            num_words_minor, 
+            !row_major);
+        swap_tiles_kernel 
+        <<< bestgridtransposeswap, bestblocktransposeswap, swap_smem_size, 0 >>> (
+            XZ_TABLE(d_tab), 
+            num_words_major, 
+            num_words_minor);
+
+        transpose_tiles_kernel 
+        <<< bestgridtransposebits, bestblocktransposebits, transpose_smem_size, 0 >>> (
+            XZ_TABLE(d_tab), 
+            num_words_major, 
+            num_words_minor, 
+            row_major);
+        swap_tiles_kernel 
+        <<< bestgridtransposeswap, bestblocktransposeswap, swap_smem_size, 0 >>> (
+            XZ_TABLE(d_tab), 
+            num_words_major, 
+            num_words_minor);
+
+        Table d_xs, d_zs;
+        d_xs.flag_orientation(row_major);
+        d_zs.flag_orientation(row_major);
+        d_tab.copy_to_host(&d_xs, &d_zs);
 
         check_transpose(h_xs, h_zs, d_xs, d_zs);
     }
@@ -291,7 +338,7 @@ namespace QuaSARQ {
             }
             LOGDONE(2, 4);
             tableau.swap_tableaus(inv_tableau);
-            if (options.check_transpose) check_transpose(inv_tableau, tableau);
+            if (options.check_transpose) check_outplace_transpose(inv_tableau, tableau);
         }
         else {
             tableau.swap_tableaus(inv_tableau);
@@ -344,7 +391,11 @@ namespace QuaSARQ {
         currentblock = bestblocktransposebits, currentgrid = bestgridtransposebits;
         OPTIMIZESHARED(transpose_smem_size, currentblock.y * currentblock.x, sizeof(word_std_t));
         LOGN2(2, "Running transpose-tiles with block(x:%u, y:%u) and grid(x:%u, y:%u, z:%u).. ", currentblock.x, currentblock.y, currentgrid.x, currentgrid.y, currentgrid.z);
-        transpose_tiles_kernel << <currentgrid, currentblock, transpose_smem_size, stream >> > (XZ_TABLE(tableau), num_words_major, num_words_minor, row_major);
+        transpose_tiles_kernel << <currentgrid, currentblock, transpose_smem_size, stream >> > (
+            XZ_TABLE(tableau), 
+            num_words_major, 
+            num_words_minor, 
+            row_major);
         if (options.sync) {
             LASTERR("failed to launch transpose-tiles kernel");
             SYNC(stream);
@@ -358,12 +409,19 @@ namespace QuaSARQ {
         currentblock = bestblocktransposeswap, currentgrid = bestgridtransposeswap;
         OPTIMIZESHARED(swap_smem_size, currentblock.y * currentblock.x, 2 * sizeof(word_std_t));
         LOGN2(2, "Running swap-tiles with block(x:%u, y:%u) and grid(x:%u, y:%u, z:%u).. ", currentblock.x, currentblock.y, currentgrid.x, currentgrid.y, currentgrid.z);
-        swap_tiles_kernel << <currentgrid, currentblock, swap_smem_size, stream >> > (XZ_TABLE(tableau), num_words_major, num_words_minor);
+        swap_tiles_kernel << <currentgrid, currentblock, swap_smem_size, stream >> > (
+            XZ_TABLE(tableau), 
+            num_words_major, 
+            num_words_minor);
         if (options.sync) {
             LASTERR("failed to launch swap-tiles kernel");
             SYNC(stream);
         }
         LOGDONE(2, 4);
+        if (options.check_transpose) {
+            SYNCALL;
+            check_inplace_transpose(tableau, row_major);
+        }
     }
     #endif
 
