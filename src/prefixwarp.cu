@@ -48,6 +48,8 @@ namespace QuaSARQ {
         const   size_t      num_qubits_padded) 
     {
         assert(active_targets == 1);
+        assert(blockDim.y == 1);
+        assert(gridDim.y == 1);
         word_std_t *xs = inv_xs->words();
         word_std_t *zs = inv_zs->words();
         sign_t *ss = inv_ss->data();

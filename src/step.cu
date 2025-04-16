@@ -426,7 +426,7 @@ namespace QuaSARQ {
                     XZ_TABLE(tableau), 
                     tableau.signs());
             }
-            else if (bestblockstep.x <= maxWarpSize) {
+            else if (bestblockstep.x > 1 && bestblockstep.x <= maxWarpSize) {
                 switch (bestblockstep.x) {
                     FOREACH_X_DIM_MAX_32(CALL_STEP_2D_WARPED, bestblockstep.y);
                     default:
