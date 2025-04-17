@@ -84,8 +84,9 @@ namespace QuaSARQ {
                 for (size_t w = 0; w < cols; w++) {
                     const size_t word_idx = q + w * rows;
                     #if PRINT_HEX
-                    if (word_std_t(t[word_idx]))
-                        LOGGPU("%-16llX ", uint64(t[word_idx]));
+                    uint64 t_word = t[word_idx];
+                    if (t_word)
+                        LOGGPU("%-16llX ", t_word);
                     #else 
                     #if defined(WORD_SIZE_64)
                     LOGGPU(B2B_STR, RB2B(uint32(word_std_t(t[word_idx]) & 0xFFFFFFFFUL)));
@@ -219,13 +220,13 @@ namespace QuaSARQ {
         dlocker.unlock();
     }
 
-	__global__ void print_tableau_k(ConstTablePointer xs, ConstTablePointer zs, ConstSignsPointer ss, const depth_t level) {
+	__global__ void print_tableau_k(const_table_t xs, const_table_t zs, const_signs_t ss, const depth_t level) {
 		if (!global_tx) {
 			print_tables(*xs, *zs, ss, level == MAX_DEPTH ? -1 : int64(level));
 		}
 	}
 
-	__global__ void print_paulis_k(ConstTablePointer xs, ConstTablePointer zs, ConstSignsPointer ss, const size_t num_words_major, const size_t num_qubits, const bool extended) {
+	__global__ void print_paulis_k(const_table_t xs, const_table_t zs, const_signs_t ss, const size_t num_words_major, const size_t num_qubits, const bool extended) {
 		if (!global_tx) {
 			print_state(*xs, *zs, *ss, 0, num_qubits, num_qubits, num_words_major);
 			if (extended) {
@@ -236,7 +237,7 @@ namespace QuaSARQ {
 		}
 	}
 	
-	__global__ void print_paulis_k(ConstTablePointer ps, ConstSignsPointer ss, const size_t num_words_major, const size_t num_qubits, const depth_t level) {
+	__global__ void print_paulis_k(const_table_t ps, const_signs_t ss, const size_t num_words_major, const size_t num_qubits, const depth_t level) {
 		if (!global_tx) {
 			const word_t *words = ps->data();
 			for (size_t w = 0; w < num_qubits; w++) {
@@ -265,7 +266,7 @@ namespace QuaSARQ {
 	}
 
 
-	__global__ void print_gates_k(ConstRefsPointer refs, ConstBucketsPointer gates, CPivotsPtr pivots, const gate_ref_t num_gates) {
+	__global__ void print_gates_k(const_refs_t refs, const_buckets_t gates, const_pivots_t pivots, const gate_ref_t num_gates) {
 		if (!global_tx) {
 			for (gate_ref_t i = 0; i < num_gates; i++) {
 				const gate_ref_t r = refs[i];
@@ -280,7 +281,7 @@ namespace QuaSARQ {
 		}
 	}
 
-	__global__ void print_measurements_k(ConstRefsPointer refs, ConstBucketsPointer measurements, CPivotsPtr pivots, const gate_ref_t num_gates) {
+	__global__ void print_measurements_k(const_refs_t refs, const_buckets_t measurements, const_pivots_t pivots, const gate_ref_t num_gates) {
         for_parallel_x(i, num_gates) {
             const gate_ref_t r = refs[i];
             const Gate &m = (Gate &)measurements[r];

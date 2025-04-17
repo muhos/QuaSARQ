@@ -10,25 +10,24 @@ namespace QuaSARQ {
     word_std_t warp_exclusive_xor(
         const   word_std_t&     target,
                 word_std_t&     prefix, 
-        const   word_std_t&     initial_control, 
-        const   uint32&         active_targets) 
+        const   word_std_t&     initial_control) 
     {
         prefix = target;
         unsigned mask = __activemask();
         word_std_t prev;
-        if (B >= 2) {
+        if constexpr (B >= 2) {
             prev = __shfl_up_sync(mask, prefix, 1); if (threadIdx.x >= 1) prefix ^= prev;
         }
-        if (B >= 4) {
+        if constexpr (B >= 4) {
             prev = __shfl_up_sync(mask, prefix, 2); if (threadIdx.x >= 2) prefix ^= prev;
         }
-        if (B >= 8) {
+        if constexpr (B >= 8) {
             prev = __shfl_up_sync(mask, prefix, 4); if (threadIdx.x >= 4) prefix ^= prev;
         }
-        if (B >= 16) {
+        if constexpr (B >= 16) {
             prev = __shfl_up_sync(mask, prefix, 8); if (threadIdx.x >= 8) prefix ^= prev;
         }
-        if (B >= 32) {
+        if constexpr (B >= 32) {
             prev = __shfl_up_sync(mask, prefix, 16); if (threadIdx.x >= 16) prefix ^= prev;
         }
         word_std_t sum = prefix;
@@ -38,14 +37,14 @@ namespace QuaSARQ {
 
      __global__ 
     void inject_cx_warp_1(
-                Table*      inv_xs, 
-                Table*      inv_zs, 
-                Signs*      inv_ss, 
-                CPivotsPtr  pivots,
-        const   size_t      active_targets, 
-        const   size_t      num_words_major, 
-        const   size_t      num_words_minor,
-        const   size_t      num_qubits_padded) 
+                Table*          inv_xs, 
+                Table*          inv_zs, 
+                Signs*          inv_ss, 
+                const_pivots_t  pivots,
+        const   size_t          active_targets, 
+        const   size_t          num_words_major, 
+        const   size_t          num_words_minor,
+        const   size_t          num_qubits_padded) 
     {
         assert(active_targets == 1);
         assert(blockDim.y == 1);
@@ -54,9 +53,9 @@ namespace QuaSARQ {
         word_std_t *zs = inv_zs->words();
         sign_t *ss = inv_ss->data();
         for_parallel_x(w, num_words_minor) { 
-            const pivot_t pivot = pivots[0];
+            const pivot_t pivot = __ldg(&pivots[0]);
             assert(pivot != INVALID_PIVOT);
-            const size_t t = pivots[1];
+            const size_t t = __ldg(&pivots[1]);
             assert(t != pivot);
             assert(t != INVALID_PIVOT);
             const size_t c_destab = TABLEAU_INDEX(w, pivot);
@@ -87,45 +86,48 @@ namespace QuaSARQ {
         const size_t num_qubits_padded) 
     {
         assert(active_targets > 0);
-        word_std_t *xs = inv_xs->words();
-        word_std_t *zs = inv_zs->words();
-        sign_t *ss = inv_ss->data();
+        word_std_t * __restrict__ xs = inv_xs->words();
+        word_std_t * __restrict__ zs = inv_zs->words();
+        sign_t * __restrict__ ss = inv_ss->data();
+        int tid = threadIdx.x;
         for_parallel_y(w, num_words_minor) { 
-            const pivot_t pivot = pivots[0];
-            assert(pivot != INVALID_PIVOT);
-            const size_t c_destab = TABLEAU_INDEX(w, pivot);
-            word_std_t prefix_zc = 0;
-            word_std_t prefix_xc = 0;
-            word_std_t init_z = 0;
-            word_std_t init_x = 0;
-            word_std_t z = 0;
-            word_std_t x = 0;
-            int tid = threadIdx.x;
-            if (tid < int(active_targets)) {
-                const size_t t = pivots[tid + 1];
-                assert(t != pivot);
-                assert(t != INVALID_PIVOT);
-                const size_t t_destab = TABLEAU_INDEX(w, t);
-                z = zs[t_destab];
-                x = xs[t_destab];             
+            const unsigned mask = __activemask();
+            pivot_t pivot;
+            size_t c_destab;
+            word_std_t init_z = 0, init_x = 0;
+            if (!tid) {
+                pivot = __ldg(&pivots[0]);
+                c_destab = TABLEAU_INDEX(w, pivot);
                 init_z = zs[c_destab];
                 init_x = xs[c_destab];
             }
-            word_std_t warpsum_z = warp_exclusive_xor<B>(z, prefix_zc, init_z, active_targets);
-            word_std_t warpsum_x = warp_exclusive_xor<B>(x, prefix_xc, init_x, active_targets);
-            if (tid == active_targets - 1) {
-                zs[c_destab] ^= warpsum_z;
-                xs[c_destab] ^= warpsum_x;
-            }
+            pivot = __shfl_sync(mask, pivot, 0, B);
+            c_destab = __shfl_sync(mask, c_destab, 0, B);
+            init_z = __shfl_sync(mask, init_z, 0, B);
+            init_x = __shfl_sync(mask, init_x, 0, B);
+            assert(pivot != INVALID_PIVOT);
+            assert(c_destab == TABLEAU_INDEX(w, pivot));
+            assert(init_z == zs[c_destab]);
+            assert(init_x == xs[c_destab]);
+            bool active = tid < static_cast<int>(active_targets);
+            const pivot_t t = active ? __ldg(&pivots[tid + 1]) : pivot;
+            const size_t t_destab = TABLEAU_INDEX(w, t);
+            word_std_t z = active ? zs[t_destab] : 0;
+            word_std_t x = active ? xs[t_destab] : 0;
+            word_std_t prefix_zc, prefix_xc;
+            word_std_t warpsum_z = warp_exclusive_xor<B>(z, prefix_zc, init_z);
+            word_std_t warpsum_x = warp_exclusive_xor<B>(x, prefix_xc, init_x);
             sign_t local_destab_s = 0;
             sign_t local_stab_s = 0;
-            if (tid < active_targets) {
-                const size_t t = pivots[tid + 1];
-                const size_t t_destab = TABLEAU_INDEX(w, t);
+            if (active) {
                 const size_t t_stab = t_destab + TABLEAU_STAB_OFFSET;
                 const size_t c_stab = c_destab + TABLEAU_STAB_OFFSET;
                 compute_local_sign_per_block(local_destab_s, zs[t_stab], prefix_zc, zs[c_stab], z);
                 compute_local_sign_per_block(local_stab_s, xs[t_stab], prefix_xc, xs[c_stab], x);
+                if (tid == static_cast<int>(active_targets) - 1) {
+                    zs[c_destab] = init_z ^ warpsum_z;
+                    xs[c_destab] = init_x ^ warpsum_x;
+                }
             }
             collapse_warp_dual<B, sign_t>(local_destab_s, local_stab_s, tid);
             if (!tid) {

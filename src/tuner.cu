@@ -1,7 +1,10 @@
 #include "simulator.hpp"
 #include "tuner.cuh"
-#include "transpose.cuh"
 #include "step.cuh"
+#include "pivot.cuh"
+#include "transpose.cuh"
+#include "identity.cuh"
+#include "injectswap.cuh"
 
 namespace QuaSARQ {
 
@@ -571,52 +574,20 @@ namespace QuaSARQ {
 		size_t shared_element_bytes = 0;
 		TUNE_1D(offset, size, ps);
 	}
-	
-	#ifdef INTERLEAVE_XZ
-	#define TUNE_XZ_TABLES ps
-	#else
-	#define TUNE_XZ_TABLES xs, zs
-	#endif
-	
-	void tune_kernel(
-		void (*kernel)(
-		const size_t,
-	#ifdef INTERLEAVE_XZ
-				Table*,
-	#else
-				Table*,
-				Table*,
-	#endif
-				Signs *),
-		const 	char* 	opname,
-				dim3& 	bestBlock,
-				dim3& 	bestGrid,
-		const 	size_t& size,
-	#ifdef INTERLEAVE_XZ
-				Table* 	ps,
-	#else
-				Table* 	xs,
-				Table* 	zs,
-	#endif
-				Signs*	ss)
-	{
-		size_t shared_element_bytes = 0;
-		TUNE_1D(size, TUNE_XZ_TABLES, ss);
-	}
-	
+
 	void tune_step(
-		const 	char* 				opname,
 				dim3& 				bestBlock,
 				dim3& 				bestGrid,
 		const 	size_t& 			shared_element_bytes,
 		const 	bool& 				shared_size_yextend,
 		const 	size_t& 			data_size_in_x,
 		const 	size_t& 			data_size_in_y,
-				ConstRefsPointer 	gate_refs,
-				ConstBucketsPointer gate_buckets,
+				const_refs_t 		gate_refs,
+				const_buckets_t 	gate_buckets,
 				Tableau& 			tableau)
 	{
 		assert(gate_ref_t(data_size_in_x) == data_size_in_x);
+		const char* opname = "step";
 		size_t _initThreadsPerBlockX = initThreadsPerBlockX;
 		initThreadsPerBlockX = 1;
 		TUNE_2D_CALL(
@@ -629,13 +600,12 @@ namespace QuaSARQ {
 		initThreadsPerBlockX = _initThreadsPerBlockX;
 	}
 	
-	void tune_kernel_m(
+	void tune_identity(
 		void (*kernel)(
 		const 	size_t, 
 		const 	size_t, 
 				Table*, 
 				Table*),
-		const 	char* 	opname,
 				dim3& 	bestBlock,
 				dim3& 	bestGrid,
 		const 	size_t& offset,
@@ -643,36 +613,36 @@ namespace QuaSARQ {
 				Table* 	xs,
 				Table* 	zs)
 	{
+		const char* opname = "identity";
 		size_t shared_element_bytes = 0;
 		TUNE_1D(offset, size, xs, zs);
 	}
 	
-	void tune_kernel_m(
+	void tune_reset_pivots(
 		void (*kernel)(
 				pivot_t*, 
 		const 	size_t),
-		const 	char*		opname,
 				dim3& 		bestBlock,
 				dim3& 		bestGrid,
 				pivot_t* 	pivots,
 		const 	size_t 		size)
 	{
+		const char* opname = "reset_pivots";
 		size_t shared_element_bytes = 0;
 		TUNE_1D(pivots, size);
 	}
 	
-	void tune_kernel_m(
+	void tune_finding_all_pivots(
 		void (*kernel)(
 				pivot_t*,
-				ConstBucketsPointer,
-				ConstRefsPointer,
-				ConstTablePointer,
+				const_buckets_t,
+				const_refs_t,
+				const_table_t,
 		const 	size_t,
 		const 	size_t,
 		const 	size_t,
 		const 	size_t,
 		const 	size_t),
-		const 	char*				opname,
 				dim3& 				bestBlock,
 				dim3& 				bestGrid,
 		const 	size_t& 			shared_element_bytes,
@@ -680,9 +650,9 @@ namespace QuaSARQ {
 		const 	size_t& 			data_size_in_x,
 		const 	size_t& 			data_size_in_y,
 				pivot_t* 			pivots,
-				ConstBucketsPointer measurements,
-				ConstRefsPointer 	refs,
-				ConstTablePointer 	inv_xs,
+				const_buckets_t 	measurements,
+				const_refs_t 		refs,
+				const_table_t 		inv_xs,
 		const 	size_t 				num_gates,
 		const 	size_t 				num_qubits,
 		const 	size_t 				num_words_major,
@@ -690,39 +660,65 @@ namespace QuaSARQ {
 		const 	size_t 				num_qubits_padded
 	)
 	{
+		const char* opname = "finding all pivots";
 		TUNE_2D(pivots, measurements, refs, inv_xs, num_gates, num_qubits, num_words_major, num_words_minor, num_qubits_padded);
 	}
 	
-	void tune_kernel_m(
+	void tune_finding_new_pivots(
 		void (*kernel)(
 				pivot_t*,
-				ConstTablePointer,
+				const_table_t,
 		const 	qubit_t,
 		const 	size_t,
 		const 	size_t,
 		const 	size_t,
 		const 	size_t),
-		const 	char* 				opname,
 				dim3& 				bestBlock,
 				dim3& 				bestGrid,
 		const 	size_t& 			shared_element_bytes,
 				pivot_t* 			pivots,
-				ConstTablePointer 	inv_xs,
+				const_table_t 		inv_xs,
 		const 	qubit_t& 			qubit,
 		const 	size_t& 			size,
 		const 	size_t 				num_words_major,
 		const 	size_t 				num_words_minor,
 		const 	size_t 				num_qubits_padded)
 	{
+		const char* opname = "finding new pivots";
 		TUNE_1D(pivots, inv_xs, qubit, size, num_words_major, num_words_minor, num_qubits_padded);
+	}
+
+	void tune_inject_swap(
+		void (*kernel)(
+				Table*, 
+				Table*,
+				Signs*,
+				const_pivots_t,
+		const 	size_t, 
+		const 	size_t, 
+		const 	size_t),
+				dim3& 			bestBlock,
+				dim3& 			bestGrid,
+				Table* 			xs,
+				Table* 			zs,
+				Signs* 			ss,
+				const_pivots_t 	pivots,
+		const 	size_t& 		num_words_major,
+		const 	size_t& 		num_words_minor,
+		const 	size_t& 		num_qubits_padded)
+	{
+		const char* opname = "injecting swap";
+		size_t shared_element_bytes = 0;
+		const size_t size = num_words_minor;
+		TUNE_1D(xs, zs, ss, pivots, num_words_major, num_words_minor, num_qubits_padded);	
 	}
 
 	void tune_outplace_transpose(
 		void (*kernel)(
 				Table*, 
 				Table*, 
-				ConstTablePointer, 
-				ConstTablePointer, 
+				const_table_t, 
+				const_table_t, 
 		const 	size_t, 
 		const 	size_t, 
 		const 	size_t),
@@ -735,8 +731,8 @@ namespace QuaSARQ {
 		const 	size_t& 			data_size_in_y,
 				Table* 				xs1, 
 				Table* 				zs1,
-        		ConstTablePointer 	xs2, 
-				ConstTablePointer 	zs2,
+        		const_table_t 		xs2, 
+				const_table_t 		zs2,
         const 	size_t& 			num_words_major, 
 		const 	size_t& 			num_words_minor, 
 		const 	size_t& 			num_qubits_padded,

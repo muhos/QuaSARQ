@@ -56,7 +56,9 @@ namespace QuaSARQ {
 
         INLINE_ALL operator bool() const { return bool(word); }
 
-        INLINE_ALL operator word_std_t() const { return word; }
+        INLINE_ALL operator uint32() const { return uint32(word); }
+
+        INLINE_ALL operator uint64() const { return uint64(word); }
 
         #if defined(WORD_SIZE_8)
         INLINE_ALL operator uint32() const { return uint32(word); }
@@ -118,14 +120,6 @@ namespace QuaSARQ {
 
         INLINE_ALL word_t operator&(const word_t& other) const {
             return word_t(word & other.word);
-        }
-
-        INLINE_ALL void bitwise_xor(const word_t& other) {
-            word ^= other.word;
-        }
-
-        INLINE_ALL void bitwise_xor(const word_std_t& other) {
-            word ^= other;
         }
 
         INLINE_ALL void identity(const qubit_t& word_idx) {

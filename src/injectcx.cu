@@ -1,9 +1,8 @@
 #include "simulator.hpp"
 #include "prefix.cuh"
-#include "tuner.cuh"
 #include "print.cuh"
-#include "measurement.cuh"
 #include "collapse.cuh"
+#include "measurecheck.cuh"
 
 namespace QuaSARQ {
 

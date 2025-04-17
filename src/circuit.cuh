@@ -1,6 +1,5 @@
 
-#ifndef __CU_CIRCUIT_H
-#define __CU_CIRCUIT_H
+#pragma once
 
 #include "definitions.cuh"
 #include "pivot.cuh"
@@ -183,5 +182,3 @@ namespace QuaSARQ {
 
 	};
 }
-
-#endif

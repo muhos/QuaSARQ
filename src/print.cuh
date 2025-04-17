@@ -26,17 +26,17 @@ namespace QuaSARQ {
     NOINLINE_DEVICE void print_row(DeviceLocker& dlocker, const Gate& m, const Table& inv_xs, const Table& inv_zs, const Signs& inv_ss, const size_t& row, const size_t& num_words_minor);
 
     // Print the tableau in binary format (generators are columns).
-    __global__ void print_tableau_k(ConstTablePointer xs, ConstTablePointer zs, ConstSignsPointer ss, const depth_t level);
+    __global__ void print_tableau_k(const_table_t xs, const_table_t zs, const_signs_t ss, const depth_t level);
 
     // Print the tableau's Pauli strings.
-    __global__ void print_paulis_k(ConstTablePointer xs, ConstTablePointer zs, ConstSignsPointer ss, const size_t num_words_major, const size_t num_qubits, const bool extended);
-    __global__ void print_paulis_k(ConstTablePointer ps, ConstSignsPointer ss, const size_t num_words_major, const size_t num_qubits, const bool extended);
+    __global__ void print_paulis_k(const_table_t xs, const_table_t zs, const_signs_t ss, const size_t num_words_major, const size_t num_qubits, const bool extended);
+    __global__ void print_paulis_k(const_table_t ps, const_signs_t ss, const size_t num_words_major, const size_t num_qubits, const bool extended);
 
     // Print gates.
-    __global__ void print_gates_k(ConstRefsPointer refs, ConstBucketsPointer gates, CPivotsPtr pivots, const gate_ref_t num_gates);
+    __global__ void print_gates_k(const_refs_t refs, const_buckets_t gates, const_pivots_t pivots, const gate_ref_t num_gates);
 
     // Print measurements.
-    __global__ void print_measurements_k(ConstRefsPointer refs, ConstBucketsPointer measurements, CPivotsPtr pivots, const gate_ref_t num_gates);
+    __global__ void print_measurements_k(const_refs_t refs, const_buckets_t measurements, const_pivots_t pivots, const gate_ref_t num_gates);
 
 }
 

@@ -1,6 +1,5 @@
 
-#ifndef __CU_ACCESS_H
-#define __CU_ACCESS_H
+#pragma once
 
 namespace QuaSARQ {
 
@@ -26,5 +25,3 @@ namespace QuaSARQ {
 	#endif
 	
 }
-
-#endif

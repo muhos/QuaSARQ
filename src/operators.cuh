@@ -26,17 +26,17 @@ namespace QuaSARQ {
     #define sign_update_CX(SIGNS, Xc, Xt, Zc, Zt) \
     { \
         const word_std_t xc = Xc, xt = Xt, zc = Zc, zt = Zt; \
-        const word_std_t xc_and_zt = xc & zt; \
         const word_std_t not_xt_xor_zc = ~(xt ^ zc); \
-        sign_update_global(SIGNS, xc_and_zt & not_xt_xor_zc); \
+        const word_std_t anding = xc & zt & not_xt_xor_zc; \
+        sign_update_global(SIGNS, anding); \
     }
 
     #define sign_update_CZ(SIGNS, Xc, Xt, Zc, Zt) \
     { \
         const word_std_t xc = Xc, xt = Xt, zc = Zc, zt = Zt; \
         const word_std_t zc_xor_zt = zc ^ zt; \
-        const word_std_t xc_and_xt = xc & xt; \
-        sign_update_global(SIGNS, zc_xor_zt & xc_and_xt); \
+        const word_std_t anding = zc_xor_zt & xc & xt; \
+        sign_update_global(SIGNS, anding); \
     }
 
     #define sign_update_CY(SIGNS, Xc, Xt, Zc, Zt) \
@@ -44,7 +44,8 @@ namespace QuaSARQ {
         const word_std_t xc = Xc, xt = Xt, zc = Zc, zt = Zt; \
         const word_std_t xt_xor_zc = xt ^ zc; \
         const word_std_t xt_xor_zt = xt ^ zt; \
-        sign_update_global(SIGNS, xc & (xt_xor_zc & xt_xor_zt)); \
+        const word_std_t anding = xc & xt_xor_zc & xt_xor_zt; \
+        sign_update_global(SIGNS, anding); \
     }
 
     #define sign_update_CS(SIGNS, Xc, Xt, Zc, Zt) \
@@ -68,42 +69,42 @@ namespace QuaSARQ {
     #define do_S(SIGNS, EXT) \
     { \
         sign_update_S(SIGNS, x_## EXT, z_ ## EXT); \
-        z_ ## EXT.bitwise_xor(x_## EXT); \
+        z_ ## EXT ^= (x_## EXT); \
     }
 
     #define do_Sdg(SIGNS, EXT) \
     { \
         sign_update_Sdg(SIGNS, x_## EXT, z_ ## EXT); \
-        z_ ## EXT.bitwise_xor(x_## EXT); \
+        z_ ## EXT ^= (x_## EXT); \
     }
 
     #define do_CX(SIGNS, C, T) \
     { \
         sign_update_CX(SIGNS, x_words_ ## C, x_words_ ## T, z_words_ ## C, z_words_ ## T); \
-        z_words_ ## C.bitwise_xor(z_words_ ## T); \
-        x_words_ ## T.bitwise_xor(x_words_ ## C); \
+        z_words_ ## C ^= (z_words_ ## T); \
+        x_words_ ## T ^= (x_words_ ## C); \
     }
 
     #define do_CZ(SIGNS, C, T) \
     { \
         sign_update_CZ(SIGNS, x_words_ ## C, x_words_ ## T, z_words_ ## C, z_words_ ## T); \
-        z_words_ ## C.bitwise_xor(x_words_ ## T); \
-        z_words_ ## T.bitwise_xor(x_words_ ## C); \
+        z_words_ ## C ^= (x_words_ ## T); \
+        z_words_ ## T ^= (x_words_ ## C); \
     }
 
     #define do_CY(SIGNS, C, T) \
     { \
         sign_update_CY(SIGNS, x_words_ ## C, x_words_ ## T, z_words_ ## C, z_words_ ## T); \
-        z_words_ ## C.bitwise_xor(x_words_ ## T ^ z_words_ ## T); \
-        z_words_ ## T.bitwise_xor(x_words_ ## C); \
-        x_words_ ## T.bitwise_xor(x_words_ ## C); \
+        z_words_ ## C ^= (x_words_ ## T ^ z_words_ ## T); \
+        z_words_ ## T ^= (x_words_ ## C); \
+        x_words_ ## T ^= (x_words_ ## C); \
     }
 
     #define do_CS(SIGNS, C, T) \
     { \
         sign_update_CS(SIGNS, x_words_ ## C, x_words_ ## T, z_words_ ## C, z_words_ ## T); \
-        z_words_ ## C.bitwise_xor(x_words_ ## T); \
-        z_words_ ## T.bitwise_xor(x_words_ ## C); \
+        z_words_ ## C ^= (x_words_ ## T); \
+        z_words_ ## T ^= (x_words_ ## C); \
     }
 
     #define do_SWAP(A,B) \

@@ -1,16 +1,13 @@
-#ifndef __CU_PIVOT_H
-#define __CU_PIVOT_H
+#pragma once
 
 #include "definitions.cuh"
+#include "datatypes.cuh"
 #include "datatypes.hpp"
 #include "logging.hpp"
 
 namespace QuaSARQ {
 
-    typedef uint32 pivot_t;
-
     constexpr pivot_t INVALID_PIVOT = UINT32_MAX;
-
     struct Pivoting {
 
         DeviceAllocator& allocator;
@@ -59,6 +56,60 @@ namespace QuaSARQ {
         void compact_pivots(const cudaStream_t& stream);
     };
 
-}
+    void tune_reset_pivots(
+		void (*kernel)(
+				pivot_t*, 
+		const 	size_t),
+				dim3& 		bestBlock,
+				dim3& 		bestGrid,
+				pivot_t* 	pivots,
+		const 	size_t 		size);
 
-#endif
+    void tune_finding_new_pivots(
+		void (*kernel)(
+				pivot_t*,
+				const_table_t,
+		const 	qubit_t,
+		const 	size_t,
+		const 	size_t,
+		const 	size_t,
+		const 	size_t),
+				dim3& 				bestBlock,
+				dim3& 				bestGrid,
+		const 	size_t& 			shared_element_bytes,
+				pivot_t* 			pivots,
+				const_table_t 	    inv_xs,
+		const 	qubit_t& 			qubit,
+		const 	size_t& 			size,
+		const 	size_t 				num_words_major,
+		const 	size_t 				num_words_minor,
+		const 	size_t 				num_qubits_padded);
+
+    void tune_finding_all_pivots(
+		void (*kernel)(
+				pivot_t*,
+				const_buckets_t,
+				const_refs_t,
+				const_table_t,
+		const 	size_t,
+		const 	size_t,
+		const 	size_t,
+		const 	size_t,
+		const 	size_t),
+				dim3& 				bestBlock,
+				dim3& 				bestGrid,
+		const 	size_t& 			shared_element_bytes,
+		const 	bool& 				shared_size_yextend,
+		const 	size_t& 			data_size_in_x,
+		const 	size_t& 			data_size_in_y,
+				pivot_t* 			pivots,
+				const_buckets_t     measurements,
+				const_refs_t 	    refs,
+				const_table_t 	    inv_xs,
+		const 	size_t 				num_gates,
+		const 	size_t 				num_qubits,
+		const 	size_t 				num_words_major,
+		const 	size_t 				num_words_minor,
+		const 	size_t 				num_qubits_padded);
+
+}

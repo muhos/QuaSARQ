@@ -2,7 +2,6 @@
 #include "simulator.hpp"
 #include "identity.cuh"
 #include "collapse.cuh"
-#include "tuner.cuh"
 
 namespace QuaSARQ {
 
@@ -36,13 +35,13 @@ namespace QuaSARQ {
         }
     }
 
-    __global__ void identity_Z_1D(const size_t column_offset, const size_t num_qubits, Table* zs) {
+    __global__ void identity_Z_1D(const size_t column_offset, const size_t num_qubits, Table* xs, Table* zs) {
         for_parallel_x(q, num_qubits) {
             zs->set_word_to_identity(q, column_offset);
         }
     }
 
-    __global__ void identity_X_1D(const size_t column_offset, const size_t num_qubits, Table* xs) {
+    __global__ void identity_X_1D(const size_t column_offset, const size_t num_qubits, Table* xs, Table* zs) {
         for_parallel_x(q, num_qubits) {
             xs->set_word_to_identity(q, column_offset);
         }
@@ -73,10 +72,13 @@ namespace QuaSARQ {
     
     void Simulator::identity(Tableau& tab, const size_t& offset_per_partition, const size_t& num_qubits_per_partition, const cudaStream_t* streams, const InitialState& istate) {
         if (options.tune_identity) {
-            if (measuring)
-                tune_kernel_m(identity_Z_extended_1D, "Identity", bestblockidentity, bestgrididentity, offset_per_partition, num_qubits_per_partition, XZ_TABLE(tab));
-            else
-                tune_kernel(identity_Z_1D, "Identity", bestblockidentity, bestgrididentity, offset_per_partition, num_qubits_per_partition, Z_TABLE(tab));
+            tune_identity(
+                measuring ? identity_Z_extended_1D : identity_Z_1D, 
+                bestblockidentity, 
+                bestgrididentity, 
+                offset_per_partition, 
+                num_qubits_per_partition, 
+                XZ_TABLE(tab));
         }
         char state = '0';
         if (istate == Plus)
@@ -96,9 +98,9 @@ namespace QuaSARQ {
         }
         else {
             if (istate == Zero)
-                identity_Z_1D <<< bestgrididentity, bestblockidentity, 0, streams[KERNEL_STREAM] >>> (offset_per_partition, num_qubits_per_partition, Z_TABLE(tab));
+                identity_Z_1D <<< bestgrididentity, bestblockidentity, 0, streams[KERNEL_STREAM] >>> (offset_per_partition, num_qubits_per_partition, XZ_TABLE(tab));
             else if (istate == Plus)
-                identity_X_1D <<< bestgrididentity, bestblockidentity, 0, streams[KERNEL_STREAM] >>> (offset_per_partition, num_qubits_per_partition, X_TABLE(tab));
+                identity_X_1D <<< bestgrididentity, bestblockidentity, 0, streams[KERNEL_STREAM] >>> (offset_per_partition, num_qubits_per_partition, XZ_TABLE(tab));
             else if (istate == Imag)
                 identity_1D <<< bestgrididentity, bestblockidentity, 0, streams[KERNEL_STREAM] >>> (offset_per_partition, num_qubits_per_partition, XZ_TABLE(tab));
         }

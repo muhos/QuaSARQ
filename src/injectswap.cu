@@ -1,5 +1,5 @@
 #include "simulator.hpp"
-#include "measurement.cuh"
+#include "injectswap.cuh"
 #include "print.cuh"
 
 namespace QuaSARQ {
@@ -25,7 +25,7 @@ namespace QuaSARQ {
                 Table*              inv_xs, 
                 Table*              inv_zs,
                 Signs*              inv_ss, 
-                CPivotsPtr          pivots,
+                const_pivots_t      pivots,
         const   size_t              num_words_major, 
         const   size_t              num_words_minor,
         const   size_t              num_qubits_padded) 

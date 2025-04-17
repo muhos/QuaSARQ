@@ -1,6 +1,5 @@
 #include "simulator.hpp"
 #include "pivot.cuh"
-#include "tuner.cuh"
 #include "datatypes.cuh"
 #include "shared.cuh"
 #include "access.cuh"
@@ -71,9 +70,9 @@ namespace QuaSARQ {
     __global__ 
     void find_all_pivots(
                 pivot_t*            pivots, 
-                ConstBucketsPointer measurements, 
-                ConstRefsPointer    refs, 
-                ConstTablePointer   inv_xs, 
+                const_buckets_t     measurements, 
+                const_refs_t        refs, 
+                const_table_t       inv_xs, 
         const   size_t              num_gates, 
         const   size_t              num_qubits, 
         const   size_t              num_words_major, 
@@ -113,13 +112,13 @@ namespace QuaSARQ {
 
     __global__ 
     void anti_commuting_pivots (
-                pivot_t*              scatter,
-                ConstTablePointer     inv_xs, 
-        const   qubit_t               qubit, 
-        const   size_t                num_qubits, 
-        const   size_t                num_words_major, 
-        const   size_t                num_words_minor,
-        const   size_t                num_qubits_padded) {
+                pivot_t*            scatter,
+                const_table_t       inv_xs, 
+        const   qubit_t             qubit, 
+        const   size_t              num_qubits, 
+        const   size_t              num_words_major, 
+        const   size_t              num_words_minor,
+        const   size_t              num_qubits_padded) {
         const size_t q_w = WORD_OFFSET(qubit);
         const word_std_t q_mask = BITMASK_GLOBAL(qubit);
         for_parallel_x(g, num_qubits) {
@@ -133,7 +132,7 @@ namespace QuaSARQ {
     void compact_pivots_seq(
                 pivot_t*              pivots,
                 uint32*               num_compacted,
-                ConstTablePointer     inv_xs, 
+                const_table_t         inv_xs, 
         const   qubit_t               qubit, 
         const   size_t                num_qubits, 
         const   size_t                num_words_major, 
@@ -182,7 +181,7 @@ namespace QuaSARQ {
     void Simulator::reset_pivots(const size_t& num_pivots, const cudaStream_t& stream) {
         if (options.tune_reset) {
             SYNCALL;
-            tune_kernel_m(reset_all_pivots, "Resetting pivots", bestblockreset, bestgridreset, pivoting.pivots, num_pivots);
+            tune_reset_pivots(reset_all_pivots, bestblockreset, bestgridreset, pivoting.pivots, num_pivots);
         }
         TRIM_BLOCK_IN_DEBUG_MODE(bestblockreset, bestgridreset, num_pivots, 0);
         dim3 currentblock = bestblockreset, currentgrid = bestgridreset;
@@ -201,7 +200,7 @@ namespace QuaSARQ {
         dim3 currentblock, currentgrid;
         if (options.tune_allpivots) {
             SYNCALL;
-            tune_kernel_m(find_all_pivots, "Find all pivots", 
+            tune_finding_all_pivots(find_all_pivots, 
                             bestblockallpivots, bestgridallpivots, 
                             sizeof(pivot_t), true,   // shared size, extend?
                             num_qubits,             // x-dim
@@ -248,7 +247,7 @@ namespace QuaSARQ {
         dim3 currentblock, currentgrid;
         if (options.tune_newpivots) {
             SYNCALL;
-            tune_kernel_m(anti_commuting_pivots, "New pivots", 
+            tune_finding_new_pivots(anti_commuting_pivots, 
                 bestblocknewpivots, bestgridnewpivots, 
                 sizeof(pivot_t),
                 pivoting.pivots, 

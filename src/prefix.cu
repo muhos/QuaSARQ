@@ -133,8 +133,8 @@ namespace QuaSARQ {
     void scan_blocks_pass_2(
                 word_std_t*         block_intermediate_prefix_z,
                 word_std_t*         block_intermediate_prefix_x,
-                ConstWordsPointer   subblocks_prefix_z,
-                ConstWordsPointer   subblocks_prefix_x,
+                const_words_t   subblocks_prefix_z,
+                const_words_t   subblocks_prefix_x,
         const   size_t              num_blocks,
         const   size_t              num_words_minor,
         const   size_t              max_blocks,

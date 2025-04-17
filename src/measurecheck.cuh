@@ -22,27 +22,6 @@ namespace QuaSARQ {
         s ^= (xc_and_zt & not_zc_xor_xt); \
     }
 
-	#define do_YZ_Swap(X, Z, S) \
-    { \
-        const word_std_t x = X, z = Z; \
-        X = x ^ z; \
-        S ^= (x & ~z); \
-    }
-
-    #define do_XZ_Swap(X, Z, S) \
-    { \
-        do_SWAP(X, Z); \
-        S ^= word_std_t(X & Z); \
-    }
-
-	bool is_commuting_cpu(
-		const 	Table&          h_xs, 
-		const   qubit_t         qubit,
-		const   pivot_t         pivot,
-		const   size_t          num_words_major, 
-        const   size_t          num_words_minor,
-        const   size_t          num_qubits_padded);
-
 	bool is_anti_commuting_cpu(
 		const 	Table&          h_xs, 
 		const   qubit_t         qubit,

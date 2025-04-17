@@ -1,15 +1,14 @@
 
-#ifndef __CU_PREFIX_H
-#define __CU_PREFIX_H
+#pragma once
 
 #include "definitions.cuh"
-#include "measurement.cuh"
 #include "datatypes.cuh"
 #include "shared.cuh"
 #include "word.cuh"
 #include "grid.cuh"
 #include "memory.cuh"
 #include "tableau.cuh"
+#include "measurecheck.cuh"
 
 namespace QuaSARQ {
 
@@ -271,5 +270,3 @@ namespace QuaSARQ {
 		const 	size_t& 		pass_1_blocksize);
 	
 }
-
-#endif

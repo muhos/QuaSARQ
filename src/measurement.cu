@@ -1,6 +1,5 @@
 #include "simulator.hpp"
-#include "tuner.cuh"
-#include "measurement.cuh"
+#include "injectswap.cuh"
 
 namespace QuaSARQ {
 
@@ -53,83 +52,34 @@ namespace QuaSARQ {
         const size_t num_words_major = tableau.num_words_major();
         const size_t num_qubits_padded = tableau.num_qubits_padded();
         const size_t num_gates_per_window = circuit[depth_level].size();
-		const size_t pass_1_blocksize = 512;
-		const size_t max_intermediate_blocks = nextPow2(ROUNDUP(num_qubits, MIN_BLOCK_INTERMEDIATE_SIZE));
-		Tableau dummy_input(gpu_allocator);
-		Tableau dummy_targets(gpu_allocator);
-		size_t max_targets = 0;
-        pivot_t min_pivot = INVALID_PIVOT;
-        // for(size_t i = 0; i < num_gates_per_window; i++) {
-        //     const Gate& curr_gate = circuit.gate(depth_level, i);
-        //     const qubit_t qubit = curr_gate.wires[0];
-		// 	checker.find_new_pivot(qubit, tableau);
-		// 	const pivot_t pivot = checker.pivot;
-		// 	if (checker.pivot != INVALID_PIVOT) {
-		// 		LOG2(2, "Meauring qubit %d using pivot %d.. ", qubit, pivot);
-		// 		const size_t total_targets = num_qubits - pivot - 1;
-		// 		if (!total_targets) continue;
-		// 		if (max_targets < total_targets) {
-        //             max_targets = total_targets;
-        //             min_pivot = pivot;
-        //         }
-		// 		const size_t pass_1_gridsize = ROUNDUP(total_targets, pass_1_blocksize);
-		// 		checker.check_prefix_pass_1(
-		// 		dummy_targets,
-		// 		nullptr,
-		// 		nullptr, 
-		// 		nullptr,
-		// 		total_targets,
-		// 		max_intermediate_blocks,
-		// 		pass_1_blocksize,
-		// 		pass_1_gridsize,
-        //         true);
+		uint32 max_targets = ROUNDUP(num_qubits, 10);
+        pivot_t min_pivot = 0;
+        
+        LOG2(2, "Tuning measurements for maximum targets of %u for pivot %u", max_targets, min_pivot);
 
-		// 		checker.check_prefix_intermediate_pass(
-		// 			nullptr, 
-		// 			nullptr,
-		// 			max_intermediate_blocks,
-		// 			pass_1_gridsize,
-        //             true);
+        Vec<pivot_t> h_pivots(max_targets + 1);
+        h_pivots[0] = min_pivot;
 
-		// 		checker.check_prefix_pass_2(
-		// 			dummy_targets, 
-		// 			dummy_input,
-		// 			total_targets, 
-		// 			max_intermediate_blocks,
-		// 			pass_1_blocksize,
-        //             true);
+        for (uint32 i = 0; i < max_targets; i++) {
+            h_pivots[i + 1] = rand() % num_qubits;
+        }
 
-		// 		inject_swap_cpu(
-		// 			checker.h_xs,
-		// 			checker.h_zs,
-		// 			checker.h_ss,
-		// 			qubit,
-		// 			pivot,
-		// 			num_words_major,
-		// 			num_words_minor,
-		// 			num_qubits_padded
-		// 		);
-		// 	}
-		// }
-        LOG2(2, "Maximum targets is %lld for minimum pivot %d", max_targets, min_pivot);
+        CHECK(cudaMemcpy(pivoting.pivots, h_pivots.data(), sizeof(pivot_t) * (max_targets + 1), cudaMemcpyHostToDevice));
+        CHECK(cudaMemcpy(pivoting.d_active_pivots, &max_targets, sizeof(uint32), cudaMemcpyHostToDevice));
 
-        // we need to find the maximum active targets with their corresponding pivots on the CPU side
-        // then send them to the GPU.
-
-
-        //prefix.tune_inject_cx(tableau, pivoting.pivots, max_targets);
-        // if (options.tune_injectswap) {
-        //     SYNCALL;
-        //     tune_kernel_m(inject_swap_k, "injecting swap", 
-        //                 bestblockinjectswap, bestgridinjectswap, 
-        //                 XZ_TABLE(tableau),
-        //                 tableau.signs(),
-        //                 commutations,
-        //                 min_pivot,
-        //                 num_words_major,
-        //                 num_words_minor,
-        //                 num_qubits_padded);
-        // }
+        prefix.tune_inject_cx(tableau, pivoting.pivots, max_targets);
+        if (options.tune_injectswap) {
+            SYNCALL;
+            tune_inject_swap(inject_swap_k,
+                        bestblockinjectswap, 
+                        bestgridinjectswap, 
+                        XZ_TABLE(tableau),
+                        tableau.signs(),
+                        pivoting.pivots,
+                        num_words_major,
+                        num_words_minor,
+                        num_qubits_padded);
+        }
 	}
 
     int64 Simulator::measure_indeterminate(const depth_t& depth_level, const cudaStream_t& stream) {

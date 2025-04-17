@@ -13,17 +13,17 @@ namespace QuaSARQ {
                 Table *         inv_xs,
                 Table *         inv_zs,
                 Signs *         inv_ss,
-                CPivotsPtr      pivots,
+                const_pivots_t  pivots,
         const   size_t          active_targets,
         const   size_t          num_words_major,
         const   size_t          num_words_minor,
         const   size_t          num_qubits_padded)
     {
-        word_std_t *xs = inv_xs->words();
-        word_std_t *zs = inv_zs->words();
-        sign_t *ss = inv_ss->data();
+        word_std_t * __restrict__ xs = inv_xs->words();
+        word_std_t * __restrict__ zs = inv_zs->words();
+        sign_t * __restrict__ ss = inv_ss->data();
 
-        using ScanType   = cub::BlockScan<word_std_t, BLOCKX, cub::BLOCK_SCAN_RAKING>;
+        using ScanType   = cub::BlockScan<word_std_t, BLOCKX>;
         using ReduceType = cub::BlockReduce<word_std_t, BLOCKX>;
 
         __shared__ union {
@@ -34,47 +34,36 @@ namespace QuaSARQ {
         } smem;
 
         for_parallel_y(w, num_words_minor) { 
-            const pivot_t pivot = pivots[0];
+            const pivot_t pivot = __ldg(&pivots[0]);
             assert(pivot != INVALID_PIVOT);
-            const size_t c_destab = TABLEAU_INDEX(w, pivot);
-            word_std_t prefix_zc = 0;
-            word_std_t prefix_xc = 0;
-            word_std_t init_z = 0;
-            word_std_t init_x = 0;
-            word_std_t z = 0;
-            word_std_t x = 0;
             int tid = threadIdx.x;
-            if (tid < int(active_targets)) {
-                const size_t t = pivots[tid + 1];
-                assert(t != pivot);
-                assert(t != INVALID_PIVOT);
-                const size_t t_destab = TABLEAU_INDEX(w, t);
-                z = zs[t_destab];
-                x = xs[t_destab];             
-                init_z = zs[c_destab];
-                init_x = xs[c_destab];
-            }
+            bool active = tid < static_cast<int>(active_targets);
+            pivot_t t = active ? __ldg(&pivots[tid + 1]) : pivot;
+            assert(t != INVALID_PIVOT);
+            const size_t t_destab = TABLEAU_INDEX(w, t);
+            word_std_t z = active ? zs[t_destab] : 0;
+            word_std_t x = active ? xs[t_destab] : 0;
 
+            word_std_t prefix_zc, prefix_xc;
             word_std_t blocksum_z, blocksum_x; 
             ScanType(smem.prefix_zs[threadIdx.y]).ExclusiveScan(z, prefix_zc, 0, XOROP(), blocksum_z);
             ScanType(smem.prefix_xs[threadIdx.y]).ExclusiveScan(x, prefix_xc, 0, XOROP(), blocksum_x);
 
-            if (tid == active_targets - 1) {
-                zs[c_destab] ^= blocksum_z;
-                xs[c_destab] ^= blocksum_x;
-            }
-
             sign_t local_destab_s = 0;
             sign_t local_stab_s   = 0;
-            if (tid < active_targets) {
-                const size_t t = pivots[tid + 1];
+            if (active) {
                 const size_t t_destab = TABLEAU_INDEX(w, t);
                 const size_t t_stab = t_destab + TABLEAU_STAB_OFFSET;
+                const size_t c_destab = TABLEAU_INDEX(w, pivot);
                 const size_t c_stab = c_destab + TABLEAU_STAB_OFFSET;
-                prefix_zc ^= init_z;
-                prefix_xc ^= init_x;
+                prefix_zc ^= zs[c_destab];
+                prefix_xc ^= xs[c_destab];
                 compute_local_sign_per_block(local_destab_s, zs[t_stab], prefix_zc, zs[c_stab], z);
                 compute_local_sign_per_block(local_stab_s  , xs[t_stab], prefix_xc, xs[c_stab], x);
+                if (tid == active_targets - 1) {
+                    zs[c_destab] ^= blocksum_z;
+                    xs[c_destab] ^= blocksum_x;
+                }
             }
 
             local_destab_s = ReduceType(smem.destab_ss[threadIdx.y]).Reduce(local_destab_s, XOROP());

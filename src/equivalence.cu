@@ -10,7 +10,7 @@ namespace QuaSARQ {
 
     #ifdef INTERLEAVE_XZ
 
-    __global__ void equivalence_1D(ConstTablePointer ps, ConstSignsPointer ss, ConstTablePointer other_ps, ConstSignsPointer other_ss, const size_t min_num_words) {
+    __global__ void equivalence_1D(const_table_t ps, const_signs_t ss, const_table_t other_ps, const_signs_t other_ss, const size_t min_num_words) {
         for_parallel_x(w, min_num_words) {
             if (equivalent && ((*ps)[w] != (*other_ps)[w])) {
                 equivalent = 0;
@@ -29,7 +29,7 @@ namespace QuaSARQ {
 
 #else
 
-    __global__ void equivalence_1D(ConstTablePointer xs, ConstTablePointer zs, ConstSignsPointer ss, ConstTablePointer other_xs, ConstTablePointer other_zs, ConstSignsPointer other_ss, const size_t min_num_words) {
+    __global__ void equivalence_1D(const_table_t xs, const_table_t zs, const_signs_t ss, const_table_t other_xs, const_table_t other_zs, const_signs_t other_ss, const size_t min_num_words) {
         for_parallel_x(w, min_num_words) {
             if (equivalent && ((*xs)[w] != (*other_xs)[w])) {
                 equivalent = 0;

@@ -1,6 +1,5 @@
 
-#include "access.cuh"
-#include "measurement.cuh"
+#include "measurecheck.cuh"
 
 namespace QuaSARQ {
 

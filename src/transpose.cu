@@ -160,13 +160,13 @@ namespace QuaSARQ {
 
     __global__ 
     void transpose_to_colmajor(
-        Table* xs, 
-        Table* zs, 
-        ConstTablePointer inv_xs, 
-        ConstTablePointer inv_zs, 
-        const size_t num_words_major, 
-        const size_t num_words_minor, 
-        const size_t num_qubits) 
+                Table*          xs, 
+                Table*          zs, 
+                const_table_t   inv_xs, 
+                const_table_t   inv_zs, 
+        const   size_t          num_words_major, 
+        const   size_t          num_words_minor, 
+        const   size_t          num_qubits) 
     {
 
         if (!global_ty && !global_tx) {
