@@ -263,7 +263,6 @@ namespace QuaSARQ {
         TRIM_BLOCK_IN_DEBUG_MODE(bestblocknewpivots, bestgridnewpivots, num_qubits, 0);
         currentblock = bestblocknewpivots, currentgrid = bestgridnewpivots;
         TRIM_GRID_IN_1D(num_qubits, x);
-        OPTIMIZESHARED(smem_size, currentblock.x, sizeof(pivot_t));
         if (currentblock.y > 1) {
             LOGERROR("Kernel launch with 2D grid is not supported for anti_commuting_pivots kernel");
         }

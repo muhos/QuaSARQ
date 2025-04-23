@@ -16,10 +16,7 @@ namespace QuaSARQ {
     template <int BLOCKX, int BLOCKY>
     __global__ 
     void scan_targets_pass_1(
-                Table *             prefix_xs, 
-                Table *             prefix_zs, 
-                word_std_t *        block_intermediate_prefix_z,
-                word_std_t *        block_intermediate_prefix_x,
+                PASS_1_ARGS_GLOBAL_PREFIX,
                 Table*              inv_xs, 
                 Table*              inv_zs,
                 const_pivots_t      pivots,
@@ -41,35 +38,52 @@ namespace QuaSARQ {
         __shared__ typename BlockScan::TempStorage shared_prefix_zs[BLOCKY];
         __shared__ typename BlockScan::TempStorage shared_prefix_xs[BLOCKY];
 
+        __shared__ pivot_t sh_pivot0;
+        __shared__ pivot_t sh_pivots[BLOCKX];
+
+        int tx = threadIdx.x, ty = threadIdx.y;
+
+        if (!ty && !tx) {
+            sh_pivot0 = pivots[0];
+            assert(sh_pivot0 != INVALID_PIVOT);
+        }
+
         for_parallel_y_tiled(by, num_words_minor) {
-            const grid_t w = threadIdx.y + by * BLOCKY;
-    
+            const grid_t w = ty + by * BLOCKY;
+
             for_parallel_x_tiled(bx, active_targets) {
-                const grid_t tid_x = threadIdx.x + bx * BLOCKX;
+                const grid_t tid_x = tx + bx * BLOCKX;
                 bool active = (w < num_words_minor && tid_x < active_targets);
 
-                const pivot_t pivot = __ldg(&pivots[0]);
-                const size_t c_destab = TABLEAU_INDEX(w, pivot);
+                if (!ty && active) {
+                    sh_pivots[tx] = pivots[tid_x + 1];
+                }
 
-                pivot_t t = active ? __ldg(&pivots[tid_x + 1]) : pivot;
-                assert(t != INVALID_PIVOT);
-                const size_t t_destab = TABLEAU_INDEX(w, t);
-                word_std_t z = active ? zs[t_destab] : 0;
-                word_std_t x = active ? xs[t_destab] : 0;
+                __syncthreads();
+
+                word_std_t z = 0, x = 0;
+                if (active) {
+                    const size_t t_destab = TABLEAU_INDEX(w, sh_pivots[tx]);
+                    z = zs[t_destab];
+                    x = xs[t_destab];
+                }
 
                 word_std_t blocksum_z, blocksum_x;
-                BlockScan(shared_prefix_zs[threadIdx.y]).ExclusiveScan(z, z, 0, XOROP(), blocksum_z);
-                BlockScan(shared_prefix_xs[threadIdx.y]).ExclusiveScan(x, x, 0, XOROP(), blocksum_x);
+                BlockScan(shared_prefix_zs[ty]).ExclusiveScan(z, z, 0, XOROP(), blocksum_z);
+                BlockScan(shared_prefix_xs[ty]).ExclusiveScan(x, x, 0, XOROP(), blocksum_x);
 
-                const size_t word_idx = PREFIX_TABLEAU_INDEX(w, tid_x);
-                (*prefix_zs)[word_idx] = active ? zs[c_destab] ^ z : 0;
-                (*prefix_xs)[word_idx] = active ? xs[c_destab] ^ x : 0;
+                if (active) {
+                    const size_t c_destab = TABLEAU_INDEX(w, sh_pivot0);
+                    const size_t word_idx = PREFIX_TABLEAU_INDEX(w, tid_x);
+                    assert(word_idx < num_qubits_padded * num_words_minor);
+                    WRITE_GLOBAL_PREFIX(word_idx, zs[c_destab] ^ z, xs[c_destab] ^ x);
+                }
 
-                if (w < num_words_minor && threadIdx.x == BLOCKX - 1) {
+                if (w < num_words_minor && tx == BLOCKX - 1) {
                     assert((blockIdx.x * num_words_minor + w) < gridDim.x * num_words_minor);
                     const size_t bid = PREFIX_INTERMEDIATE_INDEX(w, bx);
-                    block_intermediate_prefix_z[bid] = blocksum_z;
-                    block_intermediate_prefix_x[bid] = blocksum_x;
+                    WRITE_INTERMEDIATE_PREFIX(bid, blocksum_z, blocksum_x);
+                    const size_t c_destab = TABLEAU_INDEX(w, sh_pivot0);
                     if (blocksum_z)
                         atomicXOR(zs + c_destab, blocksum_z);
                     if (blocksum_x)
@@ -82,9 +96,7 @@ namespace QuaSARQ {
     #define CALL_INJECTCX_PASS_1_FOR_BLOCK(X, Y) \
         scan_targets_pass_1 <X, Y> \
         <<<currentgrid, currentblock, 0, stream>>> ( \
-                XZ_TABLE(targets), \
-                block_intermediate_prefix_z, \
-                block_intermediate_prefix_x, \
+                KERNEL_INPUT_GLOBAL_PREFIX, \
                 XZ_TABLE(input), \
                 pivots, \
                 active_targets, \
@@ -97,13 +109,10 @@ namespace QuaSARQ {
     template <int BLOCKX, int BLOCKY>
     __global__ 
     void scan_targets_pass_2(
+                PASS_2_ARGS_GLOBAL_PREFIX,
                 Table *             inv_xs, 
                 Table *             inv_zs,
                 Signs *             inv_ss,
-                const_table_t       prefix_xs, 
-                const_table_t       prefix_zs, 
-                const_words_t       block_intermediate_prefix_z,
-                const_words_t       block_intermediate_prefix_x,
                 const_pivots_t      pivots,
         const   size_t              active_targets,
         const   size_t              num_words_major,
@@ -123,39 +132,54 @@ namespace QuaSARQ {
         __shared__ typename BlockReduce::TempStorage shared_destab_ss[BLOCKY];
         __shared__ typename BlockReduce::TempStorage shared_stab_ss  [BLOCKY];
 
-        for_parallel_y(w, num_words_minor) {
+        __shared__ pivot_t sh_pivot0;
+        __shared__ pivot_t sh_pivots[BLOCKX];
+
+        int tx = threadIdx.x, ty = threadIdx.y;
+
+        if (!ty && !tx) {
+            sh_pivot0 = pivots[0];
+            assert(sh_pivot0 != INVALID_PIVOT);
+        }
+
+        for_parallel_y_tiled(by, num_words_minor) {
+            const grid_t w = ty + by * BLOCKY;
 
             sign_t local_destab_sign = 0;
             sign_t local_stab_sign = 0;
+            
+            for_parallel_x_tiled(bx, active_targets) {
+                const grid_t tid_x = tx + bx * BLOCKX;
+                bool active = (w < num_words_minor && tid_x < active_targets);
+                
+                if (!ty && active) {
+                    sh_pivots[tx] = pivots[tid_x + 1];
+                }
 
-            for_parallel_x(tid_x, active_targets) {
-                const pivot_t pivot = __ldg(&pivots[0]);
-                assert(pivot != INVALID_PIVOT);
-                const size_t t = __ldg(&pivots[tid_x + 1]);
-                assert(t != pivot);
-                assert(t != INVALID_PIVOT);
+                __syncthreads();
 
-                const size_t c_stab = TABLEAU_INDEX(w, pivot) + TABLEAU_STAB_OFFSET;
-                const size_t t_destab = TABLEAU_INDEX(w, t);
-                const size_t t_stab = t_destab + TABLEAU_STAB_OFFSET;
+                if (active) {
+                    const size_t c_stab = TABLEAU_INDEX(w, sh_pivot0) + TABLEAU_STAB_OFFSET;
+                    const size_t t_destab = TABLEAU_INDEX(w, sh_pivots[tx]);
+                    const size_t t_stab = t_destab + TABLEAU_STAB_OFFSET;
 
-                const size_t word_idx = PREFIX_TABLEAU_INDEX(w, tid_x);
-                word_std_t zc_xor_prefix = (*prefix_zs)[word_idx];
-                word_std_t xc_xor_prefix = (*prefix_xs)[word_idx];
+                    const size_t word_idx = PREFIX_TABLEAU_INDEX(w, tid_x);
+                    word_std_t zc_xor_prefix, xc_xor_prefix;
+                    READ_GLOBAL_PREFIX(word_idx, zc_xor_prefix, xc_xor_prefix);
 
-                // Compute final prefixes and hence final {x,z}'c = {x,z}'c ^ {x,z}'t expressions.
-                const size_t bid = PREFIX_INTERMEDIATE_INDEX(w, (tid_x / pass_1_blocksize));
-                zc_xor_prefix ^= block_intermediate_prefix_z[bid];
-                xc_xor_prefix ^= block_intermediate_prefix_x[bid];
+                    // Compute final prefixes and hence final {x,z}'c = {x,z}'c ^ {x,z}'t expressions.
+                    const size_t bid = PREFIX_INTERMEDIATE_INDEX(w, (tid_x / pass_1_blocksize));
+                    XOR_FROM_INTERMEDIATE_PREFIX(bid, zc_xor_prefix, xc_xor_prefix);
 
-                compute_local_sign_per_block(local_destab_sign, zs[t_stab], zc_xor_prefix, zs[c_stab], zs[t_destab]);
-                compute_local_sign_per_block(local_stab_sign, xs[t_stab], xc_xor_prefix, xs[c_stab], xs[t_destab]);
+                    compute_local_sign_per_block(local_destab_sign, zs[t_stab], zc_xor_prefix, zs[c_stab], zs[t_destab]);
+                    compute_local_sign_per_block(local_stab_sign, xs[t_stab], xc_xor_prefix, xs[c_stab], xs[t_destab]);
+                }
             }
 
-            sign_t block_destab_sign = BlockReduce(shared_destab_ss[threadIdx.y]).Reduce(local_destab_sign, XOROP());
-            sign_t block_stab_sign   = BlockReduce(shared_stab_ss  [threadIdx.y]).Reduce(local_stab_sign,   XOROP());
+            sign_t block_destab_sign = BlockReduce(shared_destab_ss[ty]).Reduce(local_destab_sign, XOROP());
+            sign_t block_stab_sign   = BlockReduce(shared_stab_ss  [ty]).Reduce(local_stab_sign,   XOROP());
 
-            if (!threadIdx.x) {
+            if (w < num_words_minor && !tx) {
                 if (block_destab_sign)
                     atomicXOR(ss + w, block_destab_sign);
                 if (block_stab_sign)
@@ -167,11 +191,9 @@ namespace QuaSARQ {
     #define CALL_INJECTCX_PASS_2_FOR_BLOCK(X, Y) \
         scan_targets_pass_2 <X, Y> \
         <<<currentgrid, currentblock, 0, stream>>> ( \
+                KERNEL_INPUT_GLOBAL_PREFIX, \
                 XZ_TABLE(input), \
                 input.signs(), \
-                XZ_TABLE(targets), \
-                block_intermediate_prefix_z, \
-                block_intermediate_prefix_x, \
                 pivots, \
                 active_targets, \
                 num_words_major, \
@@ -182,10 +204,8 @@ namespace QuaSARQ {
             )
 
 	void call_injectcx_pass_1_kernel(
-                Tableau& 			targets, 
+                CALL_ARGS_GLOBAL_PREFIX,
                 Tableau& 			input,
-                word_std_t *        block_intermediate_prefix_z,
-                word_std_t *        block_intermediate_prefix_x,
         const   pivot_t*            pivots,
         const   size_t&             active_targets,
         const   size_t&             num_words_major,
@@ -200,10 +220,8 @@ namespace QuaSARQ {
     }
 
 	void call_injectcx_pass_2_kernel(
-                Tableau& 			targets, 
+                CALL_ARGS_GLOBAL_PREFIX,
                 Tableau& 			input,
-                const_words_t   block_intermediate_prefix_z,
-                const_words_t   block_intermediate_prefix_x,
         const   pivot_t*            pivots,
         const   size_t&             active_targets,
         const   size_t&             num_words_major,
@@ -239,10 +257,8 @@ namespace QuaSARQ {
             active_targets, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
         if (options.sync) cutimer.start(stream);
         call_injectcx_pass_1_kernel(
-            targets, 
-            input, 
-            zblocks(), 
-            xblocks(),
+            CALL_INPUT_GLOBAL_PREFIX,
+            input,
             pivots,
             active_targets, 
             num_words_major, 
@@ -262,10 +278,8 @@ namespace QuaSARQ {
         // Verify pass-1 prefix.
         if (options.check_measurement) {
             checker.check_prefix_pass_1(
-                targets,
+                CHECK_PREFIX_PASS_1_INPUT,
                 pivots,
-                zblocks(), 
-                xblocks(),
                 active_targets,
                 max_intermediate_blocks,
                 pass_1_blocksize,
@@ -278,8 +292,7 @@ namespace QuaSARQ {
         // Verify intermediate-pass prefix.
         if (options.check_measurement) {
             checker.check_prefix_intermediate_pass(
-                zblocks(), 
-                xblocks(),
+                CHECK_PREFIX_SINGLE_PASS_INPUT,
                 max_intermediate_blocks,
                 pass_1_gridsize);
         }
@@ -295,10 +308,8 @@ namespace QuaSARQ {
             active_targets, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y); \
         if (options.sync) cutimer.start(stream);
         call_injectcx_pass_2_kernel(
-            targets, 
+            CALL_INPUT_GLOBAL_PREFIX,
             input,
-            zblocks(), 
-            xblocks(), 
             pivots, 
             active_targets, 
             num_words_major, 
@@ -319,7 +330,6 @@ namespace QuaSARQ {
         // Verify pass-2 prefix.
         if (options.check_measurement) {
             checker.check_prefix_pass_2(
-                targets, 
                 input,
                 active_targets, 
                 max_intermediate_blocks,
@@ -339,10 +349,8 @@ namespace QuaSARQ {
                 2 * sizeof(word_std_t), // used to skip very large blocks.
                 max_active_targets,
                 num_words_minor,
-                targets, 
+                CALL_INPUT_GLOBAL_PREFIX,
                 input, 
-                zblocks(), 
-                xblocks(),
                 pivots,
                 max_active_targets, 
                 num_words_major, 
@@ -364,10 +372,8 @@ namespace QuaSARQ {
                 2 * sizeof(word_std_t),
                 max_active_targets,
                 num_words_minor,
-                targets, 
-                input,
-                zblocks(), 
-                xblocks(), 
+                CALL_INPUT_GLOBAL_PREFIX,  
+                input, 
                 pivots, 
                 max_active_targets, 
                 num_words_major, 

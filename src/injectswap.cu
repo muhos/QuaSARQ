@@ -1,5 +1,6 @@
 #include "simulator.hpp"
 #include "injectswap.cuh"
+#include "operators.cuh"
 #include "print.cuh"
 
 namespace QuaSARQ {
@@ -189,10 +190,10 @@ namespace QuaSARQ {
         for (size_t w = 0; w < num_words_minor; w++) { 
             const size_t c_destab = TABLEAU_INDEX(w, pivot);
             const size_t c_stab = c_destab + TABLEAU_STAB_OFFSET;
-            if (h_xs[c_destab] != d_xs[c_destab]) {
+            if (h_xs[c_stab] != d_xs[c_stab]) {
                 LOGERROR("X-Stabilizer failed at w(%lld), pivot(%lld)", w, pivot);
             }
-            if (h_zs[c_destab] != d_zs[c_destab]) {
+            if (h_zs[c_stab] != d_zs[c_stab]) {
                 LOGERROR("Z-Stabilizer failed at w(%lld), pivot(%lld)", w, pivot);
             }
             if (h_ss[w] != d_ss[w]) {
@@ -203,7 +204,7 @@ namespace QuaSARQ {
             }
         }
 
-        LOG0("PASSED");
+        LOG2(2, "PASSED");
     }
 	
 }

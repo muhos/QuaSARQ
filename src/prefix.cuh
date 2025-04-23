@@ -8,6 +8,7 @@
 #include "grid.cuh"
 #include "memory.cuh"
 #include "tableau.cuh"
+#include "prefixintra.cuh"
 #include "measurecheck.cuh"
 
 namespace QuaSARQ {
@@ -44,12 +45,17 @@ namespace QuaSARQ {
 		DeviceAllocator& allocator;
 		MeasurementChecker& checker;
 
+		#if PREFIX_INTERLEAVE
+		PrefixCell* global_prefix;
+		PrefixCell* intermediate_prefix;
+		PrefixCell* subblock_prefix;
+		#else
 		Tableau targets;
-
-		word_std_t* block_intermediate_prefix_z;
-		word_std_t* block_intermediate_prefix_x;
+		word_std_t* intermediate_prefix_z;
+		word_std_t* intermediate_prefix_x;
 		word_std_t* subblocks_prefix_z;
 		word_std_t* subblocks_prefix_x;
+		#endif
 
 		size_t max_intermediate_blocks;
 		size_t max_sub_blocks;
@@ -69,11 +75,17 @@ namespace QuaSARQ {
 		Prefix(DeviceAllocator& allocator, MeasurementChecker& checker) : 
 			allocator(allocator)
 		,	checker(checker)
+		#if PREFIX_INTERLEAVE
+		,	global_prefix(nullptr)
+		,	intermediate_prefix(nullptr)
+		,	subblock_prefix(nullptr)
+		#else
 		,	targets(allocator)
-		,	block_intermediate_prefix_z(nullptr)
-		,	block_intermediate_prefix_x(nullptr)
+		,	intermediate_prefix_z(nullptr)
+		,	intermediate_prefix_x(nullptr)
 		,	subblocks_prefix_z(nullptr)
 		,	subblocks_prefix_x(nullptr)
+		#endif
 		,	max_intermediate_blocks(0)
 		,	max_sub_blocks(0)
 		,   num_qubits(0)
@@ -86,12 +98,13 @@ namespace QuaSARQ {
 		,	min_yblock_size(2)
 		{}
 
-		size_t 		max_intermediate_size() const { return max_intermediate_blocks * num_words_minor; }
-		word_std_t* zblocks			() { assert(block_intermediate_prefix_z != nullptr); return block_intermediate_prefix_z; }
-		word_std_t* xblocks			() { assert(block_intermediate_prefix_x != nullptr); return block_intermediate_prefix_x; }
-		word_std_t* zsubblocks		() { assert(subblocks_prefix_z != nullptr); return subblocks_prefix_z; }
-		word_std_t* xsubblocks		() { assert(subblocks_prefix_x != nullptr); return subblocks_prefix_x; }
-
+		#if PREFIX_INTERLEAVE
+		PrefixCell* global_prefixes	() { assert(global_prefix != nullptr); return global_prefix; }
+		PrefixCell* block_prefixes	() { assert(intermediate_prefix != nullptr); return intermediate_prefix; }
+		#else
+		word_std_t* zblocks			() { assert(intermediate_prefix_z != nullptr); return intermediate_prefix_z; }
+		word_std_t* xblocks			() { assert(intermediate_prefix_x != nullptr); return intermediate_prefix_x; }
+		#endif
 		void 		alloc			(const Tableau& input, const size_t& config_qubits, const size_t& max_window_bytes);
 		void 		resize			(const Tableau& input, const size_t& max_window_bytes);
 		void 		scan_blocks		(const size_t& num_blocks, const size_t& inject_pass_1_blocksize, const cudaStream_t& stream);
@@ -128,8 +141,7 @@ namespace QuaSARQ {
 	};
 
 	void call_single_pass_kernel(
-                word_std_t *        intermediate_prefix_z,
-                word_std_t *        intermediate_prefix_x,
+                SINGLE_PASS_ARGS,
         const   size_t&             num_chunks,
         const   size_t&             num_words_minor,
         const   size_t&             max_blocks,
@@ -138,10 +150,7 @@ namespace QuaSARQ {
         const   cudaStream_t&       stream);
 
     void call_scan_blocks_pass_1_kernel(
-                word_std_t*     	block_intermediate_prefix_z,
-                word_std_t*     	block_intermediate_prefix_x,
-                word_std_t*     	subblocks_prefix_z, 
-                word_std_t*     	subblocks_prefix_x, 
+                PASS_1_ARGS_PREFIX, 
         const   size_t&         	num_blocks,
         const   size_t&         	num_words_minor,
         const   size_t&         	max_blocks,
@@ -151,10 +160,8 @@ namespace QuaSARQ {
         const   cudaStream_t&   	stream);
 
 	void call_injectcx_pass_1_kernel(
-                Tableau& 			targets, 
-                Tableau& 			input,
-                word_std_t *        block_intermediate_prefix_z,
-                word_std_t *        block_intermediate_prefix_x,
+                CALL_ARGS_GLOBAL_PREFIX,
+				Tableau& 			input,
         const   pivot_t*            pivots,
         const   size_t&             active_targets,
         const   size_t&             num_words_major,
@@ -166,10 +173,8 @@ namespace QuaSARQ {
         const   cudaStream_t&       stream);
 
 	void call_injectcx_pass_2_kernel(
-                Tableau& 			targets, 
+                CALL_ARGS_GLOBAL_PREFIX, 
                 Tableau& 			input,
-        const   word_std_t *        block_intermediate_prefix_z,
-        const   word_std_t *        block_intermediate_prefix_x,
         const   pivot_t*            pivots,
         const   size_t&             active_targets,
         const   size_t&             num_words_major,
@@ -188,8 +193,7 @@ namespace QuaSARQ {
         const   size_t&     	shared_element_bytes, 
         const   size_t&     	data_size_in_x, 
         const   size_t&     	data_size_in_y,
-                word_std_t* 	block_intermediate_prefix_z, 
-                word_std_t* 	block_intermediate_prefix_x,
+                SINGLE_PASS_ARGS,
         const   size_t&     	num_chunks,
         const   size_t&     	num_words_minor,
         const   size_t&     	max_blocks);
@@ -200,10 +204,7 @@ namespace QuaSARQ {
         const   size_t&     	shared_element_bytes, 
         const   size_t&     	data_size_in_x, 
         const   size_t&     	data_size_in_y,
-                word_std_t* 	block_intermediate_prefix_z,
-                word_std_t* 	block_intermediate_prefix_x,
-                word_std_t* 	subblocks_prefix_z, 
-                word_std_t* 	subblocks_prefix_x,
+                PASS_1_ARGS_PREFIX,
         const   size_t&     	num_blocks,
         const   size_t&     	num_words_minor,
         const   size_t&     	max_blocks,
@@ -211,10 +212,7 @@ namespace QuaSARQ {
 
 	void tune_prefix_pass_2(
 		void (*kernel)(
-				word_std_t*, 
-				word_std_t*, 
-		const 	word_std_t*, 
-		const 	word_std_t*, 
+				PASS_2_ARGS_PREFIX, 
 		const 	size_t, 
 		const 	size_t, 
 		const 	size_t, 
@@ -224,10 +222,7 @@ namespace QuaSARQ {
 				dim3& 			bestGrid,
 		const	size_t& 		data_size_in_x, 
 		const 	size_t& 		data_size_in_y,
-				word_std_t* 	block_intermediate_prefix_z,
-				word_std_t* 	block_intermediate_prefix_x,
-		const 	word_std_t* 	subblocks_prefix_z, 
-		const 	word_std_t* 	subblocks_prefix_x,
+				PASS_2_ARGS_PREFIX,
 		const 	size_t& 		num_blocks,
 		const 	size_t& 		num_words_minor,
 		const 	size_t& 		max_blocks,
@@ -240,10 +235,8 @@ namespace QuaSARQ {
 		const   size_t&         shared_element_bytes, 
 		const   size_t&         data_size_in_x, 
 		const   size_t&         data_size_in_y,
-		        Tableau& 		targets, 
-		        Tableau& 		input, 
-                word_std_t *    block_intermediate_prefix_z,
-                word_std_t *    block_intermediate_prefix_x,
+		        CALL_ARGS_GLOBAL_PREFIX,
+				Tableau& 		input, 
 		const 	pivot_t* 		pivots,
 		const 	size_t& 		active_targets,
 		const   size_t&         num_words_major,
@@ -257,10 +250,8 @@ namespace QuaSARQ {
 		const 	size_t& 		shared_element_bytes, 
 		const 	size_t& 		data_size_in_x, 
 		const 	size_t& 		data_size_in_y,
-				Tableau& 		targets, 
-				Tableau& 		input, 
-        const 	word_std_t *	block_intermediate_prefix_z,
-        const 	word_std_t *	block_intermediate_prefix_x,
+				CALL_ARGS_GLOBAL_PREFIX,
+				Tableau& 		input,
 		const 	pivot_t* 		pivots,
 		const 	size_t& 		active_targets,
 		const 	size_t& 		num_words_major,

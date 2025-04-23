@@ -2,6 +2,7 @@
 #include "prefix.cuh"
 #include "collapse.cuh"
 #include "templatedim.cuh"
+#include "warp.cuh"
 
 namespace QuaSARQ {
 
@@ -35,6 +36,51 @@ namespace QuaSARQ {
         return sum;
     }
 
+    template<int B>
+    INLINE_DEVICE 
+    PrefixCell dual_warp_exclusive_xor(
+        const   word_std_t&     target_x,
+                word_std_t&     prefix_x,
+        const   word_std_t&     target_z,
+                word_std_t&     prefix_z, 
+        const   word_std_t&     initial_x,
+        const   word_std_t&     initial_z) 
+    {
+        prefix_x = target_x, prefix_z = target_z;
+        unsigned mask = __activemask();
+        word_std_t prev_x, prev_z;
+        if constexpr (B >= 2) {
+            prev_x = __shfl_up_sync(mask, prefix_x, 1);
+            prev_z = __shfl_up_sync(mask, prefix_z, 1);
+            if (threadIdx.x >= 1) prefix_x ^= prev_x, prefix_z ^= prev_z;
+        }
+        if constexpr (B >= 4) {
+            prev_x = __shfl_up_sync(mask, prefix_x, 2);
+            prev_z = __shfl_up_sync(mask, prefix_z, 2);
+            if (threadIdx.x >= 2) prefix_x ^= prev_x, prefix_z ^= prev_z;
+        }
+        if constexpr (B >= 8) {
+            prev_x = __shfl_up_sync(mask, prefix_x, 4);
+            prev_z = __shfl_up_sync(mask, prefix_z, 4);
+            if (threadIdx.x >= 4) prefix_x ^= prev_x, prefix_z ^= prev_z;
+        }
+        if constexpr (B >= 16) {
+            prev_x = __shfl_up_sync(mask, prefix_x, 8);
+            prev_z = __shfl_up_sync(mask, prefix_z, 8);
+            if (threadIdx.x >= 8) prefix_x ^= prev_x, prefix_z ^= prev_z;
+        }
+        if constexpr (B >= 32) {
+            prev_x = __shfl_up_sync(mask, prefix_x, 16);
+            prev_z = __shfl_up_sync(mask, prefix_z, 16);
+            if (threadIdx.x >= 16) prefix_x ^= prev_x, prefix_z ^= prev_z;
+        }
+        PrefixCell sum(prefix_x, prefix_z);
+        prefix_x ^= (initial_x ^ target_x);
+        prefix_z ^= (initial_z ^ target_z);
+        return sum;
+    }
+
+
      __global__ 
     void inject_cx_warp_1(
                 Table*          inv_xs, 
@@ -53,11 +99,14 @@ namespace QuaSARQ {
         word_std_t *zs = inv_zs->words();
         sign_t *ss = inv_ss->data();
         for_parallel_x(w, num_words_minor) { 
-            const pivot_t pivot = __ldg(&pivots[0]);
-            assert(pivot != INVALID_PIVOT);
-            const size_t t = __ldg(&pivots[1]);
-            assert(t != pivot);
-            assert(t != INVALID_PIVOT);
+            const unsigned mask = __activemask();
+            pivot_t pivot, t;
+            if (!laneID()) {
+                pivot = pivots[0];
+                t = pivots[1];
+            }
+            pivot = __shfl_sync(mask, pivot, 0, blockDim.x);
+            t = __shfl_sync(mask, t, 0, blockDim.x);
             const size_t c_destab = TABLEAU_INDEX(w, pivot);
             const size_t t_destab = TABLEAU_INDEX(w, t);
             const word_std_t zt_destab = zs[t_destab];
@@ -86,51 +135,67 @@ namespace QuaSARQ {
         const size_t num_qubits_padded) 
     {
         assert(active_targets > 0);
+
         word_std_t * __restrict__ xs = inv_xs->words();
         word_std_t * __restrict__ zs = inv_zs->words();
         sign_t * __restrict__ ss = inv_ss->data();
-        int tid = threadIdx.x;
-        for_parallel_y(w, num_words_minor) { 
-            const unsigned mask = __activemask();
-            pivot_t pivot;
-            size_t c_destab;
+
+        int tx = threadIdx.x, ty = threadIdx.y;
+
+        for_parallel_y_tiled(by, num_words_minor) { 
+            const grid_t w = ty + by * blockDim.y;
+
+            bool active = (w < num_words_minor && tx < active_targets); 
+        
+            pivot_t pivot, t;
             word_std_t init_z = 0, init_x = 0;
-            if (!tid) {
-                pivot = __ldg(&pivots[0]);
-                c_destab = TABLEAU_INDEX(w, pivot);
+            if (!tx && active) {
+                pivot = pivots[0];
+                const size_t c_destab = TABLEAU_INDEX(w, pivot);
                 init_z = zs[c_destab];
                 init_x = xs[c_destab];
             }
-            pivot = __shfl_sync(mask, pivot, 0, B);
-            c_destab = __shfl_sync(mask, c_destab, 0, B);
-            init_z = __shfl_sync(mask, init_z, 0, B);
-            init_x = __shfl_sync(mask, init_x, 0, B);
-            assert(pivot != INVALID_PIVOT);
-            assert(c_destab == TABLEAU_INDEX(w, pivot));
-            assert(init_z == zs[c_destab]);
-            assert(init_x == xs[c_destab]);
-            bool active = tid < static_cast<int>(active_targets);
-            const pivot_t t = active ? __ldg(&pivots[tid + 1]) : pivot;
-            const size_t t_destab = TABLEAU_INDEX(w, t);
-            word_std_t z = active ? zs[t_destab] : 0;
-            word_std_t x = active ? xs[t_destab] : 0;
+
+            word_std_t z = 0, x = 0;
+            if (active) {
+                t = pivots[tx + 1];
+                const unsigned mask = __activemask();
+                pivot = __shfl_sync(mask, pivot, 0, B);
+                init_z = __shfl_sync(mask, init_z, 0, B);
+                init_x = __shfl_sync(mask, init_x, 0, B);
+                const size_t t_destab = TABLEAU_INDEX(w, t);
+                z = zs[t_destab]; 
+                x = xs[t_destab];
+            }
+
             word_std_t prefix_zc, prefix_xc;
-            word_std_t warpsum_z = warp_exclusive_xor<B>(z, prefix_zc, init_z);
-            word_std_t warpsum_x = warp_exclusive_xor<B>(x, prefix_xc, init_x);
+            PrefixCell warpsum;
+            #if PREFIX_INTERLEAVE
+            warpsum = dual_warp_exclusive_xor<B>(x, prefix_xc, z, prefix_zc, init_x, init_z);
+            #else
+            warpsum.z = warp_exclusive_xor<B>(z, prefix_zc, init_z);
+            warpsum.x = warp_exclusive_xor<B>(x, prefix_xc, init_x);
+            #endif
+            
+
             sign_t local_destab_s = 0;
             sign_t local_stab_s = 0;
             if (active) {
+                const size_t t_destab = TABLEAU_INDEX(w, t);
                 const size_t t_stab = t_destab + TABLEAU_STAB_OFFSET;
+                const size_t c_destab = TABLEAU_INDEX(w, pivot);
                 const size_t c_stab = c_destab + TABLEAU_STAB_OFFSET;
                 compute_local_sign_per_block(local_destab_s, zs[t_stab], prefix_zc, zs[c_stab], z);
                 compute_local_sign_per_block(local_stab_s, xs[t_stab], prefix_xc, xs[c_stab], x);
-                if (tid == static_cast<int>(active_targets) - 1) {
-                    zs[c_destab] = init_z ^ warpsum_z;
-                    xs[c_destab] = init_x ^ warpsum_x;
+                if (tx == active_targets - 1) {
+                    zs[c_destab] = init_z ^ warpsum.z;
+                    xs[c_destab] = init_x ^ warpsum.x;
                 }
             }
-            collapse_warp_dual<B, sign_t>(local_destab_s, local_stab_s, tid);
-            if (!tid) {
+
+            collapse_warp_dual<B, sign_t>(local_destab_s, local_stab_s, tx);
+
+            if (!tx) {
                 ss[w] ^= local_destab_s;
                 ss[w + num_words_minor] ^= local_stab_s;
             }

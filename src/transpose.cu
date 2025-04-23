@@ -211,7 +211,7 @@ namespace QuaSARQ {
                 LOGERROR("FAILED for z1 or z2 at word %lld.", i);
             }
         }
-        LOG0("PASSED");
+        LOG2(2, "PASSED");
     }
 
     void transpose_to_colmajor_cpu(Table& xs, Table& zs, const Table& inv_xs, const Table& inv_zs) {

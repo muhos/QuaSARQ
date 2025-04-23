@@ -18,10 +18,8 @@ namespace QuaSARQ {
      // will be slipped but CPU computations would proceed normally.
      // Useful to determine the largest number of targets.
     void MeasurementChecker::check_prefix_pass_1(
-        const   Tableau&        other_targets,
-        const   pivot_t*        other_pivots,
-        const   word_std_t*     other_zs,
-        const   word_std_t*     other_xs,
+        CHECK_PREFIX_PASS_1_ARGS,
+        const   pivot_t*    	other_pivots,
         const   size_t&         active_targets,
         const   size_t&         max_blocks,
         const   size_t&         pass_1_blocksize,
@@ -54,13 +52,16 @@ namespace QuaSARQ {
         }
 
         if (!skip_checking_device) {
-            assert(num_qubits == other_targets.num_qubits());
             copy_prefix(other_targets);
+            #if PREFIX_INTERLEAVE
+            copy_prefix_blocks(other_intermediate, max_blocks * num_words_minor);
+            #else
             copy_prefix_blocks(other_xs, other_zs, max_blocks * num_words_minor);
+            #endif
         }
 
-        h_block_intermediate_prefix_z.resize(max_blocks * num_words_minor, 0);
-        h_block_intermediate_prefix_x.resize(max_blocks * num_words_minor, 0);
+        h_intermediate_prefix_z.resize(max_blocks * num_words_minor, 0);
+        h_intermediate_prefix_x.resize(max_blocks * num_words_minor, 0);
 
         Vec<word_std_t> t_prefix_z(pass_1_blocksize);
         Vec<word_std_t> t_prefix_x(pass_1_blocksize);
@@ -96,22 +97,22 @@ namespace QuaSARQ {
                         size_t word_idx = PREFIX_TABLEAU_INDEX(w, tid_x);
                         h_prefix_zs[word_idx] = word_std_t(h_zs[c_destab]) ^ t_prefix_z[tx];
                         h_prefix_xs[word_idx] = word_std_t(h_xs[c_destab]) ^ t_prefix_x[tx];
-                        if (!skip_checking_device && d_prefix_xs[word_idx] != h_prefix_xs[word_idx]) {
+                        if (!skip_checking_device && D_PREFIX_XS(word_idx) != word_std_t(h_prefix_xs[word_idx])) {
                             LOGERROR("Pass-1 FAILED at prefix-x[w: %lld, tid: %lld]", w, tid_x);
                         }
-                        if (!skip_checking_device && d_prefix_zs[word_idx] != h_prefix_zs[word_idx]) {
+                        if (!skip_checking_device && D_PREFIX_ZS(word_idx) != word_std_t(h_prefix_zs[word_idx])) {
                             LOGERROR("Pass-1 FAILED at prefix-z[w: %lld, tid: %lld]", w, tid_x);
                         }
                     }
                 }
                 if (pass_1_blocksize > 0 && pass_1_gridsize > 1) {
                     size_t bid = PREFIX_INTERMEDIATE_INDEX(w, bx);
-                    h_block_intermediate_prefix_z[bid] = blocksum_z;
-                    h_block_intermediate_prefix_x[bid] = blocksum_x;
-                    if (!skip_checking_device && h_block_intermediate_prefix_x[bid] != d_block_intermediate_prefix_x[bid]) {
+                    h_intermediate_prefix_z[bid] = blocksum_z;
+                    h_intermediate_prefix_x[bid] = blocksum_x;
+                    if (!skip_checking_device && h_intermediate_prefix_x[bid] != D_INTERMEDIATE_PREFIX_X(bid)) {
                         LOGERROR("Pass-1 FAILED at block-prefix-x[w: %lld, bx: %lld]", w, bx);
                     }
-                    if (!skip_checking_device && h_block_intermediate_prefix_z[bid] != d_block_intermediate_prefix_z[bid]) {
+                    if (!skip_checking_device && h_intermediate_prefix_z[bid] != D_INTERMEDIATE_PREFIX_Z(bid)) {
                         LOGERROR("Pass-1 FAILED at block-prefix-z[w: %lld, bx: %lld]", w, bx);
                     }
                 }
@@ -123,8 +124,7 @@ namespace QuaSARQ {
     }
 
     void MeasurementChecker::check_prefix_intermediate_pass(
-        const   word_std_t*     other_zs,
-        const   word_std_t*     other_xs,
+        CHECK_PREFIX_SINGLE_PASS_ARGS,
         const   size_t&	        max_blocks,
         const 	size_t&         pass_1_gridsize,
         const   bool&           skip_checking_device) {
@@ -144,7 +144,13 @@ namespace QuaSARQ {
         const char * title = skip_checking_device ? "Performing" : "Checking"; 
         LOGN2(2, "  %s pass-x prefix for qubit %d and pivot %d.. ", title, qubit, pivot);
 
-        if (!skip_checking_device) copy_prefix_blocks(other_xs, other_zs, max_blocks * num_words_minor);
+        if (!skip_checking_device) {
+            #if PREFIX_INTERLEAVE
+            copy_prefix_blocks(other_intermediate, max_blocks * num_words_minor);
+            #else
+            copy_prefix_blocks(other_xs, other_zs, max_blocks * num_words_minor);
+            #endif
+        }
 
         const int nextpow2_blocksize = nextPow2(pass_1_gridsize);
         Vec<word_std_t> block_z(nextpow2_blocksize);
@@ -152,24 +158,24 @@ namespace QuaSARQ {
         for (size_t w = 0; w < num_words_minor; w++) {
             for (size_t tx = pass_1_gridsize; tx < nextpow2_blocksize; tx++) {
                 size_t bid = PREFIX_INTERMEDIATE_INDEX(w, tx);
-                h_block_intermediate_prefix_z[bid] = 0;
-                h_block_intermediate_prefix_x[bid] = 0;
+                h_intermediate_prefix_z[bid] = 0;
+                h_intermediate_prefix_x[bid] = 0;
             }
             for (size_t tx = 0; tx < nextpow2_blocksize; tx++) {
                 size_t bid = PREFIX_INTERMEDIATE_INDEX(w, tx);
-                block_z[tx] = h_block_intermediate_prefix_z[bid];
-                block_x[tx] = h_block_intermediate_prefix_x[bid];
+                block_z[tx] = h_intermediate_prefix_z[bid];
+                block_x[tx] = h_intermediate_prefix_x[bid];
             }
             scan_block_exclusive_cpu(block_z, nextpow2_blocksize);
             scan_block_exclusive_cpu(block_x, nextpow2_blocksize);
             for (size_t tx = 0; tx < pass_1_gridsize; tx++) {
                 size_t bid = PREFIX_INTERMEDIATE_INDEX(w, tx);
-                h_block_intermediate_prefix_z[bid] = block_z[tx];
-                h_block_intermediate_prefix_x[bid] = block_x[tx];
-                if (!skip_checking_device && h_block_intermediate_prefix_x[bid] != d_block_intermediate_prefix_x[bid]) {
+                h_intermediate_prefix_z[bid] = block_z[tx];
+                h_intermediate_prefix_x[bid] = block_x[tx];
+                if (!skip_checking_device && h_intermediate_prefix_x[bid] != D_INTERMEDIATE_PREFIX_X(bid)) {
                     LOGERROR("Pass-x FAILED at block-prefix-x[w: %lld, tx: %lld]", w, tx);
                 }
-                if (!skip_checking_device && h_block_intermediate_prefix_z[bid] != d_block_intermediate_prefix_z[bid]) {
+                if (!skip_checking_device && h_intermediate_prefix_z[bid] != D_INTERMEDIATE_PREFIX_Z(bid)) {
                     LOGERROR("Pass-x FAILED at block-prefix-z[w: %lld, tx: %lld]", w, tx);
                 }
             }
@@ -178,7 +184,6 @@ namespace QuaSARQ {
     }
 
     void MeasurementChecker::check_prefix_pass_2(
-        const   Tableau& 		other_targets, 
         const   Tableau& 		other_input,
         const   size_t&         active_targets,
         const   size_t&         max_blocks,
@@ -217,16 +222,16 @@ namespace QuaSARQ {
                 const size_t word_idx = PREFIX_TABLEAU_INDEX(w, tid_x);
                 word_std_t zc_xor_zt = h_prefix_zs[word_idx];
                 word_std_t xc_xor_xt = h_prefix_xs[word_idx];
-                word_std_t d_zc_xor_zt = d_prefix_zs[word_idx];
-                word_std_t d_xc_xor_xt = d_prefix_xs[word_idx];
+                word_std_t d_zc_xor_zt = D_PREFIX_ZS(word_idx);
+                word_std_t d_xc_xor_xt = D_PREFIX_XS(word_idx);
 
                 const size_t bid = PREFIX_INTERMEDIATE_INDEX(w, (tid_x / pass_1_blocksize));
-                zc_xor_zt ^= h_block_intermediate_prefix_z[bid];
-                xc_xor_xt ^= h_block_intermediate_prefix_x[bid];
+                zc_xor_zt ^= h_intermediate_prefix_z[bid];
+                xc_xor_xt ^= h_intermediate_prefix_x[bid];
 
                 if (!skip_checking_device) {
-                    d_zc_xor_zt ^= d_block_intermediate_prefix_z[bid];
-                    d_xc_xor_xt ^= d_block_intermediate_prefix_x[bid];
+                    d_zc_xor_zt ^= D_INTERMEDIATE_PREFIX_Z(bid);
+                    d_xc_xor_xt ^= D_INTERMEDIATE_PREFIX_X(bid);
                     if (d_xc_xor_xt != xc_xor_xt) {
                         LOGERROR("Pass-2 FAILED at prefix-x[w: %lld, tid: %lld]", w, tid_x);
                     }

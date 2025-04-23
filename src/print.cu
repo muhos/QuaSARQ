@@ -44,11 +44,10 @@ namespace QuaSARQ {
     }
 
     NOINLINE_ALL void print_table(const Table& t, const size_t& total_targets) {
-        size_t bits, rows, cols, word_idx;
+        size_t bits, rows, cols;
         const size_t num_qubits_padded = t.num_qubits_padded();
         const size_t num_words_major = t.num_words_major();
         const size_t num_words_minor = t.num_words_minor();
-        constexpr int ROWMAJOR_STEP = 2;
         if (t.is_rowmajor()) {
             LOGGPU("%-3s ", "g\\q ");
             #if PRINT_HEX
@@ -86,7 +85,7 @@ namespace QuaSARQ {
                     #if PRINT_HEX
                     uint64 t_word = t[word_idx];
                     if (t_word)
-                        LOGGPU("%-16llX ", t_word);
+                        LOGGPU("%-016llX ", t_word);
                     #else 
                     #if defined(WORD_SIZE_64)
                     LOGGPU(B2B_STR, RB2B(uint32(word_std_t(t[word_idx]) & 0xFFFFFFFFUL)));
@@ -106,7 +105,7 @@ namespace QuaSARQ {
                     const size_t word_idx = q * cols + w;
                     #if PRINT_HEX
                     if (word_std_t(t[word_idx]))
-                        LOGGPU("%-16llX ", uint64(t[word_idx]));
+                        LOGGPU("%-016llX ", uint64(t[word_idx]));
                     #else 
                     #if defined(WORD_SIZE_64)
                     LOGGPU(B2B_STR, RB2B(uint32(word_std_t(t[word_idx]) & 0xFFFFFFFFUL)));

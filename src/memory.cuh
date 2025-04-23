@@ -1,6 +1,4 @@
-
-#ifndef __CU_MEMORY_
-#define __CU_MEMORY_
+#pragma once
 
 #define cuMalloc cudaMallocAsync
 
@@ -31,7 +29,7 @@ namespace QuaSARQ {
 
 	class DeviceAllocator {
 
-		static constexpr size_t ALIGNMENT = 8;
+		static constexpr size_t ALIGNMENT = 128; // 64 bytes for CPU, 128 bytes for GPU
 		static constexpr size_t GPU_PENALTY = 256 * MB;
 		static constexpr size_t CPU_PENALTY = 512 * MB;
 
@@ -239,5 +237,3 @@ namespace QuaSARQ {
 	};
 
 }
-
-#endif

@@ -33,21 +33,46 @@ namespace QuaSARQ {
             typename ReduceType::TempStorage   stab_ss[BLOCKY];
         } smem;
 
-        for_parallel_y(w, num_words_minor) { 
-            const pivot_t pivot = __ldg(&pivots[0]);
-            assert(pivot != INVALID_PIVOT);
-            int tid = threadIdx.x;
-            bool active = tid < static_cast<int>(active_targets);
-            pivot_t t = active ? __ldg(&pivots[tid + 1]) : pivot;
-            assert(t != INVALID_PIVOT);
-            const size_t t_destab = TABLEAU_INDEX(w, t);
-            word_std_t z = active ? zs[t_destab] : 0;
-            word_std_t x = active ? xs[t_destab] : 0;
+        __shared__ pivot_t sh_pivot0;
+        __shared__ pivot_t sh_pivots[BLOCKX];
+        __shared__ word_std_t sh_zs_destab[BLOCKY];
+        __shared__ word_std_t sh_xs_destab[BLOCKY];
+
+        int tx = threadIdx.x, ty = threadIdx.y;
+
+        if (!ty && !tx) {
+            sh_pivot0 = pivots[0];
+            assert(sh_pivot0 != INVALID_PIVOT);
+        }
+
+        for_parallel_y_tiled(by, num_words_minor) { 
+            const grid_t w = ty + by * BLOCKY;
+
+            bool active = (w < num_words_minor && tx < active_targets);
+
+            if (!ty && active) {
+                sh_pivots[tx] = pivots[tx + 1];
+            }
+            __syncthreads();
+
+            word_std_t z = 0, x = 0;
+            pivot_t pivot, t;
+            if (active) {
+                pivot = sh_pivot0, t = sh_pivots[tx];
+                const size_t t_destab = TABLEAU_INDEX(w, t);
+                z = zs[t_destab];
+                x = xs[t_destab];
+                if (!tx) {
+                    const size_t c_destab = TABLEAU_INDEX(w, pivot);
+                    sh_zs_destab[ty] = zs[c_destab];
+                    sh_xs_destab[ty] = xs[c_destab];
+                }
+            }
 
             word_std_t prefix_zc, prefix_xc;
             word_std_t blocksum_z, blocksum_x; 
-            ScanType(smem.prefix_zs[threadIdx.y]).ExclusiveScan(z, prefix_zc, 0, XOROP(), blocksum_z);
-            ScanType(smem.prefix_xs[threadIdx.y]).ExclusiveScan(x, prefix_xc, 0, XOROP(), blocksum_x);
+            ScanType(smem.prefix_zs[ty]).ExclusiveScan(z, prefix_zc, 0, XOROP(), blocksum_z);
+            ScanType(smem.prefix_xs[ty]).ExclusiveScan(x, prefix_xc, 0, XOROP(), blocksum_x);
 
             sign_t local_destab_s = 0;
             sign_t local_stab_s   = 0;
@@ -56,20 +81,22 @@ namespace QuaSARQ {
                 const size_t t_stab = t_destab + TABLEAU_STAB_OFFSET;
                 const size_t c_destab = TABLEAU_INDEX(w, pivot);
                 const size_t c_stab = c_destab + TABLEAU_STAB_OFFSET;
-                prefix_zc ^= zs[c_destab];
-                prefix_xc ^= xs[c_destab];
+                const word_std_t init_z = sh_zs_destab[ty];
+                const word_std_t init_x = sh_xs_destab[ty];
+                prefix_zc ^= init_z;
+                prefix_xc ^= init_x;
                 compute_local_sign_per_block(local_destab_s, zs[t_stab], prefix_zc, zs[c_stab], z);
                 compute_local_sign_per_block(local_stab_s  , xs[t_stab], prefix_xc, xs[c_stab], x);
-                if (tid == active_targets - 1) {
-                    zs[c_destab] ^= blocksum_z;
-                    xs[c_destab] ^= blocksum_x;
+                if (tx == active_targets - 1) {
+                    zs[c_destab] = init_z ^ blocksum_z;
+                    xs[c_destab] = init_x ^ blocksum_x;
                 }
             }
 
-            local_destab_s = ReduceType(smem.destab_ss[threadIdx.y]).Reduce(local_destab_s, XOROP());
-            local_stab_s   = ReduceType(smem.  stab_ss[threadIdx.y]).Reduce(local_stab_s,   XOROP());
+            local_destab_s = ReduceType(smem.destab_ss[ty]).Reduce(local_destab_s, XOROP());
+            local_stab_s   = ReduceType(smem.  stab_ss[ty]).Reduce(local_stab_s,   XOROP());
 
-            if (!tid) {
+            if (w < num_words_minor && !tx) {
                 ss[w] ^= local_destab_s;
                 ss[w + num_words_minor] ^= local_stab_s;
             }

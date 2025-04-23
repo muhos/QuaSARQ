@@ -63,7 +63,7 @@ endif
 
 # debug build flags
 ifeq ($(debug),1)
-      NVCCFLAGS += -g -G 
+      NVCCFLAGS += -g -G -DDEBUG
 else  ifeq ($(assert),1)
       NVCCFLAGS += -O3 
 else
@@ -114,7 +114,7 @@ ALL_LDFLAGS += $(addprefix -Xlinker ,$(LDFLAGS))
 
 # gencode arguments
 
-SMS ?= 89
+SMS ?= 80 89
 ifeq ($(SMS),)
 $(error no SM architectures have been specified)
 endif

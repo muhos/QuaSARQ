@@ -5,6 +5,7 @@ namespace QuaSARQ {
 
 	#define ROW_MAJOR 0
 	#define PREFIX_ROW_MAJOR 1
+	#define PREFIX_INTERLEAVE 1
 
 	#if PREFIX_ROW_MAJOR
 		#define PREFIX_TABLEAU_INDEX(WORD_IDX, TID) ((TID) + (WORD_IDX) * active_targets)

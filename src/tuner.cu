@@ -5,6 +5,7 @@
 #include "transpose.cuh"
 #include "identity.cuh"
 #include "injectswap.cuh"
+#include "prefixintra.cuh"
 
 namespace QuaSARQ {
 
@@ -802,16 +803,37 @@ namespace QuaSARQ {
 		}
 	}
 
+	void tune_single_pass(
+				dim3&       	bestBlock, 
+				dim3&       	bestGrid,
+		const   size_t&     	shared_element_bytes, 
+		const   size_t&     	data_size_in_x, 
+		const   size_t&     	data_size_in_y,
+				SINGLE_PASS_ARGS,
+		const   size_t&     	num_chunks,
+		const   size_t&     	num_words_minor,
+		const   size_t&     	max_blocks)
+	{
+		const char* opname = "scan single pass";
+		size_t _initThreadsPerBlockY = initThreadsPerBlockY;
+		initThreadsPerBlockY = 1;
+		TUNE_2D_PREFIX_SINGLE_CUB(
+			call_single_pass_kernel,
+			SINGLE_PASS_INPUT,
+			num_chunks, 
+			num_words_minor,
+			max_blocks
+		);
+		initThreadsPerBlockY = _initThreadsPerBlockY;
+	}
+
 	void tune_prefix_pass_1(
 				dim3&       bestBlock, 
 				dim3&       bestGrid,
 		const   size_t&     shared_element_bytes, 
 		const   size_t&     data_size_in_x, 
 		const   size_t&     data_size_in_y,
-				word_std_t* block_intermediate_prefix_z,
-				word_std_t* block_intermediate_prefix_x,
-				word_std_t* subblocks_prefix_z, 
-				word_std_t* subblocks_prefix_x,
+				PASS_1_ARGS_PREFIX,
 		const   size_t&     num_blocks,
 		const   size_t&     num_words_minor,
 		const   size_t&     max_blocks,
@@ -823,15 +845,43 @@ namespace QuaSARQ {
 		TUNE_2D_PREFIX_CUB(
 			false,
 			call_scan_blocks_pass_1_kernel,
-			block_intermediate_prefix_z, 
-			block_intermediate_prefix_x, 
-			subblocks_prefix_z, 
-			subblocks_prefix_x, 
+			MULTI_PASS_INPUT,
 			num_blocks, 
 			num_words_minor,
 			max_blocks,
 			max_sub_blocks);
 		initThreadsPerBlockY = _initThreadsPerBlockY;
+	}
+
+	void tune_prefix_pass_2(
+		void (*kernel)(
+				PASS_2_ARGS_PREFIX,
+		const 	size_t, 
+		const 	size_t, 
+		const 	size_t, 
+		const 	size_t, 
+		const 	size_t),
+				dim3& 			bestBlock, 
+				dim3& 			bestGrid,
+		const 	size_t& 		data_size_in_x, 
+		const 	size_t& 		data_size_in_y,
+				PASS_2_ARGS_PREFIX,
+		const 	size_t& 		num_blocks,
+		const 	size_t& 		num_words_minor,
+		const 	size_t& 		max_blocks,
+		const 	size_t& 		max_sub_blocks,
+		const 	size_t& 		pass_1_blocksize) 
+	{
+		const char* opname = "prefix pass 2";
+		const size_t shared_element_bytes = 0;
+		const bool shared_size_yextend = false;
+		TUNE_2D(
+			MULTI_PASS_INPUT,
+			num_blocks, 
+			num_words_minor, 
+			max_blocks, 
+			max_sub_blocks,
+			pass_1_blocksize);
 	}
 
 	void tune_inject_pass_1(
@@ -840,10 +890,8 @@ namespace QuaSARQ {
 		const   size_t&         shared_element_bytes, 
 		const   size_t&         data_size_in_x, 
 		const   size_t&         data_size_in_y,
-				Tableau& 		targets, 
+				CALL_ARGS_GLOBAL_PREFIX,
 				Tableau& 		input, 
-				word_std_t *    block_intermediate_prefix_z,
-				word_std_t *    block_intermediate_prefix_x,
 		const   pivot_t*        pivots,
 		const   size_t&         active_targets,
 		const   size_t&         num_words_major,
@@ -857,10 +905,8 @@ namespace QuaSARQ {
 		TUNE_2D_PREFIX_CUB(
 			false,
 			call_injectcx_pass_1_kernel,
-			targets,
+			CALL_INPUT_GLOBAL_PREFIX,
 			input,
-			block_intermediate_prefix_z,
-			block_intermediate_prefix_x,
 			pivots,
 			active_targets,
 			num_words_major,
@@ -870,82 +916,14 @@ namespace QuaSARQ {
 		initThreadsPerBlockY = _initThreadsPerBlockY;
 	}
 
-	void tune_single_pass(
-				dim3&       	bestBlock, 
-				dim3&       	bestGrid,
-		const   size_t&     	shared_element_bytes, 
-		const   size_t&     	data_size_in_x, 
-		const   size_t&     	data_size_in_y,
-				word_std_t* 	block_intermediate_prefix_z, 
-				word_std_t* 	block_intermediate_prefix_x,
-		const   size_t&     	num_chunks,
-		const   size_t&     	num_words_minor,
-		const   size_t&     	max_blocks)
-	{
-		const char* opname = "scan single pass";
-		size_t _initThreadsPerBlockY = initThreadsPerBlockY;
-		initThreadsPerBlockY = 1;
-		TUNE_2D_PREFIX_SINGLE_CUB(
-			call_single_pass_kernel,
-			block_intermediate_prefix_z, 
-			block_intermediate_prefix_x, 
-			num_chunks, 
-			num_words_minor,
-			max_blocks
-		);
-		initThreadsPerBlockY = _initThreadsPerBlockY;
-	}
-
-	void tune_prefix_pass_2(
-		void (*kernel)(
-				word_std_t*, 
-				word_std_t*, 
-		const 	word_std_t*, 
-		const 	word_std_t*, 
-		const 	size_t, 
-		const 	size_t, 
-		const 	size_t, 
-		const 	size_t, 
-		const 	size_t),
-				dim3& 			bestBlock, 
-				dim3& 			bestGrid,
-		const 	size_t& 		data_size_in_x, 
-		const 	size_t& 		data_size_in_y,
-				word_std_t* 	block_intermediate_prefix_z,
-				word_std_t* 	block_intermediate_prefix_x,
-		const 	word_std_t* 	subblocks_prefix_z, 
-		const 	word_std_t* 	subblocks_prefix_x,
-		const 	size_t& 		num_blocks,
-		const 	size_t& 		num_words_minor,
-		const 	size_t& 		max_blocks,
-		const 	size_t& 		max_sub_blocks,
-		const 	size_t& 		pass_1_blocksize) 
-	{
-		const char* opname = "prefix pass 2";
-		const size_t shared_element_bytes = 0;
-		const bool shared_size_yextend = false;
-		TUNE_2D(
-			block_intermediate_prefix_z, 
-			block_intermediate_prefix_x, 
-			subblocks_prefix_z, 
-			subblocks_prefix_x, 
-			num_blocks, 
-			num_words_minor, 
-			max_blocks, 
-			max_sub_blocks,
-			pass_1_blocksize);
-	}
-
 	void tune_inject_pass_2(
 				dim3& 			bestBlock, 
 				dim3& 			bestGrid,
 		const 	size_t& 		shared_element_bytes, 
 		const 	size_t& 		data_size_in_x, 
 		const 	size_t& 		data_size_in_y,
-				Tableau& 		targets, 
+				CALL_ARGS_GLOBAL_PREFIX,
 				Tableau& 		input, 
-        const 	word_std_t *	block_intermediate_prefix_z,
-        const 	word_std_t *	block_intermediate_prefix_x,
 		const 	pivot_t* 		pivots,
 		const 	size_t& 		active_targets,
 		const 	size_t& 		num_words_major,
@@ -958,10 +936,8 @@ namespace QuaSARQ {
 		const bool shared_size_yextend = true;
 		TUNE_2D_CUB(
 			call_injectcx_pass_2_kernel,
-			targets,
+			CALL_INPUT_GLOBAL_PREFIX,
 			input,
-			block_intermediate_prefix_z,
-			block_intermediate_prefix_x,
 			pivots,
 			active_targets,
 			num_words_major,

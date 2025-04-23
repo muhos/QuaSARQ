@@ -2,7 +2,6 @@
 #include "prefix.cuh"
 #include "templatedim.cuh"
 #include "timer.cuh"
-#include "access.cuh"
 #include "datatypes.cuh"
 #include <cub/block/block_scan.cuh>
 
@@ -11,8 +10,7 @@ namespace QuaSARQ {
     template <int BLOCKX, int BLOCKY>
     __global__ 
     void scan_blocks_single_pass(
-                word_std_t* intermediate_prefix_z, 
-                word_std_t* intermediate_prefix_x,
+                SINGLE_PASS_ARGS,
         const   size_t      num_chunks,
         const   size_t      num_words_minor,
         const   size_t      max_blocks) {
@@ -31,8 +29,7 @@ namespace QuaSARQ {
 
             if (w < num_words_minor && threadIdx.x < num_chunks) {
                 const size_t bid = PREFIX_INTERMEDIATE_INDEX(w, threadIdx.x);
-                z = intermediate_prefix_z[bid];
-                x = intermediate_prefix_x[bid];
+                READ_INTERMEDIATE_PREFIX(bid, z, x);
             }
 
             BlockScan(temp_storage_z[threadIdx.y]).ExclusiveScan(z, z, 0, XOROP());
@@ -40,8 +37,7 @@ namespace QuaSARQ {
 
             if (w < num_words_minor && threadIdx.x < num_chunks) {
                 const size_t bid = PREFIX_INTERMEDIATE_INDEX(w, threadIdx.x);
-                intermediate_prefix_z[bid] = z;
-                intermediate_prefix_x[bid] = x;
+                WRITE_INTERMEDIATE_PREFIX(bid, z, x);
             }
 
         }
@@ -50,8 +46,7 @@ namespace QuaSARQ {
     #define CALL_SINGLE_PASS_FOR_BLOCK(X, Y) \
         scan_blocks_single_pass <X, Y> \
         <<<currentgrid, currentblock, 0, stream>>> ( \
-            intermediate_prefix_z, \
-            intermediate_prefix_x, \
+            SINGLE_PASS_INPUT, \
             num_chunks, \
             num_words_minor, \
             max_blocks \
@@ -60,10 +55,7 @@ namespace QuaSARQ {
     template <int BLOCKX, int BLOCKY>
     __global__ 
     void scan_blocks_pass_1(
-		        word_std_t*     block_intermediate_prefix_z,
-		        word_std_t*     block_intermediate_prefix_x,
-		        word_std_t*     subblocks_prefix_z, 
-		        word_std_t*     subblocks_prefix_x, 
+		        PASS_1_ARGS_PREFIX,
 		const   size_t          num_blocks,
 		const   size_t          num_words_minor,
         const   size_t          max_blocks,
@@ -88,8 +80,7 @@ namespace QuaSARQ {
 
                 if (w < num_words_minor && tid_x < num_blocks) {
                     const size_t bid = PREFIX_INTERMEDIATE_INDEX(w, tid_x);
-                    z = block_intermediate_prefix_z[bid];
-                    x = block_intermediate_prefix_x[bid];
+                    READ_INTERMEDIATE_PREFIX(bid, z, x);
                 }
 
                 word_std_t blocksum_z;
@@ -101,16 +92,14 @@ namespace QuaSARQ {
                 if (w < num_words_minor && tid_x < num_blocks) {
                     const size_t bid = PREFIX_INTERMEDIATE_INDEX(w, tid_x);
                     assert(tid_x < max_blocks);
-                    block_intermediate_prefix_z[bid] = z;
-                    block_intermediate_prefix_x[bid] = x;
+                    WRITE_INTERMEDIATE_PREFIX(bid, z, x);
                 }
 
                 if (w < num_words_minor && threadIdx.x == blockDim.x - 1) {
                     assert((blockIdx.x * num_words_minor + w) < gridDim.x * num_words_minor);
                     grid_t sub_bid = PREFIX_SUBINTERMEDIATE_INDEX(w, bx);
                     assert(bx < max_sub_blocks);
-                    subblocks_prefix_z[sub_bid] = blocksum_z;
-                    subblocks_prefix_x[sub_bid] = blocksum_x;
+                    WRITE_SUBBLOCK_PREFIX(sub_bid, blocksum_z, blocksum_x);
                 }
             }
 		}
@@ -119,10 +108,7 @@ namespace QuaSARQ {
     #define CALL_PREFIX_PASS_1_FOR_BLOCK(X, Y) \
         scan_blocks_pass_1 <X, Y> \
         <<<currentgrid, currentblock, 0, stream>>> ( \
-            block_intermediate_prefix_z, \
-            block_intermediate_prefix_x, \
-            subblocks_prefix_z, \
-            subblocks_prefix_x, \
+            MULTI_PASS_INPUT, \
             num_blocks, \
             num_words_minor, \
             max_blocks, \
@@ -131,10 +117,7 @@ namespace QuaSARQ {
 
     __global__
     void scan_blocks_pass_2(
-                word_std_t*         block_intermediate_prefix_z,
-                word_std_t*         block_intermediate_prefix_x,
-                const_words_t   subblocks_prefix_z,
-                const_words_t   subblocks_prefix_x,
+                PASS_2_ARGS_PREFIX,
         const   size_t              num_blocks,
         const   size_t              num_words_minor,
         const   size_t              max_blocks,
@@ -145,20 +128,18 @@ namespace QuaSARQ {
 
             for_parallel_x(tid, num_blocks) {
                 
-                word_std_t offsetZ = 0;
-                word_std_t offsetX = 0;
+                word_std_t z = 0;
+                word_std_t x = 0;
                 
                 if ((tid / pass_1_blocksize) > 0) {
                     const size_t sub_bid = PREFIX_SUBINTERMEDIATE_INDEX(w, (tid / pass_1_blocksize));
                     assert((tid / pass_1_blocksize) < max_sub_blocks);
-                    offsetZ = subblocks_prefix_z[sub_bid];
-                    offsetX = subblocks_prefix_x[sub_bid];
+                    READ_SUBBLOCK_PREFIX(sub_bid, z, x);
                 }
 
                 const size_t bid = PREFIX_INTERMEDIATE_INDEX(w, tid);
                 assert(tid < max_blocks);
-                block_intermediate_prefix_z[bid] ^= offsetZ;
-                block_intermediate_prefix_x[bid] ^= offsetX;
+                XOR_TO_INTERMEDIATE_PREFIX(bid, z, x);
             }
         }
     }
@@ -174,25 +155,46 @@ namespace QuaSARQ {
             LOGERROR("number of minor words is invalid.");
         if (!num_words_major || num_words_major > MAX_WORDS)
             LOGERROR("number of major words is invalid.");
+        #if PREFIX_INTERLEAVE
+        if (global_prefix == nullptr) {
+            assert(num_qubits);
+            assert(num_words_minor);
+            const size_t max_array_size = num_qubits * num_words_minor;
+            LOGN2(2, "allocating %lld memory for prefix global cells.. ", int64(max_array_size * sizeof(PrefixCell)));
+            global_prefix = allocator.allocate<PrefixCell>(max_array_size);
+            LOGDONE(2, 4);
+        }
+        #else
+        targets.alloc(num_qubits, max_window_bytes, true, false, false);
+        #endif
         if (!max_intermediate_blocks) {
             max_intermediate_blocks = nextPow2(ROUNDUP(num_qubits, MIN_BLOCK_INTERMEDIATE_SIZE));
             size_t max_array_size = max_intermediate_blocks * num_words_minor;
             LOGN2(2, "allocating memory for %lld intermediate blocks.. ", int64(max_intermediate_blocks));
-            if (block_intermediate_prefix_z == nullptr)
-                block_intermediate_prefix_z = allocator.allocate<word_std_t>(max_array_size);
-            if (block_intermediate_prefix_x == nullptr)
-                block_intermediate_prefix_x = allocator.allocate<word_std_t>(max_array_size);
+            #if PREFIX_INTERLEAVE
+            if (intermediate_prefix == nullptr)
+                intermediate_prefix = allocator.allocate<PrefixCell>(max_array_size);
+            #else
+            if (intermediate_prefix_z == nullptr)
+                intermediate_prefix_z = allocator.allocate<word_std_t>(max_array_size);
+            if (intermediate_prefix_x == nullptr)
+                intermediate_prefix_x = allocator.allocate<word_std_t>(max_array_size);
+            #endif
             LOGDONE(2, 4);
             max_sub_blocks = MAX(1, (max_intermediate_blocks >> 1));
             max_array_size = max_sub_blocks * num_words_minor;
             LOGN2(2, "allocating memory for %lld sub-blocks.. ", int64(max_sub_blocks));
+            #if PREFIX_INTERLEAVE
+            if (subblock_prefix == nullptr)
+                subblock_prefix = allocator.allocate<PrefixCell>(max_array_size);
+            #else
             if (subblocks_prefix_z == nullptr)
                 subblocks_prefix_z = allocator.allocate<word_std_t>(max_array_size);
             if (subblocks_prefix_x == nullptr)
                 subblocks_prefix_x = allocator.allocate<word_std_t>(max_array_size);
+            #endif
             LOGDONE(2, 4);
         }
-        targets.alloc(num_qubits, max_window_bytes, true, false, false);
     }
 
     void Prefix::resize(const Tableau& input, const size_t& max_window_bytes) {
@@ -212,12 +214,13 @@ namespace QuaSARQ {
             (options.tune_prefixprepare || options.tune_prefixfinal)) {
             max_sub_blocks = max_intermediate_blocks >> 1;
         }
+        #if !PREFIX_INTERLEAVE
         targets.resize(num_qubits, max_window_bytes, true, false, false);
+        #endif
     }
 
     void call_single_pass_kernel(
-                word_std_t *        intermediate_prefix_z,
-                word_std_t *        intermediate_prefix_x,
+                SINGLE_PASS_ARGS,
         const   size_t&             num_chunks,
         const   size_t&             num_words_minor,
         const   size_t&             max_blocks,
@@ -229,10 +232,7 @@ namespace QuaSARQ {
         }
 
     void call_scan_blocks_pass_1_kernel(
-                word_std_t*     	block_intermediate_prefix_z,
-                word_std_t*     	block_intermediate_prefix_x,
-                word_std_t*     	subblocks_prefix_z, 
-                word_std_t*     	subblocks_prefix_x, 
+                PASS_1_ARGS_PREFIX,
         const   size_t&         	num_blocks,
         const   size_t&         	num_words_minor,
         const   size_t&         	max_blocks,
@@ -263,8 +263,7 @@ namespace QuaSARQ {
             LOGN2(2, " Running pass-x kernel scanning %lld chunks with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", num_blocks, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
             if (options.sync) cutimer.start(stream);
             call_single_pass_kernel(
-                block_intermediate_prefix_z, 
-                block_intermediate_prefix_x, 
+                SINGLE_PASS_INPUT,
                 num_blocks, 
                 num_words_minor,
                 max_intermediate_blocks,
@@ -298,10 +297,7 @@ namespace QuaSARQ {
             LOGN2(2, "  Running pass-1 kernel scanning %lld words with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", num_blocks, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
             if (options.sync) cutimer.start(stream);
             call_scan_blocks_pass_1_kernel(
-                block_intermediate_prefix_z, 
-                block_intermediate_prefix_x, 
-                subblocks_prefix_z, 
-                subblocks_prefix_x, 
+                MULTI_PASS_INPUT,
                 num_blocks, 
                 num_words_minor,
                 max_intermediate_blocks,
@@ -331,8 +327,7 @@ namespace QuaSARQ {
             LOGN2(2, "  Running pass-x kernel scanning %lld chunks with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", pass_1_gridsize, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
             if (options.sync) cutimer.start(stream);
             call_single_pass_kernel(
-                subblocks_prefix_z, 
-                subblocks_prefix_x, 
+                SINGLE_PASS_SUBINPUT,
                 pass_1_gridsize, 
                 num_words_minor,
                 max_sub_blocks,
@@ -361,10 +356,7 @@ namespace QuaSARQ {
             LOGN2(2, "  Running pass-2 kernel scanning %lld words with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", num_blocks, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
             if (options.sync) cutimer.start(stream);
             scan_blocks_pass_2 <<<currentgrid, currentblock, 0, stream>>> (
-                block_intermediate_prefix_z, 
-                block_intermediate_prefix_x, 
-                subblocks_prefix_z, 
-                subblocks_prefix_x, 
+                MULTI_PASS_INPUT,
                 num_blocks, 
                 num_words_minor, 
                 max_intermediate_blocks,
@@ -389,8 +381,7 @@ namespace QuaSARQ {
                 2 * sizeof(word_std_t), // used to skip very large blocks.
                 num_blocks,
                 num_words_minor,
-                block_intermediate_prefix_z, 
-                block_intermediate_prefix_x, 
+                SINGLE_PASS_INPUT,
                 num_blocks, 
                 num_words_minor,
                 max_intermediate_blocks);
@@ -407,10 +398,7 @@ namespace QuaSARQ {
                 2 * sizeof(word_std_t), // used to skip very large blocks.
                 max_blocks,
                 num_words_minor,
-                block_intermediate_prefix_z, 
-                block_intermediate_prefix_x, 
-                subblocks_prefix_z, 
-                subblocks_prefix_x, 
+                MULTI_PASS_INPUT,
                 max_blocks, 
                 num_words_minor,
                 max_intermediate_blocks,
@@ -424,10 +412,7 @@ namespace QuaSARQ {
                 bestblockprefixfinal, bestgridprefixfinal,
                 max_blocks,
                 num_words_minor,
-                block_intermediate_prefix_z, 
-                block_intermediate_prefix_x, 
-                subblocks_prefix_z, 
-                subblocks_prefix_x, 
+                MULTI_PASS_INPUT,
                 max_blocks, 
                 num_words_minor,
                 max_intermediate_blocks,
