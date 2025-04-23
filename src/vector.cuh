@@ -1,6 +1,4 @@
-
-#ifndef __CU_VECTOR_H
-#define __CU_VECTOR_H
+#pragma once
 
 #include "definitions.cuh"
 #include "datatypes.hpp"
@@ -67,5 +65,3 @@ namespace QuaSARQ {
 	};
 
 }
-
-#endif

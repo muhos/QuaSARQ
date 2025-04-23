@@ -1,6 +1,5 @@
 
-#ifndef __GL_MACROS_
-#define __GL_MACROS_
+#pragma once
 
 #include "datatypes.hpp"
 #include <cstring>
@@ -21,5 +20,3 @@ namespace QuaSARQ {
 	constexpr double percent	(const double& x, const double& y) { return ratio(100 * x, y); }
 	
 }
-
-#endif

@@ -1,6 +1,4 @@
-
-#ifndef __CU_DEFINITIONS_H
-#define __CU_DEFINITIONS_H  
+#pragma once
 
 #include <cstdio>
 #include <cstdlib>
@@ -77,5 +75,3 @@ namespace QuaSARQ {
 	#define SYNCALL CHECK(cudaDeviceSynchronize())
 
 }
-
-#endif

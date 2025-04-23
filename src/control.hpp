@@ -1,6 +1,4 @@
-
-#ifndef __CONTROL_
-#define __CONTROL_
+#pragma once
 
 #include "definitions.cuh"
 #include "definitions.hpp"
@@ -31,5 +29,3 @@ namespace QuaSARQ {
 		signal(SIGFPE, arithmetic_error); \
 	}
 }
-
-#endif 

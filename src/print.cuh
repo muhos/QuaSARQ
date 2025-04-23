@@ -1,5 +1,4 @@
-#ifndef __CU_PRINT_H
-#define __CU_PRINT_H
+#pragma once
 
 #include "datatypes.cuh"
 #include "circuit.cuh"
@@ -10,8 +9,6 @@
 namespace QuaSARQ {
 
     NOINLINE_DEVICE void REPCH_GPU(const char* ch, const size_t& size, const size_t& off = 0);
-
-    NOINLINE_ALL void print_table_interleave(const Table& t);
 
     NOINLINE_ALL void print_table(const Table& t, const size_t& total_targets = 0);
 
@@ -39,5 +36,3 @@ namespace QuaSARQ {
     __global__ void print_measurements_k(const_refs_t refs, const_buckets_t measurements, const_pivots_t pivots, const gate_ref_t num_gates);
 
 }
-
-#endif

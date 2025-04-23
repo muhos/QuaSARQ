@@ -5,29 +5,6 @@
 
 namespace QuaSARQ {
 
-#ifdef INTERLEAVE_XZ
-
-    __global__ void identity_1D(const size_t column_offset, const size_t num_qubits, Table* ps) {
-        for_parallel_x(q, num_qubits) {
-            ps->set_x_word_to_identity(q, column_offset);
-            ps->set_z_word_to_identity(q, column_offset);
-        }
-    }
-
-    __global__ void identity_Z_1D(const size_t column_offset, const size_t num_qubits, Table* ps) {
-        for_parallel_x(q, num_qubits) {
-            ps->set_z_word_to_identity(q, column_offset);
-        }
-    }
-
-    __global__ void identity_X_1D(const size_t column_offset, const size_t num_qubits, Table* ps) {
-        for_parallel_x(q, num_qubits) {
-            ps->set_x_word_to_identity(q, column_offset);
-        }
-    }
-
-#else
-
     __global__ void identity_1D(const size_t column_offset, const size_t num_qubits, Table* xs, Table* zs) {
         for_parallel_x(q, num_qubits) {
             xs->set_word_to_identity(q, column_offset);
@@ -67,10 +44,15 @@ namespace QuaSARQ {
             xs->set_stab_to_identity(q, column_offset);
         }
     }
-
-#endif
     
-    void Simulator::identity(Tableau& tab, const size_t& offset_per_partition, const size_t& num_qubits_per_partition, const cudaStream_t* streams, const InitialState& istate) {
+    void Simulator::identity(
+                Tableau&        tab, 
+        const   size_t&         offset_per_partition, 
+        const   size_t&         num_qubits_per_partition, 
+        const   cudaStream_t*   streams, 
+        const   InitialState&   istate) 
+    {
+        const cudaStream_t& stream = streams[KERNEL_STREAM];
         if (options.tune_identity) {
             tune_identity(
                 measuring ? identity_Z_extended_1D : identity_Z_1D, 
@@ -85,24 +67,31 @@ namespace QuaSARQ {
             state = '+';
         else if (istate == Imag)
             state = 'i';
-        LOGN2(1, "Creating \'%c\' initial state  for size %zd and offset %zd using grid(%d) and block(%d).. ", state, num_qubits_per_partition, offset_per_partition, bestgrididentity.x, bestblockidentity.x);
+        LOGN2(1, "Creating \'%c\' initial state  for size %zd and offset %zd using grid(%d) and block(%d).. ", 
+            state, num_qubits_per_partition, offset_per_partition, bestgrididentity.x, bestblockidentity.x);
         if (options.sync) cutimer.start();
         if (offset_per_partition) tab.reset();
         if (measuring) { 
             if (istate == Zero)
-                identity_Z_extended_1D <<< bestgrididentity, bestblockidentity, 0, streams[KERNEL_STREAM] >>> (offset_per_partition, num_qubits_per_partition, XZ_TABLE(tab));
+                identity_Z_extended_1D <<< bestgrididentity, bestblockidentity, 0, stream >>> 
+                    (offset_per_partition, num_qubits_per_partition, XZ_TABLE(tab));
             else if (istate == Plus)
-                identity_X_extended_1D <<< bestgrididentity, bestblockidentity, 0, streams[KERNEL_STREAM] >>> (offset_per_partition, num_qubits_per_partition, XZ_TABLE(tab));
+                identity_X_extended_1D <<< bestgrididentity, bestblockidentity, 0, stream >>> 
+                    (offset_per_partition, num_qubits_per_partition, XZ_TABLE(tab));
             else if (istate == Imag)
-                identity_extended_1D <<< bestgrididentity, bestblockidentity, 0, streams[KERNEL_STREAM] >>> (offset_per_partition, num_qubits_per_partition, XZ_TABLE(tab));
+                identity_extended_1D <<< bestgrididentity, bestblockidentity, 0, stream >>> 
+                    (offset_per_partition, num_qubits_per_partition, XZ_TABLE(tab));
         }
         else {
             if (istate == Zero)
-                identity_Z_1D <<< bestgrididentity, bestblockidentity, 0, streams[KERNEL_STREAM] >>> (offset_per_partition, num_qubits_per_partition, XZ_TABLE(tab));
+                identity_Z_1D <<< bestgrididentity, bestblockidentity, 0, stream >>> 
+                    (offset_per_partition, num_qubits_per_partition, XZ_TABLE(tab));
             else if (istate == Plus)
-                identity_X_1D <<< bestgrididentity, bestblockidentity, 0, streams[KERNEL_STREAM] >>> (offset_per_partition, num_qubits_per_partition, XZ_TABLE(tab));
+                identity_X_1D <<< bestgrididentity, bestblockidentity, 0, stream >>> 
+                    (offset_per_partition, num_qubits_per_partition, XZ_TABLE(tab));
             else if (istate == Imag)
-                identity_1D <<< bestgrididentity, bestblockidentity, 0, streams[KERNEL_STREAM] >>> (offset_per_partition, num_qubits_per_partition, XZ_TABLE(tab));
+                identity_1D <<< bestgrididentity, bestblockidentity, 0, stream >>> 
+                    (offset_per_partition, num_qubits_per_partition, XZ_TABLE(tab));
         }
         if (options.sync) {
             LASTERR("failed to launch identity kernel");

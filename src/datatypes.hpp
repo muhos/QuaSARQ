@@ -1,6 +1,4 @@
-
-#ifndef __DATATYPES_H
-#define __DATATYPES_H
+#pragma once
 
 #include <cstddef>
 #include <cstdint>
@@ -23,5 +21,3 @@ namespace QuaSARQ {
 	};
 	
 }
-
-#endif

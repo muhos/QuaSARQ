@@ -1,6 +1,4 @@
-
-#ifndef __VECTOR_H
-#define __VECTOR_H
+#pragma once
 
 #include "malloc.hpp"
 #include "color.hpp"
@@ -203,5 +201,3 @@ namespace QuaSARQ {
 		for (auto* PTR = VECTOR.data(), *END = VECTOR.end(); PTR != END; ++PTR)
 	
 }
-
-#endif

@@ -1,33 +1,11 @@
 #include "equivalence.hpp"
 #include "operators.cuh"
-#include "macros.cuh"
 #include "step.cuh"
 #include <cuda_profiler_api.h>
 
 namespace QuaSARQ {
 
     __managed__ uint32 equivalent;
-
-    #ifdef INTERLEAVE_XZ
-
-    __global__ void equivalence_1D(const_table_t ps, const_signs_t ss, const_table_t other_ps, const_signs_t other_ss, const size_t min_num_words) {
-        for_parallel_x(w, min_num_words) {
-            if (equivalent && ((*ps)[w] != (*other_ps)[w])) {
-                equivalent = 0;
-                return;
-            }
-            else if (equivalent && ((*ps)[w] != (*other_ps)[w])) {
-                equivalent = 0;
-                return;
-            }
-            else if (equivalent && w < ss->size() && ((*ss)[w] != (*other_ss)[w])) {
-                equivalent = 0;
-                return;
-            }
-        }
-    }
-
-#else
 
     __global__ void equivalence_1D(const_table_t xs, const_table_t zs, const_signs_t ss, const_table_t other_xs, const_table_t other_zs, const_signs_t other_ss, const size_t min_num_words) {
         for_parallel_x(w, min_num_words) {
@@ -45,9 +23,6 @@ namespace QuaSARQ {
             }
         }
     }
-
-#endif
-
 
     bool Equivalence::check(const size_t& p, const cudaStream_t* streams, const cudaStream_t* other_streams) {
 

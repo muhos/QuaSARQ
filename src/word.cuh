@@ -1,11 +1,12 @@
-
-#ifndef __CU_WORD_H
-#define __CU_WORD_H
+#pragma once
 
 #include <cassert>
 #include "definitions.cuh"
 #include "logging.hpp"
-#include "macros.cuh"
+
+#if !defined(WORD_SIZE_8) && !defined(WORD_SIZE_32) && !defined(WORD_SIZE_64)
+#define WORD_SIZE_64
+#endif
 
 #ifdef __GNUC__ 
 #pragma GCC diagnostic ignored "-Wreturn-local-addr"
@@ -152,14 +153,14 @@ namespace QuaSARQ {
 
     #define B2B_STR "%-3c%-3c%-3c%-3c%-3c%-3c%-3c%-3c"
     #define RB2B(WORD)  \
-    ((WORD) & 0x01 ? '1' : '0'), \
-    ((WORD) & 0x02 ? '1' : '0'), \
-    ((WORD) & 0x04 ? '1' : '0'), \
-    ((WORD) & 0x08 ? '1' : '0'), \
-    ((WORD) & 0x10 ? '1' : '0'), \
-    ((WORD) & 0x20 ? '1' : '0'), \
-    ((WORD) & 0x40 ? '1' : '0'), \
-    ((WORD) & 0x80 ? '1' : '0') 
+    ((WORD) & 0x01U ? '1' : '0'), \
+    ((WORD) & 0x02U ? '1' : '0'), \
+    ((WORD) & 0x04U ? '1' : '0'), \
+    ((WORD) & 0x08U ? '1' : '0'), \
+    ((WORD) & 0x10U ? '1' : '0'), \
+    ((WORD) & 0x20U ? '1' : '0'), \
+    ((WORD) & 0x40U ? '1' : '0'), \
+    ((WORD) & 0x80U ? '1' : '0') 
 
 #elif defined(WORD_SIZE_32) || defined(WORD_SIZE_64)
 
@@ -201,5 +202,3 @@ namespace QuaSARQ {
 #endif
 
 }
-
-#endif 

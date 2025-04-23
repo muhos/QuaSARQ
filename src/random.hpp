@@ -1,6 +1,4 @@
-
-#ifndef __RANDOM_H
-#define __RANDOM_H
+#pragma once
 
 #include <cassert>
 #include "datatypes.hpp"
@@ -12,7 +10,6 @@ namespace QuaSARQ {
      * shr3 (shift rotate) and Kiss (Keep it simple
      * stupid) constant. Randomness is up to 2^32.
     */
-
     class Random {
         uint32 _seed_;
 
@@ -39,5 +36,3 @@ namespace QuaSARQ {
     };
 
 }
-
-#endif

@@ -1,5 +1,4 @@
-#ifndef __CU_SHARED_H
-#define __CU_SHARED_H
+#pragma once
 
 #include "definitions.cuh"
 
@@ -21,5 +20,3 @@ namespace QuaSARQ {
 	};
 
 }
-
-#endif

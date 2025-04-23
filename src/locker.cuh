@@ -1,5 +1,4 @@
-#ifndef __CU_LOCKER_H
-#define __CU_LOCKER_H
+#pragma once
 
 #include "definitions.cuh"
 #include "memory.cuh"
@@ -65,5 +64,3 @@ namespace QuaSARQ {
 	};
 
 }
-
-#endif

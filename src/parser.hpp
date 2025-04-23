@@ -1,6 +1,4 @@
-
-#ifndef __PARSER_H
-#define __PARSER_H
+#pragma once
 
 #include "definitions.hpp"
 #include "statistics.hpp"
@@ -243,5 +241,3 @@ namespace QuaSARQ {
     };
 
 }
-
-#endif

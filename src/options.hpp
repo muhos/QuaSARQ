@@ -1,6 +1,4 @@
-
-#ifndef __OPTIONS_H
-#define __OPTIONS_H
+#pragma once
 
 #include "datatypes.hpp"
 #include "constants.hpp"
@@ -81,5 +79,3 @@ namespace QuaSARQ {
     extern Options options;
 
 }
-
-#endif

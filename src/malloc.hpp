@@ -1,6 +1,4 @@
-
-#ifndef __MALLOC_
-#define __MALLOC_
+#pragma once
 
 #include "logging.hpp"
 #include <cstdlib>
@@ -66,5 +64,3 @@ namespace QuaSARQ {
 #endif
 
 }
-
-#endif

@@ -1,13 +1,9 @@
-
-#ifndef __CU_SUM_H
-#define __CU_SUM_H
+#pragma once
 
 #include "definitions.cuh"
 #include "shared.cuh"
 
 namespace QuaSARQ {
-
-	#define FULL_WARP 0xffffffff
 
 	#define USE_SHARED_IN_WARP 0
 
@@ -79,5 +75,3 @@ namespace QuaSARQ {
 	}
 
 }
-
-#endif

@@ -1,6 +1,4 @@
-
-#ifndef __EQUIVALENCE_H
-#define __EQUIVALENCE_H
+#pragma once
 
 #include "simulator.hpp"
 #include "definitions.cuh"
@@ -41,5 +39,3 @@ namespace QuaSARQ {
 	};
 
 }
-
-#endif 

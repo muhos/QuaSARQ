@@ -1,3 +1,5 @@
+#pragma once
+
 #include <nvml.h>
 #include "datatypes.hpp"
 

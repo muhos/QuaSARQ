@@ -1,6 +1,4 @@
-
-#ifndef __ARGS_H
-#define __ARGS_H
+#pragma once
 
 #include "definitions.hpp"
 #include "vector.hpp"
@@ -301,5 +299,3 @@ namespace QuaSARQ {
 		}
 	};
 }
-
-#endif

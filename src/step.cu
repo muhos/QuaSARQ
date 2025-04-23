@@ -1,12 +1,29 @@
 #include "simulator.hpp"
 #include "step.cuh"
 #include "operators.cuh"
-#include "macros.cuh"
 #include "collapse.cuh"
 #include "templatedim.cuh"
 
 
 namespace QuaSARQ {
+
+    #define LOAD_X_WORDS(Q) \
+        word_t& x_words_ ## Q = x_gens_word[Q ## _word_idx]
+
+    #define LOAD_Z_WORDS(Q) \
+        word_t& z_words_ ## Q = z_gens_word[Q ## _word_idx]
+
+    #define LOAD_Q1_WORDS \
+        LOAD_X_WORDS(q1); \
+        LOAD_Z_WORDS(q1)
+
+    #define LOAD_Q2_WORDS \
+        const size_t q2 = gate.wires[1]; \
+        assert(q2 != INVALID_QUBIT); \
+        const size_t q2_word_idx = q2 * num_words_major; \
+        LOAD_Q1_WORDS; \
+        LOAD_X_WORDS(q2); \
+        LOAD_Z_WORDS(q2)
 
     INLINE_DEVICE
     void update_forall_gate(
@@ -29,50 +46,66 @@ namespace QuaSARQ {
             assert(gate.size <= 2);
 
             const size_t q1 = gate.wires[0];
-            const size_t q2 = gate.wires[gate.size - 1];
-
             assert(q1 != INVALID_QUBIT);
-            assert(q2 != INVALID_QUBIT);
-
-            const size_t q1_x_word_idx = X_OFFSET(q1) * num_words_major;
-            const size_t q2_x_word_idx = X_OFFSET(q2) * num_words_major;
-            #ifdef INTERLEAVE_WORDS
-            const size_t q1_z_word_idx = Z_OFFSET(q1) * num_words_major + 1;
-            const size_t q2_z_word_idx = Z_OFFSET(q2) * num_words_major + 1;
-            #else
-            const size_t q1_z_word_idx = Z_OFFSET(q1) * num_words_major;
-            const size_t q2_z_word_idx = Z_OFFSET(q2) * num_words_major;
-            #endif
-
-            #ifdef INTERLEAVE_XZ
-            word_t& x_words_q1 = generators[q1_x_word_idx];
-            word_t& x_words_q2 = generators[q2_x_word_idx];
-            word_t& z_words_q1 = generators[q1_z_word_idx];
-            word_t& z_words_q2 = generators[q2_z_word_idx];
-            #else
-            word_t& x_words_q1 = x_gens_word[q1_x_word_idx];
-            word_t& x_words_q2 = x_gens_word[q2_x_word_idx];
-            word_t& z_words_q1 = z_gens_word[q1_z_word_idx];
-            word_t& z_words_q2 = z_gens_word[q2_z_word_idx];
-            #endif
+            const size_t q1_word_idx = q1 * num_words_major;
 
             #if DEBUG_STEP
-            LOGGPU("  word(%-4lld): Gate(%-5s, r:%-4u, s:%d), qubits(%-3lld, %-3lld)\n", w, G2S[gate.type], r, gate.size, q1, q2);
+            LOGGPU("  word(%-4lld): Gate(%-5s, r:%-4u, s:%d), qubits(%-3lld, %-3lld)\n", 
+                w, G2S[gate.type], r, gate.size, q1, gate.wires[gate.size - 1]);
             #endif
 
             switch (gate.type) {
             case I: { break; }
-            case H: { do_H(signs_word, words_q1); break; }
-            case S: { do_S(signs_word, words_q1); break; }
-            case S_DAG: { do_Sdg(signs_word, words_q1); break; }
-            case Z: { sign_update_X_or_Z(signs_word, x_words_q1); break; }
-            case X: { sign_update_X_or_Z(signs_word, z_words_q1); break; }
-            case Y: { sign_update_Y(signs_word, x_words_q1, z_words_q1); break; }
-            case CX: { do_CX(signs_word, q1, q2); break; }
-            case CZ: { do_CZ(signs_word, q1, q2); break; }
-            case CY: { do_CY(signs_word, q1, q2); break; }
-            case SWAP: { do_SWAP(x_words_q1, x_words_q2); do_SWAP(z_words_q1, z_words_q2); break; }
-            case ISWAP: { do_iSWAP(signs_word, q1, q2); break; }
+            case H: { 
+                LOAD_Q1_WORDS;
+                do_H(signs_word, words_q1); 
+                break; 
+            }
+            case S: { 
+                LOAD_Q1_WORDS;
+                do_S(signs_word, words_q1); 
+                break; 
+            }
+            case S_DAG: { 
+                LOAD_Q1_WORDS;
+                do_Sdg(signs_word, words_q1); 
+                break; 
+            }
+            case Z: { 
+                LOAD_X_WORDS(q1);
+                sign_update_X_or_Z(signs_word, x_words_q1); 
+                break; 
+            }
+            case X: { 
+                LOAD_Z_WORDS(q1);
+                sign_update_X_or_Z(signs_word, z_words_q1); 
+                break; 
+            }
+            case Y: { 
+                LOAD_Q1_WORDS;
+                sign_update_Y(signs_word, x_words_q1, z_words_q1); 
+                break; 
+            }
+            case CX: { 
+                LOAD_Q2_WORDS;
+                do_CX(signs_word, q1, q2); break; 
+            }
+            case CZ: { 
+                LOAD_Q2_WORDS;
+                do_CZ(signs_word, q1, q2); break; 
+            }
+            case CY: { 
+                LOAD_Q2_WORDS;
+                do_CY(signs_word, q1, q2); break; 
+            }
+            case SWAP: { 
+                LOAD_Q2_WORDS;
+                do_SWAP(x_words_q1, x_words_q2); do_SWAP(z_words_q1, z_words_q2); break; 
+            }
+            case ISWAP: { 
+                LOAD_Q2_WORDS;
+                do_iSWAP(signs_word, q1, q2); break; 
+            }
             default: break;
             }
         }
@@ -80,99 +113,62 @@ namespace QuaSARQ {
 
     __global__ 
     void step_2D_atomic(
-        const_refs_t refs, 
-        const_buckets_t gates, 
-        const size_t num_gates, 
-        const size_t num_words_major, 
-        #ifdef INTERLEAVE_XZ
-        Table* ps, 
-        #else
-        Table* xs, Table* zs,
-        #endif
-        Signs* ss) {
+                const_refs_t 	refs,
+                const_buckets_t gates,
+        const 	size_t 			num_gates,
+        const 	size_t 			num_words_major,
+                Table *			xs, 
+                Table *			zs,
+                Signs *			ss) 
+    {
         sign_t* signs = ss->data();
-
         for_parallel_y(w, num_words_major) {
-
             sign_t signs_word = signs[w];
-
-            #ifdef INTERLEAVE_XZ
-                #ifdef INTERLEAVE_WORDS
-                word_t* generators = ps->data() + X_OFFSET(w);
-                #else
-                word_t* generators = ps->data() + w;
-                #endif
-            #else
-            word_t* x_gens_word = xs->data() + w;
-            word_t* z_gens_word = zs->data() + w;
-            #endif
-
             update_forall_gate(
                 signs_word,
-                x_gens_word,
-                z_gens_word,
+                xs->data() + w,
+                zs->data() + w,
                 refs,
                 gates,
                 num_gates,
                 num_words_major
             );
-
             if (signs_word) {
                 atomicXOR(signs + w, signs_word);
             }
-
         }
     }
 
     template<int B>
     __global__ 
     void step_2D(
-        const_refs_t refs, 
-        const_buckets_t gates, 
-        const size_t num_gates, 
-        const size_t num_words_major, 
-    #ifdef INTERLEAVE_XZ
-    Table* ps, 
-    #else
-    Table* xs, Table* zs,
-    #endif
-    Signs* ss) {
+                        const_refs_t 	refs,
+                        const_buckets_t gates,
+                const 	size_t 			num_gates,
+                const 	size_t 			num_words_major,
+                        Table *			xs, 
+                        Table *			zs,
+                        Signs *			ss) 
+    {
         uint32 tx = threadIdx.x;
-        uint32 global_offset = blockIdx.x * B;
         sign_t* smem = SharedMemory<sign_t>();
         sign_t* shared_signs = smem + threadIdx.y * B;
         sign_t* signs = ss->data();
-
         for_parallel_y(w, num_words_major) {
-
             sign_t signs_word = signs[w];
-
-            #ifdef INTERLEAVE_XZ
-                #ifdef INTERLEAVE_WORDS
-                word_t* generators = ps->data() + X_OFFSET(w);
-                #else
-                word_t* generators = ps->data() + w;
-                #endif
-            #else
-            word_t* x_gens_word = xs->data() + w;
-            word_t* z_gens_word = zs->data() + w;
-            #endif
-
             update_forall_gate(
                 signs_word,
-                x_gens_word,
-                z_gens_word,
+                xs->data() + w,
+                zs->data() + w,
                 refs,
                 gates,
                 num_gates,
                 num_words_major
             );
-
             collapse_load_shared(shared_signs, signs_word, tx, num_gates);
             collapse_shared<B, sign_t>(shared_signs, signs_word, tx);
             collapse_warp<B, sign_t>(signs_word, tx);
-
-            if (!tx && global_offset < num_gates && signs_word) {
+            if (!tx && signs_word) {
                 atomicXOR(signs + w, signs_word);
             }
         }
@@ -180,37 +176,25 @@ namespace QuaSARQ {
 
     template<int B>
     __global__ 
-    void step_2D_warped(const_refs_t refs, const_buckets_t gates, const size_t num_gates, const size_t num_words_major, 
-    #ifdef INTERLEAVE_XZ
-    Table* ps, 
-    #else
-    Table* xs, Table* zs,
-    #endif
-    Signs* ss) {
+    void step_2D_warped(
+                const_refs_t 	refs,
+                const_buckets_t gates,
+        const 	size_t 			num_gates,
+        const 	size_t 			num_words_major,
+                Table *			xs, 
+                Table *			zs,
+                Signs *			ss) 
+    {
         assert(B <= 32);
         uint32 tx = threadIdx.x;
-        uint32 global_offset = blockIdx.x * B;
         sign_t* signs = ss->data();
-
         for_parallel_y(w, num_words_major) {
-
             sign_t signs_word = signs[w];
-
-            #ifdef INTERLEAVE_XZ
-                #ifdef INTERLEAVE_WORDS
-                word_t* generators = (!tx) ? ps->data() + X_OFFSET(w) : nullptr;
-                generators = (word_t*)__shfl_sync(FULL_WARP, uint64(generators), 0, B);
-                #else
-                word_t* generators = (!tx) ? ps->data() + w : nullptr;
-                generators = (word_t*)__shfl_sync(FULL_WARP, uint64(generators), 0, B);
-                #endif
-            #else
+            const unsigned mask = __activemask();
             word_t* x_gens_word = (!tx) ? xs->data() + w : nullptr;
-            x_gens_word = (word_t*)__shfl_sync(FULL_WARP, uint64(x_gens_word), 0, B);
+            x_gens_word = (word_t*)__shfl_sync(mask, uint64(x_gens_word), 0, B);
             word_t* z_gens_word = (!tx) ? zs->data() + w : nullptr;
-            z_gens_word = (word_t*)__shfl_sync(FULL_WARP, uint64(z_gens_word), 0, B);
-            #endif
-            
+            z_gens_word = (word_t*)__shfl_sync(mask, uint64(z_gens_word), 0, B);
             update_forall_gate(
                 signs_word,
                 x_gens_word,
@@ -220,10 +204,8 @@ namespace QuaSARQ {
                 num_gates,
                 num_words_major
             );
-
             collapse_warp<B, sign_t>(signs_word, tx);
-
-            if (!tx && global_offset < num_gates && signs_word) {
+            if (!tx && signs_word) {
                 atomicXOR(signs + w, signs_word);
             }
         }

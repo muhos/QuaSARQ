@@ -1,7 +1,4 @@
-
-
-#ifndef __CIRCUIT_H
-#define __CIRCUIT_H
+#pragma once
 
 #include "vector.hpp"
 #include "gate.cuh"
@@ -318,5 +315,3 @@ namespace QuaSARQ {
     };
 
 }
-
-#endif

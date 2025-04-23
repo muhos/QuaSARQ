@@ -1,6 +1,4 @@
-﻿
-#ifndef __GL_DEFINITIONS_H
-#define __GL_DEFINITIONS_H
+﻿#pragma once
 
 #include <iostream>
 #include <algorithm>
@@ -131,6 +129,3 @@ namespace QuaSARQ {
 	}
 	
 }
-
-#endif 
-

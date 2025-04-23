@@ -1,7 +1,6 @@
 
 #include "options.hpp"
 #include "input.hpp"
-#include "macros.cuh"
 
 namespace QuaSARQ {
 

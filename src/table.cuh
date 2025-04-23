@@ -1,7 +1,4 @@
-
-
-#ifndef __CU_TABLE_H
-#define __CU_TABLE_H
+#pragma once
 
 #include <string>
 
@@ -9,9 +6,15 @@
 #include "memory.cuh"
 #include "malloc.hpp"
 #include "word.cuh"
-#include "macros.cuh"
 
 namespace QuaSARQ {
+
+    #define BIT_OFFSET(IDX)  ((IDX) & WORD_MASK)
+    #define WORD_OFFSET(IDX) ((IDX) >> WORD_POWER)
+
+    #define Z_TABLE(TABLEAU)  TABLEAU.ztable()
+    #define X_TABLE(TABLEAU)  TABLEAU.xtable()
+    #define XZ_TABLE(TABLEAU) TABLEAU.xtable(), TABLEAU.ztable()
 
     /*
     * A flat 2D matrix of bit-packed words of size 'word_t'.
@@ -38,41 +41,6 @@ namespace QuaSARQ {
     *    OPERATION(generators[q + w * num_words_major])
     * 
     */
-
-    #define BIT_OFFSET(IDX)  ((IDX) & WORD_MASK)
-    #define WORD_OFFSET(IDX) ((IDX) >> WORD_POWER)
-
-    // Used in interleaving mode.
-#ifdef INTERLEAVE_XZ
-    #ifdef INTERLEAVE_WORDS
-        #define X_WORD_OFFSET(W) ((W) << 1)
-        #define Z_WORD_OFFSET(W) (X_WORD_OFFSET(W) | 1)
-        #define X_OFFSET(IDX) X_WORD_OFFSET(IDX)
-        #define Z_OFFSET(IDX) X_WORD_OFFSET(IDX)
-    #else
-        #define X_WORD_OFFSET(W) (W)
-        #define Z_WORD_OFFSET(W) (W)
-        constexpr size_t INTERLEAVE_OFFSET =  2 * INTERLEAVE_COLS;
-        INLINE_ALL size_t X_OFFSET(const size_t& idx) {
-            return (((idx) / INTERLEAVE_COLS) * INTERLEAVE_OFFSET) + idx % INTERLEAVE_COLS;
-        }
-        INLINE_ALL size_t Z_OFFSET(const size_t& idx) { 
-            return X_OFFSET(idx) + INTERLEAVE_COLS;
-        } 
-    #endif
-    #define Z_TABLE(TABLEAU)  TABLEAU.ptable()
-    #define X_TABLE(TABLEAU)  TABLEAU.ptable()
-    #define XZ_TABLE(TABLEAU) TABLEAU.ptable()
-#else
-    #define X_WORD_OFFSET(W) (W)
-    #define Z_WORD_OFFSET(W) (W)
-    #define X_OFFSET(IDX)    (IDX)
-    #define Z_OFFSET(IDX)    (IDX)
-    #define Z_TABLE(TABLEAU)  TABLEAU.ztable()
-    #define X_TABLE(TABLEAU)  TABLEAU.xtable()
-    #define XZ_TABLE(TABLEAU) TABLEAU.xtable(), TABLEAU.ztable()
-#endif
-
     class Table {
 
         word_t* _data;
@@ -163,13 +131,13 @@ namespace QuaSARQ {
         INLINE_ALL const word_t* data() const { return _data; }
 
         INLINE_ALL void set_destab_to_identity(const qubit_t& q, const qubit_t& column_offset = 0) {
-            const size_t idx = (X_OFFSET(q) + column_offset) * _num_words_major + X_WORD_OFFSET(WORD_OFFSET(q));
+            const size_t idx = (q + column_offset) * _num_words_major + WORD_OFFSET(q);
             assert(idx < _num_words);
             _data[idx].identity(q);
         }
 
         INLINE_ALL void set_stab_to_identity(const qubit_t& q, const qubit_t& column_offset = 0) {
-            const size_t idx = (X_OFFSET(q) + column_offset) * _num_words_major + X_WORD_OFFSET(WORD_OFFSET(q + _num_qubits_padded));
+            const size_t idx = (q + column_offset) * _num_words_major + WORD_OFFSET(q + _num_qubits_padded);
             assert(idx < _num_words);
             _data[idx].identity(q + _num_qubits_padded);
         }
@@ -205,13 +173,13 @@ namespace QuaSARQ {
         }
 
         INLINE_ALL bool check_z_word_is_identity(const qubit_t& q, const qubit_t& column_offset) const {
-            const size_t idx = (Z_OFFSET(q) + column_offset) * _num_words_major + WORD_OFFSET(q);
+            const size_t idx = (q + column_offset) * _num_words_major + WORD_OFFSET(q);
             assert(idx < _num_words);
             return _data[idx].is_identity(q);
         }
 
         INLINE_ALL bool check_x_word_is_identity(const qubit_t& q, const qubit_t& column_offset) const {
-            const size_t idx = (X_OFFSET(q) + column_offset) * _num_words_major + WORD_OFFSET(q);
+            const size_t idx = (q + column_offset) * _num_words_major + WORD_OFFSET(q);
             assert(idx < _num_words);
             return _data[idx].is_identity(q);
         }
@@ -257,5 +225,3 @@ namespace QuaSARQ {
     };    
 
 }
-
-#endif

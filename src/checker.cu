@@ -10,12 +10,12 @@ namespace QuaSARQ {
 
     template<int B>
     __global__ 
-    void check_identity_Z_2D(const size_t offset, const size_t num_qubits, const size_t num_words_major, 
-    #ifdef INTERLEAVE_XZ
-    Table* ps
-    #else
-    Table* xs, Table* zs
-    #endif
+    void check_identity_Z_2D(
+        const   size_t offset, 
+        const   size_t num_qubits, 
+        const   size_t num_words_major, 
+                Table* xs, 
+                Table* zs
     ) {
         word_std_t* smem = SharedMemory<word_std_t>();
         int tx = threadIdx.x;
@@ -28,18 +28,6 @@ namespace QuaSARQ {
             word_std_t xored_z = word_std_t(0);
             word_std_t xored_x = word_std_t(0);
 
-    #ifdef INTERLEAVE_XZ
-            word_t* gens_per_word = ps->data() + w;
-            for_parallel_x(q, num_qubits) {
-                // Check the diagonal. Done only once.
-                if (!w && !ps->check_z_word_is_identity(q, offset)) {
-                    LOGGPU(" Qubit %lld\n", (q + offset));
-                    ps->flag_not_indentity();                  
-                }
-                xored_z ^= word_std_t(gens_per_word[(Z_OFFSET(q) + offset) * num_words_major]);
-                xored_x ^= word_std_t(gens_per_word[(X_OFFSET(q) + offset) * num_words_major]);
-            }
-    #else
             word_t* z_gens_per_word = zs->data() + w;
             word_t* x_gens_per_word = xs->data() + w;
             for_parallel_x(q, num_qubits) {
@@ -51,7 +39,6 @@ namespace QuaSARQ {
                 xored_z ^= word_std_t(z_gens_per_word[(q + offset) * num_words_major]);
                 xored_x ^= word_std_t(x_gens_per_word[(q + offset) * num_words_major]);
             }
-    #endif
 
             word_std_t xored = xored_x ^ xored_z;
 
@@ -70,12 +57,12 @@ namespace QuaSARQ {
 
     template<int B>
     __global__ 
-    void check_identity_X_2D(const size_t offset, const size_t num_qubits, const size_t num_words_major, 
-    #ifdef INTERLEAVE_XZ
-    Table* ps
-    #else
-    Table* xs, Table* zs
-    #endif
+    void check_identity_X_2D(
+        const   size_t offset, 
+        const   size_t num_qubits, 
+        const   size_t num_words_major, 
+                Table* xs, 
+                Table* zs
     ) {
 
         word_std_t* smem = SharedMemory<word_std_t>();
@@ -89,18 +76,6 @@ namespace QuaSARQ {
             word_std_t xored_z = word_std_t(0);
             word_std_t xored_x = word_std_t(0);
 
-    #ifdef INTERLEAVE_XZ
-            word_t* gens_per_word = ps->data() + w;
-            for_parallel_x(q, num_qubits) {
-                // Check the diagonal. Done only once.
-                if (!w && !ps->check_x_word_is_identity(q, offset)) {
-                    LOGGPU(" Qubit %lld\n", (q + offset));
-                    ps->flag_not_indentity();                  
-                }
-                xored_z ^= word_std_t(gens_per_word[(Z_OFFSET(q) + offset) * num_words_major]);
-                xored_x ^= word_std_t(gens_per_word[(X_OFFSET(q) + offset) * num_words_major]);
-            }
-    #else
             word_t* z_gens_per_word = zs->data() + w;
             word_t* x_gens_per_word = xs->data() + w;
             for_parallel_x(q, num_qubits) {
@@ -111,7 +86,6 @@ namespace QuaSARQ {
                 xored_z ^= word_std_t(z_gens_per_word[(q + offset) * num_words_major]);
                 xored_x ^= word_std_t(x_gens_per_word[(q + offset) * num_words_major]);
             }
-    #endif
 
             word_std_t xored = xored_x ^ xored_z;
 
@@ -130,12 +104,12 @@ namespace QuaSARQ {
 
     template<int B>
     __global__ 
-    void check_identity_2D(const size_t offset, const size_t num_qubits, const size_t num_words_major, 
-    #ifdef INTERLEAVE_XZ
-    Table* ps
-    #else
-    Table* xs, Table* zs
-    #endif
+    void check_identity_2D(
+        const   size_t offset, 
+        const   size_t num_qubits, 
+        const   size_t num_words_major, 
+                Table* xs, 
+                Table* zs
     ) {
 
         word_std_t* smem = SharedMemory<word_std_t>();
@@ -149,20 +123,6 @@ namespace QuaSARQ {
             word_std_t xored_z = word_std_t(0);
             word_std_t xored_x = word_std_t(0);
 
-    #ifdef INTERLEAVE_XZ
-            word_t* gens_per_word = ps->data() + w;
-            for_parallel_x(q, num_qubits) {
-                // Check the diagonal. Done only once.
-                if (!w && !ps->check_z_word_is_identity(q, offset)) {
-                    ps->flag_not_indentity();
-                }
-                if (!w && !ps->check_x_word_is_identity(q, offset)) {
-                    ps->flag_not_indentity();
-                }
-                xored_z ^= word_std_t(gens_per_word[(Z_OFFSET(q) + offset) * num_words_major]);
-                xored_x ^= word_std_t(gens_per_word[(X_OFFSET(q) + offset) * num_words_major]);
-            }
-    #else
             word_t* z_gens_per_word = zs->data() + w;
             word_t* x_gens_per_word = xs->data() + w;
             for_parallel_x(q, num_qubits) {
@@ -176,7 +136,7 @@ namespace QuaSARQ {
                 xored_z ^= word_std_t(z_gens_per_word[(q + offset) * num_words_major]);
                 xored_x ^= word_std_t(x_gens_per_word[(q + offset) * num_words_major]);
             }
-    #endif
+
             word_std_t xored = xored_x ^ xored_z;
 
             collapse_load_shared(shared_xored, xored, tx, num_qubits);

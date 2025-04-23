@@ -1,7 +1,4 @@
-
-
-#ifndef __CU_TRANSPOSE_H
-#define __CU_TRANSPOSE_H
+#pragma once
 
 #include "datatypes.cuh"
 #include "tableau.cuh"
@@ -57,5 +54,3 @@ void tune_inplace_transpose(
     const 	bool& 	row_major);
 
 }
-
-#endif

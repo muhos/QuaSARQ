@@ -11,38 +11,6 @@ namespace QuaSARQ {
         for (size_t i = off; i < size; i++) LOGGPU("%s", ch);
     }
 
-    NOINLINE_ALL void print_table_interleave(const Table& t) {
-        const bool is_rowmajor = t.is_rowmajor();
-        const size_t size = t.size();
-        const size_t major_end = t.num_words_major();
-        const size_t minor_end = t.num_words_major() * WORD_BITS;
-        #if defined(INTERLEAVE_XZ)
-        const size_t interleaving_offset = major_end * INTERLEAVE_COLS * 2;
-        #else
-        const size_t interleaving_offset = major_end;
-        #endif
-        size_t j = 0;
-        for (size_t i = 0; i < size; i++) {
-            if (i > 0 && i % major_end == 0)
-                LOGGPU("\n");
-            if (i > 0 && i % minor_end == 0)
-                LOGGPU("\n");
-            LOGGPU("  ");
-            
-            if (i > 0 && i % interleaving_offset == 0) 
-                j++;
-            if (i % major_end == 0)
-                LOGGPU("%-2lld ", j);
-            #if defined(WORD_SIZE_64)
-            LOGGPU(B2B_STR, RB2B(uint32(word_std_t(t[i]) & 0xFFFFFFFFUL)));
-            LOGGPU(B2B_STR, RB2B(uint32((word_std_t(t[i]) >> 32) & 0xFFFFFFFFUL)));
-            #else
-            LOGGPU(B2B_STR, RB2B(word_std_t(t[i])));
-            #endif
-        }
-        LOGGPU("\n");
-    }
-
     NOINLINE_ALL void print_table(const Table& t, const size_t& total_targets) {
         size_t bits, rows, cols;
         const size_t num_qubits_padded = t.num_qubits_padded();
@@ -248,8 +216,8 @@ namespace QuaSARQ {
 					else if (q == 0) {
 						LOGGPU("+");
 					}
-					const size_t x_word_idx = X_OFFSET(q) * num_words_major + X_WORD_OFFSET(WORD_OFFSET(w));
-					const size_t z_word_idx = Z_OFFSET(q) * num_words_major + Z_WORD_OFFSET(WORD_OFFSET(w));
+					const size_t x_word_idx = q * num_words_major + WORD_OFFSET(w);
+					const size_t z_word_idx = q * num_words_major + WORD_OFFSET(w);
 					if ((!(words[x_word_idx] & pow2)) && (!(words[z_word_idx] & pow2)))
 						LOGGPU("I");
 					if ((words[x_word_idx] & pow2) && (!(words[z_word_idx] & pow2)))

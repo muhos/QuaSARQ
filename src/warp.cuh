@@ -1,5 +1,4 @@
-#ifndef __CU_WARP_H
-#define __CU_WARP_H
+#pragma once
 
 #include "definitions.cuh"
 
@@ -17,5 +16,3 @@ namespace QuaSARQ {
         return ret;
     }
 }
-
-#endif

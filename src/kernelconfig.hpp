@@ -1,6 +1,4 @@
-
-#ifndef __KERNELCONFIG_H
-#define __KERNELCONFIG_H
+#pragma once
 
 #include <cuda_runtime.h>
 
@@ -42,5 +40,3 @@ namespace QuaSARQ {
 	// If they are set to default (1), tuner will be triggered.
 	FOREACH_CONFIG(CONFIG2EXTERN);
 }
-
-#endif

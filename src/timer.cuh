@@ -1,6 +1,4 @@
-
-#ifndef __CU_TIMER_
-#define __CU_TIMER_
+#pragma once
 
 #include "definitions.cuh"
 #include "constants.hpp"
@@ -36,5 +34,3 @@ namespace QuaSARQ {
 	extern cuTimer cutimer;
 
 }
-
-#endif

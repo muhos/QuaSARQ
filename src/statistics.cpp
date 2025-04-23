@@ -18,15 +18,6 @@ void Simulator::report()
 		LOG1(" %sSimulation time                : %s%-12.3f  sec%s", CREPORT, CREPORTVAL, stats.time.simulation / 1000.0, CNORMAL);
 		LOG1(" %sPower consumption              : %s%-12.3f  watt%s", CREPORT, CREPORTVAL, stats.power.wattage, CNORMAL);
 		LOG1(" %sEnergy consumption             : %s%-12.3f  joules%s", CREPORT, CREPORTVAL, stats.power.joules, CNORMAL);
-		string INTERLEAVING_STR = "disabled";
-		string WINTERLEAVING_STR = "";
-		#ifdef INTERLEAVE_WORDS
-		WINTERLEAVING_STR = "(mixed words)";
-		#endif
-		#ifdef INTERLEAVE_XZ
-		INTERLEAVING_STR = to_string(INTERLEAVE_COLS) + "-way";
-		#endif
-		LOG1(" %sTableau interleaving           : %s%-12s  %s%s", CREPORT, CREPORTVAL, INTERLEAVING_STR.c_str(), WINTERLEAVING_STR.c_str(), CNORMAL);
 		string WORD_SIZE_STR = "64 bits";
 		#if defined(WORD_SIZE_8)
 		WORD_SIZE_STR = "8 bits";

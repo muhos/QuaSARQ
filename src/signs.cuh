@@ -1,8 +1,6 @@
-#ifndef __CU_SIGNS_H
-#define __CU_SIGNS_H
+#pragma once
 
 #include "word.cuh"
-#include "macros.cuh"
 #include "malloc.hpp"
 #include "logging.hpp"
 
@@ -141,6 +139,3 @@ namespace QuaSARQ {
     };
 
 }
-
-
-#endif

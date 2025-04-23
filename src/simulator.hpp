@@ -1,5 +1,4 @@
-#ifndef __SIMULATOR_H
-#define __SIMULATOR_H
+#pragma once
 
 #include "vector.cuh"
 #include "locker.cuh"
@@ -136,5 +135,3 @@ namespace QuaSARQ {
     };
 
 }
-
-#endif

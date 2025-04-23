@@ -1,6 +1,4 @@
-
-#ifndef __TIMER_
-#define __TIMER_
+#pragma once
 
 #include <chrono>
 #include "constants.hpp"
@@ -46,5 +44,3 @@ namespace QuaSARQ {
 	} while(0)
 
 }
-
-#endif

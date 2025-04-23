@@ -1,6 +1,4 @@
-
-#ifndef __CU_TUNE_H
-#define __CU_TUNE_H
+#pragma once
 
 #include "tableau.cuh"
 #include "datatypes.cuh"
@@ -23,5 +21,3 @@ namespace QuaSARQ {
 	};
 
 }
-
-#endif 

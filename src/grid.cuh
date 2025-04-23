@@ -1,5 +1,4 @@
-#ifndef __CU_GRID_H
-#define __CU_GRID_H
+#pragma once
 
 #include "definitions.cuh"
 #include "datatypes.hpp"
@@ -128,5 +127,3 @@ namespace QuaSARQ {
 		} \
 
 }
-
-#endif

@@ -1,5 +1,4 @@
-#ifndef __CU_ATOMIC_H
-#define __CU_ATOMIC_H
+#pragma once
 
 #include "definitions.cuh"
 #include "datatypes.hpp"
@@ -17,11 +16,11 @@ namespace QuaSARQ {
     #endif
     atomicXOR(word_std_t* addr, const uint32& value);
 #else
-    NOINLINE_DEVICE word_std_t atomicXOR(word_std_t* addr, const word_std_t& value);
+    NOINLINE_DEVICE 
+    word_std_t atomicXOR(word_std_t* addr, const word_std_t& value);
 #endif
 
-    NOINLINE_DEVICE void atomicByteXOR(byte_t* addr, const uint32& value);
+    NOINLINE_DEVICE 
+    void atomicByteXOR(byte_t* addr, const uint32& value);
 
 }
-
-#endif

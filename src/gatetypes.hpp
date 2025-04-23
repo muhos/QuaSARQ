@@ -1,6 +1,4 @@
-
-#ifndef __GATETYPES_H
-#define __GATETYPES_H
+#pragma once
 
 #include "datatypes.hpp"
 
@@ -33,5 +31,3 @@ namespace QuaSARQ {
     constexpr uint32 NR_GATETYPES = ISWAP + 1;
 
 }
-
-#endif

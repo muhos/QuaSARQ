@@ -1,5 +1,4 @@
-#ifndef __CU_CLIFFORDUTILS_H
-#define __CU_CLIFFORDUTILS_H
+#pragma once
 
 #include "table.cuh"
 #include "gate.cuh"
@@ -125,5 +124,3 @@ namespace QuaSARQ {
     }
         
 }
-
-#endif

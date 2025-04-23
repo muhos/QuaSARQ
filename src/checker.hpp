@@ -1,6 +1,5 @@
 
-#ifndef __CHECKER_H
-#define __CHECKER_H
+#pragma once
 
 #include "simulator.hpp"
 #include "definitions.cuh"
@@ -29,5 +28,3 @@ namespace QuaSARQ {
 	};
 
 }
-
-#endif 

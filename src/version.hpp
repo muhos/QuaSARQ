@@ -1,6 +1,4 @@
-
-#ifndef __VERSION_H
-#define __VERSION_H
+#pragma once
 
 namespace QuaSARQ {
 
@@ -12,5 +10,3 @@ namespace QuaSARQ {
 	const char* date();
 
 }
-
-#endif

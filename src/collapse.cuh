@@ -1,6 +1,5 @@
 
-#ifndef __CU_COLLAPSE_H
-#define __CU_COLLAPSE_H
+#pragma once
 
 #include "definitions.cuh"
 #include "shared.cuh"
@@ -144,5 +143,3 @@ namespace QuaSARQ {
 	}
 
 }
-
-#endif

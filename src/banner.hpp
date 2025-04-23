@@ -1,5 +1,4 @@
-#ifndef __BANNER_
-#define __BANNER_
+#pragma once
 
 #include "version.hpp"
 #include "definitions.hpp"
@@ -11,6 +10,3 @@
 void LOGFANCYBANNER(const char* VER);
 
 #define CBANNER CREPORT
-
-
-#endif

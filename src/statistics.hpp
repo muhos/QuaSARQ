@@ -1,6 +1,4 @@
-
-#ifndef __STATISTICS_H
-#define __STATISTICS_H
+#pragma once
 
 #include "malloc.hpp"
 #include "gate.cuh"
@@ -97,5 +95,3 @@ namespace QuaSARQ {
     };
 
 }
-
-#endif

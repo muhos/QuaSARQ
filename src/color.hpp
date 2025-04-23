@@ -1,6 +1,4 @@
-
-#ifndef __COLOR_
-#define __COLOR_
+#pragma once
 
 #include <cstdio>
 
@@ -96,5 +94,3 @@
 
 
 #define SETCOLOR(COLOR, STD) fprintf(STD, "%s", COLOR)
-
-#endif

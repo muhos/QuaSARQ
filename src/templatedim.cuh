@@ -1,6 +1,4 @@
-
-#ifndef __CU_PREFIXDIM_H
-#define __CU_PREFIXDIM_H
+#pragma once
 
 namespace QuaSARQ {
     
@@ -182,5 +180,3 @@ namespace QuaSARQ {
                 break; \
         }
 }
-
-#endif

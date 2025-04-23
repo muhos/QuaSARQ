@@ -1,5 +1,4 @@
-#ifndef __CU_GATE_H
-#define __CU_GATE_H
+#pragma once
 
 #include "definitions.cuh"
 #include "datatypes.hpp"
@@ -68,5 +67,3 @@ namespace QuaSARQ {
     constexpr size_t GATESIZE = sizeof(Gate);
 
 }
-
-#endif
