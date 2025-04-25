@@ -52,10 +52,27 @@ namespace QuaSARQ {
         const size_t num_words_major = tableau.num_words_major();
         const size_t num_qubits_padded = tableau.num_qubits_padded();
         const size_t num_gates_per_window = circuit[depth_level].size();
-		uint32 max_targets = ROUNDUP(num_qubits, 10);
-        pivot_t min_pivot = 0;
+		uint32 max_targets = MAX(10, ROUNDUP(num_qubits, 10));
+        const pivot_t min_pivot = 0;
+        const qubit_t qubit = 0;
         
         LOG2(2, "Tuning measurements for maximum targets of %u for pivot %u", max_targets, min_pivot);
+
+        if (options.tune_newpivots) {
+            SYNCALL;
+            tune_finding_new_pivots(anti_commuting_pivots, 
+                bestblocknewpivots, bestgridnewpivots, 
+                sizeof(pivot_t),
+                pivoting.pivots, 
+                tableau.xtable(), 
+                qubit, 
+                num_qubits, 
+                num_words_major, 
+                num_words_minor,
+                num_qubits_padded);
+            reset_all_pivots <<<bestgridreset, bestblockreset>>> (pivoting.pivots, num_qubits);
+            SYNCALL;
+        }
 
         Vec<pivot_t> h_pivots(max_targets + 1);
         h_pivots[0] = min_pivot;
@@ -66,8 +83,9 @@ namespace QuaSARQ {
 
         CHECK(cudaMemcpy(pivoting.pivots, h_pivots.data(), sizeof(pivot_t) * (max_targets + 1), cudaMemcpyHostToDevice));
         CHECK(cudaMemcpy(pivoting.d_active_pivots, &max_targets, sizeof(uint32), cudaMemcpyHostToDevice));
-
+        
         prefix.tune_inject_cx(tableau, pivoting.pivots, max_targets);
+        
         if (options.tune_injectswap) {
             SYNCALL;
             tune_inject_swap(inject_swap_k,

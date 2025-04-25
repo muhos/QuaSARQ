@@ -97,7 +97,7 @@ namespace QuaSARQ {
 		}
 
 		virtual void help(bool verbose = false) {
-			LOGN1("  %s--%-25s = %-8s [", CHELP, arg, type);
+			PRINT("  %s--%-25s = %-8s [", CHELP, arg, type);
 			if (r.h == INT32_MIN) { PRINT("%-8s", "-I32"); }
 			else { PRINT("%-8d", r.h); }
 			PRINT(" .. ");
@@ -106,7 +106,7 @@ namespace QuaSARQ {
 			if (val == INT32_MAX) { PRINT("]%s (%sdefault: %s%10s%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, "+I32", CNORMAL); }
 			else { PRINT("]%s (%sdefault: %s%10d%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, val, CNORMAL); }
 			if (verbose) {
-				LOG1("   %s", text);
+				PRINT("   %s\n", text);
 				LOG0("");
 			}
 		}
@@ -151,7 +151,7 @@ namespace QuaSARQ {
 		}
 
 		virtual void help(bool verbose = false) {
-			LOGN1("  %s--%-25s = %-8s [", CHELP, arg, type);
+			PRINT("  %s--%-25s = %-8s [", CHELP, arg, type);
 			if (r.h == INT64_MIN) { PRINT("%-8s", "-I64"); }
 			else PRINT("%-8lld", r.h); 
 			PRINT(" .. ");
@@ -160,7 +160,7 @@ namespace QuaSARQ {
 			if (val == INT64_MAX) { PRINT("]%s (%sdefault: %s%10s%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, "+I64", CNORMAL); }
 			else { PRINT("]%s (%sdefault: %s%10lld%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, val, CNORMAL); }
 			if (verbose) {
-				LOG1("   %s", text);
+				PRINT("   %s\n", text);
 				LOG0("");
 			}
 		}
@@ -200,7 +200,7 @@ namespace QuaSARQ {
 		}
 
 		virtual void help(bool verbose = false) {
-			LOGN1("  %s--%-25s = %-8s [", CHELP, arg, type);
+			PRINT("  %s--%-25s = %-8s [", CHELP, arg, type);
 			if (r.h == -INFINITY) { PRINT("%-8s", "-inf"); }
 			else { PRINT("%-8.2f", r.h); }
 			PRINT(" .. ");
@@ -208,7 +208,7 @@ namespace QuaSARQ {
 			else { PRINT("%8.2f", r.t); }
 			PRINT("]%s (%sdefault: %s%10.2e%s)\n", CNORMAL, CARGDEFAULT, CARGVALUE, val, CNORMAL);
 			if (verbose) {
-				LOG1("   %s", text);
+				PRINT("   %s\n", text);
 				LOG0("");
 			}
 		}
@@ -242,9 +242,10 @@ namespace QuaSARQ {
 		}
 
 		virtual void help(bool verbose = false) {
-			LOG1("  %s--%-25s = %8s%s  (%sdefault: %s%s%s)", CHELP, arg, type, CNORMAL, CARGDEFAULT, CARGVALUE, val, CNORMAL);
+			PRINT("  %s--%-25s = %8s%s  (%sdefault: %s%s%s)\n", 
+				CHELP, arg, type, CNORMAL, CARGDEFAULT, CARGVALUE, val, CNORMAL);
 			if (verbose) {
-				LOG1("   %s", text);
+				PRINT("   %s\n", text);
 				LOG0("");
 			}
 		}
@@ -281,12 +282,12 @@ namespace QuaSARQ {
 		}
 
 		virtual void help(bool verbose = false) {
-			LOGN1("  %s-%-25s -no-%-21s%s", CHELP, arg, arg, CNORMAL);
+			PRINT("  %s-%-25s -no-%-21s%s", CHELP, arg, arg, CNORMAL);
 			PRINT("                 ");
 			if (val) { PRINT("(%sdefault: %s%3s%s)\n", CARGDEFAULT, CARGON, "on", CNORMAL); }
 			else { PRINT("(%sdefault: %s%3s%s)\n", CARGDEFAULT, CARGOFF, "off", CNORMAL); }
 			if (verbose) {
-				LOG1("   %s", text);
+				PRINT("   %s\n", text);
 				LOG0("");
 			}
 		}

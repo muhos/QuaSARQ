@@ -10,12 +10,12 @@ namespace QuaSARQ {
         LOGHEADER(0, 4, "Banner");
         LOGFANCYBANNER(version());
         LOGHEADER(0, 4, "Build");
-        getCPUInfo();
-        getBuildInfo();
-        getGPUInfo();
+        getCPUInfo(1);
+        getBuildInfo(1);
+        getGPUInfo(1);
         LOGHEADER(0, 5, "Usage");
         LOG0("");
-        LOG1(" %squasarq%s [<circuit>.<qasm or stim>][<option> ...]", CSIM, CNORMAL);
+        LOG2(0, " %squasarq%s [<circuit>.<qasm or stim>][<option> ...]", CSIM, CNORMAL);
         LOG0("");
         AvailOptions& avail_opts = ARG::opts();
         std::sort(avail_opts.data(), avail_opts.end(), ARG::ARG_CMP());
@@ -28,8 +28,8 @@ namespace QuaSARQ {
             prev_type = avail_opts[i]->type;
         }
         LOG0("");
-        LOG1("  %s-h or --help  print available options.%s", CHELP, CNORMAL);
-        LOG1("  %s--helpmore    print available options with verbose message.%s", CHELP, CNORMAL);
+        LOG2(0, "  %s-h or --help  print available options.%s", CHELP, CNORMAL);
+        LOG2(0, "  %s--helpmore    print available options with verbose message.%s", CHELP, CNORMAL);
         LOG0("");
         LOGRULER(0, '-', RULERLEN);
         exit(EXIT_SUCCESS);

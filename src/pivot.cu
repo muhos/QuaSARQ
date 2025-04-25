@@ -245,21 +245,6 @@ namespace QuaSARQ {
         const size_t num_words_minor = tableau.num_words_minor();
         const size_t num_qubits_padded = tableau.num_qubits_padded();
         dim3 currentblock, currentgrid;
-        if (options.tune_newpivots) {
-            SYNCALL;
-            tune_finding_new_pivots(anti_commuting_pivots, 
-                bestblocknewpivots, bestgridnewpivots, 
-                sizeof(pivot_t),
-                pivoting.pivots, 
-                tableau.xtable(), 
-                qubit, 
-                num_qubits, 
-                num_words_major, 
-                num_words_minor,
-                num_qubits_padded);
-            reset_all_pivots <<<bestgridreset, bestblockreset>>> (pivoting.pivots, num_qubits);
-            SYNCALL;
-        }
         TRIM_BLOCK_IN_DEBUG_MODE(bestblocknewpivots, bestgridnewpivots, num_qubits, 0);
         currentblock = bestblocknewpivots, currentgrid = bestgridnewpivots;
         TRIM_GRID_IN_1D(num_qubits, x);

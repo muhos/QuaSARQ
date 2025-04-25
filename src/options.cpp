@@ -106,7 +106,8 @@ namespace QuaSARQ {
         FOREACH_CHECK(CHECK_ALL);
         tune_measurement |= (tune_injectprepare || tune_injectfinal ||
                         tune_prefixprepare || tune_prefixfinal ||
-                        tune_prefixsingle);
+                        tune_prefixsingle || tune_newpivots ||
+                        tune_injectswap);
 
         initialstate = InitialState(int(opt_initialstate));
         num_qubits = opt_num_qubits;
@@ -132,6 +133,7 @@ namespace QuaSARQ {
         if (verbose > 1) {
             LOG2(1, "%s  Enabled synchronization mode with verbosity level %s%zd%s.%s", CARGDEFAULT, CARGVALUE, verbose, CARGDEFAULT, CNORMAL);
             sync = true;
+            progress_en = false;
         }
         if (tuner_en && tuner_step_qubits > num_qubits) {
             LOG2(1, "%s  Stepwise qubits %s%zd%s is downsized to %s%zd%s maximum.%s", CARGDEFAULT, CARGVALUE, tuner_step_qubits, CARGDEFAULT, CARGVALUE, num_qubits, CARGDEFAULT, CNORMAL);

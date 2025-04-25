@@ -39,7 +39,6 @@ namespace QuaSARQ {
         __shared__ typename BlockScan::TempStorage shared_prefix_xs[BLOCKY];
 
         __shared__ pivot_t sh_pivot0;
-        __shared__ pivot_t sh_pivots[BLOCKX];
 
         int tx = threadIdx.x, ty = threadIdx.y;
 
@@ -48,6 +47,8 @@ namespace QuaSARQ {
             assert(sh_pivot0 != INVALID_PIVOT);
         }
 
+        __syncthreads();
+
         for_parallel_y_tiled(by, num_words_minor) {
             const grid_t w = ty + by * BLOCKY;
 
@@ -55,15 +56,11 @@ namespace QuaSARQ {
                 const grid_t tid_x = tx + bx * BLOCKX;
                 bool active = (w < num_words_minor && tid_x < active_targets);
 
-                if (!ty && active) {
-                    sh_pivots[tx] = pivots[tid_x + 1];
-                }
-
-                __syncthreads();
+                pivot_t pivot = sh_pivot0;
 
                 word_std_t z = 0, x = 0;
                 if (active) {
-                    const size_t t_destab = TABLEAU_INDEX(w, sh_pivots[tx]);
+                    const size_t t_destab = TABLEAU_INDEX(w, pivots[tid_x + 1]);
                     z = zs[t_destab];
                     x = xs[t_destab];
                 }
@@ -73,7 +70,7 @@ namespace QuaSARQ {
                 BlockScan(shared_prefix_xs[ty]).ExclusiveScan(x, x, 0, XOROP(), blocksum_x);
 
                 if (active) {
-                    const size_t c_destab = TABLEAU_INDEX(w, sh_pivot0);
+                    const size_t c_destab = TABLEAU_INDEX(w, pivot);
                     const size_t word_idx = PREFIX_TABLEAU_INDEX(w, tid_x);
                     assert(word_idx < num_qubits_padded * num_words_minor);
                     WRITE_GLOBAL_PREFIX(word_idx, zs[c_destab] ^ z, xs[c_destab] ^ x);
@@ -83,7 +80,7 @@ namespace QuaSARQ {
                     assert((blockIdx.x * num_words_minor + w) < gridDim.x * num_words_minor);
                     const size_t bid = PREFIX_INTERMEDIATE_INDEX(w, bx);
                     WRITE_INTERMEDIATE_PREFIX(bid, blocksum_z, blocksum_x);
-                    const size_t c_destab = TABLEAU_INDEX(w, sh_pivot0);
+                    const size_t c_destab = TABLEAU_INDEX(w, pivot);
                     if (blocksum_z)
                         atomicXOR(zs + c_destab, blocksum_z);
                     if (blocksum_x)
@@ -133,7 +130,6 @@ namespace QuaSARQ {
         __shared__ typename BlockReduce::TempStorage shared_stab_ss  [BLOCKY];
 
         __shared__ pivot_t sh_pivot0;
-        __shared__ pivot_t sh_pivots[BLOCKX];
 
         int tx = threadIdx.x, ty = threadIdx.y;
 
@@ -141,6 +137,8 @@ namespace QuaSARQ {
             sh_pivot0 = pivots[0];
             assert(sh_pivot0 != INVALID_PIVOT);
         }
+
+        __syncthreads();
 
         for_parallel_y_tiled(by, num_words_minor) {
             const grid_t w = ty + by * BLOCKY;
@@ -151,16 +149,10 @@ namespace QuaSARQ {
             for_parallel_x_tiled(bx, active_targets) {
                 const grid_t tid_x = tx + bx * BLOCKX;
                 bool active = (w < num_words_minor && tid_x < active_targets);
-                
-                if (!ty && active) {
-                    sh_pivots[tx] = pivots[tid_x + 1];
-                }
-
-                __syncthreads();
 
                 if (active) {
                     const size_t c_stab = TABLEAU_INDEX(w, sh_pivot0) + TABLEAU_STAB_OFFSET;
-                    const size_t t_destab = TABLEAU_INDEX(w, sh_pivots[tx]);
+                    const size_t t_destab = TABLEAU_INDEX(w, pivots[tid_x + 1]);
                     const size_t t_stab = t_destab + TABLEAU_STAB_OFFSET;
 
                     const size_t word_idx = PREFIX_TABLEAU_INDEX(w, tid_x);
@@ -361,12 +353,11 @@ namespace QuaSARQ {
             SYNCALL;
         }
 
-        const size_t pass_1_blocksize = bestblockinjectprepare.x;
-        const size_t pass_1_gridsize = ROUNDUP(max_active_targets, pass_1_blocksize);
-        tune_scan_blocks(nextPow2(pass_1_gridsize), pass_1_blocksize);
+        tune_scan_blocks();
 
         if (options.tune_injectfinal) {
             SYNCALL;
+            const size_t pass_1_blocksize = bestblockinjectprepare.x;
             tune_inject_pass_2(
                 bestblockinjectfinal, bestgridinjectfinal,
                 2 * sizeof(word_std_t),

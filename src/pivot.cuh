@@ -56,6 +56,19 @@ namespace QuaSARQ {
         void compact_pivots(const cudaStream_t& stream);
     };
 
+	__global__ 
+    void reset_all_pivots(pivot_t* pivots, const size_t num_gates);
+
+	__global__ 
+    void anti_commuting_pivots(
+                pivot_t*            scatter,
+                const_table_t       inv_xs, 
+        const   qubit_t             qubit, 
+        const   size_t              num_qubits, 
+        const   size_t              num_words_major, 
+        const   size_t              num_words_minor,
+        const   size_t              num_qubits_padded);
+
     void tune_reset_pivots(
 		void (*kernel)(
 				pivot_t*, 

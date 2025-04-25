@@ -9,9 +9,9 @@ namespace QuaSARQ {
 
 	size_t	sysMemUsed				();
 	size_t	getAvailSysMem			();
-	void	getBuildInfo			();
-	void	getCPUInfo				();
-	int		getGPUInfo				();
+	void	getBuildInfo			(const int& verbose);
+	void	getCPUInfo				(const int& verbose);
+	int		getGPUInfo				(const int& verbose);
 	void	signal_handler			(void h_intr(int), void h_timeout(int) = nullptr);
 	void	set_timeout				(int);
 	void	set_memoryout			(int);

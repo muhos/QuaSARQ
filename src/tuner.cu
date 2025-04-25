@@ -248,7 +248,7 @@ namespace QuaSARQ {
 			initBlocksPerGridY = (int64) ceil(initBlocksPerGridY / 1.0); \
 			initBlocksPerGridX = (int64) ceil(initBlocksPerGridX / 1.0); \
 			const int64 maxBlocksPerGridY = maxGPUBlocks2D << 1; \
-			const int64 maxBlocksPerGridX = maxGPUBlocks2D << 1; \
+			const int64 maxBlocksPerGridX = maxGPUBlocks2D; \
 			for (int64 blocksY = initBlocksPerGridY; (blocksY <= maxBlocksPerGridY) && !early_exit && trials < TRIALS; blocksY += 4, trials++) { \
 				for (int64 blocksX = initBlocksPerGridX; (blocksX <= maxBlocksPerGridX) && !early_exit && trials < TRIALS; blocksX += 4, trials++) { \
 					for (int64 threadsY = maxThreadsPerBlockY; (threadsY >= initThreadsPerBlockY) && !early_exit && trials < TRIALS; threadsY >>= 1) { \
@@ -296,7 +296,7 @@ namespace QuaSARQ {
 			initBlocksPerGridY = (int64) ceil(initBlocksPerGridY / 1.0); \
 			initBlocksPerGridX = (int64) ceil(initBlocksPerGridX / 1.0); \
 			const int64 maxBlocksPerGridY = maxGPUBlocks2D << 1; \
-			const int64 maxBlocksPerGridX = maxGPUBlocks2D << 1; \
+			const int64 maxBlocksPerGridX = maxGPUBlocks2D; \
 			for (int64 blocksY = initBlocksPerGridY; (blocksY <= maxBlocksPerGridY) && !early_exit && trials < TRIALS; blocksY += 4, trials++) { \
 				for (int64 blocksX = initBlocksPerGridX; (blocksX <= maxBlocksPerGridX) && !early_exit && trials < TRIALS; blocksX += 4, trials++) { \
 					for (int64 threadsY = maxThreadsPerBlockY; (threadsY >= initThreadsPerBlockY) && !early_exit && trials < TRIALS; threadsY >>= 1) { \
@@ -342,8 +342,8 @@ namespace QuaSARQ {
 			size_t trials = 0; \
 			initBlocksPerGridY = (int64) ceil(initBlocksPerGridY / 1.0); \
 			initBlocksPerGridX = (int64) ceil(initBlocksPerGridX / 1.0); \
-			const int64 maxBlocksPerGridY = maxGPUBlocks2D << 1; \
-			const int64 maxBlocksPerGridX = maxGPUBlocks2D << 1; \
+			const int64 maxBlocksPerGridY = maxGPUBlocks2D << 2; \
+			const int64 maxBlocksPerGridX = maxGPUBlocks2D; \
 			for (int64 blocksY = initBlocksPerGridY; (blocksY <= maxBlocksPerGridY) && !early_exit && trials < TRIALS; blocksY += 8, trials++) { \
 				for (int64 blocksX = initBlocksPerGridX; (blocksX <= maxBlocksPerGridX) && !early_exit && trials < TRIALS; blocksX += 8, trials++) { \
 					for (int64 threadsY = maxThreadsPerBlockY; (threadsY >= initThreadsPerBlockY) && !early_exit && trials < TRIALS; threadsY >>= 1) { \
@@ -354,50 +354,6 @@ namespace QuaSARQ {
 						if (threadsPerBlock % maxWarpSize != 0) continue; \
 						dim3 block((uint32)threadsX, (uint32)threadsY); \
 						dim3 grid((uint32)blocksX, (uint32)blocksY, (uint32)GRID_Z); \
-						double avgRuntime = 0; \
-						BENCHMARK_KERNEL(avgRuntime, NSAMPLES, extended_shared_size, ## __VA_ARGS__); \
-						if (PRINT_PROGRESS_2D) LOG2(1, "  GPU Time for block(x:%u, y:%u) and grid(x:%u, y:%u): %f ms", block.x, block.y, grid.x, grid.y, avgRuntime); fflush(stdout); fflush(stderr); \
-						BEST_CONFIG(avgRuntime, minRuntime, bestGrid, bestBlock, early_exit); \
-					} \
-				} \
-			} \
-			LOG2(1, " Best %s configuration found after %zd trials:", opname, trials); \
-			LOG2(1, " Block (%-4u, %4u)", bestBlock.x, bestBlock.y); \
-			LOG2(1, " Grid  (%-4u, %4u)", bestGrid.x, bestGrid.y); \
-			LOG2(1, " Min time: %.4f ms", minRuntime); \
-			fflush(stdout); \
-		} \
-	} while(0)
-
-	#define TUNE_2D_FIX_GRID_X(...) \
-	do { \
-		if (bestBlock.x > 1 || bestGrid.x > 1 || bestBlock.y > 1 || bestGrid.y > 1) { \
-			LOG2(3, "\nBest configuration: block(%d, %d), grid(%d, %d) will be used without tuning.", bestBlock.x, bestBlock.y, bestGrid.x, bestGrid.y); \
-		} \
-		else { \
-			LOG0(""); \
-			LOG2(1, "Tunning %s kernel with maximum of %zd trials and %-.5f milliseconds precision...", opname, TRIALS, PRECISION); \
-			int min_precision_hits = MIN_PRECISION_HITS; \
-			int64 initBlocksPerGridY = 0; \
-			OPTIMIZEBLOCKS2D(initBlocksPerGridY, data_size_in_y, maxThreadsPerBlockY); \
-			double minRuntime = double(UINTMAX_MAX); \
-			bool early_exit = false; \
-			size_t trials = 0; \
-			initBlocksPerGridY = (int64) ceil(initBlocksPerGridY / 1.0); \
-			const int64 maxBlocksPerGridY = maxGPUBlocks2D << 1; \
-			const int64 maxBlocksPerGridX = maxGPUBlocks2D << 3; \
-			for (int64 blocksY = initBlocksPerGridY; (blocksY <= maxBlocksPerGridY) && !early_exit && trials < TRIALS; blocksY += 4, trials++) { \
-				for (int64 threadsY = maxThreadsPerBlockY; (threadsY >= initThreadsPerBlockY) && !early_exit && trials < TRIALS; threadsY >>= 1) { \
-					for (int64 threadsX = maxThreadsPerBlockX; (threadsX >= initThreadsPerBlockX) && !early_exit && trials < TRIALS; threadsX >>= 1) { \
-						const int64 threadsPerBlock = threadsX * threadsY; \
-						const size_t extended_shared_size = shared_size_yextend ? shared_element_bytes * threadsPerBlock : shared_element_bytes * threadsX; \
-						if (extended_shared_size >= maxGPUSharedMem || threadsPerBlock > maxThreadsPerBlock) continue; \
-						/* Avoid deadloack due to warp divergence. */ \
-						if (threadsPerBlock % maxWarpSize != 0) continue; \
-						const int64 blocksX = ROUNDUP(data_size_in_x, threadsX); \
-						if (blocksX > maxBlocksPerGridX) continue; \
-						dim3 block((uint32)threadsX, (uint32)threadsY); \
-						dim3 grid((uint32)blocksX, (uint32)blocksY); \
 						double avgRuntime = 0; \
 						BENCHMARK_KERNEL(avgRuntime, NSAMPLES, extended_shared_size, ## __VA_ARGS__); \
 						if (PRINT_PROGRESS_2D) LOG2(1, "  GPU Time for block(x:%u, y:%u) and grid(x:%u, y:%u): %f ms", block.x, block.y, grid.x, grid.y, avgRuntime); fflush(stdout); fflush(stderr); \
@@ -431,7 +387,7 @@ namespace QuaSARQ {
 			size_t trials = 0; \
 			initBlocksPerGridY = (int64) ceil(initBlocksPerGridY / 1.0); \
 			initBlocksPerGridX = (int64) ceil(initBlocksPerGridX / 1.0); \
-			const int64 maxBlocksPerGridY = maxGPUBlocks2D << 1; \
+			const int64 maxBlocksPerGridY = maxGPUBlocks2D << 2; \
 			const int64 maxBlocksPerGridX = maxGPUBlocks2D << 1; \
 			for (int64 blocksY = initBlocksPerGridY; (blocksY <= maxBlocksPerGridY) && !early_exit && trials < TRIALS; blocksY += 8, trials++) { \
 				for (int64 blocksX = initBlocksPerGridX; (blocksX <= maxBlocksPerGridX) && !early_exit && trials < TRIALS; blocksX += 8, trials++) { \
@@ -480,7 +436,7 @@ namespace QuaSARQ {
 			size_t trials = 0; \
 			initBlocksPerGridY = (int64) ceil(initBlocksPerGridY / 1.0); \
 			initBlocksPerGridX = (int64) ceil(initBlocksPerGridX / 1.0); \
-			const int64 maxBlocksPerGridY = maxGPUBlocks2D << 1; \
+			const int64 maxBlocksPerGridY = maxGPUBlocks2D << 2; \
 			const int64 maxBlocksPerGridX = maxGPUBlocks2D << 1; \
 			for (int64 blocksY = initBlocksPerGridY; (blocksY <= maxBlocksPerGridY) && !early_exit && trials < TRIALS; blocksY += 4, trials++) { \
 				for (int64 blocksX = initBlocksPerGridX; (blocksX <= maxBlocksPerGridX) && !early_exit && trials < TRIALS; blocksX += 4, trials++) { \
@@ -524,9 +480,9 @@ namespace QuaSARQ {
 		} \
 		else { \
 			if (bestBlock.x < 2 || bestBlock.x > MIN_SINGLE_PASS_THRESHOLD) \
-				LOGERROR("x-block size is incorrect."); \
+				LOGERROR("x-block size %d is incorrect.", bestBlock.x); \
 			if (bestGrid.x > 1) \
-				LOGERROR("x-grid size must be 1."); \
+				LOGERROR("x-grid size %d must be 1.", bestGrid.x); \
 			LOG0(""); \
 			LOG2(1, "Tunning %s kernel with maximum of %zd trials and %-.5f milliseconds precision...", opname, TRIALS, PRECISION); \
 			int min_precision_hits = MIN_PRECISION_HITS; \
@@ -536,7 +492,7 @@ namespace QuaSARQ {
 			bool early_exit = false; \
 			size_t trials = 0; \
 			initBlocksPerGridY = (int64) ceil(initBlocksPerGridY / 1.0); \
-			const int64 maxBlocksPerGridY = maxGPUBlocks2D << 1; \
+			const int64 maxBlocksPerGridY = maxGPUBlocks2D << 2; \
 			for (int64 blocksY = initBlocksPerGridY; (blocksY <= maxBlocksPerGridY) && !early_exit && trials < TRIALS; blocksY += 4, trials++) { \
 				for (int64 threadsY = maxThreadsPerBlockY; (threadsY >= 1) && !early_exit && trials < TRIALS; threadsY >>= 1) { \
 					const int64 threadsPerBlock = bestBlock.x * threadsY; \

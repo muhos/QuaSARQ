@@ -70,8 +70,8 @@ Simulator::Simulator(const string& path) :
 
 void Simulator::initialize() {
     LOGHEADER(1, 4, "Build");
-    getCPUInfo();
-    getGPUInfo();
+    getCPUInfo(options.verbose);
+    getGPUInfo(options.verbose);
     LOGHEADER(1, 4, "Initial");
     gpu_allocator.create_gpu_pool();
     parse();
@@ -159,7 +159,7 @@ void check_simulate(Simulator& sim, const size_t& p, const size_t& prev_num_qubi
         const bool passed = check_identity(tableau, prev_num_qubits, num_qubits, sim.is_measuring());
         if (passed) LOG2(2, "%sPASSED.%s", CGREEN, CNORMAL);
         else LOG2(2, "%FAILED.%s", CRED, CNORMAL);
-        sim.print_progress(p, end_depth - 1, passed);
+        if (options.progress_en) sim.print_progress(p, end_depth - 1, passed);
         end_depth++;
     }
 }

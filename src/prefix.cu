@@ -160,7 +160,8 @@ namespace QuaSARQ {
             assert(num_qubits);
             assert(num_words_minor);
             const size_t max_array_size = num_qubits * num_words_minor;
-            LOGN2(2, "allocating %lld memory for prefix global cells.. ", int64(max_array_size * sizeof(PrefixCell)));
+            LOGN2(2, "allocating %lld MB for global prefix.. ", 
+                ratio(int64(max_array_size * sizeof(PrefixCell)), MB));
             global_prefix = allocator.allocate<PrefixCell>(max_array_size);
             LOGDONE(2, 4);
         }
@@ -168,7 +169,9 @@ namespace QuaSARQ {
         targets.alloc(num_qubits, max_window_bytes, true, false, false);
         #endif
         if (!max_intermediate_blocks) {
-            max_intermediate_blocks = nextPow2(ROUNDUP(num_qubits, MIN_BLOCK_INTERMEDIATE_SIZE));
+            const size_t at_least_blocks = 
+                options.tune_prefixsingle ? AT_LEAST_TUNED_SINGLE_PASS : 1;
+            max_intermediate_blocks = MAX(at_least_blocks, nextPow2(ROUNDUP(num_qubits, MIN_BLOCK_INTERMEDIATE_SIZE)));
             size_t max_array_size = max_intermediate_blocks * num_words_minor;
             LOGN2(2, "allocating memory for %lld intermediate blocks.. ", int64(max_intermediate_blocks));
             #if PREFIX_INTERLEAVE
@@ -181,7 +184,10 @@ namespace QuaSARQ {
                 intermediate_prefix_x = allocator.allocate<word_std_t>(max_array_size);
             #endif
             LOGDONE(2, 4);
-            max_sub_blocks = MAX(1, (max_intermediate_blocks >> 1));
+            const size_t at_least_sub_blocks = 
+                options.tune_prefixprepare || options.tune_prefixfinal ? 
+                AT_LEAST_TUNED_MULTIPASS : 1;
+            max_sub_blocks = MAX(at_least_sub_blocks, (max_intermediate_blocks >> 1));
             max_array_size = max_sub_blocks * num_words_minor;
             LOGN2(2, "allocating memory for %lld sub-blocks.. ", int64(max_sub_blocks));
             #if PREFIX_INTERLEAVE
@@ -371,35 +377,44 @@ namespace QuaSARQ {
         }
     }
 
-    void Prefix::tune_scan_blocks(const size_t& num_blocks, const size_t& inject_pass_1_blocksize) {
+    void Prefix::tune_scan_blocks() {
         if (options.tune_prefixsingle) {
             SYNCALL;
-            bestblockprefixsingle.x = MAX(2, num_blocks);
+            #if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
+            const size_t max_size = MIN_SINGLE_PASS_THRESHOLD;
+            #else
+            const size_t max_size = AT_LEAST_TUNED_SINGLE_PASS;
+            #endif
+            if (max_size > max_intermediate_blocks)
+                LOGERROR("max tuned size for single-pass is too large %lld.", max_size);
+            bestblockprefixsingle.x = max_size;
             bestgridprefixsingle.x = 1;
             tune_single_pass(
                 bestblockprefixsingle, bestgridprefixsingle,
                 2 * sizeof(word_std_t), // used to skip very large blocks.
-                num_blocks,
+                max_size,
                 num_words_minor,
                 SINGLE_PASS_INPUT,
-                num_blocks, 
+                max_size, 
                 num_words_minor,
                 max_intermediate_blocks);
             SYNCALL;
         }
         
         // Now, assume max blocks we could get and tune for it the multiple passes.
-        const size_t max_blocks = MIN(1, max_intermediate_blocks / 2);
+        const size_t max_size = MAX(AT_LEAST_TUNED_MULTIPASS, ROUNDUP(max_intermediate_blocks, 2));
+        if (ROUNDUP(max_size, MIN_BLOCK_INTERMEDIATE_SIZE) > max_sub_blocks)
+            LOGERROR("max tuned size for multi-pass is too large %lld.", max_size);
         if (options.tune_prefixprepare) {
             SYNCALL;
             tune_prefix_pass_1(
                 bestblockprefixprepare,
                 bestgridprefixprepare,
                 2 * sizeof(word_std_t), // used to skip very large blocks.
-                max_blocks,
+                max_size,
                 num_words_minor,
                 MULTI_PASS_INPUT,
-                max_blocks, 
+                max_size, 
                 num_words_minor,
                 max_intermediate_blocks,
                 max_sub_blocks);
@@ -410,10 +425,10 @@ namespace QuaSARQ {
             tune_prefix_pass_2(
                 scan_blocks_pass_2, 
                 bestblockprefixfinal, bestgridprefixfinal,
-                max_blocks,
+                max_size,
                 num_words_minor,
                 MULTI_PASS_INPUT,
-                max_blocks, 
+                max_size, 
                 num_words_minor,
                 max_intermediate_blocks,
                 max_sub_blocks,

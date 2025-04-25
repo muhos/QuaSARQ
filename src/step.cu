@@ -190,11 +190,10 @@ namespace QuaSARQ {
         sign_t* signs = ss->data();
         for_parallel_y(w, num_words_major) {
             sign_t signs_word = signs[w];
-            const unsigned mask = __activemask();
             word_t* x_gens_word = (!tx) ? xs->data() + w : nullptr;
-            x_gens_word = (word_t*)__shfl_sync(mask, uint64(x_gens_word), 0, B);
+            x_gens_word = (word_t*)__shfl_sync(0xFFFFFFFF, uint64(x_gens_word), 0, B);
             word_t* z_gens_word = (!tx) ? zs->data() + w : nullptr;
-            z_gens_word = (word_t*)__shfl_sync(mask, uint64(z_gens_word), 0, B);
+            z_gens_word = (word_t*)__shfl_sync(0xFFFFFFFF, uint64(z_gens_word), 0, B);
             update_forall_gate(
                 signs_word,
                 x_gens_word,
@@ -212,9 +211,9 @@ namespace QuaSARQ {
     }
 
     #define CALL_STEP_2D_WARPED(B, YDIM) \
-        step_2D_warped<B> <<<bestgridstep, bestblockstep, 0, kernel_stream>>> ( \
-            gpu_circuit.references(), \
-            gpu_circuit.gates(), \
+        step_2D_warped<B> <<<currentgrid, currentblock, 0, stream>>> ( \
+            refs, \
+            gates, \
             num_gates_per_window, \
             num_words_major, \
             XZ_TABLE(tableau), \
@@ -242,10 +241,28 @@ namespace QuaSARQ {
         const   size_t          shared_size,
         const   cudaStream_t&   stream)
     {
-        switch (currentblock.x) {
-            FOREACH_X_DIM_MAX_1024(CALL_STEP_2D, currentblock.y);
-            default:
-                break;
+        if (currentblock.x == 1) {
+            step_2D_atomic << < currentgrid, currentblock, 0, stream >> > (
+                refs, 
+                gates, 
+                num_gates_per_window, 
+                num_words_major, 
+                XZ_TABLE(tableau), 
+                tableau.signs());
+        }
+        else if (currentblock.x > 1 && currentblock.x <= maxWarpSize) {
+            switch (currentblock.x) {
+                FOREACH_X_DIM_MAX_32(CALL_STEP_2D_WARPED, currentblock.y);
+                default:
+                    break;
+            }
+        }
+        else {
+            switch (currentblock.x) {
+                FOREACH_X_DIM_MAX_1024(CALL_STEP_2D, currentblock.y);
+                default:
+                    break;
+            }
         }
     }
 
@@ -314,34 +331,16 @@ namespace QuaSARQ {
             // Run simulation.
             if (options.sync) cutimer.start(kernel_stream);
 
-            if (bestblockstep.x == 1) {
-                step_2D_atomic << < bestgridstep, bestblockstep, 0, kernel_stream >> > (
-                    gpu_circuit.references(), 
-                    gpu_circuit.gates(), 
-                    num_gates_per_window, 
-                    num_words_major, 
-                    XZ_TABLE(tableau), 
-                    tableau.signs());
-            }
-            else if (bestblockstep.x > 1 && bestblockstep.x <= maxWarpSize) {
-                switch (bestblockstep.x) {
-                    FOREACH_X_DIM_MAX_32(CALL_STEP_2D_WARPED, bestblockstep.y);
-                    default:
-                        break;
-                }
-            }
-            else {
-                call_step_2D(
-                    gpu_circuit.references(), 
-                    gpu_circuit.gates(), 
-                    tableau, 
-                    num_gates_per_window, 
-                    num_words_major, 
-                    bestblockstep, 
-                    bestgridstep, 
-                    reduce_smem_size, 
-                    kernel_stream);
-            }
+            call_step_2D(
+                gpu_circuit.references(), 
+                gpu_circuit.gates(), 
+                tableau, 
+                num_gates_per_window, 
+                num_words_major, 
+                bestblockstep, 
+                bestgridstep, 
+                reduce_smem_size, 
+                kernel_stream);
 
             if (options.sync) { 
                 LASTERR("failed to launch step kernel");

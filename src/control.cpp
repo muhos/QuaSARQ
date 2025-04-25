@@ -146,7 +146,7 @@ namespace QuaSARQ {
 		_exit(EXIT_FAILURE);
 	}
 
-	void getCPUInfo()
+	void getCPUInfo(const int& verbose)
 	{
 #ifndef __CYGWIN__
 		char cpuid[0x40] = { 0 };
@@ -173,17 +173,17 @@ namespace QuaSARQ {
 		}
 		char * cpu = cpuid;
 		while(isSpace(*cpu)) cpu++;
-		LOG2(1, "Available CPU: %s%s%s", CREPORTVAL, cpu, CNORMAL);
+		LOG2(verbose, "Available CPU: %s%s%s", CREPORTVAL, cpu, CNORMAL);
 #endif
 		size_t _free = getAvailSysMem();
-		LOG2(1, "Available system memory: %s%zd GB%s", CREPORTVAL, _free / GB, CNORMAL);
+		LOG2(verbose, "Available system memory: %s%zd GB%s", CREPORTVAL, _free / GB, CNORMAL);
 		fflush(stdout);
 	}
 
-	void getBuildInfo()
+	void getBuildInfo(const int& verbose)
 	{
-		LOG1("Built on %s%s%s at %s%s%s", CREPORTVAL, osystem(), CNORMAL, CREPORTVAL, date(), CNORMAL);
-		LOG1("      using %s%s %s%s", CREPORTVAL, compiler(), compilemode(), CNORMAL);
+		LOG2(verbose, "Built on %s%s%s at %s%s%s", CREPORTVAL, osystem(), CNORMAL, CREPORTVAL, date(), CNORMAL);
+		LOG2(verbose, "      using %s%s %s%s", CREPORTVAL, compiler(), compilemode(), CNORMAL);
 		fflush(stdout);
 	}
 
@@ -213,7 +213,7 @@ namespace QuaSARQ {
 		return -1;
 	}
 
-	int getGPUInfo()
+	int getGPUInfo(const int& verbose)
 	{
 		int devCount = 0;
 		CHECK(cudaGetDeviceCount(&devCount));
@@ -229,11 +229,11 @@ namespace QuaSARQ {
 		maxWarpSize = devProp.warpSize;
 		maxGPUSharedMem = devProp.sharedMemPerBlock - _shared_penalty;
 		if (!options.quiet_en) {
-			LOG1("Available GPU: %s%d x %s @ %.2fGHz (compute cap: %d.%d)%s", CREPORTVAL, devCount, devProp.name, ratio((double)devProp.clockRate, 1e6), devProp.major, devProp.minor, CNORMAL);
+			LOG2(verbose, "Available GPU: %s%d x %s @ %.2fGHz (compute cap: %d.%d)%s", CREPORTVAL, devCount, devProp.name, ratio((double)devProp.clockRate, 1e6), devProp.major, devProp.minor, CNORMAL);
 			const int cores = SM2Cores(devProp.major, devProp.minor);
-			LOG1("Available GPU Multiprocessors: %s%d MPs (%s cores/MP)%s", CREPORTVAL, devProp.multiProcessorCount, (cores < 0 ? "unknown": std::to_string(cores).c_str()), CNORMAL);
-			LOG1("Available GPU threads and blocks: %s%lld threads, %lld blocks%s", CREPORTVAL, int64(maxGPUThreads), int64(maxGPUBlocks), CNORMAL);
-			LOG1("Available Global memory: %s%zd GB%s", CREPORTVAL, _free / GB, CNORMAL);
+			LOG2(verbose, "Available GPU Multiprocessors: %s%d MPs (%s cores/MP)%s", CREPORTVAL, devProp.multiProcessorCount, (cores < 0 ? "unknown": std::to_string(cores).c_str()), CNORMAL);
+			LOG2(verbose, "Available GPU threads and blocks: %s%lld threads, %lld blocks%s", CREPORTVAL, int64(maxGPUThreads), int64(maxGPUBlocks), CNORMAL);
+			LOG2(verbose, "Available Global memory: %s%zd GB%s", CREPORTVAL, _free / GB, CNORMAL);
 			fflush(stdout);
 		}
 		return devCount;
