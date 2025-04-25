@@ -152,20 +152,6 @@ namespace QuaSARQ {
 		}
 
 		inline
-		void 		copygateto 		(Circuit& circuit, const gate_ref_t& host_ref, const depth_t& depth_level, const cudaStream_t& stream) {
-			const size_t prev_buckets_offset = circuit.reference(depth_level, 0);
-			assert(host_ref >= prev_buckets_offset);
-			const gate_ref_t device_ref = host_ref - prev_buckets_offset;
-			const Gate* host_gate = circuit.gateptr(host_ref);
-			const size_t num_buckets = NBUCKETS(host_gate->size);
-			LOGN2(2, "Copying back gate");
-			if (options.verbose >= 2) host_gate->print(true);
-			LOGN2(2, " to host asynchroneously.. ");
-			CHECK(cudaMemcpyAsync(circuit.data(host_ref), _buckets + device_ref, BUCKETSIZE * num_buckets, cudaMemcpyDeviceToHost, stream));
-			LOGDONE(2, 4);
-		}
-
-		inline
 		bucket_t*    gates			() { return _buckets; }
 
 		inline const

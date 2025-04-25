@@ -35,8 +35,8 @@ NVCC := $(CUDA_PATH)/bin/nvcc -ccbin $(CXX)
 # compiler flags
 
 RELOC	  := -dc
-CCFLAGS   := -std=c++17 -fdiagnostics-show-option
-NVCCFLAGS := -m64 -std=c++17
+CCFLAGS   := -std=c++20 -fdiagnostics-show-option
+NVCCFLAGS := -m64 -std=c++20
 
 # Common includes 
 INCLUDES  := -I../../common/inc 

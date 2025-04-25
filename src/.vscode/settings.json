@@ -99,7 +99,8 @@
         "stdfloat": "cpp",
         "cinttypes": "cpp",
         "typeindex": "cpp",
-        "target": "cpp"
+        "target": "cpp",
+        "forward_list": "cpp"
     },
     "git.ignoreLimitWarning": true
 }

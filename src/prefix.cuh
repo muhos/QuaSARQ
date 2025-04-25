@@ -10,6 +10,8 @@
 #include "tableau.cuh"
 #include "prefixintra.cuh"
 #include "measurecheck.cuh"
+#include "options.hpp"
+#include "kernelconfig.hpp"
 
 namespace QuaSARQ {
 

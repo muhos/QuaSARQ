@@ -5,7 +5,7 @@
 
 namespace QuaSARQ {
 
-    #define PRINT_HEX 1
+    #define PRINT_HEX 0
 
 	NOINLINE_DEVICE void REPCH_GPU(const char* ch, const size_t& size, const size_t& off) {
         for (size_t i = off; i < size; i++) LOGGPU("%s", ch);
@@ -36,24 +36,22 @@ namespace QuaSARQ {
         }
         for (size_t q = 0; q < bits; q++) {
             #if PRINT_HEX
-            LOGGPU("%-16lld ", q);
+            LOGGPU("%-16lld   ", int64(q));
             #else
             if (q > 0 && q % WORD_BITS == 0)
                 LOGGPU("  ");
-            LOGGPU("%-3lld", q);
+            LOGGPU("%-3lld", int64(q));
             #endif
             if (q > 64) break;
         }
         LOGGPU("\n\n");
         if (t.is_rowmajor()) {
             for (size_t q = 0; q < rows; q++) {
-                LOGGPU("%-3lld  ", q);
+                LOGGPU("%-3lld  ", int64(q));
                 for (size_t w = 0; w < cols; w++) {
                     const size_t word_idx = q + w * rows;
                     #if PRINT_HEX
-                    uint64 t_word = t[word_idx];
-                    if (t_word)
-                        LOGGPU("%-016llX ", t_word);
+                    LOGGPU("0x%016llX ", uint64(t[word_idx]));
                     #else 
                     #if defined(WORD_SIZE_64)
                     LOGGPU(B2B_STR, RB2B(uint32(word_std_t(t[word_idx]) & 0xFFFFFFFFUL)));
@@ -68,12 +66,11 @@ namespace QuaSARQ {
         }
         else {
             for (size_t q = 0; q < rows; q++) {
-                LOGGPU("%-3lld  ", q);
+                LOGGPU("%-3lld  ", int64(q));
                 for (size_t w = 0; w < cols; w++) {
                     const size_t word_idx = q * cols + w;
                     #if PRINT_HEX
-                    if (word_std_t(t[word_idx]))
-                        LOGGPU("%-016llX ", uint64(t[word_idx]));
+                    LOGGPU("0x%016llX ", uint64(t[word_idx]));
                     #else 
                     #if defined(WORD_SIZE_64)
                     LOGGPU(B2B_STR, RB2B(uint32(word_std_t(t[word_idx]) & 0xFFFFFFFFUL)));
@@ -86,13 +83,14 @@ namespace QuaSARQ {
                 LOGGPU("\n");
             }
         }
-        
     }
 
     NOINLINE_ALL void print_table_signs(const Signs& ss, const size_t& start, const size_t& end) {
         const size_t size = ss.is_unpacked() ? ss.size() : ss.size() * WORD_BITS;
         for (size_t i = start; i < end; i++) {
-            LOGGPU("g%-3lld   %-2d\n", i >= ss.num_qubits_padded() ? (i - ss.num_qubits_padded()) : i,  ss.is_unpacked() ? ss.unpacked_data()[i] : bool(ss[WORD_OFFSET(i)] & sign_t(BITMASK_GLOBAL(i))));
+            LOGGPU("g%-3lld   %-2d\n", 
+                (int64) (i >= ss.num_qubits_padded() ? i - ss.num_qubits_padded() : i),  
+                ss.is_unpacked() ? ss.unpacked_data()[i] : bool(ss[WORD_OFFSET(i)] & sign_t(BITMASK_GLOBAL(i))));
         }
     }
 
@@ -248,22 +246,17 @@ namespace QuaSARQ {
 		}
 	}
 
-	__global__ void print_measurements_k(const_refs_t refs, const_buckets_t measurements, const_pivots_t pivots, const gate_ref_t num_gates) {
-        for_parallel_x(i, num_gates) {
-            const gate_ref_t r = refs[i];
-            const Gate &m = (Gate &)measurements[r];
-            LOGGPU(" q%-10d: %c (%s)\n", m.wires[0], 
-                m.measurement != UNMEASURED ? char(((m.measurement % 4 + 4) % 4 >> 1) + 48) : 'U',
-                pivots[i] == INVALID_PIVOT ? "definite" : "random");
-            // LOGGPU(" %8d     %10s    %2d\n", m.wires[0], 
-            // 	m.pivot == INVALID_PIVOT ? "definite" : "random",  
-            // 	m.measurement != UNMEASURED ? m.measurement : -1);
-        }
-	}
+	// __global__ void print_measurements_k(const_signs_t signs, const_pivots_t pivots, const size_t num_qubits) {
+    //     for_parallel_x(i, num_qubits) {
+    //         // LOGGPU(" %8d     %10s    %2d\n", m.wires[0], 
+    //         // 	m.pivot == INVALID_PIVOT ? "definite" : "random",  
+    //         // 	m.measurement != UNMEASURED ? m.measurement : -1);
+    //     }
+	// }
 
 	void Simulator::print_paulis(const Tableau& tab, const depth_t& depth_level, const bool& reversed) {
 		if (!options.sync) SYNCALL;
-		if (depth_level == -1) 
+		if (depth_level == MAX_DEPTH) 
 			LOGHEADER(0, 3, "Initial state");
 		else if (options.print_stepstate)
 			LOG2(0, "State after %d-step", depth_level);
@@ -282,7 +275,7 @@ namespace QuaSARQ {
 	void Simulator::print_tableau(const Tableau& tab, const depth_t& depth_level, const bool& reversed, const bool& prefix) {
 		if (!options.sync) SYNCALL;
 		LOG2(0, "");
-		if (depth_level == -1)
+		if (depth_level == MAX_DEPTH)
 			LOG2(0, "Initial tableau before simulation");
 		else if (depth_level == depth)
 			LOG2(0, "Final tableau after %d %ssimulation steps", depth, reversed ? "reversed " : "");
@@ -312,12 +305,57 @@ namespace QuaSARQ {
         else SETCOLOR(CLBLUE, stdout);
         uint32 currentblock = 256, currentgrid;
         OPTIMIZEBLOCKS(currentgrid, num_gates, currentblock);
-		print_measurements_k <<< currentgrid, currentblock >>> (gpu_circuit.references(), gpu_circuit.gates(), pivoting.pivots, num_gates);
+		//print_measurements_k <<< currentgrid, currentblock >>> (gpu_circuit.references(), gpu_circuit.gates(), pivoting.pivots, num_gates);
 		LASTERR("failed to launch print_measurements_k kernel");
 		SYNCALL;
         SETCOLOR(CNORMAL, stdout);
 		fflush(stdout);
 	}
+
+    void Simulator::print_progress_header() {
+        LOGN2(1, "   %-10s    %-10s    %-10s    %15s          %-9s", 
+                "Partition", "Step", "Gates", "Measurements", "Time (s)");
+        if (options.check_tableau || options.check_measurement)
+            LOG2(1, "  %s", "Integrity");
+        else
+            LOG2(1, "");
+        LOGN2(1, "   %-10s    %-10s    %-10s    %-10s  %-10s    %-10s", 
+                "", "", "", "definite", "random", "");
+        if (options.check_tableau || options.check_measurement)
+            LOG2(1, "  %s", "");
+        else
+            LOG2(1, "");
+        LOGRULER(1, '-', RULERLEN);
+    }
+
+    void Simulator::print_progress(const size_t& p, const depth_t& depth_level, const bool& passed) {
+        if (options.progress_en) {
+            progress_timer.stop();
+            const bool is_measuring = circuit.is_measuring(depth_level);
+            size_t random_measures = stats.circuit.measure_stats.random_per_window;
+            stats.circuit.measure_stats.random_per_window = 0;
+            size_t prev_num_gates = circuit[depth_level].size();
+            size_t definite_measures = is_measuring ? prev_num_gates - random_measures : 0;
+            if (is_measuring) SETCOLOR(CLBLUE, stdout);
+            else SETCOLOR(CORANGE1, stdout);
+            LOGN2(1, "%c  %-10lld    %-10lld    %-10lld    %-10lld  %-10lld   %-7.3f", 
+                    is_measuring ? 'm' : 'u',
+                    p + 1, 
+                    depth_level + 1, 
+                    prev_num_gates, 
+                    definite_measures, 
+                    random_measures, 
+                    progress_timer.time() / 1000.0);
+            if (options.check_tableau ||
+                (options.check_measurement && is_measuring))
+                LOG2(1, "    %s%-10s%s", 
+                passed ? CGREEN : CRED,
+                passed ? "PASSED" : "FAILED", CNORMAL);
+            else
+                LOG2(1, "");
+            SETCOLOR(CNORMAL, stdout);
+        }
+    }
 
 }
 

@@ -1,20 +1,15 @@
 #pragma once
 
-#include "vector.cuh"
 #include "locker.cuh"
 #include "tableau.cuh"
 #include "circuit.cuh"
 #include "prefix.cuh"
-#include "timer.cuh"
 #include "timer.hpp"
 #include "vector.hpp"
 #include "random.hpp"
 #include "circuit.hpp"
 #include "parser.hpp"
-#include "control.hpp"
-#include "options.hpp"
 #include "statistics.hpp"
-#include "kernelconfig.hpp"
 
 
 namespace QuaSARQ {
@@ -69,6 +64,12 @@ namespace QuaSARQ {
         Simulator();
         Simulator(const string& path);
 
+        // Getters.
+        Tableau&        get_tableau() { return tableau; }
+        Circuit&        get_circuit() { return circuit; }
+        DeviceCircuit&  get_gpu_circuit() { return gpu_circuit; }
+        bool            is_measuring() const { return measuring; }
+
         // Random circuit generation.
         Gatetypes get_rand_gate(const bool& multi_input = true, const bool& force_multi_input = false);
         void get_rand_qubit(const qubit_t& control, qubit_t& qubit);
@@ -94,7 +95,6 @@ namespace QuaSARQ {
         void reset_pivots(const size_t& num_pivots, const cudaStream_t& stream);
         void find_pivots(const size_t& num_pivots, const cudaStream_t& stream);
         void compact_targets(const qubit_t& qubit, const cudaStream_t& stream);
-        void mark_commutations(const qubit_t& qubit, const cudaStream_t& stream);
         void inject_swap(const qubit_t& qubit, const cudaStream_t& stream);
         void inject_cx(const uint32& active_targets, const cudaStream_t& stream);
         void tune_assuming_maximum_targets(const depth_t& depth_level);
@@ -102,35 +102,12 @@ namespace QuaSARQ {
         void measure(const size_t& p, const depth_t& depth_level, const bool& reversed = false);
 
         // Printers.
+        void print_progress_header();
+        void print_progress(const size_t& p, const depth_t& depth_level, const bool& passed = false);
         void print_tableau(const Tableau& tab, const depth_t& depth_level, const bool& reverse, const bool& prefix = false);
         void print_paulis(const Tableau& tab, const depth_t& depth_level, const bool& reversed);
         void print_gates(const DeviceCircuit& gates, const gate_ref_t& num_gates, const depth_t& depth_level);
         void print_measurements(const DeviceCircuit& gates, const gate_ref_t& num_gates, const depth_t& depth_level);
-
-        // Progress report.
-        inline void print_progress_header() {
-            LOG2(1, "   %-10s    %-10s    %-10s    %15s          %-15s", 
-                    "Partition", "Step", "Gates", "Measurements", "Time (s)");
-            LOG2(1, "   %-10s    %-10s    %-10s    %-10s  %-10s    %-10s", 
-                    "", "", "", "definite", "random", "");
-            LOGRULER('-', RULERLEN);
-        }
-        inline void print_progress(const size_t& p, const depth_t& depth_level) {
-            if (options.progress_en) {
-                progress_timer.stop();
-                const bool is_measuring = circuit.is_measuring(depth_level);
-                size_t random_measures = stats.circuit.measure_stats.random_per_window;
-                stats.circuit.measure_stats.random_per_window = 0;
-                size_t prev_num_gates = circuit[depth_level].size();
-                size_t definite_measures = is_measuring ? prev_num_gates - random_measures : 0;
-                if (is_measuring) SETCOLOR(CLBLUE, stdout);
-                else SETCOLOR(CORANGE1, stdout);
-                LOG2(1, "%c  %-10lld    %-10lld    %-10lld    %-10lld  %-10lld   %-7.3f", 
-                        is_measuring ? 'm' : 'u',
-                        p + 1, depth_level + 1, prev_num_gates, definite_measures, random_measures, progress_timer.time() / 1000.0);
-                SETCOLOR(CNORMAL, stdout);
-            }
-        }
 
     };
 

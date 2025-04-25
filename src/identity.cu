@@ -2,43 +2,50 @@
 #include "simulator.hpp"
 #include "identity.cuh"
 #include "collapse.cuh"
+#include "identitycheck.cuh"
 
 namespace QuaSARQ {
 
-    __global__ void identity_1D(const size_t column_offset, const size_t num_qubits, Table* xs, Table* zs) {
+    __global__ 
+    void identity_1D(IDENTITY_ARGS) {
         for_parallel_x(q, num_qubits) {
             xs->set_word_to_identity(q, column_offset);
             zs->set_word_to_identity(q, column_offset);
         }
     }
 
-    __global__ void identity_Z_1D(const size_t column_offset, const size_t num_qubits, Table* xs, Table* zs) {
+    __global__ 
+    void identity_Z_1D(IDENTITY_ARGS) {
         for_parallel_x(q, num_qubits) {
             zs->set_word_to_identity(q, column_offset);
         }
     }
 
-    __global__ void identity_X_1D(const size_t column_offset, const size_t num_qubits, Table* xs, Table* zs) {
+    __global__ 
+    void identity_X_1D(IDENTITY_ARGS) {
         for_parallel_x(q, num_qubits) {
             xs->set_word_to_identity(q, column_offset);
         }
     }
 
-    __global__ void identity_extended_1D(const size_t column_offset, const size_t num_qubits, Table* xs, Table* zs) {
+    __global__ 
+    void identity_extended_1D(IDENTITY_ARGS) {
         for_parallel_x(q, num_qubits) {
             xs->set_stab_to_identity(q, column_offset);
             zs->set_stab_to_identity(q, column_offset);
         }
     }
 
-    __global__ void identity_Z_extended_1D(const size_t column_offset, const size_t num_qubits, Table* xs, Table* zs) {
+    __global__ 
+    void identity_Z_extended_1D(IDENTITY_ARGS) {
         for_parallel_x(q, num_qubits) {
             xs->set_destab_to_identity(q, column_offset);
             zs->set_stab_to_identity(q, column_offset);
         }
     }
 
-    __global__ void identity_X_extended_1D(const size_t column_offset, const size_t num_qubits, Table* xs, Table* zs) {
+    __global__ 
+    void identity_X_extended_1D(IDENTITY_ARGS) {
         for_parallel_x(q, num_qubits) {
             zs->set_destab_to_identity(q, column_offset);
             xs->set_stab_to_identity(q, column_offset);
@@ -101,8 +108,15 @@ namespace QuaSARQ {
             LOG2(1, "done in %f ms.", itime);
         }
         else LOGDONE(1, 3);
+        if (options.check_identity) {
+            LOGN2(1, " Checking identity.. ");
+            if (!check_identity(tableau, offset_per_partition, num_qubits_per_partition, measuring)) {
+                LOGERROR("creating identity failed.");
+            }
+            LOG2(1, "%sPASSED.%s", CGREEN, CNORMAL);
+        }
         if (options.print_initialtableau) 
-            print_tableau(tab, -1, false);
+            print_tableau(tab, MAX_DEPTH, false);
     }
 
 }

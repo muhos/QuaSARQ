@@ -71,6 +71,10 @@ namespace QuaSARQ {
             double schedule;
             double transfer;
             double simulation;
+
+            double total() {
+                return initial + schedule + transfer + simulation;
+            }
         } time;
 
         struct {

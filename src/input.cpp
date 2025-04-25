@@ -31,7 +31,7 @@ namespace QuaSARQ {
         LOG1("  %s-h or --help  print available options.%s", CHELP, CNORMAL);
         LOG1("  %s--helpmore    print available options with verbose message.%s", CHELP, CNORMAL);
         LOG0("");
-        LOGRULER('-', RULERLEN);
+        LOGRULER(0, '-', RULERLEN);
         exit(EXIT_SUCCESS);
     }
 

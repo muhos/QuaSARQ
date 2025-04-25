@@ -360,10 +360,13 @@ namespace QuaSARQ {
             measure(p, depth_level, reversed);
         }
 
-        if (options.progress_en) {
+        if (options.progress_en || options.check_tableau) {
             SYNC(kernel_streams[0]);
             SYNC(kernel_streams[1]);
-            print_progress(p, depth_level);
+        }
+
+        if (options.progress_en && !options.check_tableau) {
+            print_progress(p, depth_level, true);
         }
 
         print_measurements(gpu_circuit, num_gates_per_window, depth_level);

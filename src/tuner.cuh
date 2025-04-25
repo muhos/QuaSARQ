@@ -1,7 +1,6 @@
 #pragma once
 
-#include "tableau.cuh"
-#include "datatypes.cuh"
+#include "simulator.hpp"
 
 namespace QuaSARQ {
 

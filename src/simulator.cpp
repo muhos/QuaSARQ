@@ -1,6 +1,8 @@
 
 #include "simulator.hpp"
+#include "control.hpp"
 #include "power.cuh"
+#include "identitycheck.cuh"
 
 using namespace QuaSARQ;
 
@@ -110,10 +112,7 @@ void Simulator::simulate(const size_t& p, const bool& reversed) {
         LOGERRORN("cannot run simulation without allocating the tableau.");
         throw GPU_memory_exception();
     }
-    if (!options.check_tableau) {
-        if (reversed) { LOGHEADER(1, 4, "Reversed Simulation"); }
-        else { LOGHEADER(1, 4, "Simulation"); }
-    }
+    LOGHEADER(1, 4, "Simulation");
     if (options.progress_en) print_progress_header();
     if (reversed) {
         gpu_circuit.reset_circuit_offset(circuit.reference(depth - 1, 0));
@@ -127,6 +126,42 @@ void Simulator::simulate(const size_t& p, const bool& reversed) {
     }
     if (options.print_finaltableau) print_tableau(tableau, depth, reversed);
     if (options.print_finalstate) print_paulis(tableau, depth, reversed);
+}
+
+void check_simulate(Simulator& sim, const size_t& p, const size_t& prev_num_qubits, const size_t& num_qubits) {
+    Tableau& tableau = sim.get_tableau();
+    Circuit& circuit = sim.get_circuit();
+    DeviceCircuit& gpu_circuit = sim.get_gpu_circuit();
+    if (!tableau.size()) {
+        LOGERRORN("cannot run simulation without allocating the tableau.");
+        throw GPU_memory_exception();
+    }
+    LOGHEADER(1, 4, "Checking Simulation");
+    if (options.progress_en) sim.print_progress_header();
+    const depth_t max_depth = circuit.depth();
+    depth_t start_depth = 0, end_depth = 1;
+    while (start_depth < end_depth && end_depth < max_depth) {
+        if (circuit.is_measuring(start_depth)) {
+            start_depth++;
+            end_depth++;
+            continue;
+        }
+        gpu_circuit.reset_circuit_offset(circuit.reference(start_depth, 0));
+        for (depth_t d = start_depth; d < end_depth; d++)
+            if (!circuit.is_measuring(d)) 
+                sim.step(p, d);
+        gpu_circuit.reset_circuit_offset(circuit.reference(end_depth - 1, 0));
+        for (depth_t d = start_depth; d < end_depth; d++)
+            if (!circuit.is_measuring(d)) 
+                sim.step(p, end_depth - d - 1, true);
+        
+        LOGN2(2, "  checking tableau integrity from %d up to %d depth levels.. ", start_depth, end_depth);
+        const bool passed = check_identity(tableau, prev_num_qubits, num_qubits, sim.is_measuring());
+        if (passed) LOG2(2, "%sPASSED.%s", CGREEN, CNORMAL);
+        else LOG2(2, "%FAILED.%s", CRED, CNORMAL);
+        sim.print_progress(p, end_depth - 1, passed);
+        end_depth++;
+    }
 }
 
 void Simulator::simulate() {
@@ -156,7 +191,10 @@ void Simulator::simulate() {
         LOGN2(1, "Partition %zd: ", p);
         identity(tableau, prev_num_qubits, (p == num_partitions - 1) ? (num_qubits - prev_num_qubits) : num_qubits_per_partition, custreams, options.initialstate);
         // Stepwise simulation.
-        simulate(p, false);
+        if (options.check_tableau)
+            check_simulate(*this, p, prev_num_qubits, num_qubits_per_partition);
+        else
+            simulate(p, false);
     }
 	SYNCALL;
 	timer.stop();

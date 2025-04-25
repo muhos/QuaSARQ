@@ -9,6 +9,7 @@ namespace QuaSARQ {
 
     #define FOREACH_CHECK(CONFIG) \
         CONFIG(scheduler) \
+        CONFIG(identity) \
         CONFIG(tableau) \
         CONFIG(transpose) \
         CONFIG(measurement) \

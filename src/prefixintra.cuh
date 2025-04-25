@@ -18,7 +18,7 @@ namespace QuaSARQ {
 
 		INLINE_ALL 
 		void print() const {
-			printf("PrefixCell: x = %016llx, z = %016llx\n", x, z);
+			printf("PrefixCell: x = %016llx, z = %016llx\n", uint64(x), uint64(z));
 		}
     };
 

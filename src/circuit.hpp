@@ -300,7 +300,7 @@ namespace QuaSARQ {
                 const gate_ref_t& r = windows[depth_level][i];
                 const Gate& g = gate(r);
                 LOGN1("  Gate(r = %8d): ", r);
-                gate(r).print();
+                gate(r).print_host();
             }
             fflush(stdout);
         } 

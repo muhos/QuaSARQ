@@ -105,7 +105,7 @@ namespace QuaSARQ {
                     mchecker.check_compact_pivots(qubit, pivoting.pivots, active_pivots);
                 if (active_pivots) {
                     if (active_pivots > 1)
-                        inject_cx(active_pivots - 1/*active_pivots - 1*/, stream);
+                        inject_cx(active_pivots - 1, stream);
                     inject_swap(qubit, stream);
                     random_measures++;
                 }

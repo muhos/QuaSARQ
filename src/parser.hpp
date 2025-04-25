@@ -163,19 +163,15 @@ namespace QuaSARQ {
             }
         }
 
-        inline Gatetypes translate_gate(char* in, const int& gatelen) {
+        inline int translate_gate(char* in, const int& gatelen) {
             for (int i = 0; i < NR_GATETYPES; i++) {
                 const char* ref = G2S_STIM[i];
                 int c = 0;
-                while (ref[c]) {
-                    if (ref[c] != in[c])
-                        break;
-                    c++;
-                }
+                while (ref[c] && ref[c] == in[c]) c++;
                 if (gatelen == c)
-                    return Gatetypes(i);
+                    return i;
             }
-            LOGERROR("unknown gate %s.", in);
+            return -1;
         }
 
         char* read(const char* circuit_path) {
@@ -217,7 +213,9 @@ namespace QuaSARQ {
             if (gatename_len == MAX_GATENAME_LEN)
                 LOGERROR("gate name is too long.");
             gatestr[gatename_len] = '\0';           
-            Gatetypes type = translate_gate(gatestr, gatename_len);
+            int gateindex = translate_gate(gatestr, gatename_len);
+            if (gateindex < 0) LOGERROR("unknown gate %s.", gatestr);
+            const Gatetypes type = Gatetypes(gateindex);
             // Flag measurement existance.
             if (type == M) measuring = true;
             str += gatename_len;    

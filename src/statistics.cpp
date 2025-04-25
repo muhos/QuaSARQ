@@ -10,7 +10,7 @@ using namespace QuaSARQ;
 void Simulator::report()
 {
 	if (options.report_en) {
-		LOGHEADER(0, 4, "Statistics");
+		LOGHEADER(1, 4, "Statistics");
 		LOG1(" %sInitial time                   : %s%-12.3f  sec%s", CREPORT, CREPORTVAL, stats.time.initial / 1000.0, CNORMAL);
 		LOG1(" %sSchedule time                  : %s%-12.3f  sec%s", CREPORT, CREPORTVAL, stats.time.schedule / 1000.0, CNORMAL);
 		if (options.sync)
@@ -38,5 +38,14 @@ void Simulator::report()
 		LOG1(" %sDefinite measurements          : %s%-12zd%s", CREPORT, CREPORTVAL, stats.circuit.measure_stats.definite, CNORMAL);
 		LOG1(" %sClifford gates                 : %s%-12zd%s", CREPORT, CREPORTVAL, stats.circuit.num_gates, CNORMAL);
 		FOREACH_GATE(GATE2STATISTIC);
+	}
+	if (options.quiet_en) {
+		PRINT("Time    : %-12.3f  sec\n", 
+			stats.time.total() / 1000.0);
+		PRINT("Memory  : %-12.3f  GB\n", 
+			ratio((double)stats.circuit.bytes, double(GB)) + 
+			stats.tableau.count * stats.tableau.gigabytes);
+		PRINT("Energy  : %-12.3f  joules\n", 
+			stats.power.joules);
 	}
 }

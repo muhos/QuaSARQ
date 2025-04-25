@@ -8,10 +8,6 @@
 #define WORD_SIZE_64
 #endif
 
-#ifdef __GNUC__ 
-#pragma GCC diagnostic ignored "-Wreturn-local-addr"
-#endif
-
 namespace QuaSARQ {
 
 #if defined(WORD_SIZE_8)
@@ -55,14 +51,20 @@ namespace QuaSARQ {
 
         INLINE_ALL constexpr word_t(const word_t& other) : word(other.word) { }
 
-        INLINE_ALL operator bool() const { return bool(word); }
+        INLINE_ALL 
+        operator word_std_t() const { return word; }
 
-        INLINE_ALL operator uint32() const { return uint32(word); }
+        INLINE_ALL 
+        explicit operator bool() const { return bool(word); }
 
-        INLINE_ALL operator uint64() const { return uint64(word); }
+        #if !defined(WORD_SIZE_32)
+        INLINE_ALL 
+        explicit operator uint32() const { return uint32(word); }
+        #endif
 
-        #if defined(WORD_SIZE_8)
-        INLINE_ALL operator uint32() const { return uint32(word); }
+        #if !defined(WORD_SIZE_64)
+        INLINE_ALL 
+        explicit operator uint64() const { return uint64(word); }
         #endif
 
         INLINE_ALL bool operator[] (const size_t& q) const {
@@ -91,13 +93,13 @@ namespace QuaSARQ {
             return *this;
         }
 
-        INLINE_ALL word_t& operator|=(const word_t& other) {
-            word |= other.word;
+        INLINE_ALL word_t& operator&=(const word_std_t& other) {
+            word &= other;
             return *this;
         }
 
-        INLINE_ALL word_t& operator&=(const word_std_t& other) {
-            word &= other;
+        INLINE_ALL word_t& operator|=(const word_t& other) {
+            word |= other.word;
             return *this;
         }
 
@@ -108,6 +110,11 @@ namespace QuaSARQ {
 
         INLINE_ALL word_t& operator^=(const word_std_t& other) {
             word ^= other;
+            return *this;
+        }
+
+        INLINE_ALL word_t& operator^=(const word_t& other) {
+            word ^= other.word;
             return *this;
         }
 

@@ -105,6 +105,35 @@ void add_measurements(Circuit& circuit, Vec<qubit_t, size_t>& measurements, Wind
     winfo.max(circuit[depth_level].size(), (circuit.num_buckets() - num_gate_buckets_per_window));
 }
 
+void check_parallel_gates(const Circuit& circuit, const size_t& num_qubits) {
+    LOGN2(1, " Checking scheduled circuit for %d depth levels and %lld qubits.. ", circuit.depth(), int64(num_qubits));
+    Vec<byte_t, size_t> locked(num_qubits, 0);
+    if (circuit.empty()) {
+        LOG0("");
+        LOGERROR(" found circuit is empty");
+    }
+    for (depth_t d = 0; d < circuit.depth(); d++) {
+        const Window& w = circuit[d];
+        for (uint32 g = 0; g < w.size(); g++) {
+            gate_ref_t r = w[g];
+            if (r == NO_REF) {
+                LOG0("");
+                LOGERROR(" gate reference is invalid");
+            }
+            const Gate& gate = circuit.gate(r);
+            for (input_size_t i = 0; i < gate.size; i++) {
+                if (locked[gate.wires[i]]) {
+                    LOG0("");
+                    LOGERROR(" found input %d of gate %d at depth %d is a duplicate", gate.wires[i], g, d);
+                }
+                locked[gate.wires[i]] = 1;
+            }
+        }
+        locked.reset();
+    }
+    LOG2(1, "%sPASSED.%s", CGREEN, CNORMAL);
+}
+
 void Simulator::generate() {
     assert(circuit_mode == RANDOM_CIRCUIT);
     if (!num_qubits) {
@@ -205,8 +234,12 @@ void Simulator::generate() {
     locked.clear(true);
     measurements.clear(true);
     // Sort gates in each depth level.
-    for (depth_t d = 0; d < circuit.depth(); d++) {
-        std::sort(circuit[d].data(), circuit[d].end(), WindowSorter(circuit));
+    // Must be disabled during checking 
+    // to avoid messing up the references.
+    if (!options.check_tableau) {
+        for (depth_t d = 0; d < circuit.depth(); d++) {
+            std::sort(circuit[d].data(), circuit[d].end(), WindowSorter(circuit));
+        }
     }
     timer.stop();
     stats.time.schedule = timer.time();
@@ -383,8 +416,12 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
     locked_qubits.clear(true);
     circuit_io.destroy();
     // Sort gates in each depth level.
-    for (depth_t d = 0; d < circuit.depth(); d++) {
-        std::sort(circuit[d].data(), circuit[d].end(), WindowSorter(circuit));
+    // Must be disabled during checking 
+    // to avoid messing up the references.
+    if (!options.check_tableau) {
+        for (depth_t d = 0; d < circuit.depth(); d++) {
+            std::sort(circuit[d].data(), circuit[d].end(), WindowSorter(circuit));
+        }
     }
     timer.stop();
     stats.time.schedule = timer.time();
@@ -411,4 +448,6 @@ void Simulator::parse() {
         depth = schedule(stats, circuit);
     }
     fflush(stdout), fflush(stderr);
+    if (options.check_scheduler)
+        check_parallel_gates(circuit, num_qubits);
 }

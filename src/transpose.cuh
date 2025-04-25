@@ -33,22 +33,22 @@ void tune_outplace_transpose(
 
 void tune_inplace_transpose(
     void (*transpose_tiles_kernel)(
-            Table*, 
-            Table*, 
+                Table*, 
+                Table*, 
     const 	size_t, 
     const 	size_t, 
     const 	bool),
     void (*swap_tiles_kernel)(
-            Table*, 
-            Table*, 
+                Table*, 
+                Table*, 
     const 	size_t, 
     const 	size_t),
-            dim3& 	bestBlockTransposeBits, 
-            dim3& 	bestGridTransposeBits,
-            dim3& 	bestBlockTransposeSwap, 
-            dim3& 	bestGridTransposeSwap,
-            Table*	xs, 
-            Table* 	zs,
+                dim3& 	bestBlockTransposeBits, 
+                dim3& 	bestGridTransposeBits,
+                dim3& 	bestBlockTransposeSwap, 
+                dim3& 	bestGridTransposeSwap,
+                Table*	xs, 
+                Table* 	zs,
     const 	size_t& num_words_major, 
     const 	size_t& num_words_minor, 
     const 	bool& 	row_major);

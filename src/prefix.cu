@@ -1,8 +1,8 @@
 
-#include "prefix.cuh"
-#include "templatedim.cuh"
 #include "timer.cuh"
+#include "prefix.cuh"
 #include "datatypes.cuh"
+#include "templatedim.cuh"
 #include <cub/block/block_scan.cuh>
 
 namespace QuaSARQ {

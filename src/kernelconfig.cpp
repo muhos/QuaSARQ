@@ -34,7 +34,7 @@ namespace QuaSARQ {
 
 	#define CONFIG2PRINT(CONFIG, BLOCKX, BLOCKY, GRIDX, GRIDY) \
 		if (fetched ## CONFIG) { \
-			LOG2(1, " read " #CONFIG " configuration with %lld distance: grid(%d, %d), block(%d, %d)", min_diff, bestgrid ## CONFIG.x, bestgrid ## CONFIG.y, bestblock ## CONFIG.x, bestblock ## CONFIG.y); \
+			LOG2(2, " read " #CONFIG " configuration with %lld distance: grid(%d, %d), block(%d, %d)", min_diff, bestgrid ## CONFIG.x, bestgrid ## CONFIG.y, bestblock ## CONFIG.x, bestblock ## CONFIG.y); \
 		}
 }
 

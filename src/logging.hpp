@@ -1,134 +1,235 @@
 #pragma once
 
-#include <cstdio>
-#include <cstring>
+#include <mutex>
+#include <iostream>
 #include <string>
-#include "constants.hpp"
-#include "options.hpp"
+#include <cstdio>
+#include <cstdarg>
+#include <cstddef>
+#include <cuda_runtime.h>
 #include "color.hpp"
+#include "constants.hpp"
 
-#if defined(__linux__) || defined(__CYGWIN__)
-#pragma GCC system_header
+#if __cplusplus >= 202002L
+  using charu8_t = char8_t;
+#else
+  using charu8_t = char;
 #endif
 
 #define STARTLEN 10
 #define RULERLEN 92
-#define PREFIX ""
-#define UNDERLINE "\u001b[4m"
 
-#define PUTCH(CH, ...) putc(CH, stdout)
+#define LOGGPU(FMT, ...)            printf(FMT, ##__VA_ARGS__)
+#define LOGGPUERROR(FMT, ...)       printf(CERROR "ERROR: " FMT CNORMAL, ##__VA_ARGS__)
 
-#define PRINT(FORMAT, ...) fprintf(stdout, FORMAT, ##__VA_ARGS__)
+class Logger {
 
-#define LOGGPU(FORMAT, ...) printf(FORMAT, ##__VA_ARGS__)
+private:
+    Logger() = default;
+    int         verbose = 0;
+    std::mutex  mutex;
 
-#define LOGGPUERROR(FORMAT, ...) printf(CERROR "ERROR: " FORMAT CNORMAL, ##__VA_ARGS__)
+    static Logger& get() {
+        static Logger instance;
+        return instance;
+    }
 
-#define LOGRULER(CH, TIMES) \
-    do                      \
-    {                       \
-        PUTCH(PREFIX[0]);   \
-        REPCH(CH, TIMES);   \
-        PUTCH('\n');        \
-    } while (0)
+    static void repch_nolock(const char& ch, size_t times) {
+        while(times && times--) std::fputc(ch, stdout);
+    }
 
-#define LOGERROR(FORMAT, ...)                                                 \
-    do                                                                        \
-    {                                                                         \
-        fprintf(stderr, CERROR "ERROR: " FORMAT "\n" CNORMAL, ##__VA_ARGS__); \
-        exit(1);                                                              \
-    } while (0)
+public:
 
-#define LOGERRORN(FORMAT, ...)                                                \
-    do                                                                        \
-    {                                                                         \
-        fprintf(stderr, CERROR "ERROR: " FORMAT "\n" CNORMAL, ##__VA_ARGS__); \
-    } while (0)
+    static void set_level(int lvl) noexcept { get().verbose = lvl; }
 
-#define LOGWARNING(FORMAT, ...)                                                   \
-    do                                                                            \
-    {                                                                             \
-        fprintf(stderr, CWARNING "WARNING: " FORMAT "\n" CNORMAL, ##__VA_ARGS__); \
-    } while (0)
+    static int min_verbosity() noexcept { return get().verbose; }
 
-inline void REPCH(const char &ch, const size_t &size, const size_t &off = 0)
-{
-    for (size_t i = off; i < size; i++)
-        PUTCH(ch);
-}
+    template<typename... Args>
+    static void print(const char* fmt, Args&&... args) {
+        std::lock_guard<std::mutex> lock(get().mutex);
+        if constexpr (sizeof...(Args) > 0) {
+            std::fprintf(stdout, fmt, std::forward<Args>(args)...);
+        } else {
+            std::fputs(fmt, stdout);
+        }
+    }
 
-#define LOGHEADER(VERBOSITY, MAXVERBOSITY, HEAD)                                 \
-    do                                                                           \
-    {                                                                            \
-        if (options.verbose >= VERBOSITY && options.verbose < MAXVERBOSITY)      \
-        {                                                                        \
-            size_t len = strlen(HEAD) + 4;                                       \
-            if (RULERLEN < len)                                                  \
-                LOGERROR("ruler length is smaller than header line (%zd)", len); \
-            SETCOLOR(CNORMAL, stdout);                                           \
-            REPCH('-', STARTLEN);                                                \
-            PRINT("[ %s%s%s ]", CHEADER, HEAD, CNORMAL);                         \
-            REPCH('-', (RULERLEN - len - STARTLEN));                             \
-            PUTCH('\n');                                                         \
-        }                                                                        \
-    } while (0)
+    template<typename... Args>
+    static void print(const charu8_t* fmt, Args&&... args) {
+        std::lock_guard<std::mutex> lock(get().mutex);
+        const char* c_fmt = reinterpret_cast<const char*>(fmt);
+        if constexpr (sizeof...(Args) > 0) {
+            std::fprintf(stdout, c_fmt, std::forward<Args>(args)...);
+        } else {
+            std::fputs(c_fmt, stdout);
+        }
+    }
 
-#define LOG0(MESSAGE)                  \
-    do                                 \
-    {                                  \
-        PRINT(PREFIX "%s\n", MESSAGE); \
-    } while (0)
+    static void putch(char ch) {
+        std::lock_guard lock(get().mutex);
+        std::fputc(ch, stdout);
+    }
 
-#define LOGN0(MESSAGE)               \
-    do                               \
-    {                                \
-        PRINT(PREFIX "%s", MESSAGE); \
-    } while (0)
+    static void repch(char ch, const size_t& times) {
+        std::lock_guard lock(get().mutex);
+        repch_nolock(ch, times);
+    }
 
-#define LOG1(FORMAT, ...)                    \
-    do                                       \
-    {                                        \
-        PRINT(PREFIX FORMAT, ##__VA_ARGS__); \
-        PUTCH('\n');                         \
-    } while (0)
+    static void ruler(int verbosity, char ch, size_t times) {
+        if (min_verbosity() >= verbosity) {
+            std::lock_guard lock(get().mutex);
+            repch_nolock(ch, times);
+            std::fputc('\n', stdout);
+        }
+    }
 
-#define LOGN1(FORMAT, ...)                   \
-    do                                       \
-    {                                        \
-        PRINT(PREFIX FORMAT, ##__VA_ARGS__); \
-    } while (0)
+    // Header logging
+    static void header(int verbosity, int maxverbosity, const char* head) {
+        if (min_verbosity() >= verbosity && min_verbosity() < maxverbosity) {
+            std::lock_guard lock(get().mutex);
+            size_t len = std::strlen(head) + 4;  // brackets and spaces
+            if (RULERLEN < len) {
+                error("ruler length is smaller than header line (%zu)", len);
+            }
+            repch_nolock('-', STARTLEN);
+            std::fprintf(stdout, "[ %s%s%s ]", CHEADER, head, CNORMAL);
+            repch_nolock('-', RULERLEN - len - STARTLEN);
+            std::fputc('\n', stdout);
+        }
+    }
 
-#define LOG2(VERBOSITY, FORMAT, ...)             \
-    do                                           \
-    {                                            \
-        if (options.verbose >= VERBOSITY)        \
-        {                                        \
-            PRINT(PREFIX FORMAT, ##__VA_ARGS__); \
-            PUTCH('\n');                         \
-        }                                        \
-    } while (0)
+    // Error logging
+    template<typename... Args>
+    static void error(const char* fmt, Args&&... args) {
+        cudaDeviceSynchronize();
+        std::lock_guard<std::mutex> lock(get().mutex);
+        std::fprintf(stderr, "%sERROR: ", CERROR);
+        if constexpr (sizeof...(Args) > 0)
+            std::fprintf(stderr, fmt, std::forward<Args>(args)...);
+        else 
+            std::fputs(fmt, stderr);
+        std::fprintf(stderr, "\n%s", CNORMAL);
+        std::exit(1);
+    }
 
-#define LOGN2(VERBOSITY, FORMAT, ...)            \
-    do                                           \
-    {                                            \
-        if (options.verbose >= VERBOSITY)        \
-        {                                        \
-            PRINT(PREFIX FORMAT, ##__VA_ARGS__); \
-        }                                        \
-    } while (0)
+    template<typename... Args>
+    static void errorN(const char* fmt, Args&&... args) {
+        std::lock_guard<std::mutex> lock(get().mutex);
+        std::fprintf(stderr, "%s", CERROR);
+        if constexpr (sizeof...(Args) > 0)
+            std::fprintf(stderr, fmt, std::forward<Args>(args)...);
+        else
+            std::fputs(fmt, stderr);
+        std::fprintf(stderr, "%s", CNORMAL);
+    }
 
-#define LOGDONE(VERBOSITY, MAXVERBOSITY)                                    \
-    do                                                                      \
-    {                                                                       \
-        if (options.verbose >= VERBOSITY && options.verbose < MAXVERBOSITY) \
-            PRINT("done.\n");                                               \
-    } while (0)
+    // Warning logging
+    template<typename... Args>
+    static void warning(const char* fmt, Args&&... args) {
+        if (min_verbosity() >= 0) {
+            std::lock_guard<std::mutex> lock(get().mutex);
+            std::fprintf(stderr, "%sWARNING: ", CWARNING);
+            if constexpr (sizeof...(Args) > 0)
+                std::fprintf(stderr, fmt, std::forward<Args>(args)...);
+            else
+                std::fputs(fmt, stderr);
+            std::fprintf(stderr, "\n%s", CNORMAL);
+        }
+    }
 
-#define LOGENDING(VERBOSITY, MAXVERBOSITY, FORMAT, ...)                     \
-    do                                                                      \
-    {                                                                       \
-        if (options.verbose >= VERBOSITY && options.verbose < MAXVERBOSITY) \
-        {                                                                   \
-            PRINT(FORMAT " done.\n", ##__VA_ARGS__);                        \
-        }                                                                   \
-    } while (0)
+    // Simple logs
+    static void log0(const char* msg) {
+        std::lock_guard<std::mutex> lock(get().mutex);
+        std::fprintf(stdout, "%s\n", msg);
+    }
+
+    static void logN0(const char* msg) {
+        std::lock_guard<std::mutex> lock(get().mutex);
+        std::fprintf(stdout, "%s", msg);
+    }
+
+    template<typename... Args>
+    static void log1(const char* fmt, Args&&... args) {
+        if (min_verbosity() >= 1) {
+            std::lock_guard<std::mutex> lock(get().mutex);
+            if constexpr (sizeof...(Args) > 0)
+                std::fprintf(stdout, fmt, std::forward<Args>(args)...);
+            else
+                std::fputs(fmt, stdout);
+            std::fputc('\n', stdout);
+        }
+    }
+
+    template<typename... Args>
+    static void logN1(const char* fmt, Args&&... args) {
+        if (min_verbosity() >= 1) {
+            std::lock_guard<std::mutex> lock(get().mutex);
+            if constexpr (sizeof...(Args) > 0)
+                std::fprintf(stdout, fmt, std::forward<Args>(args)...);
+            else
+                std::fputs(fmt, stdout);
+        }
+    }
+
+    template<typename... Args>
+    static void log2(int verbosity, const char* fmt, Args&&... args) {
+        if (min_verbosity() >= verbosity) {
+            std::lock_guard<std::mutex> lock(get().mutex);
+            if constexpr (sizeof...(Args) > 0)
+                std::fprintf(stdout, fmt, std::forward<Args>(args)...);
+            else
+                std::fputs(fmt, stdout);
+            std::fputc('\n', stdout);
+        }
+    }
+
+    template<typename... Args>
+    static void logN2(int verbosity, const char* fmt, Args&&... args) {
+        if (min_verbosity() >= verbosity) {
+            std::lock_guard<std::mutex> lock(get().mutex);
+            if constexpr (sizeof...(Args) > 0)
+                std::fprintf(stdout, fmt, std::forward<Args>(args)...);
+            else
+                std::fputs(fmt, stdout);
+        }
+    }
+
+    // Done and ending
+    static void done(int verbosity, int maxverbosity) {
+        if (min_verbosity() >= verbosity && min_verbosity() < maxverbosity) {
+            std::lock_guard<std::mutex> lock(get().mutex);
+            std::fprintf(stdout, "done.\n");
+        }
+    }
+
+    template<typename... Args>
+    static void ending(int verbosity, int maxverbosity, const char* fmt, Args&&... args) {
+        if (min_verbosity() >= verbosity && min_verbosity() < maxverbosity) {
+            std::lock_guard<std::mutex> lock(get().mutex);
+            if constexpr (sizeof...(Args) > 0)
+                std::fprintf(stdout, fmt, std::forward<Args>(args)...);
+            else
+                std::fputs(fmt, stdout);
+            std::fprintf(stdout, " done.\n");
+        }
+    }
+
+};
+
+#define SET_LOGGER_VERBOSITY(V)     Logger::set_level(V)
+#define PRINT(FMT, ...)             Logger::print(FMT, ##__VA_ARGS__)
+#define PUTCH(CH)                   Logger::putch(CH)
+#define REPCH(CH, TIMES)            Logger::repch(CH, TIMES)
+#define LOGRULER(V, CH, TIMES)      Logger::ruler(V, CH, TIMES)
+#define LOGHEADER(V, MV, HEAD)      Logger::header(V, MV, HEAD)
+#define LOGERROR(FMT, ...)          Logger::error(FMT, ##__VA_ARGS__)
+#define LOGERRORN(FMT, ...)         Logger::errorN(FMT, ##__VA_ARGS__)
+#define LOGWARNING(FMT, ...)        Logger::warning(FMT, ##__VA_ARGS__)
+#define LOG0(MSG)                   Logger::log0(MSG)
+#define LOGN0(MSG)                  Logger::logN0(MSG)
+#define LOG1(FMT, ...)              Logger::log1(FMT, ##__VA_ARGS__)
+#define LOGN1(FMT, ...)             Logger::logN1(FMT, ##__VA_ARGS__)
+#define LOG2(V, FMT, ...)           Logger::log2(V, FMT, ##__VA_ARGS__)
+#define LOGN2(V, FMT, ...)          Logger::logN2(V, FMT, ##__VA_ARGS__)
+#define LOGDONE(V, MV)              Logger::done(V, MV)
+#define LOGENDING(V, MV, FMT, ...)  Logger::ending(V, MV, FMT, ##__VA_ARGS__)

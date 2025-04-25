@@ -29,7 +29,6 @@ namespace QuaSARQ {
 
 		#define VECTOR_INIT(OFF,N,VAL) \
 		{ \
-			assert((OFF) <= (N)); \
 			assert((N) <= cap); \
 			T* begin = _mem + (OFF); \
 			if (!VAL) \

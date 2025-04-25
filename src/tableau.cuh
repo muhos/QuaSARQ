@@ -342,29 +342,6 @@ namespace QuaSARQ {
             }
         }
 
-        bool is_xstab_valid(const cudaStream_t& stream = 0) const { 
-            Table tmp_xs;
-            CHECK(cudaMemcpyAsync(&tmp_xs, _xs, sizeof(Table), cudaMemcpyDeviceToHost, stream));
-            SYNC(stream);
-            return tmp_xs.is_stab_valid();
-        }
-
-        bool is_xstab_valid(const qubit_t& q, const size_t& pivot, const cudaStream_t& stream = 0) const { 
-            assert(_num_qubits);
-            assert(_num_words_minor);
-            const size_t stab_pivot = pivot + _num_qubits;
-            const qubit_t q_w = WORD_OFFSET(q);
-            const word_std_t q_mask = BITMASK_GLOBAL(q);
-            assert(_xs_data != nullptr);
-            assert((stab_pivot * _num_words_minor + q_w) < _num_words);
-            const word_t* device_word_ptr = _xs_data + stab_pivot * _num_words_minor + q_w;
-            word_t host_word;
-            CHECK(cudaMemcpyAsync(&host_word, device_word_ptr, sizeof(word_t), cudaMemcpyDeviceToHost, stream));
-            SYNC(stream);
-            //printf("pivot: %d, word = " B2B_STR "\n", stab_pivot, RB2B(word_std_t(host_word)));
-            return (word_std_t(host_word) & q_mask);
-        }
-
     };
 
 } 

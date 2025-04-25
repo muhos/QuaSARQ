@@ -198,7 +198,7 @@ namespace QuaSARQ {
     }
 
     void check_transpose(const Table& x1, const Table& z1, const Table& x2, const Table& z2) {
-        LOGN0(" Checking transpose correctness.. ");
+        LOGN2(2, " Checking transpose correctness.. ");
         if (x1.size() != x2.size()) LOGERROR("x1 and x2 sizes do not match");
         if (z1.size() != z2.size()) LOGERROR("z1 and z2 sizes do not match");
         for (size_t i = 0; i < x1.size(); i++) {
@@ -211,7 +211,7 @@ namespace QuaSARQ {
                 LOGERROR("FAILED for z1 or z2 at word %lld.", i);
             }
         }
-        LOG2(2, "PASSED");
+        LOG2(2, "%sPASSED.%s", CGREEN, CNORMAL);
     }
 
     void transpose_to_colmajor_cpu(Table& xs, Table& zs, const Table& inv_xs, const Table& inv_zs) {

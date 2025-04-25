@@ -3,6 +3,7 @@
 #include "definitions.cuh"
 #include "definitions.hpp"
 #include "datatypes.hpp"
+#include "options.hpp"
 
 namespace QuaSARQ {
 

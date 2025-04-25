@@ -6,6 +6,7 @@
 #include "memory.cuh"
 #include "malloc.hpp"
 #include "word.cuh"
+#include "access.cuh"
 
 namespace QuaSARQ {
 
@@ -50,8 +51,23 @@ namespace QuaSARQ {
         size_t _num_words_major;
         bool _is_identity;
         bool _is_rowmajor;
-        bool _is_stab_valid;
         Context _context;
+
+        INLINE_ALL
+        size_t get_diagonal_index(const qubit_t& q, const qubit_t& column_offset = 0) const {
+            const size_t idx = (q + column_offset) * _num_words_major +
+                                WORD_OFFSET(q);
+            assert(idx < _num_words);
+            return idx;
+        }
+
+        INLINE_ALL
+        size_t get_diagonal_index_off(const qubit_t& q, const qubit_t& column_offset = 0) const {
+            const size_t idx = (q + column_offset) * _num_words_major + 
+                                WORD_OFFSET(q + _num_qubits_padded);
+            assert(idx < _num_words);
+            return idx;
+        }
 
     public:
 
@@ -63,7 +79,6 @@ namespace QuaSARQ {
             , _num_words_major(0)
             , _is_identity(true)
             , _is_rowmajor(false)
-            , _is_stab_valid(false)
             , _context(UNKNOWN)
         { }
 
@@ -131,21 +146,27 @@ namespace QuaSARQ {
         INLINE_ALL const word_t* data() const { return _data; }
 
         INLINE_ALL void set_destab_to_identity(const qubit_t& q, const qubit_t& column_offset = 0) {
-            const size_t idx = (q + column_offset) * _num_words_major + WORD_OFFSET(q);
-            assert(idx < _num_words);
-            _data[idx].identity(q);
+            _data[get_diagonal_index(q, column_offset)].identity(q);
         }
 
         INLINE_ALL void set_stab_to_identity(const qubit_t& q, const qubit_t& column_offset = 0) {
-            const size_t idx = (q + column_offset) * _num_words_major + WORD_OFFSET(q + _num_qubits_padded);
-            assert(idx < _num_words);
-            _data[idx].identity(q + _num_qubits_padded);
+            _data[get_diagonal_index_off(q, column_offset)].identity(q + _num_qubits_padded);
         }
 
         INLINE_ALL void set_word_to_identity(const qubit_t& q, const qubit_t& column_offset = 0) {
-            const size_t idx = (q + column_offset) * _num_words_major + WORD_OFFSET(q);
-            assert(idx < _num_words);
-            _data[idx].identity(q);
+            _data[get_diagonal_index(q, column_offset)].identity(q);
+        }
+
+        INLINE_ALL bool check_stab_is_identity(const qubit_t& q, const qubit_t& column_offset) const {
+            return _data[get_diagonal_index_off(q, column_offset)].is_identity(q + _num_qubits_padded);
+        }
+
+        INLINE_ALL bool check_destab_is_identity(const qubit_t& q, const qubit_t& column_offset) const {
+            return _data[get_diagonal_index(q, column_offset)].is_identity(q);
+        }
+
+        INLINE_ALL bool check_word_is_identity(const qubit_t& q, const qubit_t& column_offset) const {
+            return _data[get_diagonal_index(q, column_offset)].is_identity(q);
         }
 
         // Same as data() but returns 'word_std_t' value at index 'idx'.
@@ -172,24 +193,6 @@ namespace QuaSARQ {
             return _data[idx];
         }
 
-        INLINE_ALL bool check_z_word_is_identity(const qubit_t& q, const qubit_t& column_offset) const {
-            const size_t idx = (q + column_offset) * _num_words_major + WORD_OFFSET(q);
-            assert(idx < _num_words);
-            return _data[idx].is_identity(q);
-        }
-
-        INLINE_ALL bool check_x_word_is_identity(const qubit_t& q, const qubit_t& column_offset) const {
-            const size_t idx = (q + column_offset) * _num_words_major + WORD_OFFSET(q);
-            assert(idx < _num_words);
-            return _data[idx].is_identity(q);
-        }
-
-        INLINE_ALL bool check_word_is_identity(const qubit_t& q, const qubit_t& column_offset) const {
-            const size_t idx = (q + column_offset) * _num_words_major + WORD_OFFSET(q);
-            assert(idx < _num_words);
-            return _data[idx].is_identity(q);
-        }
-
         INLINE_ALL void flag_not_indentity() {
             if (_is_identity) {
                 _is_identity = false;
@@ -211,10 +214,6 @@ namespace QuaSARQ {
         INLINE_ALL void flag_orientation(const bool& row_major) {
             _is_rowmajor = row_major;
         }
-
-        INLINE_ALL void set_stab(const bool& val) { _is_stab_valid = val; }
-
-        INLINE_ALL bool is_stab_valid() const { return _is_stab_valid; }
 
         INLINE_ALL bool is_identity() const { return _is_identity; }
 

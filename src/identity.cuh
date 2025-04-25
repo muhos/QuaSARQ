@@ -5,13 +5,19 @@
 
 namespace QuaSARQ {
 
+	#define IDENTITY_ARGS \
+		const 	size_t column_offset, \
+		const 	size_t num_qubits, \
+				Table* xs, \
+				Table* zs
+
 	// Set the tableau into identity.
-	__global__ void identity_1D(const size_t column_offset, const size_t num_qubits, Table* xs, Table* zs);
-	__global__ void identity_Z_1D(const size_t column_offset, const size_t num_qubits, Table* xs, Table* zs);
-	__global__ void identity_X_1D(const size_t column_offset, const size_t num_qubits, Table* xs, Table* zs);
-	__global__ void identity_extended_1D(const size_t column_offset, const size_t num_qubits, Table* xs, Table* zs);
-    __global__ void identity_Z_extended_1D(const size_t column_offset, const size_t num_qubits, Table* xs, Table* zs);
-    __global__ void identity_X_extended_1D(const size_t column_offset, const size_t num_qubits, Table* xs, Table* zs);
+	__global__ void identity_1D(IDENTITY_ARGS);
+	__global__ void identity_Z_1D(IDENTITY_ARGS);
+	__global__ void identity_X_1D(IDENTITY_ARGS);
+	__global__ void identity_extended_1D(IDENTITY_ARGS);
+    __global__ void identity_Z_extended_1D(IDENTITY_ARGS);
+    __global__ void identity_X_extended_1D(IDENTITY_ARGS);
 
 	void tune_identity(
 		void (*kernel)(
