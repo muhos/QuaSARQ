@@ -54,7 +54,7 @@ namespace QuaSARQ {
 
             // Window transfer of first circuit.
             if (p < num_partitions && d < depth) {
-                LOGN2(1, "Partition %zd: ", p);
+                LOGN2(2, "Partition %zd: ", p);
                 if (d > 0) SYNC(kernel_stream);
                 gpu_circuit.copyfrom(stats, circuit, d, false, options.sync, copy_stream1, copy_stream2);
                 num_gates_per_window = circuit[d].size();
@@ -63,12 +63,14 @@ namespace QuaSARQ {
 
             // Window transfer of second circuit.
             if (p < other_num_partitions && d < other_depth) {
-                LOGN2(1, "Partition %zd: ", p);
+                LOGN2(2, "Partition %zd: ", p);
                 if (d > 0) SYNC(other_kernel_stream);
                 other_gpu_circuit.copyfrom(other_stats, other_circuit, d, false, options.sync, other_copy_stream1, other_copy_stream2);
                 other_num_gates_per_window = other_circuit[d].size();
                 print_gates(other_gpu_circuit, other_num_gates_per_window, d);
             }
+
+            TRIM_BLOCK_IN_DEBUG_MODE(bestblockstep, bestgridstep, num_gates_per_window, num_words_major);
             
 #if DEBUG_STEP
 
@@ -94,16 +96,36 @@ namespace QuaSARQ {
 
             if (options.sync) cutimer.start();
 
+            OPTIMIZESHARED(reduce_smem_size, bestblockstep.y * bestblockstep.x, sizeof(word_std_t));
+
             if (p < num_partitions && d < depth) {
                 SYNC(copy_stream1);
                 SYNC(copy_stream2);
-                step_2D_atomic << < bestgridstep, bestblockstep, 0, kernel_stream >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs());
+                call_step_2D(
+                    gpu_circuit.references(), 
+                    gpu_circuit.gates(), 
+                    tableau, 
+                    num_gates_per_window, 
+                    num_words_major, 
+                    bestblockstep,
+                    bestgridstep,
+                    reduce_smem_size,
+                    kernel_stream);
             }
 
             if (p < other_num_partitions && d < other_depth) {
                 SYNC(other_copy_stream1);
                 SYNC(other_copy_stream2);
-                step_2D_atomic << < bestgridstep, bestblockstep, 0, other_kernel_stream >> > (other_gpu_circuit.references(), other_gpu_circuit.gates(), other_num_gates_per_window, other_num_words_major, XZ_TABLE(other_tableau), other_tableau.signs());
+                call_step_2D(
+                    other_gpu_circuit.references(), 
+                    other_gpu_circuit.gates(), 
+                    other_tableau, 
+                    other_num_gates_per_window, 
+                    other_num_words_major, 
+                    bestblockstep,
+                    bestgridstep,
+                    reduce_smem_size,
+                    other_kernel_stream);
             }
 
             if (options.sync) { 

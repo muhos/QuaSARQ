@@ -70,7 +70,7 @@ void Equivalence::inject() {
     assert(other_stats.circuit.gate_stats.types[random_gate.type]);
     other_stats.circuit.gate_stats.types[random_gate.type]--;
     other_stats.circuit.gate_stats.types[type]++;
-    ogate = G2S[random_gate.type], rgate = G2S[type];
+    ogate = H_G2S[random_gate.type], rgate = H_G2S[type];
     random_gate.type = type;
 }
 

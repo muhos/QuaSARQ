@@ -41,10 +41,6 @@ namespace QuaSARQ {
             size_t bytes_per_window = num_gates_per_window * sizeof(gate_ref_t) + num_buckets_per_window * sizeof(bucket_t);
             max_window_bytes = MAX(max_window_bytes, bytes_per_window);
         }
-
-        void operator=(const WindowInfo& from) {
-            *this = from;
-        }
     };
 
     class Circuit : private buckets_container {
