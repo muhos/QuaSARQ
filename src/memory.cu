@@ -151,7 +151,7 @@ bool DeviceAllocator::create_cpu_pool(const size_t& limit) {
 		return true;
 	}
 	assert(_cpool.mem == nullptr);
-	_climit = align_up(limit + ALIGNMENT * KB);
+	_climit = align_up(limit + KB);
 	if (!_cfree) cudaMemGetInfo(&_cfree, &_ctot);
 	if (_cfree > CPU_PENALTY)
 		_cfree -= CPU_PENALTY;
