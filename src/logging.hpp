@@ -103,24 +103,28 @@ public:
     static void error(const char* fmt, Args&&... args) {
         cudaDeviceSynchronize();
         std::lock_guard<std::mutex> lock(get().mutex);
+        std::fflush(stdout);
         std::fprintf(stderr, "%sERROR: ", CERROR);
         if constexpr (sizeof...(Args) > 0)
             std::fprintf(stderr, fmt, std::forward<Args>(args)...);
         else 
             std::fputs(fmt, stderr);
         std::fprintf(stderr, "\n%s", CNORMAL);
+        std::fflush(stderr);
         std::exit(1);
     }
 
     template<typename... Args>
     static void errorN(const char* fmt, Args&&... args) {
         std::lock_guard<std::mutex> lock(get().mutex);
+        std::fflush(stdout);
         std::fprintf(stderr, "%s", CERROR);
         if constexpr (sizeof...(Args) > 0)
             std::fprintf(stderr, fmt, std::forward<Args>(args)...);
         else
             std::fputs(fmt, stderr);
-        std::fprintf(stderr, "%s", CNORMAL);
+        std::fprintf(stderr, "\n%s", CNORMAL);
+        std::fflush(stderr);
     }
 
     // Warning logging
@@ -128,12 +132,14 @@ public:
     static void warning(const char* fmt, Args&&... args) {
         if (min_verbosity() >= 0) {
             std::lock_guard<std::mutex> lock(get().mutex);
+            std::fflush(stdout);
             std::fprintf(stderr, "%sWARNING: ", CWARNING);
             if constexpr (sizeof...(Args) > 0)
                 std::fprintf(stderr, fmt, std::forward<Args>(args)...);
             else
                 std::fputs(fmt, stderr);
             std::fprintf(stderr, "\n%s", CNORMAL);
+            std::fflush(stderr);
         }
     }
 

@@ -9,12 +9,12 @@
             "type": "cuda-gdb",
             "request": "launch",
             "program": "${workspaceFolder}/quasarq",
-            //"args": "/home/muhos/quantum/github/QuaSARQ/src/circuits/q100000_d10.stim --verbose=2 -sync --config-path=\"$HOME/quantum/github/QuaSARQ/src/kernel.config\"",
+            "args": "/home/muhos/quantum/github/QuaSARQ/src/circuits/q1000_d10.stim --verbose=2 -sync --config-path=\"$HOME/quantum/github/QuaSARQ/src/kernel.config\"",
             //"args": "/home/muhos/quantum/github/QuaSARQ/src/circuits/q500_d10.stim --verbose=2 -sync --config-path=\"$HOME/quantum/github/QuaSARQ/src/kernel.config\""
             //"args": "--qubits=16 --M=0.2 --depth=15 -print-gates --write-circuit=2"
             //"args": "-tune-identity -tune-step -tune-reset -tune-transposec2r -tune-transposer2c -tune-allpivots -tune-multdeterminate -tune-copyindeterminate -tune-phase1indeterminate -tune-phase2indeterminate -tune-singdeterminate -tune-newpivots  --qubits=5000 --depth=50 > output.txt --tune-step-qubits=900"
             //"args": "-tune-copyindeterminate --qubits=8 --depth=15 --tune-initial-qubits=8 --tune-step-qubits=8"
-            "args": "--qubits=10 -equivalence --config-path=\"$HOME/quantum/github/QuaSARQ/src/kernel.config\""
+            //"args": "--qubits=10 -equivalence --config-path=\"$HOME/quantum/github/QuaSARQ/src/kernel.config\""
             //"args": "${workspaceFolder}/q1000_d100.stim ${workspaceFolder}/q1000_d100.stim"
         },
         {
