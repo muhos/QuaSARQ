@@ -1,4 +1,5 @@
 #include "simulator.hpp"
+#include "injectx.cuh"
 #include "injectswap.cuh"
 
 namespace QuaSARQ {
@@ -76,7 +77,6 @@ namespace QuaSARQ {
 
         Vec<pivot_t> h_pivots(max_targets + 1);
         h_pivots[0] = min_pivot;
-
         for (uint32 i = 0; i < max_targets; i++) {
             h_pivots[i + 1] = rand() % num_qubits;
         }
@@ -85,12 +85,33 @@ namespace QuaSARQ {
         CHECK(cudaMemcpy(pivoting.d_active_pivots, &max_targets, sizeof(uint32), cudaMemcpyHostToDevice));
         
         prefix.tune_inject_cx(tableau, pivoting.pivots, max_targets);
+
+        assert(SIGN_FLAG_IDX > COMMUTING_FLAG_IDX);
+        const size_t num_copies = SIGN_FLAG_IDX + 1; 
+        h_pivots[COMMUTING_FLAG_IDX] = 1; // Assume commutation is true.
+        h_pivots[SIGN_FLAG_IDX] = 1; // Enable injecting x-gate.
+        CHECK(cudaMemcpy(pivoting.pivots, h_pivots.data(), sizeof(pivot_t) * num_copies, cudaMemcpyHostToDevice));
         
         if (options.tune_injectswap) {
             SYNCALL;
             tune_inject_swap(inject_swap_k,
                         bestblockinjectswap, 
                         bestgridinjectswap, 
+                        XZ_TABLE(tableau),
+                        tableau.signs(),
+                        pivoting.pivots,
+                        qubit,
+                        1,
+                        num_words_major,
+                        num_words_minor,
+                        num_qubits_padded);
+        }
+
+        if (options.tune_injectx) {
+            SYNCALL;
+            tune_inject_x(inject_x_k,
+                        bestblockinjectx, 
+                        bestgridinjectx, 
                         XZ_TABLE(tableau),
                         tableau.signs(),
                         pivoting.pivots,
@@ -122,9 +143,12 @@ namespace QuaSARQ {
                 if (options.check_measurement)
                     mchecker.check_compact_pivots(qubit, pivoting.pivots, active_pivots);
                 if (active_pivots) {
-                    if (active_pivots > 1)
+                    if (active_pivots > 1) {
                         inject_cx(active_pivots - 1, stream);
-                    inject_swap(qubit, stream);
+                    }
+                    const sign_t rbit = mrand.brand();
+                    inject_swap(qubit, rbit, stream);
+                    inject_x(qubit, rbit, stream);
                     random_measures++;
                 }
             }

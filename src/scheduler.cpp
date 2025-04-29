@@ -57,7 +57,7 @@ struct WindowSorter
 void Simulator::shuffle_qubits() {
     shuffled.resize(num_qubits);
     for (qubit_t i = 0; i < num_qubits; i++) {
-        qubit_t j = random.irand() % (i + 1);
+        qubit_t j = crand.irand() % (i + 1);
         if (j != i)
             shuffled[i] = shuffled[j]; 
         shuffled[j] = i;
@@ -72,7 +72,7 @@ void Simulator::get_rand_qubit(const qubit_t& control, qubit_t& random_qubit) {
 }
 
 Gatetypes Simulator::get_rand_gate(const bool& multi_input, const bool& force_multi_input) {
-    double p = random.drand();
+    double p = crand.drand();
     double sum_probs = 0;
     Gatetypes type = I;
     uint32 offset = 0;

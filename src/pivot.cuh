@@ -7,6 +7,13 @@
 
 namespace QuaSARQ {
 
+	#define COMMUTING_FLAG_IDX 			1
+    #define SIGN_FLAG_IDX      			2
+    #define COMMUTING_FLAG              pivots[COMMUTING_FLAG_IDX]
+    #define D_COMMUTING_FLAG  d_compact_pivots[COMMUTING_FLAG_IDX]
+    #define SIGN_FLAG                   pivots[SIGN_FLAG_IDX]
+    #define D_SIGN_FLAG       d_compact_pivots[SIGN_FLAG_IDX]
+
     constexpr pivot_t INVALID_PIVOT = UINT32_MAX;
     struct Pivoting {
 

@@ -20,7 +20,7 @@ Equivalence::Equivalence() :
     { 
         assert(!circuit.empty());
         create_streams(other_custreams);
-        inject();
+        inject_faulty();
         gpu_allocator.resize_cpu_pool(winfo.max_window_bytes + other_wininfo.max_window_bytes + KB * 2);
     }
 
@@ -36,7 +36,7 @@ Equivalence::Equivalence(const string& path_to_circuit, const string& path_to_ot
     {
         create_streams(other_custreams);
         if (path_to_other.empty()) {
-            inject();
+            inject_faulty();
         }
         else {
             assert(!circuit_io.size);
@@ -48,16 +48,16 @@ Equivalence::Equivalence(const string& path_to_circuit, const string& path_to_ot
         gpu_allocator.resize_cpu_pool(winfo.max_window_bytes + other_wininfo.max_window_bytes + KB * 2);
     }
 
-void Equivalence::inject() {
+void Equivalence::inject_faulty() {
     circuit.copyTo(other_circuit);
     other_wininfo = winfo;
     other_num_qubits = num_qubits;
     other_depth = depth;
     other_stats = stats;
     assert(other_depth == other_circuit.depth());
-    random.seed(other_num_qubits);
-    depth_t depth_level = random.irand() % other_depth;
-    gate_ref_t gate_index = random.irand() % other_circuit[depth_level].size();
+    crand.seed(other_num_qubits);
+    depth_t depth_level = crand.irand() % other_depth;
+    gate_ref_t gate_index = crand.irand() % other_circuit[depth_level].size();
     Gate& random_gate = other_circuit.gate(depth_level, gate_index);
     Gatetypes type = I;
     if (random_gate.size == 1) {

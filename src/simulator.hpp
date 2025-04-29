@@ -21,7 +21,8 @@ namespace QuaSARQ {
         size_t                          num_qubits;
         size_t                          num_partitions;
         depth_t                         depth;
-        Random                          random;
+        Random                          crand;
+        Random                          mrand;
         Circuit                         circuit;
         CircuitIO                       circuit_io;
         string                          circuit_path;
@@ -95,7 +96,8 @@ namespace QuaSARQ {
         void reset_pivots(const size_t& num_pivots, const cudaStream_t& stream);
         void find_pivots(const size_t& num_pivots, const cudaStream_t& stream);
         void compact_targets(const qubit_t& qubit, const cudaStream_t& stream);
-        void inject_swap(const qubit_t& qubit, const cudaStream_t& stream);
+        void inject_swap(const qubit_t& qubit, const sign_t& rbit, const cudaStream_t& stream);
+        void inject_x(const qubit_t& qubit, const sign_t& rbit, const cudaStream_t& stream);
         void inject_cx(const uint32& active_targets, const cudaStream_t& stream);
         void tune_assuming_maximum_targets(const depth_t& depth_level);
         int64 measure_indeterminate(const depth_t& depth_level, const cudaStream_t& stream = 0);

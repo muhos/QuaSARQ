@@ -14,7 +14,7 @@ namespace QuaSARQ {
         CONFIG(transposer2c, 32, 16, 50, 50) \
         CONFIG(allpivots, 256, 2, 100, 16) \
         CONFIG(newpivots, 256, 1, 100, 1) \
-        CONFIG(marking, 256, 1, 100, 1) \
+        CONFIG(injectx, 256, 1, 100, 1) \
         CONFIG(injectswap, 256, 1, 100, 1) \
         CONFIG(prefixprepare, 16, 64, 96, 28) \
         CONFIG(prefixsingle, 512, 2, 1, 10) \

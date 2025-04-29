@@ -28,8 +28,7 @@ namespace QuaSARQ {
 
 		void report(const bool& equivalent);
 
-		// Inject random faulty gate.
-		void inject();
+		void inject_faulty();
 
 		// Check if two circuits are equivalent.
 		void check();

@@ -12,10 +12,11 @@ namespace QuaSARQ {
     }
 
     NOINLINE_ALL void print_table(const Table& t, const size_t& total_targets) {
-        size_t bits, rows, cols;
         const size_t num_qubits_padded = t.num_qubits_padded();
         const size_t num_words_major = t.num_words_major();
         const size_t num_words_minor = t.num_words_minor();
+        #if ROW_MAJOR
+        size_t bits, rows, cols;
         if (t.is_rowmajor()) {
             LOGGPU("%-3s ", "g\\q ");
             #if PRINT_HEX
@@ -83,6 +84,46 @@ namespace QuaSARQ {
                 LOGGPU("\n");
             }
         }
+        #else
+        if (num_words_major == 2 * num_words_minor) {
+            LOGGPU("Destabilizers:\n");
+            for (size_t q = 0; q < num_qubits_padded; q++) {
+                LOGGPU("%-3lld  ", int64(q));
+                for (size_t w = 0; w < num_words_minor; w++) {
+                    const size_t word_idx = q * num_words_major + w;
+                    #if PRINT_HEX
+                    LOGGPU("0x%016llX ", uint64(t[word_idx]));
+                    #else 
+                    #if defined(WORD_SIZE_64)
+                    LOGGPU(B2B_STR, RB2B(uint32(word_std_t(t[word_idx]) & 0xFFFFFFFFUL)));
+                    LOGGPU(B2B_STR "  ", RB2B(uint32((word_std_t(t[word_idx]) >> 32) & 0xFFFFFFFFUL)));
+                    #else
+                    LOGGPU(B2B_STR "  ", RB2B(word_std_t(t[word_idx])));
+                    #endif
+                    #endif
+                }
+                LOGGPU("\n");
+            }
+        }
+        LOGGPU("Stabilizers:\n");
+        for (size_t q = 0; q < num_qubits_padded; q++) {
+            LOGGPU("%-3lld  ", int64(q));
+            for (size_t w = 0; w < num_words_minor; w++) {
+                const size_t word_idx = q * num_words_major + w + num_words_minor;
+                #if PRINT_HEX
+                LOGGPU("0x%016llX ", uint64(t[word_idx]));
+                #else 
+                #if defined(WORD_SIZE_64)
+                LOGGPU(B2B_STR, RB2B(uint32(word_std_t(t[word_idx]) & 0xFFFFFFFFUL)));
+                LOGGPU(B2B_STR "  ", RB2B(uint32((word_std_t(t[word_idx]) >> 32) & 0xFFFFFFFFUL)));
+                #else
+                LOGGPU(B2B_STR "  ", RB2B(word_std_t(t[word_idx])));
+                #endif
+                #endif
+            }
+            LOGGPU("\n");
+        }
+        #endif
     }
 
     NOINLINE_ALL void print_table_signs(const Signs& ss, const size_t& start, const size_t& end) {

@@ -54,6 +54,7 @@ namespace QuaSARQ {
         FOREACH_CHECK(CONFIG2CHECKOPTION);
         FOREACH_PRINT(CONFIG2PRINTOPTION);
 
+        bool sampling_en;
         bool equivalence_en;
         bool profile_equivalence;
         bool disable_concurrency;

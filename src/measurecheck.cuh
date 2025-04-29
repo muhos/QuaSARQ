@@ -182,7 +182,11 @@ namespace QuaSARQ {
 
 		void check_inject_swap(const Tableau& other_input, const pivot_t* other_pivots, const size_t& num_pivots);
 
+		void check_inject_x(const Tableau& other_input, const pivot_t* other_pivots, const size_t& num_pivots, const sign_t& random_bit);
+
 		void inject_swap_cpu();
+
+		void inject_x_cpu();
 
 	};
 	
