@@ -48,12 +48,12 @@ namespace QuaSARQ {
             assert(c_stab < inv_xs->size());
             const size_t signs_stab_idx = w + num_words_minor;
             if (is_commuting) {
-                do_YZ_Swap(zs[c_stab], zs[c_destab], ss[w]);
-                do_YZ_Swap(xs[c_stab], xs[c_destab], ss[signs_stab_idx]);
+                do_Sdg_Swap(zs[c_stab], zs[c_destab], ss[w]);
+                do_Sdg_Swap(xs[c_stab], xs[c_destab], ss[signs_stab_idx]);
             }
             else {
-                do_XZ_Swap(zs[c_stab], zs[c_destab], ss[w]);
-                do_XZ_Swap(xs[c_stab], xs[c_destab], ss[signs_stab_idx]);
+                do_H_Swap(zs[c_stab], zs[c_destab], ss[w]);
+                do_H_Swap(xs[c_stab], xs[c_destab], ss[signs_stab_idx]);
             }
             
             // Wait for the thread that updated the q's word.
@@ -149,12 +149,12 @@ namespace QuaSARQ {
             assert(c_destab < h_xs.size());
             assert(c_stab < h_xs.size());
             if (commuting) {
-                do_YZ_Swap(h_zs[c_stab], h_zs[c_destab], h_ss[w]);
-                do_YZ_Swap(h_xs[c_stab], h_xs[c_destab], h_ss[w + num_words_minor]);
+                do_Sdg_Swap(h_zs[c_stab], h_zs[c_destab], h_ss[w]);
+                do_Sdg_Swap(h_xs[c_stab], h_xs[c_destab], h_ss[w + num_words_minor]);
             }
             else {
-                do_XZ_Swap(h_zs[c_stab], h_zs[c_destab], h_ss[w]);
-                do_XZ_Swap(h_xs[c_stab], h_xs[c_destab], h_ss[w + num_words_minor]);
+                do_H_Swap(h_zs[c_stab], h_zs[c_destab], h_ss[w]);
+                do_H_Swap(h_xs[c_stab], h_xs[c_destab], h_ss[w + num_words_minor]);
             }
         }
     }

@@ -8,14 +8,14 @@
 
 namespace QuaSARQ {
 
-	#define do_YZ_Swap(X, Z, S) \
+	#define do_Sdg_Swap(X, Z, S) \
     { \
         const word_std_t x = X, z = Z; \
         X = x ^ z; \
         S ^= (x & ~z); \
     }
 
-    #define do_XZ_Swap(X, Z, S) \
+    #define do_H_Swap(X, Z, S) \
     { \
         do_SWAP(X, Z); \
         S ^= word_std_t(X & Z); \

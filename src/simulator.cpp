@@ -80,7 +80,6 @@ void Simulator::initialize() {
     // Creating CPU pool (pinned memory)
     // is done after parsing as it causes
     // degradation to CPU performance.
-    // The KB extra space is used for tableau allocations.
     gpu_allocator.create_cpu_pool(winfo.max_window_bytes 
                                 + (num_qubits + 2) * sizeof(pivot_t));
     if (!options.tuner_en) register_config();

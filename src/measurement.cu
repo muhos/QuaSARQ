@@ -53,7 +53,8 @@ namespace QuaSARQ {
         const size_t num_words_major = tableau.num_words_major();
         const size_t num_qubits_padded = tableau.num_qubits_padded();
         const size_t num_gates_per_window = circuit[depth_level].size();
-		uint32 max_targets = MAX(10, ROUNDUP(num_qubits, 10));
+        const double avg = double(num_qubits) * 0.5;
+		uint32 max_targets = MAX(2, size_t(avg));
         const pivot_t min_pivot = 0;
         const qubit_t qubit = 0;
         
@@ -62,13 +63,12 @@ namespace QuaSARQ {
         if (options.tune_newpivots) {
             SYNCALL;
             tune_finding_new_pivots(anti_commuting_pivots, 
-                bestblocknewpivots, bestgridnewpivots, 
-                sizeof(pivot_t),
-                pivoting.pivots, 
-                tableau.xtable(), 
-                qubit, 
-                num_qubits, 
-                num_words_major, 
+                bestblocknewpivots, bestgridnewpivots,
+                pivoting.pivots,
+                tableau.xtable(),
+                qubit,
+                num_qubits,
+                num_words_major,
                 num_words_minor,
                 num_qubits_padded);
             reset_all_pivots <<<bestgridreset, bestblockreset>>> (pivoting.pivots, num_qubits);

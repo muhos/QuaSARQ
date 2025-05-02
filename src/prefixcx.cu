@@ -103,6 +103,50 @@ namespace QuaSARQ {
                 max_blocks \
             )
 
+    __global__ 
+    void scan_targets_pass_2_atomic(
+                PASS_2_ARGS_GLOBAL_PREFIX,
+                Table *             inv_xs, 
+                Table *             inv_zs,
+                Signs *             inv_ss,
+                const_pivots_t      pivots,
+        const   size_t              active_targets,
+        const   size_t              num_words_major,
+        const   size_t              num_words_minor,
+        const   size_t              num_qubits_padded,
+        const   size_t              max_blocks,
+        const   size_t              pass_1_blocksize)
+    { 
+        assert(blockDim.x == 1);
+        word_std_t * __restrict__ xs = inv_xs->words();
+        word_std_t * __restrict__ zs = inv_zs->words();
+        sign_t*  __restrict__ ss = inv_ss->data();
+        for_parallel_y(w, num_words_minor) {
+            sign_t local_destab_sign = 0;
+            sign_t local_stab_sign = 0;
+            for_parallel_x(tid_x, active_targets) {
+                const size_t c_stab = TABLEAU_INDEX(w, pivots[0]) + TABLEAU_STAB_OFFSET;
+                const size_t t_destab = TABLEAU_INDEX(w, pivots[tid_x + 1]);
+                const size_t t_stab = t_destab + TABLEAU_STAB_OFFSET;
+
+                const size_t word_idx = PREFIX_TABLEAU_INDEX(w, tid_x);
+                word_std_t zc_xor_prefix, xc_xor_prefix;
+                READ_GLOBAL_PREFIX(word_idx, zc_xor_prefix, xc_xor_prefix);
+
+                // Compute final prefixes and hence final {x,z}'c = {x,z}'c ^ {x,z}'t expressions.
+                const size_t bid = PREFIX_INTERMEDIATE_INDEX(w, (tid_x / pass_1_blocksize));
+                XOR_FROM_INTERMEDIATE_PREFIX(bid, zc_xor_prefix, xc_xor_prefix);
+
+                compute_local_sign_per_block(local_destab_sign, zs[t_stab], zc_xor_prefix, zs[c_stab], zs[t_destab]);
+                compute_local_sign_per_block(local_stab_sign, xs[t_stab], xc_xor_prefix, xs[c_stab], xs[t_destab]);
+            }
+            if (local_destab_sign)
+                atomicXOR(ss + w, local_destab_sign);
+            if (local_stab_sign)
+                atomicXOR(ss + w + num_words_minor, local_stab_sign);
+        }
+    }
+
     template <int BLOCKX, int BLOCKY>
     __global__ 
     void scan_targets_pass_2(
@@ -180,6 +224,21 @@ namespace QuaSARQ {
         }
     }
 
+    #define CALL_INJECTCX_PASS_2_ATOMIC \
+        scan_targets_pass_2_atomic \
+        <<<currentgrid, currentblock, 0, stream>>> ( \
+                KERNEL_INPUT_GLOBAL_PREFIX, \
+                XZ_TABLE(input), \
+                input.signs(), \
+                pivots, \
+                active_targets, \
+                num_words_major, \
+                num_words_minor, \
+                num_qubits_padded, \
+                max_blocks, \
+                pass_1_blocksize\
+            )
+
     #define CALL_INJECTCX_PASS_2_FOR_BLOCK(X, Y) \
         scan_targets_pass_2 <X, Y> \
         <<<currentgrid, currentblock, 0, stream>>> ( \
@@ -207,7 +266,6 @@ namespace QuaSARQ {
         const   dim3&               currentblock,
         const   dim3&               currentgrid,
         const   cudaStream_t&       stream) {
-        
         GENERATE_SWITCH_FOR_CALL(CALL_INJECTCX_PASS_1_FOR_BLOCK)
     }
 
@@ -224,8 +282,12 @@ namespace QuaSARQ {
         const   dim3&               currentblock,
         const   dim3&               currentgrid,
         const   cudaStream_t&       stream) {
-        
-        GENERATE_SWITCH_FOR_CALL(CALL_INJECTCX_PASS_2_FOR_BLOCK)
+        if (currentblock.x == 1) {
+            CALL_INJECTCX_PASS_2_ATOMIC;
+        }
+        else {
+            GENERATE_SWITCH_FOR_CALL(CALL_INJECTCX_PASS_2_FOR_BLOCK)
+        }
     }
 
     // We need to compute prefix-xor of t-th destabilizer in X,Z for t = c+1, c+2, ... c+n-1
@@ -293,7 +355,7 @@ namespace QuaSARQ {
         TRIM_BLOCK_IN_DEBUG_MODE(bestblockinjectfinal, bestgridinjectfinal, active_targets, num_words_minor);
         currentblock = bestblockinjectfinal, currentgrid = bestgridinjectfinal;
         if (currentblock.x > active_targets) {
-            currentblock.x = active_targets == 1 ? 2 : MIN(currentblock.x, nextPow2(active_targets));
+            currentblock.x = MIN(currentblock.x, nextPow2(active_targets));
         }
         FORCE_TRIM_GRID_IN_XY(active_targets, num_words_minor);
         LOGN2(2, " Running pass-2 kernel for %d targets with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", \
@@ -302,10 +364,10 @@ namespace QuaSARQ {
         call_injectcx_pass_2_kernel(
             CALL_INPUT_GLOBAL_PREFIX,
             input,
-            pivots, 
-            active_targets, 
-            num_words_major, 
-            num_words_minor, 
+            pivots,
+            active_targets,
+            num_words_major,
+            num_words_minor,
             num_qubits_padded,
             max_intermediate_blocks,
             pass_1_blocksize,

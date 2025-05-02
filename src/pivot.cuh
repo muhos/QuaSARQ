@@ -96,7 +96,6 @@ namespace QuaSARQ {
 		const 	size_t),
 				dim3& 				bestBlock,
 				dim3& 				bestGrid,
-		const 	size_t& 			shared_element_bytes,
 				pivot_t* 			pivots,
 				const_table_t 	    inv_xs,
 		const 	qubit_t& 			qubit,

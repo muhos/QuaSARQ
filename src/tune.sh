@@ -12,11 +12,15 @@ if [ ! -d "$circuits" ]; then
   exit 1
 fi
 
+log=tuning_log.txt
+
+echo -n "" > $log
+
 for f in $circuits/*.xz
 do
   circuit=${f%%.xz}
   echo -n "uncompressing $f.."
   xz -dkq $f
   echo "done."
-  ./quasarq $circuit -tune-all > tuning_log.txt 2>&1
+  ./quasarq $circuit -tune-all >> tuning_log.txt 2>&1
 done
