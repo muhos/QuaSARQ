@@ -35,14 +35,14 @@ Circuits have qubits in range of 1,000 to 500,000 qubits.<br>
 
 <table>
   <tr>
-    <td><img src="graphs/time_vs_ccec.png" alt="Runtime for QuaSARQ vs CCEC" width="300"></td>
-    <td><img src="graphs/time_vs_quokka.png" alt="Runtime for QuaSARQ vs Quokka-Sharp" width="300"></td>
+    <td><img src="graphs/time_vs_ccec.png" alt="Runtime for QuaSARQ vs CCEC" width="400"></td>
+    <td><img src="graphs/time_vs_quokka.png" alt="Runtime for QuaSARQ vs Quokka-Sharp" width="400"></td>
   </tr>
 </table>
 <br>
 <table>
   <tr>
-    <td><img src="graphs/energy_vs_ccec.png" alt="Energy for QuaSARQ vs CCEC" width="300"></td>
-    <td><img src="graphs/energy_vs_quokka.png" alt="Energy for QuaSARQ vs Quokka-Sharp" width="300"></td>
+    <td><img src="graphs/energy_vs_ccec.png" alt="Energy for QuaSARQ vs CCEC" width="400"></td>
+    <td><img src="graphs/energy_vs_quokka.png" alt="Energy for QuaSARQ vs Quokka-Sharp" width="400"></td>
   </tr>
 </table>
