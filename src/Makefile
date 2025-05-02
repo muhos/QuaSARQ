@@ -75,22 +75,6 @@ ifeq ($(nocolor),1)
       NVCCFLAGS += -DNCOLORS
 endif
 
-# enable word interleaving
-ifeq ($(winterleave),1)
-	ifneq ($(winterleave),0)
-		cinterleave := 0
-		NVCCFLAGS += -DINTERLEAVE_WORDS
-	endif
-endif
-
-# enable column interleaving
-ifneq ($(cinterleave),)
-	ifneq ($(cinterleave),0)
-		NVCCFLAGS += -DINTERLEAVE_XZ
-		NVCCFLAGS += -DINTERLEAVE_COLS=$(cinterleave)
-	endif
-endif
-
 # word sizes
 WORDSIZE := 64
 ifeq ($(word),8)
@@ -114,7 +98,7 @@ ALL_LDFLAGS += $(addprefix -Xlinker ,$(LDFLAGS))
 
 # gencode arguments
 
-SMS ?= 80 89
+SMS ?= 75 80 89
 ifeq ($(SMS),)
 $(error no SM architectures have been specified)
 endif
@@ -132,7 +116,7 @@ endif
 # target rules
 
 CPPOBJEXT := o
-CUOBJEXT  := cuo 
+CUOBJEXT  := cuda.o 
 
 mainsrc   := main
 cusrc     := $(sort $(wildcard *.cu))
@@ -184,4 +168,4 @@ $(mainsrc).$(CPPOBJEXT): $(mainsrc).cpp
 clean:
 	rm -f *.$(CPPOBJEXT) *.$(CUOBJEXT) $(LIB) $(BIN) 
 	
-.PHONY: all clean}
+.PHONY: all clean

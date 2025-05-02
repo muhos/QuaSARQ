@@ -30,11 +30,19 @@ For more options, type `quasarq -h` or `quasarq --helpmore`.
 # Equivalence Checking
 QuaSARQ supports equivalence checking of two stabilizer circuits. For example, `quasarq C1.stim C2.stim` checks if `C1 == C2`. 
 The outcome will be `EQUIVALENT` or otherwise `NOT EQUIVALENT`, indicating the failing initial state.<br>
-The following plots compares the performance of QuaSARQ against CCEC (a Stim-based checker) and Quokka-Sharp (universal circuit simulator based on model counting)
+The following plots compares the performance of QuaSARQ against CCEC (a Stim-based checker) and Quokka-Sharp (universal circuit simulator based on model counting).<br>
+Circuits have qubits in range of 1,000 to 500,000 qubits.<br>
 
 <table>
   <tr>
-    <td><img src="graphs/time_vs_ccec.pdf" alt="Runtime for QuaSARQ vs CCEC" width="300"></td>
-    <td><img src="graphs/time_vs_quokka.pdf" alt="Runtime for QuaSARQ vs Quokka-Sharp" width="300"></td>
+    <td><img src="graphs/time_vs_ccec.png" alt="Runtime for QuaSARQ vs CCEC" width="300"></td>
+    <td><img src="graphs/time_vs_quokka.png" alt="Runtime for QuaSARQ vs Quokka-Sharp" width="300"></td>
+  </tr>
+</table>
+<br>
+<table>
+  <tr>
+    <td><img src="graphs/energy_vs_ccec.png" alt="Energy for QuaSARQ vs CCEC" width="300"></td>
+    <td><img src="graphs/energy_vs_quokka.png" alt="Energy for QuaSARQ vs Quokka-Sharp" width="300"></td>
   </tr>
 </table>

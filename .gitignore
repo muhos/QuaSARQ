@@ -1,9 +1,14 @@
 src/*.o
 src/*.cuo
+src/*.cuda.o
 src/quasarq
 src/libquasarq.a
 src/*.out
 src/*.txt
-src/*.chp
 src/*.stim
-circuits
+src/circuits
+src/.vscode
+src/*.sh
+src/.DS_Store
+.DS_Store
+.vscode
