@@ -1,8 +1,7 @@
-################################################################################
-#
-# Muhammad Osama Mahmoud, 2024.
-#
-################################################################################
+#############################################
+# Muhammad Osama Mahmoud, 2025.
+# LIACS, Leiden University, The Netherlands.
+#############################################
 
 # advance progress
 
@@ -14,6 +13,7 @@ PERC = `expr $C '*' 100 / $T`
 PROGRESS = printf " [ %3d%% ] compiling: %-20s\r" $(PERC)
 ARCHIVE  = printf " [ 100%% ] compiling: %-30s\r\n building archive ( %-15s )..."
 ENDING   = printf " building binary  ( %-15s )..."
+INSTALL  = printf " installing       ( %-15s )..."
 DONE     = printf "%-30s\n" " done."
 endif
 
@@ -117,6 +117,7 @@ endif
 
 CPPOBJEXT := o
 CUOBJEXT  := cuda.o 
+BUILD_DIR := ../build
 
 mainsrc   := main
 cusrc     := $(sort $(wildcard *.cu))
@@ -165,7 +166,15 @@ $(mainsrc).$(CPPOBJEXT): $(mainsrc).cpp
 	@$(PROGRESS) $<
 	@$(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $<
 
+install: all
+	@$(INSTALL) $(BIN)
+	@mkdir -p $(BUILD_DIR)
+	@cp $(BIN) $(BUILD_DIR)
+	@cp $(LIB) $(BUILD_DIR)
+	@$(DONE)
+
 clean:
 	rm -f *.$(CPPOBJEXT) *.$(CUOBJEXT) $(LIB) $(BIN) 
+	rm -rf $(BUILD_DIR)
 	
 .PHONY: all clean

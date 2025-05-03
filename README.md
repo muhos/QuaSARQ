@@ -17,8 +17,8 @@ For installing CUDA v12, run the following commands on Ubuntu 24.04:<br>
 The source code is also platform-compatible with Windows and WSL2. To install CUDA on those platforms, follow the
 installation guide in https://docs.nvidia.com/cuda/.
 
-Now, the simulator can be built via the command `make`.<br>
-The `quasarq` binary and the library `libquasarq.a` will be created by default in the build directory.<br>
+Now, the simulator can be built via the command `cd src && make && make install`.<br>
+The `quasarq` binary and the library `libquasarq.a` will be created by default in the `build` directory.<br>
 
 ## Debug and Testing
 Add `assert=1` argument with the make command to enable assertions or `debug=1` to collect debugging information.<br>
@@ -29,10 +29,10 @@ For more options, type `quasarq -h` or `quasarq --helpmore`.
 
 # Equivalence Checking
 QuaSARQ supports equivalence checking of two stabilizer circuits. For example, `quasarq C1.stim C2.stim` checks if `C1 == C2`. 
-The outcome will be `EQUIVALENT` or otherwise `NOT EQUIVALENT`, indicating the failing initial state.<br>
+The outcome will be `EQUIVALENT` or otherwise `NOT EQUIVALENT`, indicating the failing initial state.
 Check our paper in [TACAS'25](https://doi.org/10.1007/978-3-031-90660-2_6) for more insights.
-The following plots compares the performance of QuaSARQ against CCEC (a Stim-based checker) and Quokka-Sharp (universal circuit simulator based on model counting).<br>
-Circuits have qubits in range of 1,000 to 500,000 qubits.<br>
+The following plots compares the performance of QuaSARQ against CCEC (a Stim-based checker) and Quokka-Sharp (universal circuit simulator based on model counting).
+Circuits have qubits in range of 1,000 to 500,000 qubits.
 
 <table>
   <tr>
