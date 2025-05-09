@@ -40,12 +40,16 @@ void Simulator::report()
 		FOREACH_GATE(GATE2STATISTIC);
 	}
 	if (options.quiet_en) {
-		PRINT("Time    : %-12.3f  sec\n", 
+		PRINT("Qubits   : %-12zd\n", num_qubits);
+		PRINT("Depth    : %-12u\n", depth);
+		PRINT("Gates    : %-12zd\n", stats.circuit.num_gates);
+		PRINT("Measures : %-12zd\n", stats.circuit.measure_stats.random + stats.circuit.measure_stats.definite);
+		PRINT("Time     : %-12.3f  sec\n", 
 			stats.time.total() / 1000.0);
-		PRINT("Memory  : %-12.3f  GB\n", 
+		PRINT("Memory   : %-12.3f  GB\n", 
 			ratio((double)stats.circuit.bytes, double(GB)) + 
 			stats.tableau.count * stats.tableau.gigabytes);
-		PRINT("Energy  : %-12.3f  joules\n", 
+		PRINT("Energy   : %-12.3f  joules\n", 
 			stats.power.joules);
 	}
 }

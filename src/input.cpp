@@ -10,9 +10,9 @@ namespace QuaSARQ {
         LOGHEADER(0, 4, "Banner");
         LOGFANCYBANNER(version());
         LOGHEADER(0, 4, "Build");
-        getCPUInfo(1);
-        getBuildInfo(1);
-        getGPUInfo(1);
+        getCPUInfo(0);
+        getBuildInfo(0);
+        getGPUInfo(0);
         LOGHEADER(0, 5, "Usage");
         LOG0("");
         LOG2(0, " %squasarq%s [<circuit>.<qasm or stim>][<option> ...]", CSIM, CNORMAL);

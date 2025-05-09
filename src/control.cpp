@@ -228,14 +228,12 @@ namespace QuaSARQ {
 		maxGPUBlocks2D = sqrt(maxGPUBlocks);
 		maxWarpSize = devProp.warpSize;
 		maxGPUSharedMem = devProp.sharedMemPerBlock - _shared_penalty;
-		if (!options.quiet_en) {
-			LOG2(verbose, "Available GPU: %s%d x %s @ %.2fGHz (compute cap: %d.%d)%s", CREPORTVAL, devCount, devProp.name, ratio((double)devProp.clockRate, 1e6), devProp.major, devProp.minor, CNORMAL);
-			const int cores = SM2Cores(devProp.major, devProp.minor);
-			LOG2(verbose, "Available GPU Multiprocessors: %s%d MPs (%s cores/MP)%s", CREPORTVAL, devProp.multiProcessorCount, (cores < 0 ? "unknown": std::to_string(cores).c_str()), CNORMAL);
-			LOG2(verbose, "Available GPU threads and blocks: %s%lld threads, %lld blocks%s", CREPORTVAL, int64(maxGPUThreads), int64(maxGPUBlocks), CNORMAL);
-			LOG2(verbose, "Available Global memory: %s%zd GB%s", CREPORTVAL, _free / GB, CNORMAL);
-			fflush(stdout);
-		}
+		LOG2(verbose, "Available GPU: %s%d x %s @ %.2fGHz (compute cap: %d.%d)%s", CREPORTVAL, devCount, devProp.name, ratio((double)devProp.clockRate, 1e6), devProp.major, devProp.minor, CNORMAL);
+		const int cores = SM2Cores(devProp.major, devProp.minor);
+		LOG2(verbose, "Available GPU Multiprocessors: %s%d MPs (%s cores/MP)%s", CREPORTVAL, devProp.multiProcessorCount, (cores < 0 ? "unknown": std::to_string(cores).c_str()), CNORMAL);
+		LOG2(verbose, "Available GPU threads and blocks: %s%lld threads, %lld blocks%s", CREPORTVAL, int64(maxGPUThreads), int64(maxGPUBlocks), CNORMAL);
+		LOG2(verbose, "Available Global memory: %s%zd GB%s", CREPORTVAL, _free / GB, CNORMAL);
+		fflush(stdout);
 		return devCount;
 	}
 

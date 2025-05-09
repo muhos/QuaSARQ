@@ -72,8 +72,8 @@ Simulator::Simulator(const string& path) :
 
 void Simulator::initialize() {
     LOGHEADER(1, 4, "Build");
-    getCPUInfo(options.verbose);
-    getGPUInfo(options.verbose);
+    getCPUInfo(1);
+    getGPUInfo(1);
     LOGHEADER(1, 4, "Initial");
     gpu_allocator.create_gpu_pool();
     parse();
