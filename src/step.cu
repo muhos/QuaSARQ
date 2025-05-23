@@ -368,7 +368,7 @@ namespace QuaSARQ {
             print_progress(p, depth_level, true);
         }
 
-        print_measurements(gpu_circuit, num_gates_per_window, depth_level);
+        //print_measurements(gpu_circuit, num_gates_per_window, depth_level);
 
     } // End of function.
 

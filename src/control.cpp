@@ -102,26 +102,16 @@ namespace QuaSARQ {
 		_exit(EXIT_INTERRUPTED);
 	}
 
-	void handler_mercy_interrupt(int)
-	{
-		fflush(stderr), fflush(stdout);
-		LOG1("%s%s%s", CYELLOW, "INTERRUPTED", CNORMAL);
-		//sim->interrupt();
-	}
-
-	void handler_mercy_timeout(int)
-	{
-		fflush(stderr), fflush(stdout);
-		LOG1("%s%s%s", CYELLOW, "TIME OUT", CNORMAL);
-		//sim->interrupt();
-	}
-
-	void signal_handler(void h_intr(int), void h_timeout(int))
+	void signal_termination(void h_intr(int))
 	{
 		signal(SIGINT, h_intr);
 		signal(SIGTERM, h_intr);
+	}
+
+	void signal_timeout(void h_timeout(int))
+	{
 #ifdef SIGXCPU
-		if (h_timeout != nullptr) signal(SIGXCPU, h_timeout);
+		signal(SIGXCPU, h_timeout);
 #endif
 	}
 

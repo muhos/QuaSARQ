@@ -338,20 +338,20 @@ namespace QuaSARQ {
 		fflush(stdout);
 	}
 
-	void Simulator::print_measurements(const DeviceCircuit& gpu_circuit, const gate_ref_t& num_gates, const depth_t& depth_level) {
-		if (!options.print_measurements) return;
-		if (!circuit.is_measuring(depth_level)) return;
-		if (!options.sync) SYNCALL;
-		if (!options.progress_en) LOG2(0, " Measurements on GPU for %d-time step:", depth_level);
-        else SETCOLOR(CLBLUE, stdout);
-        uint32 currentblock = 256, currentgrid;
-        OPTIMIZEBLOCKS(currentgrid, num_gates, currentblock);
-		//print_measurements_k <<< currentgrid, currentblock >>> (gpu_circuit.references(), gpu_circuit.gates(), pivoting.pivots, num_gates);
-		LASTERR("failed to launch print_measurements_k kernel");
-		SYNCALL;
-        SETCOLOR(CNORMAL, stdout);
-		fflush(stdout);
-	}
+	// void Simulator::print_measurements(const DeviceCircuit& gpu_circuit, const gate_ref_t& num_gates, const depth_t& depth_level) {
+	// 	if (!options.print_measurements) return;
+	// 	if (!circuit.is_measuring(depth_level)) return;
+	// 	if (!options.sync) SYNCALL;
+	// 	if (!options.progress_en) LOG2(0, " Measurements on GPU for %d-time step:", depth_level);
+    //     else SETCOLOR(CLBLUE, stdout);
+    //     uint32 currentblock = 256, currentgrid;
+    //     OPTIMIZEBLOCKS(currentgrid, num_gates, currentblock);
+	// 	//print_measurements_k <<< currentgrid, currentblock >>> (gpu_circuit.references(), gpu_circuit.gates(), pivoting.pivots, num_gates);
+	// 	LASTERR("failed to launch print_measurements_k kernel");
+	// 	SYNCALL;
+    //     SETCOLOR(CNORMAL, stdout);
+	// 	fflush(stdout);
+	// }
 
     void Simulator::print_progress_header() {
         LOGN2(1, "   %-10s    %-10s    %-10s    %15s          %-9s", 

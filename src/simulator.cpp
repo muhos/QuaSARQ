@@ -6,6 +6,8 @@
 
 using namespace QuaSARQ;
 
+bool Simulator::timeout = false;
+
 Simulator::~Simulator() { 
     if (!gpu_allocator.destroy_cpu_pool()) {
 		LOGERROR("Failed.");
@@ -116,19 +118,19 @@ void Simulator::simulate(const size_t& p, const bool& reversed) {
     if (options.progress_en) print_progress_header();
     if (reversed) {
         gpu_circuit.reset_circuit_offset(circuit.reference(depth - 1, 0));
-        for (depth_t d = 0; d < depth; d++)
+        for (depth_t d = 0; d < depth && !timeout; d++)
             step(p, depth - d - 1, true);
     }
     else {
         gpu_circuit.reset_circuit_offset(0);
-        for (depth_t d = 0; d < depth; d++)
+        for (depth_t d = 0; d < depth && !timeout; d++)
             step(p, d);
     }
     if (options.print_finaltableau) print_tableau(tableau, depth, reversed);
     if (options.print_finalstate) print_paulis(tableau, depth, reversed);
 }
 
-void check_simulate(Simulator& sim, const size_t& p, const size_t& prev_num_qubits, const size_t& num_qubits) {
+void check_simulate(Simulator& sim, const size_t& p, const size_t& prev_num_qubits, const size_t& num_qubits, const bool& timeout) {
     Tableau& tableau = sim.get_tableau();
     Circuit& circuit = sim.get_circuit();
     DeviceCircuit& gpu_circuit = sim.get_gpu_circuit();
@@ -140,18 +142,18 @@ void check_simulate(Simulator& sim, const size_t& p, const size_t& prev_num_qubi
     if (options.progress_en) sim.print_progress_header();
     const depth_t max_depth = circuit.depth();
     depth_t start_depth = 0, end_depth = 1;
-    while (start_depth < end_depth && end_depth < max_depth) {
+    while (start_depth < end_depth && end_depth < max_depth && !timeout) {
         if (circuit.is_measuring(start_depth)) {
             start_depth++;
             end_depth++;
             continue;
         }
         gpu_circuit.reset_circuit_offset(circuit.reference(start_depth, 0));
-        for (depth_t d = start_depth; d < end_depth; d++)
+        for (depth_t d = start_depth; d < end_depth && !timeout; d++)
             if (!circuit.is_measuring(d)) 
                 sim.step(p, d);
         gpu_circuit.reset_circuit_offset(circuit.reference(end_depth - 1, 0));
-        for (depth_t d = start_depth; d < end_depth; d++)
+        for (depth_t d = start_depth; d < end_depth && !timeout; d++)
             if (!circuit.is_measuring(d)) 
                 sim.step(p, end_depth - d - 1, true);
         
@@ -165,9 +167,9 @@ void check_simulate(Simulator& sim, const size_t& p, const size_t& prev_num_qubi
 }
 
 void Simulator::simulate() {
-    // Create tableau(s) in GPU memory.
     Power power;
     timer.start();
+    // Create tableau(s) in GPU memory.
     num_partitions = tableau.alloc(num_qubits, winfo.max_window_bytes, false, measuring, true);
     if (measuring) {
         #if ROW_MAJOR
@@ -184,7 +186,7 @@ void Simulator::simulate() {
     stats.time.initial += timer.time();
     // Start step-wise simulation.
     timer.start();
-    for (size_t p = 0; p < num_partitions; p++) {
+    for (size_t p = 0; p < num_partitions && !timeout; p++) {
         // Create identity.
         const size_t prev_num_qubits = num_qubits_per_partition * p;
         assert(prev_num_qubits < num_qubits);
@@ -192,7 +194,7 @@ void Simulator::simulate() {
         identity(tableau, prev_num_qubits, (p == num_partitions - 1) ? (num_qubits - prev_num_qubits) : num_qubits_per_partition, custreams, options.initialstate);
         // Stepwise simulation.
         if (options.check_tableau)
-            check_simulate(*this, p, prev_num_qubits, num_qubits_per_partition);
+            check_simulate(*this, p, prev_num_qubits, num_qubits_per_partition, timeout);
         else
             simulate(p, false);
     }

@@ -47,7 +47,7 @@ namespace QuaSARQ {
         if (options.profile_equivalence)
             cudaProfilerStart();
 
-        for (depth_t d = 0; d < max_depth; d++) {
+        for (depth_t d = 0; d < max_depth && !timeout; d++) {
             
             size_t num_gates_per_window = 0;
             size_t other_num_gates_per_window = 0;

@@ -26,22 +26,27 @@ int main(int argc, char** argv) {
 		}
 		options.check(has_input_file == 1 ? argv[1] : nullptr, has_input_file == 2 ? argv[2] : nullptr);
 
-		signal_handler(handler_terminate);
+		signal_termination(handler_terminate);
+
+		if (options.timeout > 0) set_timeout(options.timeout);
 
         if (options.equivalence_en) {
 			Equivalence* equivalence = has_input_file == 2 ? new Equivalence(string(argv[1]), string(argv[2])) : new Equivalence();
+			signal_timeout(equivalence->handler_timeout);
 			equivalence->check();
 			LOGHEADER(1, 4, "Exit");
 			delete equivalence;
 		}
 		else if (options.tuner_en) {
 			Tuner* tuner = has_input_file ? new Tuner(string(argv[1])) : new Tuner();
+			signal_timeout(tuner->handler_timeout);
 			tuner->run();
 			LOGHEADER(1, 4, "Exit");
 			delete tuner;
 		}
         else {
 			Simulator* sim = has_input_file ? new Simulator(string(argv[1])) : new Simulator();
+			signal_timeout(sim->handler_timeout);
             sim->simulate();
 		    LOGHEADER(1, 4, "Exit");
 			delete sim;

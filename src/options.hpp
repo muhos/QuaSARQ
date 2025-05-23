@@ -41,6 +41,7 @@ namespace QuaSARQ {
         int verbose;
         int streams;
         int write_rc;
+        int timeout;
 
         bool quiet_en;
         bool report_en;

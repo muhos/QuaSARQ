@@ -82,7 +82,7 @@ bool Equivalence::check(const InitialState& istate, const size_t& num_qubits_per
     else if (istate == Imag)
         state = 'i';
     size_t all_equivalent = 0;
-    for (size_t p = 0; p < num_partitions; p++) {
+    for (size_t p = 0; p < num_partitions && !timeout; p++) {
         if (p < num_partitions) {
             const size_t prev_num_qubits = num_qubits_per_partition * p;
             assert(prev_num_qubits < num_qubits);

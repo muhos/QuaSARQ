@@ -58,6 +58,7 @@ namespace QuaSARQ {
     INT_OPT opt_streams("streams", "number of GPU streams to create", 4, INT32R(4, 32));
     INT_OPT opt_verbose("verbose", "set verbosity level", 1, INT32R(0, 3));
     INT_OPT opt_write_rc("write-circuit", "write generated circuit to file (1: stim, 2: chp)", 0, INT32R(0, 2));
+    INT_OPT opt_timeout("timeout", "set the timeout in seconds", 0, INT32R(0, INT32_MAX));
 
     INT64_OPT opt_tuneinitial_qubits("tune-initial-qubits", "set the initial number of qubits to start with in the tuner", 1000, INT64R(1, UINT32_MAX));
     INT64_OPT opt_tunestep_qubits("tune-step-qubits", "set the increase of qubits", 1000, INT64R(1, UINT32_MAX));
@@ -115,6 +116,7 @@ namespace QuaSARQ {
         streams = opt_streams;
         sync = opt_sync;
         write_rc = opt_write_rc;
+        timeout = opt_timeout;
 
         std::memcpy(configpath, opt_configpath, opt_configpath.length());
     }

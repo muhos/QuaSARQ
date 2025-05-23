@@ -47,6 +47,7 @@ namespace QuaSARQ {
         cudaStream_t                    kernel_streams[2];
         WindowInfo                      winfo;
         bool                            measuring;
+        static bool                     timeout;
         
         enum { 
             COPY_STREAM1 = 0,
@@ -109,7 +110,14 @@ namespace QuaSARQ {
         void print_tableau(const Tableau& tab, const depth_t& depth_level, const bool& reverse, const bool& prefix = false);
         void print_paulis(const Tableau& tab, const depth_t& depth_level, const bool& reversed);
         void print_gates(const DeviceCircuit& gates, const gate_ref_t& num_gates, const depth_t& depth_level);
-        void print_measurements(const DeviceCircuit& gates, const gate_ref_t& num_gates, const depth_t& depth_level);
+        //void print_mesurements(const DeviceCircuit& gates, const gate_ref_t& num_gates, const depth_t& depth_level);
+
+        // Timeout.
+        static void handler_timeout(int) {
+            fflush(stderr), fflush(stdout);
+            LOG1("%s%s%s", CYELLOW, "TIME OUT", CNORMAL);
+            timeout = true;
+	    }
 
     };
 

@@ -15,7 +15,7 @@ namespace QuaSARQ {
         getGPUInfo(0);
         LOGHEADER(0, 5, "Usage");
         LOG0("");
-        LOG2(0, " %squasarq%s [<circuit>.<qasm or stim>][<option> ...]", CSIM, CNORMAL);
+        LOG2(0, " %squasarq%s [<circuit>.<stim>][<option> ...]", CSIM, CNORMAL);
         LOG0("");
         AvailOptions& avail_opts = ARG::opts();
         std::sort(avail_opts.data(), avail_opts.end(), ARG::ARG_CMP());

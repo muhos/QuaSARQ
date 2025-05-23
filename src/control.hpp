@@ -12,12 +12,11 @@ namespace QuaSARQ {
 	void	getBuildInfo			(const int& verbose);
 	void	getCPUInfo				(const int& verbose);
 	int		getGPUInfo				(const int& verbose);
-	void	signal_handler			(void h_intr(int), void h_timeout(int) = nullptr);
+	void	signal_termination		(void h_intr(int));
+	void	signal_timeout			(void h_timeout(int));
 	void	set_timeout				(int);
 	void	set_memoryout			(int);
 	void	handler_terminate		(int);
-	void	handler_mercy_interrupt	(int);
-	void	handler_mercy_timeout	(int);
 	void	segmentation_fault		(int);
 	void	illegal_code			(int);
 	void	arithmetic_error		(int);

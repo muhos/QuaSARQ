@@ -100,7 +100,7 @@ namespace QuaSARQ {
 				break;
 			// Decrease qubits.
 			num_qubits = num_qubits >= options.tuner_step_qubits ? num_qubits - options.tuner_step_qubits : 0;
-		} while (num_qubits >= options.tuner_initial_qubits);
+		} while (num_qubits >= options.tuner_initial_qubits && !timeout);
 		close_config();
 		report();
 	}

@@ -132,7 +132,7 @@ namespace QuaSARQ {
             mchecker.check_initial_pivots(circuit, depth_level, host_pivots, num_gates_per_window);
         }
         int64 random_measures = 0;
-        for(size_t i = 0; i < num_gates_per_window; i++) {
+        for(size_t i = 0; i < num_gates_per_window && !timeout; i++) {
             const Gate& curr_gate = circuit.gate(depth_level, i);
             const pivot_t curr_pivot = host_pivots[i];
             const qubit_t qubit = curr_gate.wires[0];
