@@ -118,14 +118,14 @@ namespace QuaSARQ {
 			CHECK(cudaMemcpyAsync(_references, _pinned_references, sizeof(gate_ref_t) * num_gates, cudaMemcpyHostToDevice, s1));
 			if (sync) { 
 				cutimer.stop(s1); 
-				ttime += cutimer.time();
+				ttime += cutimer.elapsed();
 				cutimer.start(s2);
 			}
 			copyhost(_pinned_buckets, buckets, curr_num_buckets, bucket_t(0));
 			CHECK(cudaMemcpyAsync(_buckets, _pinned_buckets, BUCKETSIZE * curr_num_buckets, cudaMemcpyHostToDevice, s2));
 			if (sync) {
 				cutimer.stop(s2);
-				ttime += cutimer.time();
+				ttime += cutimer.elapsed();
 				stats.time.transfer += ttime;
 				LOG2(2, "done in %f ms.", ttime);
 			}

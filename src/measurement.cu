@@ -25,7 +25,7 @@ namespace QuaSARQ {
         // Sync resetting pivots.
         SYNC(kernel_stream2);
 
-        find_pivots(num_gates_per_window, kernel_stream1);
+        find_random_measures(num_gates_per_window, kernel_stream1);
 
         // Copy source pivots to host.
         pivoting.copypivots(kernel_stream1, num_gates_per_window);
@@ -132,6 +132,7 @@ namespace QuaSARQ {
             mchecker.check_initial_pivots(circuit, depth_level, host_pivots, num_gates_per_window);
         }
         int64 random_measures = 0;
+        int64 max_random_measures = 0;
         for(size_t i = 0; i < num_gates_per_window && !timeout; i++) {
             const Gate& curr_gate = circuit.gate(depth_level, i);
             const pivot_t curr_pivot = host_pivots[i];
@@ -151,6 +152,7 @@ namespace QuaSARQ {
                     inject_x(qubit, rbit, stream);
                     random_measures++;
                 }
+                max_random_measures++;
             }
         }
 

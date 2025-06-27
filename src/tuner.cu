@@ -116,7 +116,7 @@ namespace QuaSARQ {
 			LASTERR("failed to launch kernel for benchmarking"); \
 			SYNCALL; \
 			cutimer.stop(); \
-			runtime += cutimer.time(); \
+			runtime += cutimer.elapsed(); \
 		} \
 		AVGTIME = (runtime / NSAMPLES); \
 	} while(0)
@@ -130,7 +130,7 @@ namespace QuaSARQ {
 			LASTERR("failed to launch kernel for benchmarking"); \
 			SYNCALL; \
 			cutimer.stop(); \
-			runtime += cutimer.time(); \
+			runtime += cutimer.elapsed(); \
 		} \
 		AVGTIME = (runtime / NSAMPLES); \
 	} while(0)
@@ -144,7 +144,7 @@ namespace QuaSARQ {
 			LASTERR("failed to launch kernel for benchmarking"); \
 			SYNCALL; \
 			cutimer.stop(); \
-			runtime += cutimer.time(); \
+			runtime += cutimer.elapsed(); \
 		} \
 		AVGTIME = (runtime / NSAMPLES); \
 	} while(0)
@@ -560,7 +560,7 @@ namespace QuaSARQ {
 		TUNE_1D(pivots, size);
 	}
 	
-	void tune_finding_all_pivots(
+	void tune_finding_random_measures(
 		void (*kernel)(
 				pivot_t*,
 				const_buckets_t,

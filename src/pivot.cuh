@@ -104,7 +104,7 @@ namespace QuaSARQ {
 		const 	size_t 				num_words_minor,
 		const 	size_t 				num_qubits_padded);
 
-    void tune_finding_all_pivots(
+    void tune_finding_random_measures(
 		void (*kernel)(
 				pivot_t*,
 				const_buckets_t,

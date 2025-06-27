@@ -1,7 +1,6 @@
 #include "equivalence.hpp"
 #include "operators.cuh"
 #include "step.cuh"
-#include <cuda_profiler_api.h>
 
 namespace QuaSARQ {
 
@@ -43,9 +42,6 @@ namespace QuaSARQ {
             other_kernel_stream = kernel_stream;
             options.sync = true;
         }
-
-        if (options.profile_equivalence)
-            cudaProfilerStart();
 
         for (depth_t d = 0; d < max_depth && !timeout; d++) {
             
@@ -131,7 +127,7 @@ namespace QuaSARQ {
             if (options.sync) { 
                 LASTERR("failed to launch step kernel");
                 cutimer.stop();
-                stime = cutimer.time();
+                stime = cutimer.elapsed();
             }
             if (options.sync) {
                 LOG2(1, "done in %f ms", stime);
@@ -157,9 +153,6 @@ namespace QuaSARQ {
             return 1;
         else
             return 0;
-
-        if (options.profile_equivalence)
-            cudaProfilerStop();
 
         if (options.disable_concurrency) {
             options.sync = false;

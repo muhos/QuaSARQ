@@ -113,7 +113,7 @@ namespace QuaSARQ {
             num_words_minor, \
             num_qubits_padded);
 
-    void Prefix::scan_block(Tableau& input, const pivot_t* pivots, const size_t& active_targets, const cudaStream_t& stream) {
+    double Prefix::scan_block(Tableau& input, const pivot_t* pivots, const size_t& active_targets, const cudaStream_t& stream) {
         const size_t num_qubits_padded = input.num_qubits_padded();
         const size_t pow2_active_targets = nextPow2(active_targets);
         if (pow2_active_targets > 1024) {
@@ -124,16 +124,19 @@ namespace QuaSARQ {
         OPTIMIZESHARED(smem_size, currentblock.x * currentblock.y, 2 * sizeof(word_std_t));
         LOGN2(2, "Injecting CX for %d targets with block(x:%u, y:%u) and grid(x:%u, y:%u).. ",
             active_targets, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
+        double elapsed = 0;
         if (options.sync) cutimer.start(stream);
         GENERATE_SWITCH_FOR_CALL(CALL_INJECT_CX_BLOCK);
         if (options.sync) {
             LASTERR("failed to launch inject_cx_block kernel");
             cutimer.stop(stream);
-            LOGENDING(2, 4, "(time %.3f ms)", cutimer.time());
+            elapsed = cutimer.elapsed();
+            LOGENDING(2, 4, "(time %.3f ms)", elapsed);
         } else LOGDONE(2, 4);
         if (options.check_measurement) {
             checker.check_inject_cx(input);
         }
+        return elapsed;
     }
 
 }

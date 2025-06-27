@@ -183,7 +183,7 @@ void Simulator::simulate() {
     const size_t num_qubits_per_partition = num_partitions > 1 ? tableau.num_words_major() * WORD_BITS : num_qubits;
     gpu_circuit.initiate(num_qubits, winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
     timer.stop();
-    stats.time.initial += timer.time();
+    stats.time.initial += timer.elapsed();
     // Start step-wise simulation.
     timer.start();
     for (size_t p = 0; p < num_partitions && !timeout; p++) {
@@ -200,7 +200,7 @@ void Simulator::simulate() {
     }
 	SYNCALL;
 	timer.stop();
-	stats.time.simulation = timer.time();
+	stats.time.simulation = timer.elapsed();
     stats.power.wattage = power.measure();
     stats.power.joules = stats.power.wattage * (stats.time.simulation / 1000.0);
     stats.tableau.count = stats.tableau.istates = 1;

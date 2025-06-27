@@ -250,12 +250,13 @@ namespace QuaSARQ {
             GENERATE_SWITCH_FOR_CALL(CALL_PREFIX_PASS_1_FOR_BLOCK)
         }
 
-    void Prefix::scan_blocks(const size_t& num_blocks, const size_t& inject_pass_1_blocksize, const cudaStream_t& stream) {
+    double Prefix::scan_blocks(const size_t& num_blocks, const size_t& inject_pass_1_blocksize, const cudaStream_t& stream) {
         assert(num_blocks <= max_intermediate_blocks);
         assert(nextPow2(num_blocks) == num_blocks);
         dim3 currentblock, currentgrid;
         bestblockprefixsingle.x = MAX(2, num_blocks);
         bestgridprefixsingle.x = 1;
+        double elapsed = 0;
         if (num_blocks <= MIN_SINGLE_PASS_THRESHOLD) {
             // Do single pass.
             if (bestblockprefixsingle.y == 1)
@@ -279,7 +280,8 @@ namespace QuaSARQ {
             if (options.sync) {
                 LASTERR("failed to scan in a single pass");
                 cutimer.stop(stream);
-                LOGENDING(2, 4, "(time %.3f ms)", cutimer.time());
+                elapsed = cutimer.elapsed();
+                LOGENDING(2, 4, "(time %.3f ms)", elapsed);
             } else LOGDONE(2, 4);
         }
         else {
@@ -314,7 +316,9 @@ namespace QuaSARQ {
             if (options.sync) {
                 LASTERR("failed to scan in pass-1 kernel");
                 cutimer.stop(stream);
-                LOGENDING(2, 4, "(time %.3f ms)", cutimer.time());
+                double elapsed1 = cutimer.elapsed();
+                elapsed += elapsed1;
+                LOGENDING(2, 4, "(time %.3f ms)", elapsed1);
             } else LOGDONE(2, 4);
 
             // Single phase
@@ -344,7 +348,9 @@ namespace QuaSARQ {
             if (options.sync) {
                 LASTERR("failed to scan in a single pass");
                 cutimer.stop(stream);
-                LOGENDING(2, 4, "(time %.3f ms)", cutimer.time());
+                double elapsed2 = cutimer.elapsed();
+                elapsed += elapsed2;
+                LOGENDING(2, 4, "(time %.3f ms)", elapsed2);
             } else LOGDONE(2, 4);
             
             // Final phase.
@@ -372,9 +378,12 @@ namespace QuaSARQ {
             if (options.sync) {
                 LASTERR("failed to scan in pass-2 kernel");
                 cutimer.stop(stream);
-                LOGENDING(2, 4, "(time %.3f ms)", cutimer.time());
+                double elapsed3 = cutimer.elapsed();
+                elapsed += elapsed3;
+                LOGENDING(2, 4, "(time %.3f ms)", elapsed3);
             } else LOGDONE(2, 4);
         }
+        return elapsed;
     }
 
     void Prefix::tune_scan_blocks() {

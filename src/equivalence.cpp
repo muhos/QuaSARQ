@@ -133,13 +133,13 @@ void Equivalence::check() {
     gpu_circuit.initiate(num_qubits, winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
     other_gpu_circuit.initiate(num_qubits, other_wininfo.max_parallel_gates, other_wininfo.max_parallel_gates_buckets);
     timer.stop();
-    stats.time.initial += timer.time();
+    stats.time.initial += timer.elapsed();
     // Start step-wise equivalence.
     timer.start();
     const bool equivalent = check(Zero, num_qubits_per_partition, other_num_qubits_per_partition) && check(Plus, num_qubits_per_partition, other_num_qubits_per_partition);
 	SYNCALL;
 	timer.stop();
-	stats.time.simulation = timer.time();
+	stats.time.simulation = timer.elapsed();
     stats.power.wattage = power.measure();
     stats.power.joules = stats.power.wattage * (stats.time.simulation / 1000.0);
     stats.tableau.count = 2;

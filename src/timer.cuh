@@ -23,7 +23,7 @@ namespace QuaSARQ {
 		inline void  start  (const cudaStream_t& _s = 0) { cudaEventRecord(_start, _s); }
 		inline void  stop   (const cudaStream_t& _s = 0) { cudaEventRecord(_stop, _s); }
 		// Return kernel time in milliseconds.
-		inline float time	() {
+		inline float elapsed() {
 			_gpuTime = 0;
 			cudaEventSynchronize(_stop);
 			cudaEventElapsedTime(&_gpuTime, _start, _stop);

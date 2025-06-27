@@ -46,7 +46,7 @@ namespace QuaSARQ {
     BOOL_OPT opt_progress_en("progress", "report progress", true);
     BOOL_OPT opt_equivalence_en("equivalence", "do equivalence checking", false);
     BOOL_OPT opt_sync("sync", "synchronize all kernels and data transfers", false);
-    BOOL_OPT opt_profile_equivalence("profile-equivalence", "profile equivalence checking", false);
+    BOOL_OPT opt_profile("profile", "profile simulator components and give percentage", false);
     BOOL_OPT opt_disable_concurrency("disable-concurrency", "disable concurrency in equivalence checking", false);
     BOOL_OPT opt_tune_all("tune-all", "enable tuning for all kernels", false);
     BOOL_OPT opt_check_all("check-all", "enable checking for all supported procedures", false);
@@ -90,7 +90,6 @@ namespace QuaSARQ {
         else if (!options.verbose) options.quiet_en = true;
 
         equivalence_en = opt_equivalence_en;
-        profile_equivalence = opt_profile_equivalence;
         disable_concurrency = opt_disable_concurrency;
 
         tuner_initial_qubits = opt_tuneinitial_qubits;
@@ -115,6 +114,7 @@ namespace QuaSARQ {
         depth = opt_depth;
         streams = opt_streams;
         sync = opt_sync;
+        profile = opt_profile;
         write_rc = opt_write_rc;
         timeout = opt_timeout;
 
@@ -133,13 +133,17 @@ namespace QuaSARQ {
             tuner_en = false;
         }
         if (verbose > 1) {
-            LOG2(1, "%s  Enabled synchronization mode with verbosity level %s%zd%s.%s", CARGDEFAULT, CARGVALUE, verbose, CARGDEFAULT, CNORMAL);
+            LOG2(1, "%s  Enabled synchronization with verbosity level %s%zd%s.%s", CARGDEFAULT, CARGVALUE, verbose, CARGDEFAULT, CNORMAL);
             sync = true;
             progress_en = false;
         }
         if (tuner_en && tuner_step_qubits > num_qubits) {
             LOG2(1, "%s  Stepwise qubits %s%zd%s is downsized to %s%zd%s maximum.%s", CARGDEFAULT, CARGVALUE, tuner_step_qubits, CARGDEFAULT, CARGVALUE, num_qubits, CARGDEFAULT, CNORMAL);
             depth = 1;
+        }
+        if (profile) {
+            LOG2(1, "%s  Enabled synchronization in profiling mode.%s", CARGDEFAULT, CNORMAL);
+            sync = true;
         }
         if (inpath != nullptr && num_qubits > 1) {
             LOGWARNING("entered number of qubits will be overridden by the circuit file.");

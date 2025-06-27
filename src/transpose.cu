@@ -306,6 +306,9 @@ namespace QuaSARQ {
 
     #if ROW_MAJOR
     void Simulator::transpose(const bool& row_major, const cudaStream_t& stream) {
+        
+        if (options.profile) cutimer.start(stream);
+
         const size_t num_words_minor = tableau.num_words_minor();
         const size_t num_words_major = tableau.num_words_major();
         const size_t num_qubits_padded = tableau.num_qubits_padded();
@@ -368,10 +371,18 @@ namespace QuaSARQ {
             }
             LOGDONE(2, 4);
        }
+
+        if (options.profile) { 
+            cutimer.stop(stream);
+            stats.profile.time.transpose += cutimer.elapsed();
+        }
     }
 
     #else
     void Simulator::transpose(const bool& row_major, const cudaStream_t& stream) {
+
+        if (options.profile) cutimer.start(stream);
+
         const size_t num_words_minor = tableau.num_words_minor();
         const size_t num_words_major = tableau.num_words_major();
         dim3 currentblock, currentgrid;
@@ -421,6 +432,11 @@ namespace QuaSARQ {
         if (options.check_transpose) {
             SYNCALL;
             check_inplace_transpose(tableau, row_major);
+        }
+
+        if (options.profile) { 
+            cutimer.stop(stream);
+            stats.profile.time.transpose += cutimer.elapsed();
         }
     }
     #endif

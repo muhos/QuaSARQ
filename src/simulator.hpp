@@ -95,7 +95,7 @@ namespace QuaSARQ {
         // Do measurements in a single simulation step.
         void transpose(const bool& row_major, const cudaStream_t& stream);
         void reset_pivots(const size_t& num_pivots, const cudaStream_t& stream);
-        void find_pivots(const size_t& num_pivots, const cudaStream_t& stream);
+        void find_random_measures(const size_t& num_pivots, const cudaStream_t& stream);
         void compact_targets(const qubit_t& qubit, const cudaStream_t& stream);
         void inject_swap(const qubit_t& qubit, const sign_t& rbit, const cudaStream_t& stream);
         void inject_x(const qubit_t& qubit, const sign_t& rbit, const cudaStream_t& stream);

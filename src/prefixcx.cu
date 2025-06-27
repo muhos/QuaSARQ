@@ -292,7 +292,7 @@ namespace QuaSARQ {
 
     // We need to compute prefix-xor of t-th destabilizer in X,Z for t = c+1, c+2, ... c+n-1
     // so that later we can xor every prefix-xor with controlled destabilizer.
-    void Prefix::scan_large(Tableau& input, const pivot_t* pivots, const size_t& active_targets, const cudaStream_t& stream) {
+    double Prefix::scan_large(Tableau& input, const pivot_t* pivots, const size_t& active_targets, const cudaStream_t& stream) {
         assert(nextPow2(MIN_BLOCK_INTERMEDIATE_SIZE) == MIN_BLOCK_INTERMEDIATE_SIZE);
         const size_t num_qubits_padded = input.num_qubits_padded();
 
@@ -309,6 +309,7 @@ namespace QuaSARQ {
             LOGERROR("too many blocks for intermediate arrays");
         LOGN2(2, " Running pass-1 kernel for %d targets with block(x:%u, y:%u) and grid(x:%u, y:%u).. ",
             active_targets, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
+        double elapsed = 0;
         if (options.sync) cutimer.start(stream);
         call_injectcx_pass_1_kernel(
             CALL_INPUT_GLOBAL_PREFIX,
@@ -326,7 +327,9 @@ namespace QuaSARQ {
         if (options.sync) {
             LASTERR("failed to scan targets in pass 1");
             cutimer.stop(stream);
-            LOGENDING(2, 4, "(time %.3f ms)", cutimer.time());
+            double elapsed1 = cutimer.elapsed();
+            elapsed += elapsed1;
+            LOGENDING(2, 4, "(time %.3f ms)", elapsed1);
         } else LOGDONE(2, 4);
 
         // Verify pass-1 prefix.
@@ -341,7 +344,7 @@ namespace QuaSARQ {
         }
 
         // Intermeditae scan of blocks resulted in pass 1.
-        scan_blocks(nextPow2(pass_1_gridsize), pass_1_blocksize, stream);
+        elapsed += scan_blocks(nextPow2(pass_1_gridsize), pass_1_blocksize, stream);
 
         // Verify intermediate-pass prefix.
         if (options.check_measurement) {
@@ -378,7 +381,9 @@ namespace QuaSARQ {
         if (options.sync) {
             LASTERR("failed to scan targets in pass 2");
             cutimer.stop(stream);
-            LOGENDING(2, 4, "(time %.3f ms)", cutimer.time());
+            double elapsed2 = cutimer.elapsed();
+            elapsed += elapsed2;
+            LOGENDING(2, 4, "(time %.3f ms)", elapsed2);
         } else LOGDONE(2, 4);
 
         // Verify pass-2 prefix.
@@ -389,6 +394,8 @@ namespace QuaSARQ {
                 max_intermediate_blocks,
                 pass_1_blocksize);
         }
+
+        return elapsed;
     }
 
     void Prefix::tune_inject_cx(Tableau& input, const pivot_t* pivots, const size_t& max_active_targets) {

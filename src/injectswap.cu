@@ -97,7 +97,9 @@ namespace QuaSARQ {
         if (options.sync) {
             LASTERR("failed to inject swap");
             cutimer.stop(stream);
-            LOGENDING(2, 4, "(time %.3f ms)", cutimer.time());
+            double elapsed = cutimer.elapsed();
+            if (options.profile) stats.profile.time.injectswap += elapsed;
+            LOGENDING(2, 4, "(time %.3f ms)", elapsed);
         } else LOGDONE(2, 4);
         if (options.check_measurement) {
             mchecker.check_inject_swap(tableau, pivoting.pivots, 2);

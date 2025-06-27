@@ -7,11 +7,20 @@ namespace QuaSARQ {
 
     #define PRINT_HEX 0
 
-	NOINLINE_DEVICE void REPCH_GPU(const char* ch, const size_t& size, const size_t& off) {
+	NOINLINE_DEVICE 
+    void REPCH_GPU(
+        const char*     ch, 
+        const size_t&   size, 
+        const size_t&   off) 
+    {
         for (size_t i = off; i < size; i++) LOGGPU("%s", ch);
     }
 
-    NOINLINE_ALL void print_table(const Table& t, const size_t& total_targets) {
+    NOINLINE_ALL 
+    void print_table(
+        const Table&    t, 
+        const size_t&   total_targets) 
+    {
         const size_t num_qubits_padded = t.num_qubits_padded();
         const size_t num_words_major = t.num_words_major();
         const size_t num_words_minor = t.num_words_minor();
@@ -126,7 +135,12 @@ namespace QuaSARQ {
         #endif
     }
 
-    NOINLINE_ALL void print_table_signs(const Signs& ss, const size_t& start, const size_t& end) {
+    NOINLINE_ALL 
+    void print_table_signs(
+        const Signs&    ss, 
+        const size_t&   start, 
+        const size_t&   end) 
+    {
         const size_t size = ss.is_unpacked() ? ss.size() : ss.size() * WORD_BITS;
         for (size_t i = start; i < end; i++) {
             LOGGPU("g%-3lld   %-2d\n", 
@@ -135,7 +149,13 @@ namespace QuaSARQ {
         }
     }
 
-    NOINLINE_ALL void print_tables(const Table& xs, const Table& zs, const Signs* ss, const int64& level) {
+    NOINLINE_ALL 
+    void print_tables(
+        const Table& xs, 
+        const Table& zs, 
+        const Signs* ss, 
+        const int64& level) 
+    {
         LOGGPU(" ---[ %s X-Table at (%-2lld)-step ]---------------------\n", xs.is_rowmajor() ? "Transposed" : "", level);
         print_table(xs);
         LOGGPU(" ---[ %s Z-Table at (%-2lld)-step ]---------------------\n", zs.is_rowmajor() ? "Transposed" : "", level);
@@ -156,19 +176,25 @@ namespace QuaSARQ {
         LOGGPU("\n");
     }
 
-    NOINLINE_ALL void print_state(const Table& xs, const Table& zs, const Signs& ss, 
-                                const size_t& start, const size_t& end, 
-                                const size_t& num_qubits, const size_t& num_words_major) {
-        for (size_t w = start; w < end; w++) {
+    NOINLINE_ALL 
+    void print_state(
+        const Table&    xs, 
+        const Table&    zs, 
+        const Signs&    ss, 
+        const size_t&   num_qubits, 
+        const size_t&   num_words_major,
+        const size_t&   offset) 
+    {
+        for (size_t w = 0; w < num_qubits; w++) {
             const word_t pow2 = BITMASK_GLOBAL(w);
-            if (ss[WORD_OFFSET(w)] & sign_t(pow2)) {
+            if (ss[offset + WORD_OFFSET(w)] & sign_t(pow2)) {
                 LOGGPU("-");
             }
             else {
                 LOGGPU("+");
             }
             for (size_t q = 0; q < num_qubits; q++) {
-                const size_t word_idx = q * num_words_major + WORD_OFFSET(w);
+                const size_t word_idx = q * num_words_major + WORD_OFFSET(w) + offset;
                 if ((!(xs[word_idx] & pow2)) && (!(zs[word_idx] & pow2)))
                     LOGGPU("I");
                 if ((xs[word_idx] & pow2) && (!(zs[word_idx] & pow2)))
@@ -182,97 +208,45 @@ namespace QuaSARQ {
         }
     }
 
-    NOINLINE_DEVICE void print_column(DeviceLocker& dlocker, const Table& xs, const Table& zs, const Signs& ss, const size_t& q, const size_t& num_qubits, const size_t& num_words_major) {
-        dlocker.lock();
-        LOGGPU("   X(%-2lld)   Z(%-2lld)   S\n", q, q);
-        for (size_t i = 0; i < 2 * num_qubits; i++) {
-            if (i == num_qubits) {
-                REPCH_GPU("-", 20);
-                LOGGPU("\n");
-            }
-            LOGGPU("%-2lld   %-2d     %-2d     %-2d\n", i,
-                bool(word_std_t(xs[q * num_words_major + WORD_OFFSET(i)]) & BITMASK_GLOBAL(i)),
-                bool(word_std_t(zs[q * num_words_major + WORD_OFFSET(i)]) & BITMASK_GLOBAL(i)),
-                bool(word_std_t(ss[WORD_OFFSET(i)]) & BITMASK_GLOBAL(i)));
-        }
-        dlocker.unlock();
-    }
-
-    NOINLINE_DEVICE void print_row(DeviceLocker& dlocker, const Gate& m, const Table& inv_xs, const Table& inv_zs, const int* inv_ss, const size_t& gen_idx, const size_t& num_words_minor) {
-        dlocker.lock();
-        m.print();
-        LOGGPU(" X(%lld): ", gen_idx);
-        const size_t row = gen_idx * num_words_minor;
-        for (size_t i = 0; i < num_words_minor; i++) {
-            #if defined(WORD_SIZE_64)
-            LOGGPU(B2B_STR, RB2B(uint32(word_std_t(inv_xs[row + i]) & 0xFFFFFFFFUL)));
-            LOGGPU(B2B_STR, RB2B(uint32((word_std_t(inv_xs[row + i]) >> 32) & 0xFFFFFFFFUL)));
-            #else
-            LOGGPU(B2B_STR, RB2B(word_std_t(inv_xs[row + i])));
-            #endif
-            LOGGPU("  ");
-        }
-        LOGGPU("\n Z(%lld): ", gen_idx);
-        for (size_t i = 0; i < num_words_minor; i++) {
-            #if defined(WORD_SIZE_64)
-            LOGGPU(B2B_STR, RB2B(uint32(word_std_t(inv_zs[row + i]) & 0xFFFFFFFFUL)));
-            LOGGPU(B2B_STR, RB2B(uint32((word_std_t(inv_zs[row + i]) >> 32) & 0xFFFFFFFFUL)));
-            #else
-            LOGGPU(B2B_STR, RB2B(word_std_t(inv_zs[row + i])));
-            #endif
-            LOGGPU("  ");
-        }
-        LOGGPU("\n S(%lld): %d\n", gen_idx, inv_ss[gen_idx]);
-        dlocker.unlock();
-    }
-
-	__global__ void print_tableau_k(const_table_t xs, const_table_t zs, const_signs_t ss, const depth_t level) {
+	__global__ 
+    void print_tableau_k(
+        const_table_t   xs, 
+        const_table_t   zs, 
+        const_signs_t   ss, 
+        const depth_t   level) 
+    {
 		if (!global_tx) {
 			print_tables(*xs, *zs, ss, level == MAX_DEPTH ? -1 : int64(level));
 		}
 	}
 
-	__global__ void print_paulis_k(const_table_t xs, const_table_t zs, const_signs_t ss, const size_t num_words_major, const size_t num_qubits, const bool extended) {
+	__global__ 
+    void print_paulis_k(
+        const_table_t   xs, 
+        const_table_t   zs, 
+        const_signs_t   ss, 
+        const size_t    num_words_major, 
+        const size_t    num_words_minor, 
+        const size_t    num_qubits, 
+        const bool      extended) 
+    {
 		if (!global_tx) {
-			print_state(*xs, *zs, *ss, 0, num_qubits, num_qubits, num_words_major);
+			print_state(*xs, *zs, *ss, num_qubits, num_words_major, 0);
 			if (extended) {
 				REPCH_GPU("-", num_qubits + 1);
 				LOGGPU("\n");
-				print_state(*xs, *zs, *ss, num_qubits, 2*num_qubits, num_qubits, num_words_major);
-			}
-		}
-	}
-	
-	__global__ void print_paulis_k(const_table_t ps, const_signs_t ss, const size_t num_words_major, const size_t num_qubits, const depth_t level) {
-		if (!global_tx) {
-			const word_t *words = ps->data();
-			for (size_t w = 0; w < num_qubits; w++) {
-				const word_t pow2 = BITMASK_GLOBAL(w);
-				for (size_t q = 0; q < num_qubits; q++) {
-					if (q == 0 && (*ss)[WORD_OFFSET(q)] & sign_t(pow2)) {
-						LOGGPU("-");
-					}
-					else if (q == 0) {
-						LOGGPU("+");
-					}
-					const size_t x_word_idx = q * num_words_major + WORD_OFFSET(w);
-					const size_t z_word_idx = q * num_words_major + WORD_OFFSET(w);
-					if ((!(words[x_word_idx] & pow2)) && (!(words[z_word_idx] & pow2)))
-						LOGGPU("I");
-					if ((words[x_word_idx] & pow2) && (!(words[z_word_idx] & pow2)))
-						LOGGPU("X");
-					if ((words[x_word_idx] & pow2) && (words[z_word_idx] & pow2))
-						LOGGPU("Y");
-					if ((!(words[x_word_idx] & pow2)) && (words[z_word_idx] & pow2))
-						LOGGPU("Z");
-				}
-				LOGGPU("\n");
+				print_state(*xs, *zs, *ss, num_qubits, num_words_major, num_words_minor);
 			}
 		}
 	}
 
-
-	__global__ void print_gates_k(const_refs_t refs, const_buckets_t gates, const_pivots_t pivots, const gate_ref_t num_gates) {
+	__global__ 
+    void print_gates_k(
+        const_refs_t        refs, 
+        const_buckets_t     gates, 
+        const_pivots_t      pivots, 
+        const gate_ref_t    num_gates) 
+    {
 		if (!global_tx) {
 			for (gate_ref_t i = 0; i < num_gates; i++) {
 				const gate_ref_t r = refs[i];
@@ -287,7 +261,8 @@ namespace QuaSARQ {
 		}
 	}
 
-	// __global__ void print_measurements_k(const_signs_t signs, const_pivots_t pivots, const size_t num_qubits) {
+	// __global__ 
+    //void print_measurements_k(const_signs_t signs, const_pivots_t pivots, const size_t num_qubits) {
     //     for_parallel_x(i, num_qubits) {
     //         // LOGGPU(" %8d     %10s    %2d\n", m.wires[0], 
     //         // 	m.pivot == INVALID_PIVOT ? "definite" : "random",  
@@ -307,7 +282,13 @@ namespace QuaSARQ {
             LOGWARNING("State is too large to print.");
 			fflush(stdout);
 		}
-        print_paulis_k << <1, 1 >> > (XZ_TABLE(tab), tab.signs(), tab.num_words_major(), num_qubits, measuring);
+        print_paulis_k << <1, 1 >> > (
+            XZ_TABLE(tab), 
+            tab.signs(), 
+            tab.num_words_major(), 
+            tab.num_words_minor(), 
+            num_qubits, 
+            measuring);
         LASTERR("failed to launch print_paulis_k kernel");
         SYNCALL;
         fflush(stdout);
@@ -322,7 +303,10 @@ namespace QuaSARQ {
 			LOG2(0, "Final tableau after %d %ssimulation steps", depth, reversed ? "reversed " : "");
 		else
 			LOG2(0, "Tableau after %d-step", depth_level);
-        print_tableau_k << <1, 1 >> > (XZ_TABLE(tab), prefix ? nullptr : tab.signs(), depth_level);
+        print_tableau_k << <1, 1 >> > (
+            XZ_TABLE(tab), 
+            prefix ? nullptr : tab.signs(), 
+            depth_level);
         LASTERR("failed to launch print_tableau_k kernel");
         SYNCALL;
         fflush(stdout);
@@ -332,7 +316,11 @@ namespace QuaSARQ {
 		if (!options.print_gates) return;
 		if (!options.sync) SYNCALL;
 		LOG2(0, " Gates on GPU for %d-time step:", depth_level);
-		print_gates_k << <1, 1 >> > (gpu_circuit.references(), gpu_circuit.gates(), pivoting.pivots, num_gates);
+		print_gates_k << <1, 1 >> > (
+            gpu_circuit.references(), 
+            gpu_circuit.gates(), 
+            pivoting.pivots, 
+            num_gates);
 		LASTERR("failed to launch print_gates_k kernel");
 		SYNCALL;
 		fflush(stdout);
@@ -386,7 +374,7 @@ namespace QuaSARQ {
                     prev_num_gates, 
                     definite_measures, 
                     random_measures, 
-                    progress_timer.time() / 1000.0);
+                    progress_timer.elapsed() / 1000.0);
             if (options.check_tableau ||
                 (options.check_measurement && is_measuring))
                 LOG2(1, "    %s%-10s%s", 

@@ -51,7 +51,9 @@ namespace QuaSARQ {
         if (options.sync) {
             LASTERR("failed to inject X");
             cutimer.stop(stream);
-            LOGENDING(2, 4, "(time %.3f ms)", cutimer.time());
+            double elapsed = cutimer.elapsed();
+            if (options.profile) stats.profile.time.injectx += elapsed;
+            LOGENDING(2, 4, "(time %.3f ms)", elapsed);
         } else LOGDONE(2, 4);
         if (options.check_measurement) {
             mchecker.check_inject_x(tableau, pivoting.pivots, 3, rbit);

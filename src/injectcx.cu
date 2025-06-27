@@ -7,12 +7,14 @@
 namespace QuaSARQ {
 
     void Simulator::inject_cx(const uint32& active_targets, const cudaStream_t& stream) {
+        double elapsed = 0;
         if (active_targets <= 32)
-            prefix.scan_warp(tableau, pivoting.pivots, active_targets, stream);   
+            elapsed = prefix.scan_warp(tableau, pivoting.pivots, active_targets, stream);   
         else if (active_targets > 32 && active_targets <= 1024)
-            prefix.scan_block(tableau, pivoting.pivots, active_targets, stream);
+            elapsed = prefix.scan_block(tableau, pivoting.pivots, active_targets, stream);
         else
-            prefix.scan_large(tableau, pivoting.pivots, active_targets, stream);
+            elapsed = prefix.scan_large(tableau, pivoting.pivots, active_targets, stream);
+        if (options.profile) stats.profile.time.injectcx += elapsed;
     }
 
     void MeasurementChecker::check_inject_cx(const Tableau& other_input) {

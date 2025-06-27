@@ -68,7 +68,7 @@ namespace QuaSARQ {
 	}
 
     __global__ 
-    void find_all_pivots(
+    void all_random_measures(
                 pivot_t*            pivots, 
                 const_buckets_t     measurements, 
                 const_refs_t        refs, 
@@ -193,14 +193,14 @@ namespace QuaSARQ {
         }
     }
 
-    void Simulator::find_pivots(const size_t& num_pivots, const cudaStream_t& stream) {
+    void Simulator::find_random_measures(const size_t& num_pivots, const cudaStream_t& stream) {
         const size_t num_words_major = tableau.num_words_major();
         const size_t num_words_minor = tableau.num_words_minor();
         const size_t num_qubits_padded = tableau.num_qubits_padded();
         dim3 currentblock, currentgrid;
         if (options.tune_allpivots) {
             SYNCALL;
-            tune_finding_all_pivots(find_all_pivots, 
+            tune_finding_random_measures(all_random_measures, 
                             bestblockallpivots, bestgridallpivots, 
                             sizeof(pivot_t), true,   // shared size, extend?
                             num_qubits,             // x-dim
@@ -223,7 +223,7 @@ namespace QuaSARQ {
         OPTIMIZESHARED(smem_size, currentblock.y * currentblock.x, sizeof(pivot_t));
         LOGN2(2, "Finding all pivots with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
         if (options.sync) cutimer.start(stream);
-        find_all_pivots <<< currentgrid, currentblock, smem_size, stream >>> (
+        all_random_measures <<< currentgrid, currentblock, smem_size, stream >>> (
             pivoting.pivots, 
             gpu_circuit.gates(), 
             gpu_circuit.references(), 
@@ -234,9 +234,11 @@ namespace QuaSARQ {
             num_words_minor,
             num_qubits_padded);
         if (options.sync) {
-            LASTERR("failed to launch find_all_pivots kernel");
+            LASTERR("failed to launch all_random_measures kernel");
             cutimer.stop(stream);
-            LOGENDING(2, 4, "(time %.3f ms)", cutimer.time());
+            double elapsed = cutimer.elapsed();
+            if (options.profile) stats.profile.time.maxrandom += elapsed;
+            LOGENDING(2, 4, "(time %.3f ms)", elapsed);
         } else LOGDONE(2, 4);
     }
 
@@ -280,7 +282,9 @@ namespace QuaSARQ {
         if (options.sync) {
             LASTERR("failed to launch find_new_pivot_and_mark kernel");
             cutimer.stop(stream);
-            LOGENDING(2, 4, "(pivots: %d, time %.3f ms)", *(pivoting.h_active_pivots), cutimer.time());
+            double elapsed = cutimer.elapsed();
+            if (options.profile) stats.profile.time.compactpivots += elapsed;
+            LOGENDING(2, 4, "(pivots: %d, time %.3f ms)", *(pivoting.h_active_pivots), elapsed);
         } else LOGDONE(2, 4);
     }
 }

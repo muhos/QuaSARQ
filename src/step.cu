@@ -331,6 +331,7 @@ namespace QuaSARQ {
             // Run simulation.
             if (options.sync) cutimer.start(kernel_stream);
 
+            double elapsed = 0;
             call_step_2D(
                 gpu_circuit.references(), 
                 gpu_circuit.gates(), 
@@ -345,7 +346,9 @@ namespace QuaSARQ {
             if (options.sync) { 
                 LASTERR("failed to launch step kernel");
                 cutimer.stop(kernel_stream);
-                LOGENDING(2, 4, "(time %.3f ms)", cutimer.time());
+                elapsed = cutimer.elapsed();
+                if (options.profile) stats.profile.time.gaterules += elapsed;
+                LOGENDING(2, 4, "(time %.3f ms)", elapsed);
             } else LOGDONE(2, 4);
 
             #endif // DEBUG MACRO.

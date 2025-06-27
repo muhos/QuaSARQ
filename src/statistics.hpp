@@ -40,6 +40,7 @@ namespace QuaSARQ {
     struct Measures {
         size_t random, definite;
         size_t random_per_window;
+        size_t depth;
     };
 
     struct Statistics {
@@ -76,6 +77,29 @@ namespace QuaSARQ {
                 return initial + schedule + transfer + simulation;
             }
         } time;
+
+        struct GPUTiming
+        {
+            double gaterules;
+            double transpose;
+            double maxrandom;
+            double compactpivots;
+            double injectswap;
+            double injectx;
+            double injectcx;
+        };
+
+        struct {
+            GPUTiming time;
+            GPUTiming percentage;
+
+            double total() {
+                return time.gaterules +
+                    time.transpose + time.compactpivots +
+                    time.injectswap + time.injectx + time.injectcx;
+            }
+        } profile;
+        
 
         struct {
             double wattage;

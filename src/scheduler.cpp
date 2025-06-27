@@ -162,11 +162,13 @@ void Simulator::generate() {
     NORMALIZE_PROBS();
     size_t* types = stats.circuit.gate_stats.types;
     size_t parallel_gates_per_window = 0;
+    int64 measuring_depth = 0;
     for (depth_t d = 0; d < depth; d++) {
         size_t num_gate_buckets_per_window = circuit.num_buckets();
         // Add measurements to circuit if exist.
         if (measurements.size()) {
             add_measurements(circuit, measurements, winfo, d);
+            measuring_depth++;
             continue;
         }
         // Shuffle qubits used for multi-input gates.
@@ -228,6 +230,7 @@ void Simulator::generate() {
         winfo.max(circuit[d].size(), (circuit.num_buckets() - num_gate_buckets_per_window));
     }
     assert(circuit.depth() <= depth + 1);
+    stats.circuit.measure_stats.depth = measuring_depth;
     stats.circuit.num_gates = MAX(stats.circuit.num_gates, circuit.num_gates());
     stats.circuit.bytes = stats.circuit.num_gates * sizeof(gate_ref_t) + circuit.num_buckets() * BUCKETSIZE;
     shuffled.clear(true);
@@ -242,7 +245,7 @@ void Simulator::generate() {
         }
     }
     timer.stop();
-    stats.time.schedule = timer.time();
+    stats.time.schedule = timer.elapsed();
     LOGDONE(1, 2);
     LOG2(1, "Generated a total of %s%zd gates%s with a maximum of %s%zd parallel gates%s.", 
     CREPORTVAL, circuit.num_gates(), CNORMAL, 
@@ -281,7 +284,7 @@ size_t Simulator::parse(Statistics& stats, const char* path) {
     stats.circuit.gate_stats = circuit_io.gate_stats;
     measuring = circuit_io.measuring;
     timer.stop();
-    stats.time.initial += timer.time();
+    stats.time.initial += timer.elapsed();
     return max_qubits;
 }
 
@@ -300,12 +303,14 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
     qubit_t max_locked_qubits = 0;
     size_t parallel_gates_per_window = 0;
     size_t max_depth = 0;
+    size_t measuring_depth = 0;
     while (max_depth < MAX_DEPTH && !circuit_io.circuit_queue.empty()) {
 
         // Add measurements to circuit if exist.
         if (measurements.size()) {
             add_measurements(circuit, measurements, winfo, max_depth);
             max_depth++;
+            measuring_depth++;
             assert(max_depth == circuit.depth());
             continue;
         }
@@ -405,11 +410,13 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
     if (measurements.size()) {
         add_measurements(circuit, measurements, winfo, max_depth);
         max_depth++;
+        measuring_depth++;
         assert(max_depth == circuit.depth());
     }
     
     assert(max_depth == circuit.depth());
     assert(circuit.num_gates() == stats.circuit.num_gates);
+    stats.circuit.measure_stats.depth = measuring_depth;
     stats.circuit.num_gates = MAX(stats.circuit.num_gates, circuit.num_gates());
     stats.circuit.bytes = stats.circuit.num_gates * sizeof(gate_ref_t) + circuit.num_buckets() * BUCKETSIZE;
     locked.clear(true);
@@ -424,7 +431,7 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
         }
     }
     timer.stop();
-    stats.time.schedule = timer.time();
+    stats.time.schedule = timer.elapsed();
     LOGDONE(1, 2);
     LOG2(1, "Scheduled %s%zd%s gates with a maximum of %s%zd%s parallel gates and %s%zd%s depth levels in %s%.3f%s ms.",
         CREPORTVAL, stats.circuit.num_gates, CNORMAL,
