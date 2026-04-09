@@ -6,8 +6,6 @@
 
 namespace QuaSARQ {
 
-   
-
     inline size_t get_num_partitions(const size_t& num_tableaus, const size_t& num_qubits, const size_t& extra_bytes, const size_t& max_free_memory) {
         const double free_accuracy = 0.995;
         const size_t corrected_free_memory = size_t(free_accuracy * max_free_memory);
@@ -73,6 +71,85 @@ namespace QuaSARQ {
             swap(lhs._zs_data, rhs._zs_data);
         }
 
+        // Helper to compute  num_qubits_padded, 
+        //                    num_words_major/minor,
+        //                    num_sign_words, and 
+        //                    num_partitions
+        // returns expected memory capacity.
+        size_t prepare_memory(
+            const size_t&  num_qubits,
+            const size_t&  num_shots,
+            const size_t&  max_window_bytes,
+            const bool&    prefix,
+            const bool&    measuring,
+            const bool&    alloc_signs,
+            const size_t&  forced_num_partitions)
+        {
+            _num_qubits                 = num_qubits;
+            _num_qubits_padded          = get_num_padded_bits(num_qubits);
+            const size_t num_bits_minor = num_shots ? get_num_padded_bits(num_shots) : _num_qubits_padded;
+            const size_t major_words    = get_num_words(_num_qubits);
+            _num_words_major            = major_words;
+            _num_sign_words             = (!prefix && alloc_signs) ? major_words : 0;
+            _num_words                  = major_words * num_bits_minor;
+            const size_t two_tables     = 2 * num_bits_minor;
+            const size_t sign_sz        = sizeof(sign_t);
+            const size_t cap_before     = allocator.gpu_capacity();
+
+            size_t expected = 2 * _num_words * sizeof(word_std_t)
+                            + _num_sign_words * sign_sz
+                            + max_window_bytes;
+            _num_partitions = 1;
+
+            // Break into partitions until it fits (or forced).
+            while ((forced_num_partitions && forced_num_partitions > _num_partitions)
+                || (expected >= cap_before && _num_words_major > 1)) {
+                _num_words_major = (_num_words_major + 0.5) / 1.5;
+                if (!prefix && alloc_signs) _num_sign_words = _num_words_major;
+                expected = _num_words_major * two_tables * sizeof(word_std_t)
+                        + _num_sign_words * sign_sz
+                        + max_window_bytes;
+                ++_num_partitions;
+            }
+            if (forced_num_partitions && forced_num_partitions != _num_partitions) {
+                LOGERRORN("insufficient number of partitions.");
+                throw GPU_memory_exception();
+            }
+
+            // Last‐partition padding.
+            while (_num_partitions * _num_words_major < major_words) ++_num_words_major;
+
+            // Final dimensions.
+            _num_words_minor = _num_words_major;
+            if (!prefix && measuring) _num_words_major <<= 1;
+            if (!prefix && alloc_signs) _num_sign_words = _num_words_major;
+            if (num_shots) _num_words_minor = get_num_words(num_shots);
+            _num_words = _num_words_major * num_bits_minor;
+
+            return expected;
+        }
+
+        // Helper to bind and copy table objects to device.
+        void bind_and_copy(bool prefix, bool alloc_signs) {
+            assert(_h_xs != nullptr);
+            assert(_h_zs != nullptr);
+            _h_xs->alloc(_xs_data, _num_qubits_padded, _num_words_major, _num_words_minor);
+            _h_zs->alloc(_zs_data, _num_qubits_padded, _num_words_major, _num_words_minor);
+            if (!prefix && alloc_signs) {
+                assert(_h_ss != nullptr);
+                _h_ss->alloc(_ss_data, _num_qubits_padded, _num_sign_words, false);
+            }
+            assert(_xs != nullptr);
+            assert(_zs != nullptr);
+            CHECK(cudaMemcpyAsync(_xs, _h_xs, sizeof(Table), cudaMemcpyHostToDevice));
+            CHECK(cudaMemcpyAsync(_zs, _h_zs, sizeof(Table), cudaMemcpyHostToDevice));
+            if (!prefix && alloc_signs) {
+                assert(_ss != nullptr);
+                CHECK(cudaMemcpyAsync(_ss, _h_ss, sizeof(Signs), cudaMemcpyHostToDevice));
+            }
+        }
+
+
     public:
 
         Tableau(DeviceAllocator& allocator) : 
@@ -99,178 +176,110 @@ namespace QuaSARQ {
             swap_tables(*this, other);
         }
 
-        size_t alloc(const size_t& num_qubits, const size_t& max_window_bytes, const bool& prefix, const bool& measuring, const bool& alloc_signs, const size_t& forced_num_partitions = 0) {
-            if (!num_qubits)
-                LOGERROR("cannot allocate tableau for 0 qubits.");
-            if (_num_qubits_padded == get_num_padded_bits(num_qubits))
-                return _num_partitions; 
-            if (_num_qubits_padded) {
-                // reallocate tableau.
-                LOGERROR("Not yet implemented to reallocate a tableau.");
-            }
-            LOGN2(1, "Allocating tableau for %s%lld qubits%s.. ", CREPORTVAL, int64(num_qubits), CNORMAL);
-            size_t cap_before = allocator.gpu_capacity();
-            size_t sign_word_size = sizeof(sign_t);
-            // Partition the tableau if needed.
-            _num_qubits = num_qubits;
-            const size_t num_words_major_whole_tableau = get_num_words(_num_qubits);
-            _num_qubits_padded = get_num_padded_bits(num_qubits);
-            _num_words_major = num_words_major_whole_tableau;
-            if (!prefix && alloc_signs) _num_sign_words = _num_words_major;
-            _num_words = _num_words_major * _num_qubits_padded;
-            const size_t max_padded_bits_two_tables = 2 * _num_qubits_padded;
-            size_t expected_capacity_required = 2 * _num_words * sizeof(word_std_t) + _num_sign_words * sign_word_size + max_window_bytes;
-            _num_partitions = 1;
-            assert(_num_words_major * max_padded_bits_two_tables == 2 * _num_words);
-            while ((forced_num_partitions && forced_num_partitions > _num_partitions) || (expected_capacity_required >= cap_before && _num_words_major > 1)) {
-                _num_words_major = (_num_words_major + 0.5) / 1.5;
-                if (!prefix && alloc_signs) _num_sign_words = _num_words_major;
-                expected_capacity_required = _num_words_major * max_padded_bits_two_tables * sizeof(word_std_t) + _num_sign_words * sign_word_size + max_window_bytes;
-                _num_partitions++;
-            }
-            if (forced_num_partitions && forced_num_partitions != _num_partitions) {
-                LOGERRORN("insufficient number of partitions.");
-                throw GPU_memory_exception();
-            }
-            // Fix number of words per column for last partition.
-			while ((_num_partitions * _num_words_major) < num_words_major_whole_tableau)
-				_num_words_major++;
-            // Update number of words.
-            _num_words_minor = _num_words_major;
-            if (measuring && !prefix) _num_words_major <<= 1;
-            if (!prefix && alloc_signs) _num_sign_words = _num_words_major;
-			_num_words = _num_words_major * _num_qubits_padded;
-			expected_capacity_required = 2 * _num_words * sizeof(word_std_t) + _num_sign_words * sign_word_size + max_window_bytes;       
-            if (expected_capacity_required > cap_before) {
+        size_t alloc(
+            const size_t&  num_qubits,
+            const size_t&  num_shots,
+            const size_t&  max_window_bytes,
+                  bool     prefix,
+            const bool&    measuring,
+            const bool&    alloc_signs,
+            const size_t&  forced_num_partitions = 0)
+        {
+            if (!num_qubits) LOGERROR("cannot allocate tableau for 0 qubits.");
+            if (_num_qubits_padded == get_num_padded_bits(num_qubits)) return _num_partitions;
+            if (_num_qubits_padded) LOGERROR("Not yet implemented to reallocate a tableau.");
+
+            LOGN2(1, "Allocating tableau for %s%lld qubits%s.. ",
+                CREPORTVAL, int64(num_qubits), CNORMAL);
+
+            const size_t cap_before = allocator.gpu_capacity();
+            prefix                 |= num_shots > 0;
+
+            size_t expected = prepare_memory(
+                num_qubits,
+                num_shots,
+                max_window_bytes, 
+                prefix, 
+                measuring, 
+                alloc_signs, 
+                forced_num_partitions);
+
+            if (expected > cap_before) {
                 LOGERRORN("insufficient memory during tableau allocation.");
                 throw GPU_memory_exception();
             }
 
-            assert(_num_partitions == 1 && _num_words_major >= get_num_words((measuring && !prefix) ? 2 * _num_qubits : _num_qubits)
-                || _num_partitions > 1 && _num_partitions * _num_words_major >= num_words_major_whole_tableau);
-            
-            // Create host pinned-memory objects to hold GPU pointers.
+            // Allocate host‐pinned & device memory.
             _h_xs = new (allocator.allocate_pinned<Table>(1)) Table();
-            assert(_h_xs != nullptr);
             _h_zs = new (allocator.allocate_pinned<Table>(1)) Table();
-            assert(_h_zs != nullptr);
-            if (!prefix && alloc_signs) {
+            if (!prefix && alloc_signs)
                 _h_ss = new (allocator.allocate_pinned<Signs>(1)) Signs();
-                assert(_h_ss != nullptr);
-            }
 
-            // Create CUDA memory for GPU pointers.
-            _xs = allocator.allocate<Table>(1);
-            assert(_xs != nullptr);
+            _xs      = allocator.allocate<Table>(1);
             _xs_data = allocator.allocate<word_t>(_num_words);
-            assert(_xs_data != nullptr);
-            _zs = allocator.allocate<Table>(1);
-            assert(_zs != nullptr);
+            _zs      = allocator.allocate<Table>(1);
             _zs_data = allocator.allocate<word_t>(_num_words);
-            assert(_zs_data != nullptr);
             if (!prefix && alloc_signs) {
-                _ss = allocator.allocate<Signs>(1);
-                assert(_ss != nullptr);
+                _ss      = allocator.allocate<Signs>(1);
+                _ss_data = allocator.allocate<sign_t>(_num_sign_words);
             }
 
-            // Bind the allocated GPU pointers to the host object,
-            // then transfer it to the GPU.
-            _h_xs->alloc(_xs_data, _num_qubits_padded, _num_words_major, _num_words_minor);
-            _h_zs->alloc(_zs_data, _num_qubits_padded, _num_words_major, _num_words_minor);
-            assert(_h_xs->size() == _num_words);
-            assert(_h_zs->size() == _num_words);
-            if (!prefix && alloc_signs) {
-                _ss_data = allocator.allocate<sign_t>(_num_sign_words);        
-                assert(_ss_data != nullptr);
-                _h_ss->alloc(_ss_data, _num_qubits_padded, _num_sign_words, false);
-                CHECK(cudaMemcpyAsync(_ss, _h_ss, sizeof(Signs), cudaMemcpyHostToDevice));
-            }
-            CHECK(cudaMemcpyAsync(_xs, _h_xs, sizeof(Table), cudaMemcpyHostToDevice));
-            CHECK(cudaMemcpyAsync(_zs, _h_zs, sizeof(Table), cudaMemcpyHostToDevice));
-            
-            size_t cap_after = allocator.gpu_capacity();
-            assert(cap_before > cap_after);
-            size_t alloced = cap_before - cap_after;
+            bind_and_copy(prefix, alloc_signs);
+
+            const size_t cap_after = allocator.gpu_capacity();
+            const size_t alloced   = cap_before - cap_after;
+
             SYNCALL;
+
             LOGENDING(1, 4, "(reserved %zd MB, %zd partitions).", ratio(alloced, MB), _num_partitions);
-            assert(_num_partitions);
+
             return _num_partitions;
         }
 
         // Doesn't reallocate memory.
-        size_t resize(const size_t& num_qubits, const size_t& max_window_bytes, const bool& prefix, const bool& measuring, const bool& alloc_signs, const size_t& forced_num_partitions = 0) {
+        size_t resize(
+            const size_t&  num_qubits,
+            const size_t&  max_window_bytes,
+            const bool     prefix,
+            const bool&    measuring,
+            const bool&    alloc_signs,
+            const size_t&  forced_num_partitions = 0)
+        {
             if (!num_qubits)
-                LOGERROR("cannot resize tableau for 0 qubits.");
+            LOGERROR("cannot resize tableau for 0 qubits.");
             if (_num_qubits < num_qubits)
-                LOGERROR("not enough memory for tableau resizing.");
-            LOGN2(1, "Resizing tableau for %s%lld qubits%s.. ", CREPORTVAL, int64(num_qubits), CNORMAL);
-            assert(_num_qubits >= num_qubits);
-            // Reset the tableau.
+            LOGERROR("not enough memory for tableau resizing.");
+
+            LOGN2(1, "Resizing tableau for %s%lld qubits%s.. ",
+                CREPORTVAL, int64(num_qubits), CNORMAL);
+
             reset();
-            size_t sign_word_size = sizeof(sign_t);
-            size_t cap_before = 2 * _num_words * sizeof(word_std_t) + _num_sign_words * sign_word_size + max_window_bytes;
-            // Partition the tableau if needed.
-            _num_qubits = num_qubits;
-            const size_t num_words_major_whole_tableau = get_num_words(_num_qubits);
-            _num_qubits_padded = get_num_padded_bits(num_qubits);
-            _num_words_major = num_words_major_whole_tableau;
-            if (!prefix && alloc_signs) _num_sign_words = _num_words_major;
-            _num_words = _num_words_major * _num_qubits_padded;
-            const size_t max_padded_bits_two_tables = 2 * _num_qubits_padded;
-            size_t expected_capacity_required = 2 * _num_words * sizeof(word_std_t) + _num_sign_words * sign_word_size + max_window_bytes;
-            _num_partitions = 1;
-            assert(_num_words_major * max_padded_bits_two_tables == 2 * _num_words);
-            while ((forced_num_partitions && forced_num_partitions > _num_partitions) || (expected_capacity_required >= cap_before && _num_words_major > 1)) {
-                _num_words_major = (_num_words_major + 0.5) / 1.5;
-                if (!prefix && alloc_signs) _num_sign_words = _num_words_major;
-                expected_capacity_required = _num_words_major * max_padded_bits_two_tables * sizeof(word_std_t) + _num_sign_words * sign_word_size + max_window_bytes;
-                _num_partitions++;
-            }
-            if (forced_num_partitions && forced_num_partitions != _num_partitions) {
-                LOGERRORN("insufficient number of partitions.");
-                throw GPU_memory_exception();
-            }
-            // Fix number of words per column for last partition.
-			while ((_num_partitions * _num_words_major) < num_words_major_whole_tableau)
-				_num_words_major++;
-                
-            // Update number of words.
-            _num_words_minor = _num_words_major;
-            if (measuring && !prefix) _num_words_major <<= 1;
-            if (!prefix && alloc_signs) _num_sign_words = _num_words_major;
-            _num_words = _num_words_major * _num_qubits_padded;
-			expected_capacity_required = 2 * _num_words * sizeof(word_std_t) + _num_sign_words * sign_word_size + max_window_bytes;       
-            if (expected_capacity_required > cap_before) {
+
+            size_t cap_before = 2 * _num_words * sizeof(word_std_t)
+                            + _num_sign_words * sizeof(sign_t)
+                            + max_window_bytes;
+
+            size_t expected = prepare_memory(
+                num_qubits, 
+                0,
+                max_window_bytes,
+                prefix, 
+                measuring, 
+                alloc_signs,
+                forced_num_partitions);
+
+            if (expected > cap_before) {
                 LOGERRORN("insufficient memory during resizing.");
                 throw GPU_memory_exception();
             }
-            
-            assert(_num_partitions == 1 && _num_words_major >= get_num_words(measuring ? 2 * _num_qubits : _num_qubits)
-                || _num_partitions > 1 && _num_partitions * _num_words_major >= num_words_major_whole_tableau);
-            
-            // Bind the allocated GPU pointers to the host object,
-            // then transfer it to the GPU.
-            assert(_h_xs != nullptr && _h_zs != nullptr && _h_ss != nullptr);
-            assert(_xs_data != nullptr);
-            _h_xs->alloc(_xs_data, _num_qubits_padded, _num_words_major, _num_words_minor);
-            assert(_zs_data != nullptr);
-            _h_zs->alloc(_zs_data, _num_qubits_padded, _num_words_major, _num_words_minor);
-            assert(_h_xs->size() == _num_words);
-            assert(_h_zs->size() == _num_words);
-            if (!prefix && alloc_signs) {     
-                assert(_ss_data != nullptr);
-                _h_ss->alloc(_ss_data, _num_qubits_padded, _num_sign_words, false);
-                CHECK(cudaMemcpyAsync(_ss, _h_ss, sizeof(Signs), cudaMemcpyHostToDevice));
-            }
-            CHECK(cudaMemcpyAsync(_xs, _h_xs, sizeof(Table), cudaMemcpyHostToDevice));
-            CHECK(cudaMemcpyAsync(_zs, _h_zs, sizeof(Table), cudaMemcpyHostToDevice));
-            
-            size_t cap_after = 2 * _num_words * sizeof(word_std_t) + _num_sign_words * sign_word_size + max_window_bytes;
-            assert(cap_before >= cap_after);
-            size_t alloced = cap_before - cap_after;
+
+            bind_and_copy(prefix, alloc_signs);
+
             SYNCALL;
-            LOGENDING(1, 4, "(reserved %zd MB, %zd partitions).", ratio(alloced, MB), _num_partitions);
-            assert(_num_partitions);
+
+            LOGENDING(1, 4, "(reserved %zd MB, %zd partitions).",
+                    ratio(cap_before - expected, MB), _num_partitions);
+
             return _num_partitions;
         }
 
@@ -280,10 +289,18 @@ namespace QuaSARQ {
         }
 
         void reset() const {
-            assert(_xs_data != nullptr);
-            assert(_zs_data != nullptr);
             reset_signs();
+            reset_xtable();
+            reset_ztable();
+        }
+
+        void reset_xtable() const {
+            assert(_xs_data != nullptr);
             CHECK(cudaMemsetAsync(_xs_data, 0, _num_words * sizeof(word_t)));
+        }
+
+        void reset_ztable() const {
+            assert(_zs_data != nullptr);
             CHECK(cudaMemsetAsync(_zs_data, 0, _num_words * sizeof(word_t)));
         }
 
@@ -298,6 +315,8 @@ namespace QuaSARQ {
         inline size_t num_words_major() const { return _num_words_major; }
 
         inline size_t num_words_minor() const { return _num_words_minor; }
+
+        inline size_t num_partitions() const { return _num_partitions; }
 
         inline Signs* signs() const { assert(_ss != nullptr); return _ss; }
 
@@ -323,7 +342,11 @@ namespace QuaSARQ {
             Table tmp_zs, tmp_xs;
             CHECK(cudaMemcpy(&tmp_xs, _xs, sizeof(Table), cudaMemcpyDeviceToHost));
             CHECK(cudaMemcpy(&tmp_zs, _zs, sizeof(Table), cudaMemcpyDeviceToHost));
-            return tmp_xs.is_identity() && tmp_zs.is_identity();
+            const bool is_x_identity = tmp_xs.is_identity();
+            const bool is_z_identity = tmp_zs.is_identity();
+            if (is_x_identity && is_z_identity)
+                return true;
+            return false;
         }
 
         void copy_to_host(Table* h_xs, Table* h_zs, Signs* h_ss = nullptr) const {

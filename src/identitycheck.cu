@@ -9,6 +9,8 @@ namespace QuaSARQ {
     __managed__ uint64 checksum;
 
     #define COLUMN_MAJOR_IDX(WORD_IDX, QUBIT_IDX) (QUBIT_IDX) * num_words_major + (WORD_IDX)
+    #define XBLOCKSIZE 32
+    #define DEBUG_IDENTITY 0
 
     template<int B>
     INLINE_DEVICE
@@ -32,7 +34,9 @@ namespace QuaSARQ {
             for_parallel_x(q, num_qubits) {
                 // Check the diagonal. Done only once.
                 if (!w && !zs->check_word_is_identity(q, offset)) {
+                    #if DEBUG_IDENTITY
                     LOGGPUERROR("Z[w: %lld, q: %lld] is incorrect.\n", w, (q + offset));
+                    #endif
                     zs->flag_not_indentity();                  
                 }
                 const size_t word_idx = COLUMN_MAJOR_IDX(w, q + offset);
@@ -53,7 +57,9 @@ namespace QuaSARQ {
             for_parallel_x(q, num_qubits) {
                 // Check the diagonal. Done only once.
                 if (!w && !xs->check_word_is_identity(q, offset)) {
+                    #if DEBUG_IDENTITY
                     LOGGPUERROR("X[w: %lld, q: %lld] is incorrect.\n", w, (q + offset));
+                    #endif
                     xs->flag_not_indentity();
                 }
                 const size_t word_idx = COLUMN_MAJOR_IDX(w, q + offset);
@@ -73,11 +79,15 @@ namespace QuaSARQ {
             word_t xored_z = word_t(0), xored_x = word_t(0);
             for_parallel_x(q, num_qubits) {
                 if (!w && !zs->check_word_is_identity(q, offset)) {
+                    #if DEBUG_IDENTITY
                     LOGGPUERROR("Z[w: %lld, q: %lld] is incorrect.\n", w, (q + offset));
+                    #endif
                     zs->flag_not_indentity();
                 }
                 if (!w && !xs->check_word_is_identity(q, offset)) {
+                    #if DEBUG_IDENTITY
                     LOGGPUERROR("X[w: %lld, q: %lld] is incorrect.\n", w, (q + offset));
+                    #endif
                     xs->flag_not_indentity();
                 }
                 const size_t word_idx = COLUMN_MAJOR_IDX(w, q + offset);
@@ -98,11 +108,15 @@ namespace QuaSARQ {
             for_parallel_x(q, num_qubits) {
                 // Check the diagonal. Done only once.
                 if (!w && !zs->check_stab_is_identity(q, offset)) {
+                    #if DEBUG_IDENTITY
                     LOGGPUERROR("Z[w: %lld, q: %lld] is incorrect.\n", w, (q + offset));
+                    #endif
                     zs->flag_not_indentity();                  
                 }
                 if (!w && !xs->check_destab_is_identity(q, offset)) {
+                    #if DEBUG_IDENTITY
                     LOGGPUERROR("X[w: %lld, q: %lld] is incorrect.\n", w, (q + offset));
+                    #endif
                     xs->flag_not_indentity();
                 }
                 const size_t word_idx = COLUMN_MAJOR_IDX(w, q + offset);
@@ -123,11 +137,15 @@ namespace QuaSARQ {
             for_parallel_x(q, num_qubits) {
                 // Check the diagonal. Done only once.
                 if (!w && !zs->check_destab_is_identity(q, offset)) {
+                    #if DEBUG_IDENTITY
                     LOGGPUERROR("Z[w: %lld, q: %lld] is incorrect.\n", w, (q + offset));
+                    #endif
                     zs->flag_not_indentity();
                 }
                 if (!w && !xs->check_stab_is_identity(q, offset)) {
+                    #if DEBUG_IDENTITY
                     LOGGPUERROR("X[w: %lld, q: %lld] is incorrect.\n", w, (q + offset));
+                    #endif
                     xs->flag_not_indentity();                  
                 }
                 const size_t word_idx = COLUMN_MAJOR_IDX(w, q + offset);
@@ -147,11 +165,15 @@ namespace QuaSARQ {
             word_t xored_z = word_t(0), xored_x = word_t(0);
             for_parallel_x(q, num_qubits) {
                 if (!w && !zs->check_stab_is_identity(q, offset)) {
+                    #if DEBUG_IDENTITY
                     LOGGPUERROR("Z[w: %lld, q: %lld] is incorrect.\n", w, (q + offset));
+                    #endif
                     zs->flag_not_indentity();
                 }
                 if (!w && !xs->check_stab_is_identity(q, offset)) {
+                    #if DEBUG_IDENTITY
                     LOGGPUERROR("X[w: %lld, q: %lld] is incorrect.\n", w, (q + offset));
+                    #endif
                     xs->flag_not_indentity();
                 }
                 const size_t word_idx = COLUMN_MAJOR_IDX(w, q + offset);
@@ -161,9 +183,6 @@ namespace QuaSARQ {
             identity_collapse<B>(xored, shared_xored, num_qubits);
         }
     }
-
-
-    #define XBLOCKSIZE 32
 
     bool check_identity(
         const Tableau&  tableau, 
@@ -205,11 +224,14 @@ namespace QuaSARQ {
                 (offset_per_partition, num_qubits_per_partition, tableau.num_words_major(), XZ_TABLE(tableau));
         LASTERR("failed to launch check-identity kernel");
         SYNCALL;
+        const bool is_identity = tableau.is_table_identity();
+        bool passed = false;
         if (options.initialstate == Imag)
-            return tableau.is_table_identity() && checksum == 0;
-        else
-            return tableau.is_table_identity() && 
-            checksum == measuring ? 2 * num_qubits_per_partition : num_qubits_per_partition;
+            passed = (is_identity && (checksum == 0));
+        else {
+            passed = (is_identity && (checksum == measuring ? 2 * num_qubits_per_partition : num_qubits_per_partition));
+        }
+        return passed;
     }
 
 }

@@ -290,6 +290,14 @@ namespace QuaSARQ {
         }
 
         inline
+        void        dagger(const depth_t& depth_level) {
+            for (size_t i = 0; i < windows[depth_level].size(); i++) {
+                const gate_ref_t& r = windows[depth_level][i];
+                gate(r).dagger();
+            }
+        } 
+
+        inline
         void        print_window(const depth_t& depth_level) {
             LOG1(" Depth %d%s:", depth_level, is_measuring(depth_level) ? " (measuring window)" : "");
             for (size_t i = 0; i < windows[depth_level].size(); i++) {

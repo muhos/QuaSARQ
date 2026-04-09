@@ -110,8 +110,8 @@ namespace QuaSARQ {
 		word_std_t* zblocks			() { assert(intermediate_prefix_z != nullptr); return intermediate_prefix_z; }
 		word_std_t* xblocks			() { assert(intermediate_prefix_x != nullptr); return intermediate_prefix_x; }
 		#endif
-		void 		alloc			(const Tableau& input, const size_t& config_qubits, const size_t& max_window_bytes);
-		void 		resize			(const Tableau& input, const size_t& max_window_bytes);
+		void 		alloc			(const Tableau& input, const size_t& config_qubits);
+		void 		resize			(const Tableau& input);
 		double 		scan_blocks		(const size_t& num_blocks, const size_t& inject_pass_1_blocksize, const cudaStream_t& stream);
 		double 		scan_warp 		(Tableau& input, const pivot_t* pivots, const size_t& active_targets, const cudaStream_t& stream);
 		double 		scan_block 		(Tableau& input, const pivot_t* pivots, const size_t& active_targets, const cudaStream_t& stream);

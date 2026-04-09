@@ -4,29 +4,10 @@
 #include "collapse.cuh"
 #include "templatedim.cuh"
 
-
 namespace QuaSARQ {
 
-    #define LOAD_X_WORDS(Q) \
-        word_t& x_words_ ## Q = x_gens_word[Q ## _word_idx]
-
-    #define LOAD_Z_WORDS(Q) \
-        word_t& z_words_ ## Q = z_gens_word[Q ## _word_idx]
-
-    #define LOAD_Q1_WORDS \
-        LOAD_X_WORDS(q1); \
-        LOAD_Z_WORDS(q1)
-
-    #define LOAD_Q2_WORDS \
-        const size_t q2 = gate.wires[1]; \
-        assert(q2 != INVALID_QUBIT); \
-        const size_t q2_word_idx = q2 * num_words_major; \
-        LOAD_Q1_WORDS; \
-        LOAD_X_WORDS(q2); \
-        LOAD_Z_WORDS(q2)
-
     INLINE_DEVICE
-    void update_forall_gate(
+    void do_forall_gate(
                 sign_t&         signs_word,
                 word_t*         x_gens_word,
                 word_t*         z_gens_word,
@@ -87,24 +68,28 @@ namespace QuaSARQ {
                 break; 
             }
             case CX: { 
-                LOAD_Q2_WORDS;
+                LOAD_Q2_WORDS(num_words_major);
                 do_CX(signs_word, q1, q2); break; 
             }
             case CZ: { 
-                LOAD_Q2_WORDS;
+                LOAD_Q2_WORDS(num_words_major);
                 do_CZ(signs_word, q1, q2); break; 
             }
             case CY: { 
-                LOAD_Q2_WORDS;
+                LOAD_Q2_WORDS(num_words_major);
                 do_CY(signs_word, q1, q2); break; 
             }
             case SWAP: { 
-                LOAD_Q2_WORDS;
+                LOAD_Q2_WORDS(num_words_major);
                 do_SWAP(x_words_q1, x_words_q2); do_SWAP(z_words_q1, z_words_q2); break; 
             }
             case ISWAP: { 
-                LOAD_Q2_WORDS;
+                LOAD_Q2_WORDS(num_words_major);
                 do_iSWAP(signs_word, q1, q2); break; 
+            }
+            case ISWAP_DAG: { 
+                LOAD_Q2_WORDS(num_words_major);
+                do_iSWAPdg(signs_word, q1, q2); break; 
             }
             default: break;
             }
@@ -124,7 +109,7 @@ namespace QuaSARQ {
         sign_t* signs = ss->data();
         for_parallel_y(w, num_words_major) {
             sign_t signs_word = signs[w];
-            update_forall_gate(
+            do_forall_gate(
                 signs_word,
                 xs->data() + w,
                 zs->data() + w,
@@ -156,7 +141,7 @@ namespace QuaSARQ {
         sign_t* signs = ss->data();
         for_parallel_y(w, num_words_major) {
             sign_t signs_word = signs[w];
-            update_forall_gate(
+            do_forall_gate(
                 signs_word,
                 xs->data() + w,
                 zs->data() + w,
@@ -194,7 +179,7 @@ namespace QuaSARQ {
             x_gens_word = (word_t*)__shfl_sync(0xFFFFFFFF, uint64(x_gens_word), 0, B);
             word_t* z_gens_word = (!tx) ? zs->data() + w : nullptr;
             z_gens_word = (word_t*)__shfl_sync(0xFFFFFFFF, uint64(z_gens_word), 0, B);
-            update_forall_gate(
+            do_forall_gate(
                 signs_word,
                 x_gens_word,
                 z_gens_word,
@@ -371,7 +356,9 @@ namespace QuaSARQ {
             print_progress(p, depth_level, true);
         }
 
-        //print_measurements(gpu_circuit, num_gates_per_window, depth_level);
+        if (circuit.is_measuring(depth_level)) {
+            print_measurements(depth_level);
+        }
 
     } // End of function.
 

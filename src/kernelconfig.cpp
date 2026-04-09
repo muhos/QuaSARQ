@@ -40,32 +40,12 @@ namespace QuaSARQ {
 
 using namespace QuaSARQ;
 
-bool Simulator::open_config(arg_t file_mode) {
-    if (config_file == nullptr) {
-        LOGN2(1, "Opening \"%s%s%s\" kernel configuration file for %s.. ", CREPORTVAL, options.configpath, CNORMAL, hasstr(file_mode, "r") ? "reading" : "writing");
-        config_file = fopen(options.configpath, file_mode);
-        if (config_file == nullptr) { 
-			LOG2(1, "does not exist."); 
-			return false; 
-		}
-		LOGDONE(1, 3);
-    }
-	return true;
-}
-
-void Simulator::close_config() {
-    if (config_file != nullptr) {
-        fclose(config_file);
-        config_file = nullptr;
-    }
-}
-
 void Simulator::register_config() {
-    if (!open_config()) {
+    if (!open_file(config_file, options.configpath, "rb")) {
 		LOGERROR("cannot proceed without registering kernel configuration.");
 	}
     struct stat st;
-	if (!canAccess(options.configpath, st)) {
+	if (!canAccess(options.configpath, st)) { 
 		LOGERROR("kernel configuration file is inaccessible.");
 	}
 	if (!st.st_size) return;
@@ -96,6 +76,6 @@ void Simulator::register_config() {
 		}
     }
 	FOREACH_CONFIG(CONFIG2PRINT);
-    close_config();
+    close_file(config_file);
     std::free(buffer);
 }

@@ -19,6 +19,7 @@ namespace QuaSARQ {
         GATE(CZ) \
         GATE(SWAP) \
         GATE(ISWAP) \
+        GATE(ISWAP_DAG) \
 
     #define GATE2ENUM(VAL) VAL,
     #define GATE2STR(STR) #STR,
@@ -28,6 +29,6 @@ namespace QuaSARQ {
     };
 
     constexpr uint32 NR_GATETYPES_1 = M + 1;
-    constexpr uint32 NR_GATETYPES = ISWAP + 1;
+    constexpr uint32 NR_GATETYPES = ISWAP_DAG + 1;
 
 }

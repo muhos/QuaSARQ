@@ -5,6 +5,7 @@ src/quasarq
 src/libquasarq.a
 src/*.out
 src/*.txt
+src/*.qstate
 src/*.stim
 src/circuits
 src/.vscode

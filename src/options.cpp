@@ -59,19 +59,24 @@ namespace QuaSARQ {
     INT_OPT opt_verbose("verbose", "set verbosity level", 1, INT32R(0, 3));
     INT_OPT opt_write_rc("write-circuit", "write generated circuit to file (1: stim, 2: chp)", 0, INT32R(0, 2));
     INT_OPT opt_timeout("timeout", "set the timeout in seconds", 0, INT32R(0, INT32_MAX));
+    INT_OPT opt_print_limit("print-limit", "set the limit to print quantum state to <circuit>_paulis.qstate file", 1000, INT32R(0, INT32_MAX));
+    INT_OPT opt_num_shots("shots", "set the number of shots when sampling the circuit", 0, INT32R(0, INT32_MAX));
 
     INT64_OPT opt_tuneinitial_qubits("tune-initial-qubits", "set the initial number of qubits to start with in the tuner", 1000, INT64R(1, UINT32_MAX));
     INT64_OPT opt_tunestep_qubits("tune-step-qubits", "set the increase of qubits", 1000, INT64R(1, UINT32_MAX));
     INT64_OPT opt_num_qubits("qubits", "set number of qubits for random generation (if no input file given)", 1, INT64R(1, UINT32_MAX));
     INT64_OPT opt_depth("depth", "set circuit depth for random generation (if no input file given)", 1, INT64R(1, UINT32_MAX));
+    INT64_OPT opt_seed("seed", "set random seed for sampling", 0, INT64R(0, INT64_MAX));
 
     FOREACH_GATE(GATE2FREQINPUT);
 
-    STRING_OPT opt_configpath("config-path", "Set the path of the kernel configuration file", "kernel.config");
+    STRING_OPT opt_configpath("config-path", "Set the path of the kernel configuration file", "./kernel.config");
+    STRING_OPT opt_statepath("state-path", "Set the path of the quantum state file", "./<circuit>_paulis.qstate");
 
     Options::Options() {
         RESETSTRUCT(this);
         configpath = calloc<char>(256);
+        statepath = calloc<char>(256);
     }
 
     Options::~Options() {
@@ -79,6 +84,10 @@ namespace QuaSARQ {
 			std::free(configpath);
             configpath = nullptr;
 		}
+        if (statepath != nullptr) {
+            std::free(statepath);
+            statepath = nullptr;
+        }
     }
 
     void Options::initialize() {
@@ -111,14 +120,18 @@ namespace QuaSARQ {
 
         initialstate = InitialState(int(opt_initialstate));
         num_qubits = opt_num_qubits;
+        num_shots = opt_num_shots;
         depth = opt_depth;
         streams = opt_streams;
         sync = opt_sync;
         profile = opt_profile;
         write_rc = opt_write_rc;
         timeout = opt_timeout;
+        print_limit = opt_print_limit;
+        seed = opt_seed;
 
         std::memcpy(configpath, opt_configpath, opt_configpath.length());
+        std::memcpy(statepath, opt_statepath, opt_statepath.length());
     }
 
     void Options::check(const char* inpath, const char* other_inpath) {

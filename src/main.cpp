@@ -2,10 +2,11 @@
 #include "equivalence.hpp"
 #include "simulator.hpp"
 #include "control.hpp"
+#include "logging.hpp"
 #include "banner.hpp"
 #include "input.hpp"
+#include "frame.hpp"
 #include "tuner.cuh"
-#include "logging.hpp"
 
 using namespace std;
 using namespace QuaSARQ;
@@ -36,6 +37,13 @@ int main(int argc, char** argv) {
 			equivalence->check();
 			LOGHEADER(1, 4, "Exit");
 			delete equivalence;
+		}
+		else if (options.num_shots) {
+			Framing* framing = has_input_file ? new Framing(string(argv[1]), options.num_shots) : new Framing(options.num_shots);
+			signal_timeout(framing->handler_timeout);
+			framing->sample();
+			LOGHEADER(1, 4, "Exit");
+			delete framing;
 		}
 		else if (options.tuner_en) {
 			Tuner* tuner = has_input_file ? new Tuner(string(argv[1])) : new Tuner();

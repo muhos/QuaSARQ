@@ -16,6 +16,7 @@ namespace QuaSARQ {
 
     #define FOREACH_PRINT(CONFIG) \
         CONFIG(gates, "gates") \
+        CONFIG(record, "sampling outcome") \
         CONFIG(measurements, "measurements") \
         CONFIG(initialstate, "initial state (in Pauli strings)") \
         CONFIG(stepstate, "step state (in Pauli strings)") \
@@ -42,6 +43,8 @@ namespace QuaSARQ {
         int streams;
         int write_rc;
         int timeout;
+        int print_limit;
+        int num_shots;
 
         bool quiet_en;
         bool report_en;
@@ -65,12 +68,14 @@ namespace QuaSARQ {
         size_t tuner_step_qubits;
         size_t num_qubits;
         size_t depth;
+        size_t seed;
 
         FOREACH_GATE(GATE2OPTION);
 
         InitialState initialstate;
 
         char* configpath;
+        char* statepath;
 
         Options();
         ~Options();

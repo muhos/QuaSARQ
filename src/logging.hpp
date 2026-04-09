@@ -34,8 +34,8 @@ private:
         return instance;
     }
 
-    static void repch_nolock(const char& ch, size_t times) {
-        while(times && times--) std::fputc(ch, stdout);
+    static void repch_nolock(const char& ch, size_t times, FILE* stream = stdout) {
+        while(times && times--) std::fputc(ch, stream);
     }
 
 public:
@@ -43,6 +43,16 @@ public:
     static void set_level(int lvl) noexcept { get().verbose = lvl; }
 
     static int min_verbosity() noexcept { return get().verbose; }
+
+    template<typename... Args>
+    static void print(const char* fmt, FILE* stream, Args&&... args) {
+        std::lock_guard<std::mutex> lock(get().mutex);
+        if constexpr (sizeof...(Args) > 0) {
+            std::fprintf(stream, fmt, std::forward<Args>(args)...);
+        } else {
+            std::fputs(fmt, stream);
+        }
+    }
 
     template<typename... Args>
     static void print(const char* fmt, Args&&... args) {
@@ -70,9 +80,9 @@ public:
         std::fputc(ch, stdout);
     }
 
-    static void repch(char ch, const size_t& times) {
+    static void repch(char ch, const size_t& times, FILE* stream = stdout) {
         std::lock_guard lock(get().mutex);
-        repch_nolock(ch, times);
+        repch_nolock(ch, times, stream);
     }
 
     static void ruler(int verbosity, char ch, size_t times) {
@@ -224,8 +234,9 @@ public:
 
 #define SET_LOGGER_VERBOSITY(V)     Logger::set_level(V)
 #define PRINT(FMT, ...)             Logger::print(FMT, ##__VA_ARGS__)
+#define PRINTFILE(FMT, FILE, ...)   Logger::print(FMT, FILE, ##__VA_ARGS__)
 #define PUTCH(CH)                   Logger::putch(CH)
-#define REPCH(CH, TIMES)            Logger::repch(CH, TIMES)
+#define REPCH(CH, TIMES, ...)       Logger::repch(CH, TIMES, ##__VA_ARGS__)
 #define LOGRULER(V, CH, TIMES)      Logger::ruler(V, CH, TIMES)
 #define LOGHEADER(V, MV, HEAD)      Logger::header(V, MV, HEAD)
 #define LOGERROR(FMT, ...)          Logger::error(FMT, ##__VA_ARGS__)

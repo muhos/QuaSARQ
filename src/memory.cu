@@ -49,7 +49,7 @@ bool DeviceAllocator::destroy_gpu_pool() {
 		_gpool.mem = nullptr;
 		_gpool.off = _gpool.cap = 0;
 	}
-	LOGDONE(1, 3);
+	LOGDONE(1, 4);
 	return true;
 }
 
@@ -71,7 +71,7 @@ bool DeviceAllocator::destroy_cpu_pool() {
 		_cpool.mem = nullptr;
 		_cpool.off = _cpool.cap = 0;
 	}
-	LOGDONE(1, 3);
+	LOGDONE(1, 4);
 	return true;
 }
 

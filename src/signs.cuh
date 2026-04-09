@@ -62,6 +62,7 @@ namespace QuaSARQ {
         }
 
         void alloc_host(const size_t& num_qubits_padded, const size_t& num_words, const bool& unpacked = false) {
+            if (_num_words >= num_words) return; // Already allocated.
             if (_context == GPU) {
                 LOGERRORN("cannot allocate CPU pointer to a pre-allocated GPU pointer.");
                 return;
@@ -70,10 +71,14 @@ namespace QuaSARQ {
             _num_words = num_words;
             _context = CPU;
             _is_unpacked = unpacked;
-            if (_is_unpacked)
-                _unpacked_data = calloc<int>(_num_words);
-            else
-                _data = calloc<sign_t>(_num_words);
+            if (_is_unpacked) {
+                ralloc<int>(_unpacked_data, _num_words * sizeof(int));
+                std::memset(_unpacked_data, 0, _num_words * sizeof(int));
+            }
+            else {
+                ralloc<sign_t>(_data, _num_words * sizeof(sign_t));
+                std::memset(_data, 0, _num_words * sizeof(sign_t));
+            }          
         }
 
         INLINE_ALL bool is_unpacked() const { return _is_unpacked; }

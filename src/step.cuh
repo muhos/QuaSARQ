@@ -6,6 +6,24 @@ namespace QuaSARQ {
 
     #define DEBUG_STEP 0
 
+    #define LOAD_X_WORDS(Q) \
+        word_t& x_words_ ## Q = x_gens_word[Q ## _word_idx]
+
+    #define LOAD_Z_WORDS(Q) \
+        word_t& z_words_ ## Q = z_gens_word[Q ## _word_idx]
+
+    #define LOAD_Q1_WORDS \
+        LOAD_X_WORDS(q1); \
+        LOAD_Z_WORDS(q1)
+
+    #define LOAD_Q2_WORDS(WIDTH) \
+        const size_t q2 = gate.wires[1]; \
+        assert(q2 != INVALID_QUBIT); \
+        const size_t q2_word_idx = q2 * WIDTH; \
+        LOAD_Q1_WORDS; \
+        LOAD_X_WORDS(q2); \
+        LOAD_Z_WORDS(q2)
+
     __global__ 
     void step_2D_atomic(
                 const_refs_t 	refs,

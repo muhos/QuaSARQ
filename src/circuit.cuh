@@ -90,7 +90,7 @@ namespace QuaSARQ {
 		}
 
 		inline
-		void 		copyfrom 			(Statistics& stats, const Circuit& circuit, const depth_t& depth_level, 
+		void 		copyfrom 			(Statistics& stats, Circuit& circuit, const depth_t& depth_level, 
 								const bool& reversed, const bool& sync, const cudaStream_t& s1, const cudaStream_t& s2) {
 			if (_references == nullptr)
                 LOGERROR("cannot copy empty references to device.");
@@ -98,6 +98,9 @@ namespace QuaSARQ {
                 LOGERROR("cannot copy empty gates to device.");
 			if (buckets_offset >= circuit.num_buckets()) 
 				LOGERROR("buckets offset overflow during gates transfer to GPU.");
+			if (reversed) {
+				circuit.dagger(depth_level);
+			}
 			num_gates = circuit[depth_level].size();
 			assert(num_gates <= max_qubits);
 			const auto curr_num_buckets = circuit.num_buckets(depth_level);

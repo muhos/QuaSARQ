@@ -27,8 +27,8 @@ Simulator::Simulator() :
 	num_qubits(options.num_qubits)
     , num_partitions(1)
 	, depth((depth_t)options.depth)
-	, crand(1009)
-    , mrand(999331)
+	, crand(1)
+    , mrand(1)
 	, circuit(MB)
 	, circuit_mode(RANDOM_CIRCUIT)
 	, gpu_circuit(gpu_allocator)
@@ -38,6 +38,7 @@ Simulator::Simulator() :
     , pivoting(gpu_allocator)
     , prefix(gpu_allocator, mchecker)
 	, config_file(nullptr)
+    , state_file(nullptr)
     , config_qubits(0)
 	, custreams(nullptr)
     , copy_streams{ 0, 0 }
@@ -51,8 +52,8 @@ Simulator::Simulator(const string& path) :
     num_qubits(options.num_qubits)
     , num_partitions(1)
     , depth((depth_t)options.depth)
-    , crand(1009)
-    , mrand(999331)
+    , crand(1)
+    , mrand(1)
     , circuit(MB)
     , circuit_path(path)
     , circuit_mode(PARSED_CIRCUIT)
@@ -63,6 +64,7 @@ Simulator::Simulator(const string& path) :
     , pivoting(gpu_allocator)
     , prefix(gpu_allocator, mchecker)
     , config_file(nullptr)
+    , state_file(nullptr)
     , config_qubits(0)
     , custreams(nullptr)
     , copy_streams{ 0, 0 }
@@ -160,7 +162,7 @@ void check_simulate(Simulator& sim, const size_t& p, const size_t& prev_num_qubi
         LOGN2(2, "  checking tableau integrity from %d up to %d depth levels.. ", start_depth, end_depth);
         const bool passed = check_identity(tableau, prev_num_qubits, num_qubits, sim.is_measuring());
         if (passed) LOG2(2, "%sPASSED.%s", CGREEN, CNORMAL);
-        else LOG2(2, "%FAILED.%s", CRED, CNORMAL);
+        else LOG2(2, "%sFAILED.%s", CRED, CNORMAL);
         if (options.progress_en) sim.print_progress(p, end_depth - 1, passed);
         end_depth++;
     }
@@ -170,12 +172,12 @@ void Simulator::simulate() {
     Power power;
     timer.start();
     // Create tableau(s) in GPU memory.
-    num_partitions = tableau.alloc(num_qubits, winfo.max_window_bytes, false, measuring, true);
+    num_partitions = tableau.alloc(num_qubits, 0, winfo.max_window_bytes, false, measuring, true);
     if (measuring) {
         #if ROW_MAJOR
-        inv_tableau.alloc(num_qubits, winfo.max_window_bytes, false, measuring, false);
+        inv_tableau.alloc(num_qubits, 0, 0, false, measuring, false);
         #endif
-        prefix.alloc(tableau, config_qubits, winfo.max_window_bytes);
+        prefix.alloc(tableau, config_qubits);
         pivoting.alloc(num_qubits);
         if (options.check_measurement)
             mchecker.alloc(num_qubits);

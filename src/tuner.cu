@@ -54,9 +54,9 @@ namespace QuaSARQ {
 			tableau.resize(num_qubits, winfo.max_window_bytes, false, measuring, true);
 			if (measuring) {
 				#if ROW_MAJOR
-				inv_tableau.resize(num_qubits, winfo.max_window_bytes, false, measuring, false);
+				inv_tableau.resize(num_qubits, 0, false, measuring, false);
 				#endif
-				prefix.resize(tableau, winfo.max_window_bytes);
+				prefix.resize(tableau);
 				if (options.check_measurement) {
 					mchecker.destroy();
             		mchecker.alloc(num_qubits);
@@ -66,17 +66,17 @@ namespace QuaSARQ {
 	}
 
 	void Tuner::run() {
-		if (!open_config("ab"))
+		if (!open_file(config_file, options.configpath, "ab"))
 			LOGERROR("cannot tune without opening a configuration file");
 		// Create a tableau in GPU memory for the maximum qubits.
 		const size_t max_num_qubits = num_qubits;
 		num_partitions = 1;
-		tableau.alloc(max_num_qubits, winfo.max_window_bytes, false, measuring, true);
+		tableau.alloc(max_num_qubits, 0, winfo.max_window_bytes, false, measuring, true);
 		if (measuring) {
 			#if ROW_MAJOR
-			inv_tableau.alloc(num_qubits, winfo.max_window_bytes, false, measuring, false);
+			inv_tableau.alloc(num_qubits, 0, 0, false, measuring, false);
 			#endif
-			prefix.alloc(tableau, config_qubits, winfo.max_window_bytes);
+			prefix.alloc(tableau, config_qubits);
 			pivoting.alloc(num_qubits);
 		}
 		gpu_circuit.initiate(num_qubits, winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
@@ -101,7 +101,7 @@ namespace QuaSARQ {
 			// Decrease qubits.
 			num_qubits = num_qubits >= options.tuner_step_qubits ? num_qubits - options.tuner_step_qubits : 0;
 		} while (num_qubits >= options.tuner_initial_qubits && !timeout);
-		close_config();
+		close_file(config_file);
 		report();
 	}
 

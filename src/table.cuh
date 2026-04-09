@@ -108,7 +108,7 @@ namespace QuaSARQ {
             _num_qubits_padded = num_qubits_padded;
             _num_words_major = num_words_major;
             _num_words_minor = num_words_minor;
-            _num_words = _num_words_major * _num_qubits_padded;
+            _num_words = _num_words_major * (_num_words_minor * WORD_BITS);
             _data = data_ptr;
             assert(_is_identity == true);
             _context = GPU;
@@ -120,7 +120,7 @@ namespace QuaSARQ {
                 return;
             }
             if (_data != nullptr) {
-                assert(_num_words == num_words_major * num_qubits_padded);
+                assert(_num_words == num_words_major * (_num_words_minor * WORD_BITS));
                 return;
             }
             assert(num_qubits_padded);
@@ -128,7 +128,7 @@ namespace QuaSARQ {
             _num_qubits_padded = num_qubits_padded;
             _num_words_major = num_words_major;
             _num_words_minor = num_words_minor;
-            _num_words = _num_words_major * _num_qubits_padded;
+            _num_words = _num_words_major * (_num_words_minor * WORD_BITS);
             _data = calloc<word_t>(_num_words);
             _context = CPU;
         }

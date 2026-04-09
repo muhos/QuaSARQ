@@ -47,68 +47,95 @@ namespace QuaSARQ {
         sign_update_global(SIGNS, anding); \
     }
 
-    #define sign_update_CS(SIGNS, Xc, Xt, Zc, Zt) \
-    { \
-        const word_std_t xc = Xc, xt = Xt, zc = Zc, zt = Zt; \
-        const word_std_t left = (xc & zc) & (xt & ~zt); \
-        const word_std_t right = (xc & ~zc) & (xt & zt); \
-        sign_update_global(SIGNS, left | right); \
-    }
-
     /**********************************/
     /*** Clifford gate instructions ***/
     /**********************************/
 
-    #define do_H(SIGNS, EXT) \
+    #define update_SWAP(A,B) \
     { \
-        sign_update_H(SIGNS, x_## EXT, z_ ## EXT); \
-        do_SWAP(z_ ## EXT, x_ ## EXT); \
+        word_t tmp = A; A = B; B = tmp; \
     }
 
-    #define do_S(SIGNS, EXT) \
+    #define update_H(EXT) \
     { \
-        sign_update_S(SIGNS, x_## EXT, z_ ## EXT); \
+        update_SWAP(z_ ## EXT, x_ ## EXT); \
+    }
+
+    #define update_S(EXT) \
+    { \
         z_ ## EXT ^= (x_## EXT); \
     }
 
-    #define do_Sdg(SIGNS, EXT) \
+    #define update_CX(C, T) \
     { \
-        sign_update_Sdg(SIGNS, x_## EXT, z_ ## EXT); \
-        z_ ## EXT ^= (x_## EXT); \
-    }
-
-    #define do_CX(SIGNS, C, T) \
-    { \
-        sign_update_CX(SIGNS, x_words_ ## C, x_words_ ## T, z_words_ ## C, z_words_ ## T); \
         z_words_ ## C ^= (z_words_ ## T); \
         x_words_ ## T ^= (x_words_ ## C); \
     }
 
-    #define do_CZ(SIGNS, C, T) \
+    #define update_CZ(C, T) \
     { \
-        sign_update_CZ(SIGNS, x_words_ ## C, x_words_ ## T, z_words_ ## C, z_words_ ## T); \
         z_words_ ## C ^= (x_words_ ## T); \
         z_words_ ## T ^= (x_words_ ## C); \
     }
 
-    #define do_CY(SIGNS, C, T) \
+    #define update_CY(C, T) \
     { \
-        sign_update_CY(SIGNS, x_words_ ## C, x_words_ ## T, z_words_ ## C, z_words_ ## T); \
         z_words_ ## C ^= (x_words_ ## T ^ z_words_ ## T); \
         z_words_ ## T ^= (x_words_ ## C); \
         x_words_ ## T ^= (x_words_ ## C); \
     }
 
-    #define do_CS(SIGNS, C, T) \
+    #define update_iSWAP(C, T) \
     { \
-        sign_update_CS(SIGNS, x_words_ ## C, x_words_ ## T, z_words_ ## C, z_words_ ## T); \
-        z_words_ ## C ^= (x_words_ ## T); \
-        z_words_ ## T ^= (x_words_ ## C); \
+        /* SWAP(C, T) */ \
+        update_SWAP(x_words_ ## C, x_words_ ## T); \
+        update_SWAP(z_words_ ## C, z_words_ ## T); \
+        /* CZ(C, T) */ \
+        update_CZ(C, T); \
+        /* S(C), S(T) */ \
+        update_S(words_ ## C); \
+        update_S(words_ ## T); \
     }
 
-    #define do_SWAP(A,B) \
+    #define do_H(SIGNS, EXT) \
     { \
-        word_t tmp = A; A = B; B = tmp; \
+        sign_update_H(SIGNS, x_## EXT, z_ ## EXT); \
+        update_SWAP(z_ ## EXT, x_ ## EXT); \
+    }
+
+    #define do_S(SIGNS, EXT) \
+    { \
+        sign_update_S(SIGNS, x_## EXT, z_ ## EXT); \
+        update_S(EXT); \
+    }
+
+    #define do_Sdg(SIGNS, EXT) \
+    { \
+        sign_update_Sdg(SIGNS, x_## EXT, z_ ## EXT); \
+        update_S(EXT); \
+    }
+
+    #define do_CX(SIGNS, C, T) \
+    { \
+        sign_update_CX(SIGNS, x_words_ ## C, x_words_ ## T, z_words_ ## C, z_words_ ## T); \
+        update_CX(C, T); \
+    }
+
+    #define do_CZ(SIGNS, C, T) \
+    { \
+        sign_update_CZ(SIGNS, x_words_ ## C, x_words_ ## T, z_words_ ## C, z_words_ ## T); \
+        update_CZ(C, T); \
+    }
+
+    #define do_CY(SIGNS, C, T) \
+    { \
+        sign_update_CY(SIGNS, x_words_ ## C, x_words_ ## T, z_words_ ## C, z_words_ ## T); \
+        update_CY(C, T); \
+    }
+
+    #define do_SWAP(A, B) \
+    { \
+        update_SWAP(A, B); \
     }
 
     #define do_iSWAP(SIGNS, C, T) \
@@ -121,6 +148,15 @@ namespace QuaSARQ {
         /* S(C), S(T) */ \
         do_S(SIGNS, words_ ## C); \
         do_S(SIGNS, words_ ## T); \
+    }
+
+    #define do_iSWAPdg(SIGNS, C, T) \
+    { \
+        do_Sdg(SIGNS, words_ ## T); \
+        do_Sdg(SIGNS, words_ ## C); \
+        do_CZ(SIGNS, C, T); \
+        do_SWAP(z_words_ ## C, z_words_ ## T); \
+        do_SWAP(x_words_ ## C, x_words_ ## T); \
     }
         
 }

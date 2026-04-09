@@ -48,6 +48,19 @@ namespace QuaSARQ {
 		INLINE_ALL 
         size_t capacity() const { assert(size); return size_t(size) * sizeof(qubit_t) + sizeof(*this); }
 
+        INLINE_ALL
+        void dagger() {
+            if (type < NR_GATETYPES) {
+                if (type == S_DAG) type = S;
+                else if (type == S) type = S_DAG;
+                else if (type == ISWAP) type = ISWAP_DAG;
+                else if (type == ISWAP_DAG) type = ISWAP;
+            }
+            else {
+                LOGGPU("Unknown gate type %d cannot be adjoined.\n", type);
+            }
+        }
+
         inline
         void print_host(const bool& nonl = false) const {
             if (type < NR_GATETYPES) {

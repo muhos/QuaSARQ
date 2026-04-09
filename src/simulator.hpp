@@ -35,12 +35,14 @@ namespace QuaSARQ {
         Locker                          locker;
         Tableau                         tableau;
         Tableau                         inv_tableau;
+        Signs                           record;
         Pivoting                        pivoting; 
         MeasurementChecker              mchecker;
         Prefix                          prefix;
         Statistics                      stats;
         Timer                           progress_timer;
         FILE*                           config_file;
+        FILE*                           state_file;
         size_t                          config_qubits;
         cudaStream_t*                   custreams;
         cudaStream_t                    copy_streams[2];
@@ -56,8 +58,6 @@ namespace QuaSARQ {
         };
 
         void register_config();
-        bool open_config(arg_t file_mode = "rb");
-        void close_config();
         void create_streams(cudaStream_t*& streams);
 
     public:
@@ -65,6 +65,10 @@ namespace QuaSARQ {
        ~Simulator();
         Simulator();
         Simulator(const string& path);
+
+        // File IO.
+        bool open_file(FILE*& file, arg_t file_path, arg_t file_mode);
+        void close_file(FILE*& file);
 
         // Getters.
         Tableau&        get_tableau() { return tableau; }
@@ -107,10 +111,10 @@ namespace QuaSARQ {
         // Printers.
         void print_progress_header();
         void print_progress(const size_t& p, const depth_t& depth_level, const bool& passed = false);
-        void print_tableau(const Tableau& tab, const depth_t& depth_level, const bool& reverse, const bool& prefix = false);
-        void print_paulis(const Tableau& tab, const depth_t& depth_level, const bool& reversed);
+        void print_tableau(const Tableau& tab, const depth_t& depth_level = MAX_DEPTH, const bool& reversed = false, const bool& prefix = false);
+        void print_paulis(const Tableau& tab, const depth_t& depth_level = MAX_DEPTH, const bool& reversed = false);
         void print_gates(const DeviceCircuit& gates, const gate_ref_t& num_gates, const depth_t& depth_level);
-        //void print_mesurements(const DeviceCircuit& gates, const gate_ref_t& num_gates, const depth_t& depth_level);
+        void print_measurements(const depth_t& depth_level);
 
         // Timeout.
         static void handler_timeout(int) {

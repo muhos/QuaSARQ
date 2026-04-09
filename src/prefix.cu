@@ -144,7 +144,7 @@ namespace QuaSARQ {
         }
     }
 
-    void Prefix::alloc(const Tableau& input, const size_t& config_qubits, const size_t& max_window_bytes) {
+    void Prefix::alloc(const Tableau& input, const size_t& config_qubits) {
         this->config_qubits = config_qubits;
         num_qubits = input.num_qubits();
         num_words_major = input.num_words_major();
@@ -166,7 +166,7 @@ namespace QuaSARQ {
             LOGDONE(2, 4);
         }
         #else
-        targets.alloc(num_qubits, max_window_bytes, true, false, false);
+        targets.alloc(num_qubits, 0, 0, true, false, false);
         #endif
         if (!max_intermediate_blocks) {
             const size_t at_least_blocks = 
@@ -203,7 +203,7 @@ namespace QuaSARQ {
         }
     }
 
-    void Prefix::resize(const Tableau& input, const size_t& max_window_bytes) {
+    void Prefix::resize(const Tableau& input) {
         assert(num_qubits <= input.num_qubits());
         assert(config_qubits != 0);
         num_qubits = input.num_qubits();
