@@ -27,6 +27,26 @@ Add `assert=1` argument with the make command to enable assertions or `debug=1` 
 The simulator can be used via the command `quasarq [<circuit>.<stim>/<qasm>][<option> ...]`.<br>
 For more options, type `quasarq -h` or `quasarq --helpmore`.
 
+# Simulation Benchmarking
+QuaSARQ implements two GPU-accelerated simulation modes:
+- **Single-shot simulation**: applies parallel Gaussian elimination via a three-pass prefix-XOR formulation to handle projective measurements, eliminating sequential dependencies present in CPU-based approaches like Stim.
+- **Many-shot sampling**: uses GPU-based Pauli frames to amortize tableau collapse costs across thousands of shots in parallel without repeated Gaussian elimination.
+
+Benchmarks were run on an RTX 4090 (24 GB) against Stim, Qiskit-Aer (CPU/GPU), Qibo, Cirq, and PennyLane, across two suites:
+- **Light suite**: 100–10,000 qubits, depths ∈ {100, 500, 1000}
+- **Heavy suite**: 1,000–180,000 qubits, depths ∈ {100, 500, 1000} (~130M gates at peak)
+
+QuaSARQ completes **177 circuits within 72 hours** on the heavy suite, vs. Stim's 125 circuits in 132 hours, with up to **105× speedup** on tableau evolution and **over 80% energy reduction** on demanding instances. For 1,024-shot sampling, QuaSARQ's Pauli-frame sampler shows flat runtime across circuit sizes while Stim's cost scales steeply.
+
+Check our paper on [arXiv](https://arxiv.org/abs/2603.14641) for full algorithmic details.
+
+<table>
+  <tr>
+    <td><img src="graphs/light_runtime.png" alt="Light suite runtime (d=100)" width="400"></td>
+    <td><img src="graphs/heavy_runtime.png" alt="Heavy suite runtime vs Stim (d=100)" width="400"></td>
+  </tr>
+</table>
+
 # Equivalence Checking
 QuaSARQ supports equivalence checking of two stabilizer circuits. For example, `quasarq C1.stim C2.stim` checks if `C1 == C2`. 
 The outcome will be `EQUIVALENT` or otherwise `NOT EQUIVALENT`, indicating the failing initial state.
@@ -41,9 +61,3 @@ Circuits have qubits in range of 1,000 to 500,000 qubits.
   </tr>
 </table>
 <br>
-<table>
-  <tr>
-    <td><img src="graphs/energy_vs_ccec.png" alt="Energy for QuaSARQ vs CCEC" width="400"></td>
-    <td><img src="graphs/energy_vs_quokka.png" alt="Energy for QuaSARQ vs Quokka-Sharp" width="400"></td>
-  </tr>
-</table>
