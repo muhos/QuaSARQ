@@ -161,7 +161,7 @@ namespace QuaSARQ {
 
         // If measuring window has R gates, we need to reset signs for the next window to be correct.
         if (may_reset_signs) {
-            reset_signs(num_gates_per_window, stream);
+            reset_signs(num_gates_per_window, depth_level, stream);
         }
 
         return random_measures;

@@ -38,7 +38,7 @@ namespace QuaSARQ {
         }
     }
 
-    void Simulator::reset_signs(const size_t& num_gates, const cudaStream_t& stream) {
+    void Simulator::reset_signs(const size_t& num_gates, const depth_t& depth_level, const cudaStream_t& stream) {
         dim3 currentblock, currentgrid;
         currentblock = bestblockreset, currentgrid = bestgridreset;
         TRIM_BLOCK_IN_DEBUG_MODE(currentblock, currentgrid, num_gates, 0);
@@ -60,8 +60,43 @@ namespace QuaSARQ {
             LOGENDING(2, 4, "(time %.3f ms)", elapsed);
         } else LOGDONE(2, 4);
         if (options.check_measurement) {
-            //mchecker.check_inject_swap(tableau, pivoting.pivots, 2);
+            mchecker.check_reset_signs(tableau, circuit, depth_level);
         }
+    }
+
+    void MeasurementChecker::check_reset_signs(const Tableau& other_input, const Circuit& circuit, const depth_t& depth_level) {
+        SYNCALL;
+
+        if (!input_copied) {
+            LOGERROR("device input not copied to the checker");
+        }
+
+        LOGN2(2, "  Checking resetting signs at depth level %d.. ", depth_level);
+
+        copy_input(other_input, true);
+
+        const auto num_gates = circuit[depth_level].size();
+        for (auto i = 0; i < num_gates; i++) {
+            const Gate& m = circuit.gate(depth_level, i);
+            if (!isMeasurement(m.type))
+                LOGERROR("host gate %d at depth level %d is not a measurement gate", i, depth_level);
+            const size_t q = m.wires[0];
+            const size_t q_w = WORD_OFFSET(q);
+            const word_std_t q_mask = BITMASK_GLOBAL(q);
+            h_ss[q_w] &= ~q_mask;
+            h_ss[q_w + num_words_minor] &= ~q_mask;
+        }
+
+        for (size_t w = 0; w < num_words_minor; w++) { 
+            if (h_ss[w] != d_ss[w]) {
+                LOGERROR("Destabilizer signs failed at w(%lld)", w);
+            }
+            if (h_ss[w + num_words_minor] != d_ss[w + num_words_minor]) {
+                LOGERROR("Stabilizer signs failed at w(%lld)", w + num_words_minor);
+            }
+        }
+
+        LOG2(2, "%sPASSED.%s", CGREEN, CNORMAL);
     }
 
 }

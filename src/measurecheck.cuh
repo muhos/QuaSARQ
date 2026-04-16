@@ -150,8 +150,6 @@ namespace QuaSARQ {
 
 		void find_min_pivot(const qubit_t& qubit, const bool& store_pivots = false);
 
-		void check_min_pivot(const pivot_t& other_pivot);
-
 		void check_compact_pivots(const qubit_t& qubit, const pivot_t* other_pivots, const size_t& other_num_pivots);
 
 		void check_initial_pivots(const Circuit& circuit, const depth_t& depth_level, const pivot_t* other_pivots, const size_t& other_num_pivots);
@@ -179,6 +177,8 @@ namespace QuaSARQ {
 			const   bool&           skip_checking_device = false);
 
 		void check_inject_cx(const Tableau& other_input);
+
+		void check_reset_signs(const Tableau& other_input, const Circuit& circuit, const depth_t& depth_level);
 
 		void check_inject_swap(const Tableau& other_input, const pivot_t* other_pivots, const size_t& num_pivots);
 

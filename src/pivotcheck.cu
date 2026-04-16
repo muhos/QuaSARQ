@@ -49,19 +49,6 @@ namespace QuaSARQ {
         }
     }
 
-    void MeasurementChecker::check_min_pivot(const pivot_t& other_pivot) {
-        SYNCALL;
-        if (!input_copied) {
-            LOGERROR("device input not copied to the checker");
-        }
-        if (qubit == INVALID_QUBIT) {
-            LOGERROR("qubit not set");
-        }
-        find_min_pivot(qubit);
-        if (pivot != other_pivot)
-            LOGERROR("pivots do not match");
-    }
-
     void MeasurementChecker::check_initial_pivots(const Circuit& circuit, const depth_t& depth_level, const pivot_t* other_pivots, const size_t& other_num_pivots) {
         SYNCALL;
         if (!input_copied) {
