@@ -325,6 +325,9 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
             const qubit_t t = gate.t;
             const bool is_c_unlocked = !locked[c];
             if (isMeasurement(gate.type)) {
+                // R, M, MR must never mix in the same window.
+                if (measurements.size() && measurements[0].type != gate.type)
+                    break;
                 circuit_io.circuit_queue.pop_front();
                 measurements.push(M_OP(c, gate.type));
                 measuring = true;
