@@ -16,6 +16,7 @@ namespace QuaSARQ {
 
     #define FOREACH_PRINT(CONFIG) \
         CONFIG(gates, "gates") \
+        CONFIG(signs, "signs") \
         CONFIG(record, "sampling outcome") \
         CONFIG(measurements, "measurements") \
         CONFIG(initialstate, "initial state (in Pauli strings)") \

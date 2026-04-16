@@ -55,7 +55,7 @@ namespace QuaSARQ {
 
         #define DELIM '\n'
         #define UNIX_DELIM '\r'
-        #define MAX_GATENAME_LEN 16
+        #define MAX_GATENAME_LEN 64
 
         void* buffer;
         char* eof;
@@ -142,7 +142,7 @@ namespace QuaSARQ {
                 LOGN2(1, "Opening \"%s%s%s\" circuit file for writing..", CREPORTVAL, path.c_str(), CNORMAL);
                 benchfile = fopen(path.c_str(), "w");
                 if (benchfile == nullptr) { LOG2(1, "does not exist."); }
-                LOGDONE(1, 3);
+                LOGDONE(1, 4);
             }
             LOGN2(1, "Writing circuit with %s%zd qubits%s and %s%zd depth%s..", CREPORTVAL, max_qubits, CNORMAL, CREPORTVAL, max_depth, CNORMAL);
             string comment;
@@ -156,7 +156,7 @@ namespace QuaSARQ {
             if (format == 2) stream += "#\n";
 	        write_circuit(stream, format, num_qubits_in_circuit, circuit);
             fwrite(stream.c_str(), 1, stream.size(), benchfile);
-            LOGDONE(1, 3);
+            LOGDONE(1, 4);
             if (benchfile != nullptr) {
                 fclose(benchfile);
                 benchfile = nullptr;
@@ -176,7 +176,7 @@ namespace QuaSARQ {
 
         char* read(const char* circuit_path) {
             if (circuit_path == nullptr)
-                LOGERROR("circuit path is empty.");        
+                LOGERROR("circuit path is empty.");
             struct stat st;
             if (!canAccess(circuit_path, st))
                 LOGERROR("circuit file is inaccessible.");
@@ -202,38 +202,107 @@ namespace QuaSARQ {
             return stream;
         }
 
-        void read_gate(char*& str) {
+        void read_gate_into(char*& str, CircuitQueue& target, Gate_stats& gstats) {
             eatWS(str);
+            if (str >= eof || *str == '\0') return;
+            // Parse gate / directive name: alpha, underscore, or digit.
             char gatestr[MAX_GATENAME_LEN];
             int gatename_len = 0;
-            while ((isalpha(str[gatename_len]) || str[gatename_len] == '_') && gatename_len < MAX_GATENAME_LEN) {
+            while (gatename_len < MAX_GATENAME_LEN &&
+                   (isalpha(str[gatename_len]) || str[gatename_len] == '_' || isDigit(str[gatename_len]))) {
                 gatestr[gatename_len] = str[gatename_len];
                 gatename_len++;
             }
             if (gatename_len == MAX_GATENAME_LEN)
                 LOGERROR("gate name is too long.");
-            gatestr[gatename_len] = '\0';           
-            int gateindex = translate_gate(gatestr, gatename_len);
-            if (gateindex < 0) LOGERROR("unknown gate %s.", gatestr);
-            const Gatetypes type = Gatetypes(gateindex);
-            // Flag measurement existance.
-            if (type == M) measuring = true;
-            str += gatename_len;    
-            while (*str != DELIM && str < eof) {   
-                if (*str == UNIX_DELIM) { 
-                    str++;
-                    continue;
-                }
-				const qubit_t c = toInteger(str);
-                max_qubits = MAX(max_qubits, c);
-                qubit_t t = c;
-				if (gatename_len > 1 && type != S_DAG) {
-                    t = toInteger(str);
-                    max_qubits = MAX(max_qubits, t);
-                }
-                circuit_queue.push(ParsedGate(c, t, type));
-                gate_stats.types[type]++;
+            if (gatename_len == 0) { eatLine(str); return; }
+            gatestr[gatename_len] = '\0';
+            str += gatename_len;
+
+            // Drop for now: TICK, QUBIT_COORDS, DETECTOR, SHIFT_COORDS, OBSERVABLE_INCLUDE.
+            if (strcmp(gatestr, "TICK")               == 0 ||
+                strcmp(gatestr, "QUBIT_COORDS")        == 0 ||
+                strcmp(gatestr, "DETECTOR")             == 0 ||
+                strcmp(gatestr, "SHIFT_COORDS")         == 0 ||
+                strcmp(gatestr, "OBSERVABLE_INCLUDE")   == 0) {
+                eatLine(str);
+                return;
             }
+
+            // REPEAT block.
+            if (strcmp(gatestr, "REPEAT") == 0) {
+                eatWS(str);
+                uint32 count = toInteger(str);
+                eatWS(str);
+                if (str >= eof || *str != '{')
+                    LOGERROR("expected '{' after REPEAT %u.", count);
+                str++; // consume '{'
+
+                CircuitQueue block;
+                block.reserve(256);
+                Gate_stats bstats;
+                bstats.alloc();
+
+                while (str < eof) {
+                    eatWS(str);
+                    if (*str == '}') { str++; break; }
+                    if (*str == '\0') break;
+                    if (*str == '#') { eatLine(str); continue; }
+                    read_gate_into(str, block, bstats);
+                }
+
+                for (uint32 i = 0; i < count; i++) {
+                    for (size_t j = 0; j < block.size(); j++) {
+                        const ParsedGate& g = block[j];
+                        target.push(g);
+                        gstats.types[g.type]++;
+                    }
+                }
+                block.clear(true);
+                bstats.destroy();
+                return;
+            }
+
+            // Skip DEPOLARIZE1(0.001) for now.
+            if (*str == '(') {
+                while (str < eof && *str != ')') str++;
+                if (str < eof) str++; // consume ')'
+            }
+            int gateindex = translate_gate(gatestr, gatename_len);
+            if (gateindex < 0) {
+                // Unknown / noise gate (e.g. DEPOLARIZE1, DEPOLARIZE2, X_ERROR). 
+                // Skip the rest of the line.
+                eatLine(str);
+                return;
+            }
+
+            const Gatetypes type = Gatetypes(gateindex);
+
+            if (type == M || type == MR) measuring = true;
+
+            const bool is_2qubit = isGate2(int(type));
+            while (str < eof && *str != DELIM) {
+                if (*str == UNIX_DELIM) { str++; continue; }
+                // If next non-space char is not a digit, we're done with
+                // this line (handles trailing annotations like rec[-n]).
+                char* peek = str;
+                eatWS(peek);
+                if (!isDigit(*peek)) { eatLine(str); return; }
+                const qubit_t c = toInteger(str);
+                max_qubits = MAX(max_qubits, (size_t)(c) + 1);
+                qubit_t t = c;
+                if (is_2qubit) {
+                    t = toInteger(str);
+                    max_qubits = MAX(max_qubits, (size_t)(t) + 1);
+                }
+                target.push(ParsedGate(c, t, type));
+                gstats.types[type]++;
+            }
+        }
+
+        // Public entry point: parse one instruction into circuit_queue.
+        void read_gate(char*& str) {
+            read_gate_into(str, circuit_queue, gate_stats);
         }
 
     };

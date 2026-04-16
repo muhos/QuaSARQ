@@ -133,6 +133,7 @@ namespace QuaSARQ {
         }
         int64 random_measures = 0;
         int64 max_random_measures = 0;
+        bool may_reset_signs = false;
         for(size_t i = 0; i < num_gates_per_window && !timeout; i++) {
             const Gate& curr_gate = circuit.gate(depth_level, i);
             const pivot_t curr_pivot = host_pivots[i];
@@ -150,10 +151,17 @@ namespace QuaSARQ {
                     const sign_t rbit = mrand.brand();
                     inject_swap(qubit, rbit, stream);
                     inject_x(qubit, rbit, stream);
+                    if (curr_gate.type == R)
+                        may_reset_signs = true;
                     random_measures++;
                 }
                 max_random_measures++;
             }
+        }
+
+        // If measuring window has R gates, we need to reset signs for the next window to be correct.
+        if (may_reset_signs) {
+            reset_signs(num_gates_per_window, stream);
         }
 
         return random_measures;

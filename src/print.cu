@@ -266,6 +266,25 @@ namespace QuaSARQ {
 		}
 	}
 
+    __global__ 
+    void print_signs_k(
+        const Signs* ss, 
+        const int64& level) 
+    {
+        LOGGPU(" ---[ Signs at (%-2lld)-step ]-----------------------\n", level);
+        const size_t unfolded_size = ss->is_unpacked() ? ss->size() : ss->size() * WORD_BITS;
+        if (ss->num_qubits_padded() == unfolded_size)
+            print_table_signs(*ss, 0, ss->num_qubits_padded());
+        else {
+            assert(2 * ss->num_qubits_padded() == unfolded_size);
+            LOGGPU("Destabilizers:\n");
+            print_table_signs(*ss, 0, ss->num_qubits_padded());
+            LOGGPU("Stabilizers:\n");
+            print_table_signs(*ss, ss->num_qubits_padded(), 2 * ss->num_qubits_padded());
+        }
+        LOGGPU("\n");
+    }
+
     inline string extract_circuit_name(const string& path) {
         size_t start = 0, end = path.size();
         for (size_t i = 0; i < path.size(); ++i) {
@@ -364,6 +383,17 @@ namespace QuaSARQ {
             gpu_circuit.gates(), 
             num_gates);
 		LASTERR("failed to launch print_gates_k kernel");
+		SYNCALL;
+		fflush(stdout);
+	}
+    void Simulator::print_signs(const Tableau& tab, const depth_t& depth_level) {
+		if (!options.print_signs) return;
+		SYNCALL;
+		LOG2(0, " Signs on GPU for %d-time step:", depth_level);
+		print_signs_k << <1, 1 >> > (
+            tab.signs(), 
+            depth_level);
+		LASTERR("failed to launch print_signs_k kernel");
 		SYNCALL;
 		fflush(stdout);
 	}

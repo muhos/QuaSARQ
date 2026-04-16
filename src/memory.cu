@@ -105,7 +105,7 @@ bool DeviceAllocator::create_gpu_pool(const size_t& limit) {
 	LOG2(1, "GPU memory pool of %zd MB is created successfully.", ratio(_gpool.cap, MB));
 	LOGN2(1, "Initializing GPU memory pool to 0.. ");
 	CHECK(cudaMemsetAsync(_gpool.mem, 0, _gpool.cap));
-    LOGDONE(1, 3);
+    LOGDONE(1, 4);
 	return true;
 }
 
@@ -141,7 +141,7 @@ bool DeviceAllocator::resize_gpu_pool(const size_t& new_size) {
 	LOG2(1, "succeeded");
 	LOGN2(1, "Initializing GPU memory pool to 0.. ");
 	CHECK(cudaMemsetAsync(_gpool.mem, 0, _gpool.cap));
-    LOGDONE(1, 3);
+    LOGDONE(1, 4);
 	return true;
 }
 

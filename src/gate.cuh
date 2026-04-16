@@ -97,4 +97,41 @@ namespace QuaSARQ {
 
     constexpr size_t GATESIZE = sizeof(Gate);
 
+    // Special structure for measurement operator.
+    struct M_OP {
+        qubit_t qubit;
+        byte_t type;
+
+        INLINE_ALL
+        M_OP() : qubit(0), type(0) { }
+
+        INLINE_ALL
+        M_OP(const qubit_t& qubit, const byte_t& type) : 
+            qubit(qubit), type(type) { }
+
+        inline
+        void print_host(const bool& nonl = false) const {
+            if (type < NR_GATETYPES) {
+                PRINT(" %5s(", H_G2S[type]);
+            }
+            else {
+                PRINT("  Unknown(");
+            }
+            PRINT("%6d", qubit);
+            PRINT(")%s", nonl ? "" : "\n");
+        }
+
+        INLINE_DEVICE
+        void print(const bool& nonl = false) const {
+            if (type < NR_GATETYPES) {
+                LOGGPU(" %5s(", G2S[type]);
+            }
+            else {
+                LOGGPU("  Unknown(");
+            }
+            LOGGPU("%6d", qubit);
+            LOGGPU(")%s", nonl ? "" : "\n");
+        }
+    };
+
 }

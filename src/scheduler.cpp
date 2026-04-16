@@ -3,19 +3,6 @@
 
 using namespace QuaSARQ;
 
-// 2-input gates.
-constexpr Gatetypes gatetypes_2[NR_GATETYPES - NR_GATETYPES_1] = { CX, CY, CZ, SWAP, ISWAP };
-
-// Check if Clifford gate is 2-input gate by linear search. 
-inline bool isGate2(const Gatetypes& c) {
-    assert(NR_GATETYPES > NR_GATETYPES_1);
-    for (const Gatetypes* g = gatetypes_2, *e = g + (NR_GATETYPES - NR_GATETYPES_1); g != e; g++) { 
-        if (c == *g) 
-            return true;
-    }
-    return false;
-} 
-
 // Gate probabilities.
 double probabilities[NR_GATETYPES];
 
@@ -94,10 +81,12 @@ Gatetypes Simulator::get_rand_gate(const bool& multi_input, const bool& force_mu
 }
 
 // Add measurements to circuit.
-void add_measurements(Circuit& circuit, Vec<qubit_t, size_t>& measurements, WindowInfo& winfo, const depth_t& depth_level) {
+void add_measurements(Circuit& circuit, Vec<M_OP, size_t>& measurements, WindowInfo& winfo, const depth_t& depth_level) {
     const size_t num_gate_buckets_per_window = circuit.num_buckets();
-    for (size_t i = 0; i < measurements.size(); i++)
-        circuit.addGate(depth_level, M, 1, measurements[i]);
+    for (size_t i = 0; i < measurements.size(); i++) {
+        const M_OP& m = measurements[i];
+        circuit.addGate(depth_level, m.type, 1, m.qubit);
+    }
     measurements.clear();
     circuit.markMeasure(depth_level);
     assert(circuit.num_buckets() >= num_gate_buckets_per_window);
@@ -203,7 +192,7 @@ void Simulator::generate() {
                 }
                 if (type == M) {
                     if (d < depth - 1) {
-                        measurements.push(q);
+                        measurements.push(M_OP(q, type));
                         measuring = true;
                     }
                     else
@@ -269,16 +258,24 @@ size_t Simulator::parse(Statistics& stats, const char* path) {
     while (str < circuit_io.eof) {
         eatWS(str);
         if (*str == '\0') break;
-        if (*str == '#' && !max_qubits) {
-            uint32 sign = 0;
-            max_qubits = toInteger(++str, sign);
-            if (sign) LOGERROR("number of qubits in header is negative.");
-            LOG2(1, "Found header %s%zd%s.", CREPORTVAL, max_qubits, CNORMAL);
-        }
-        else if (*str == '#') {
-            eatLine(str);
+        if (*str == '#') {
+            // Only treat as a qubit-count header if the token after '#' and
+            // optional whitespace is a digit: e.g. "# 26".  STIM files use
+            // '#' for human-readable comments, so we must not blindly
+            // call toInteger on lines like "# Generated ..."
+            char* start = str + 1;
+            eatWS(start);
+            if (!max_qubits && isDigit(*start)) {
+                str = start;
+                uint32 sign = 0;
+                max_qubits = toInteger(str, sign);
+                if (sign) LOGERROR("number of qubits in header is negative.");
+                LOG2(1, "Found header %s%zd%s.", CREPORTVAL, max_qubits, CNORMAL);
+            } else {
+                eatLine(str);
+            }
             continue;
-        }
+        }       
         circuit_io.read_gate(str);  
     }
     if (!max_qubits)
@@ -327,9 +324,9 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
             const qubit_t c = gate.c;
             const qubit_t t = gate.t;
             const bool is_c_unlocked = !locked[c];
-            if (gate.type == M) {
+            if (isMeasurement(gate.type)) {
                 circuit_io.circuit_queue.pop_front();
-                measurements.push(c);
+                measurements.push(M_OP(c, gate.type));
                 measuring = true;
                 if (is_c_unlocked) {
                     locked_qubits.push(c);
@@ -355,7 +352,7 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
                 const bool is_t_unlocked = !locked[t];
                 if (is_c_unlocked && is_t_unlocked) {
                     circuit_io.circuit_queue.pop_front();
-                    assert(gate.type != M);
+                    assert(gate.type != M && gate.type != MR);
                     circuit.addGate(max_depth, gate.type, 2, c, t);
                     locked_qubits.push(c);
                     locked_qubits.push(t);

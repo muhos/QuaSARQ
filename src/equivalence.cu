@@ -132,7 +132,7 @@ namespace QuaSARQ {
             if (options.sync) {
                 LOG2(1, "done in %f ms", stime);
             }
-            else LOGDONE(1, 3);
+            else LOGDONE(1, 4);
 
 #endif // End of debug/release mode.
 

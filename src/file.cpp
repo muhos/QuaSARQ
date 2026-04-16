@@ -12,7 +12,7 @@ bool Simulator::open_file(FILE*& file, arg_t file_path, arg_t file_mode) {
 			LOG2(1, "does not exist."); 
 			return false; 
 		}
-		LOGDONE(1, 3);
+		LOGDONE(1, 4);
     }
 	return true;
 }

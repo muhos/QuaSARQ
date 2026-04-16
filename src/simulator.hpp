@@ -27,7 +27,7 @@ namespace QuaSARQ {
         CircuitIO                       circuit_io;
         string                          circuit_path;
         byte_t                          circuit_mode;
-        Vec<qubit_t, size_t>            measurements;
+        Vec<M_OP, size_t>               measurements;
         Vec<qubit_t, size_t>            shuffled;
         Vec<byte_t, size_t>             locked;
         DeviceAllocator                 gpu_allocator;
@@ -99,6 +99,7 @@ namespace QuaSARQ {
         // Do measurements in a single simulation step.
         void transpose(const bool& row_major, const cudaStream_t& stream);
         void reset_pivots(const size_t& num_pivots, const cudaStream_t& stream);
+        void reset_signs(const size_t& num_gates, const cudaStream_t& stream);
         void find_random_measures(const size_t& num_pivots, const cudaStream_t& stream);
         void compact_targets(const qubit_t& qubit, const cudaStream_t& stream);
         void inject_swap(const qubit_t& qubit, const sign_t& rbit, const cudaStream_t& stream);
@@ -113,6 +114,7 @@ namespace QuaSARQ {
         void print_progress(const size_t& p, const depth_t& depth_level, const bool& passed = false);
         void print_tableau(const Tableau& tab, const depth_t& depth_level = MAX_DEPTH, const bool& reversed = false, const bool& prefix = false);
         void print_paulis(const Tableau& tab, const depth_t& depth_level = MAX_DEPTH, const bool& reversed = false);
+        void print_signs(const Tableau& tab, const depth_t& depth_level);
         void print_gates(const DeviceCircuit& gates, const gate_ref_t& num_gates, const depth_t& depth_level);
         void print_measurements(const depth_t& depth_level);
 

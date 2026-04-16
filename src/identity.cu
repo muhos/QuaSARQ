@@ -107,7 +107,7 @@ namespace QuaSARQ {
             double itime = cutimer.elapsed();
             LOG2(1, "done in %f ms.", itime);
         }
-        else LOGDONE(1, 3);
+        else LOGDONE(1, 4);
         if (options.check_identity) {
             LOGN2(1, " Checking identity.. ");
             if (!check_identity(tableau, offset_per_partition, num_qubits_per_partition, measuring)) {
