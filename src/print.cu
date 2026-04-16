@@ -404,7 +404,7 @@ namespace QuaSARQ {
         LOGHEADER(0, 3, "Measurements");
         SETCOLOR(CLBLUE, stdout);
         const size_t MAX_ROW = 32;
-        PRINT("record(0:%lld): ", (num_qubits < MAX_ROW ? num_qubits : MAX_ROW) - 1);
+        PRINT("rec(0:%lld): ", (num_qubits < MAX_ROW ? num_qubits : MAX_ROW) - 1);
         tableau.copy_to_host(nullptr, nullptr, &record);
         const size_t offset = tableau.num_qubits_padded();
         for (size_t i = 0; i < num_qubits; ++i) {

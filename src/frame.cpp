@@ -25,7 +25,7 @@ void Framing::sample() {
     timer.start();
     LOGHEADER(1, 4, "Simulation");
     if (options.progress_en) print_progress_header();
-    recorder.alloc(tableau, gpu_allocator);
+    samples_record.alloc(tableau, gpu_allocator);
     gpu_circuit.reset_circuit_offset(0);
     for (depth_t d = 0; d < depth && !timeout; d++)
         step(d);

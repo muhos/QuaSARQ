@@ -5,7 +5,7 @@
 namespace QuaSARQ {
 
     void print_record(
-        const  Table&  record, 
+        const  Table&  samples, 
         const  size_t  num_qubits,
         const  size_t  num_shots) {
         string qidx = "q%-4lld";
@@ -15,8 +15,8 @@ namespace QuaSARQ {
             PRINT(qidx.c_str(), int64(q));
             int count = 0;
             for (size_t s = 0; s < num_shots; s++) {
-                const size_t word_idx = q * record.num_words_minor() + WORD_OFFSET(s);
-                const word_std_t& word = record[word_idx];
+                const size_t word_idx = q * samples.num_words_minor() + WORD_OFFSET(s);
+                const word_std_t& word = samples[word_idx];
                 const word_std_t bitpos = s & WORD_MASK;
                 const int bit = (word >> bitpos) & 1;
                 count += bit;
@@ -35,7 +35,7 @@ namespace QuaSARQ {
         const   uint64          seed,
                 Table *			xs, 
                 Table *			zs,
-                Table *			record) 
+                Table *			samples) 
     {
         curandStatePhilox4_32_10_t st;
         for_parallel_y(i, num_gates) {
@@ -47,7 +47,7 @@ namespace QuaSARQ {
                 const size_t q = gate.wires[0];
                 assert(q != INVALID_QUBIT);
                 const size_t q_word_idx = q * num_words_minor + w;
-                (*record)[q_word_idx] ^= (*xs)[q_word_idx];
+                (*samples)[q_word_idx] ^= (*xs)[q_word_idx];
                 randomize_word(
                     (*zs)[q_word_idx], 
                     st, 
@@ -77,7 +77,7 @@ namespace QuaSARQ {
             tableau.num_words_minor(),
             options.seed,
             XZ_TABLE(tableau),
-            recorder.device
+            samples_record.device
         );
         stats.circuit.measure_stats.random += num_gates_per_window;
         stats.circuit.measure_stats.definite = 0;
@@ -91,12 +91,12 @@ namespace QuaSARQ {
     }
 
     void Framing::print() {
-        if (!options.print_record) return;
+        if (!options.print_sample) return;
 		if (!options.sync) SYNCALL;
 		LOGHEADER(1, 4, "Sampling");
-        recorder.copy();
+        samples_record.copy();
         print_record(
-            recorder.host, 
+            samples_record.host, 
             num_qubits, 
             num_shots
         );

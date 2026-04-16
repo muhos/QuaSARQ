@@ -6,16 +6,16 @@
 
 namespace QuaSARQ {
 
-    struct Recorder {
+    struct Samples {
         Table *device;
         word_t *device_data;
         Table  host;
 
-        Recorder() : device(nullptr), device_data(nullptr) {}
-        ~Recorder() {
+        Samples() : device(nullptr), device_data(nullptr) {}
+        ~Samples() {
             device = nullptr;
             device_data = nullptr;
-            if (options.print_record) {
+            if (options.print_sample) {
                 host.destroy();
             }
         }
@@ -26,7 +26,7 @@ namespace QuaSARQ {
             Table tmp;
             tmp.alloc(device_data, tableau.num_qubits_padded(), tableau.num_words_major(), tableau.num_words_minor());
             CHECK(cudaMemcpyAsync(device, &tmp, sizeof(Table), cudaMemcpyHostToDevice));
-            if (options.print_record)
+            if (options.print_sample)
                 host.alloc_host(tableau.num_qubits_padded(), tableau.num_words_major(), tableau.num_words_minor());
         }
 

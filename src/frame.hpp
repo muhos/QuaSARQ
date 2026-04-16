@@ -1,14 +1,14 @@
 #pragma once
 
 #include "simulator.hpp"
-#include "record.cuh"
+#include "samples.cuh"
 
 namespace QuaSARQ {
 
 	class Framing : public Simulator {
 
 		size_t num_shots;
-        Recorder recorder;
+        Samples samples_record;
         
 	public:
 
