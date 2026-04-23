@@ -7,7 +7,12 @@
 namespace QuaSARQ {
 
 
+#if defined(WORD_SIZE_64)
+	// Enable vectorization of cells. Saves 1% of total instructions.
+	struct __align__(16) PrefixCell {
+#else
 	struct PrefixCell {
+#endif
         word_std_t x, z;
 
 		INLINE_ALL 

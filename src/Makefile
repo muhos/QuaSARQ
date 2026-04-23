@@ -103,8 +103,10 @@ GENCODE_FLAGS := -arch=native
 # target rules
 
 CPPOBJEXT := o
-CUOBJEXT  := cuda.o 
+CUOBJEXT  := cuda.o
 BUILD_DIR := ../build
+PTX_DIR   := ptx
+PTXEXT    := ptx
 
 mainsrc   := main
 cusrc     := $(sort $(wildcard *.cu))
@@ -112,6 +114,7 @@ allcppsrc := $(sort $(wildcard *.cpp))
 cppsrc    := $(filter-out $(mainsrc).cpp,$(allcppsrc))
 cuobj     := $(patsubst %.cu,%.$(CUOBJEXT),$(cusrc))
 cppobj    := $(patsubst %.cpp,%.$(CPPOBJEXT),$(cppsrc))
+ptxfiles  := $(patsubst %.cu,$(PTX_DIR)/%.$(PTXEXT),$(cusrc))
 
 ifneq ($(MAKECMDGOALS),clean)
 	ifeq ($(cusrc),)
@@ -128,8 +131,13 @@ ifneq ($(MAKECMDGOALS),clean)
 	endif
 endif
 
+ifeq ($(ptx),1)
+all: $(ptxfiles)
+else
 all: $(BIN)
-	
+endif
+
+
 $(LIB): $(cuobj) $(cppobj)
 	@$(ARCHIVE) "done" $@
 	@ar rc $@ $+
@@ -153,6 +161,13 @@ $(mainsrc).$(CPPOBJEXT): $(mainsrc).cpp
 	@$(PROGRESS) $<
 	@$(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $<
 
+$(PTX_DIR):
+	@mkdir -p $@
+
+$(PTX_DIR)/%.$(PTXEXT): %.cu | $(PTX_DIR)
+	@$(PROGRESS) $<
+	@$(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) --ptx -o $@ $<
+
 install: all
 	@$(INSTALL) $(BIN)
 	@mkdir -p $(BUILD_DIR)
@@ -161,7 +176,7 @@ install: all
 	@$(DONE)
 
 clean:
-	rm -f *.$(CPPOBJEXT) *.$(CUOBJEXT) $(LIB) $(BIN) 
-	rm -rf $(BUILD_DIR)
-	
-.PHONY: all clean
+	rm -f *.$(CPPOBJEXT) *.$(CUOBJEXT) $(LIB) $(BIN)
+	rm -rf $(BUILD_DIR) $(PTX_DIR)
+
+.PHONY: all clean install

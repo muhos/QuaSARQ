@@ -122,7 +122,7 @@ namespace QuaSARQ {
         const   size_t              num_words_minor,
         const   size_t              max_blocks,
 		const   size_t              max_sub_blocks,
-        const   size_t              pass_1_blocksize) {
+        const   size_t              pass_1_log2_blocksize) {
 
         for_parallel_y(w, num_words_minor) {
 
@@ -131,9 +131,10 @@ namespace QuaSARQ {
                 word_std_t z = 0;
                 word_std_t x = 0;
                 
-                if ((tid / pass_1_blocksize) > 0) {
-                    const size_t sub_bid = PREFIX_SUBINTERMEDIATE_INDEX(w, (tid / pass_1_blocksize));
-                    assert((tid / pass_1_blocksize) < max_sub_blocks);
+                const size_t pass_1_bid = tid >> pass_1_log2_blocksize;
+                if (pass_1_bid > 0) {
+                    const size_t sub_bid = PREFIX_SUBINTERMEDIATE_INDEX(w, pass_1_bid);
+                    assert(pass_1_bid < max_sub_blocks);
                     READ_SUBBLOCK_PREFIX(sub_bid, z, x);
                 }
 
@@ -250,7 +251,7 @@ namespace QuaSARQ {
             GENERATE_SWITCH_FOR_CALL(CALL_PREFIX_PASS_1_FOR_BLOCK)
         }
 
-    double Prefix::scan_blocks(const size_t& num_blocks, const size_t& inject_pass_1_blocksize, const cudaStream_t& stream) {
+    double Prefix::scan_blocks(const size_t& num_blocks, const cudaStream_t& stream) {
         assert(num_blocks <= max_intermediate_blocks);
         assert(nextPow2(num_blocks) == num_blocks);
         dim3 currentblock, currentgrid;
@@ -267,7 +268,8 @@ namespace QuaSARQ {
             TRIM_Y_BLOCK_IN_DEBUG_MODE(bestblockprefixsingle, bestgridprefixsingle, num_words_minor);
             TRIM_GRID_IN_2D(bestblockprefixsingle, bestgridprefixsingle, num_words_minor, y);
             currentblock = bestblockprefixsingle, currentgrid = bestgridprefixsingle;
-            LOGN2(2, " Running pass-x kernel scanning %lld chunks with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", num_blocks, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
+            LOGN2(2, " Running pass-x kernel scanning %lld chunks with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", 
+                num_blocks, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
             if (options.sync) cutimer.start(stream);
             call_single_pass_kernel(
                 SINGLE_PASS_INPUT,
@@ -301,8 +303,10 @@ namespace QuaSARQ {
             currentblock = bestblockprefixprepare, currentgrid = bestgridprefixprepare;
             FORCE_TRIM_GRID_IN_XY(num_blocks, num_words_minor);
             const size_t pass_1_blocksize = currentblock.x;
+            const size_t pass_1_log2_blocksize = ffs(pass_1_blocksize) - 1;
             const size_t pass_1_gridsize = ROUNDUP(num_blocks, pass_1_blocksize);
-            LOGN2(2, "  Running pass-1 kernel scanning %lld words with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", num_blocks, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
+            LOGN2(2, "  Running pass-1 kernel scanning %lld words with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", 
+                num_blocks, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
             if (options.sync) cutimer.start(stream);
             call_scan_blocks_pass_1_kernel(
                 MULTI_PASS_INPUT,
@@ -334,7 +338,8 @@ namespace QuaSARQ {
             TRIM_Y_BLOCK_IN_DEBUG_MODE(bestblockprefixsingle, bestgridprefixsingle, num_words_minor);
             TRIM_GRID_IN_2D(bestblockprefixsingle, bestgridprefixsingle, num_words_minor, y);
             currentblock = bestblockprefixsingle, currentgrid = bestgridprefixsingle;
-            LOGN2(2, "  Running pass-x kernel scanning %lld chunks with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", pass_1_gridsize, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
+            LOGN2(2, "  Running pass-x kernel scanning %lld chunks with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", 
+                pass_1_gridsize, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
             if (options.sync) cutimer.start(stream);
             call_single_pass_kernel(
                 SINGLE_PASS_SUBINPUT,
@@ -373,7 +378,7 @@ namespace QuaSARQ {
                 num_words_minor, 
                 max_intermediate_blocks,
                 max_sub_blocks,
-                pass_1_blocksize
+                pass_1_log2_blocksize
             );
             if (options.sync) {
                 LASTERR("failed to scan in pass-2 kernel");
@@ -431,6 +436,7 @@ namespace QuaSARQ {
         }
         if (options.tune_prefixfinal) {
             SYNCALL;
+            const size_t pass_1_log2_blocksize = ffs(bestblockprefixprepare.x) - 1;
             tune_prefix_pass_2(
                 scan_blocks_pass_2, 
                 bestblockprefixfinal, bestgridprefixfinal,
@@ -441,7 +447,7 @@ namespace QuaSARQ {
                 num_words_minor,
                 max_intermediate_blocks,
                 max_sub_blocks,
-                bestblockprefixprepare.x
+                pass_1_log2_blocksize
             );
             SYNCALL;
         }

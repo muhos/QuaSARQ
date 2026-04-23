@@ -112,7 +112,7 @@ namespace QuaSARQ {
 		#endif
 		void 		alloc			(const Tableau& input, const size_t& config_qubits);
 		void 		resize			(const Tableau& input);
-		double 		scan_blocks		(const size_t& num_blocks, const size_t& inject_pass_1_blocksize, const cudaStream_t& stream);
+		double 		scan_blocks		(const size_t& num_blocks, const cudaStream_t& stream);
 		double 		scan_warp 		(Tableau& input, const pivot_t* pivots, const size_t& active_targets, const cudaStream_t& stream);
 		double 		scan_block 		(Tableau& input, const pivot_t* pivots, const size_t& active_targets, const cudaStream_t& stream);
 		double 		scan_large		(Tableau& input, const pivot_t* pivots, const size_t& active_targets, const cudaStream_t& stream);
@@ -186,7 +186,7 @@ namespace QuaSARQ {
         const   size_t&             num_words_minor,
         const   size_t&             num_qubits_padded,
         const   size_t&             max_blocks,
-        const   size_t&             pass_1_blocksize,
+        const   size_t&             pass_1_log2_blocksize,
         const   dim3&               currentblock,
         const   dim3&               currentgrid,
         const   cudaStream_t&       stream);
@@ -232,7 +232,7 @@ namespace QuaSARQ {
 		const 	size_t& 		num_words_minor,
 		const 	size_t& 		max_blocks,
 		const 	size_t& 		max_sub_blocks,
-		const 	size_t& 		pass_1_blocksize);
+		const 	size_t& 		pass_1_log2_blocksize);
 
     void tune_inject_pass_1(
 		        dim3&           bestBlock, 
@@ -263,6 +263,6 @@ namespace QuaSARQ {
 		const 	size_t& 		num_words_minor,
 		const 	size_t& 		num_qubits_padded,
 		const 	size_t& 		max_blocks,
-		const 	size_t& 		pass_1_blocksize);
+		const 	size_t& 		pass_1_log2_blocksize);
 	
 }

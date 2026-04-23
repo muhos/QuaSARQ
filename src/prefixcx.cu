@@ -115,7 +115,7 @@ namespace QuaSARQ {
         const   size_t              num_words_minor,
         const   size_t              num_qubits_padded,
         const   size_t              max_blocks,
-        const   size_t              pass_1_blocksize)
+        const   size_t              pass_1_log2_blocksize)
     { 
         assert(blockDim.x == 1);
         word_std_t * __restrict__ xs = inv_xs->words();
@@ -134,7 +134,7 @@ namespace QuaSARQ {
                 READ_GLOBAL_PREFIX(word_idx, zc_xor_prefix, xc_xor_prefix);
 
                 // Compute final prefixes and hence final {x,z}'c = {x,z}'c ^ {x,z}'t expressions.
-                const size_t bid = PREFIX_INTERMEDIATE_INDEX(w, (tid_x / pass_1_blocksize));
+                const size_t bid = PREFIX_INTERMEDIATE_INDEX(w, (tid_x >> pass_1_log2_blocksize));
                 XOR_FROM_INTERMEDIATE_PREFIX(bid, zc_xor_prefix, xc_xor_prefix);
 
                 compute_local_sign_per_block(local_destab_sign, zs[t_stab], zc_xor_prefix, zs[c_stab], zs[t_destab]);
@@ -160,7 +160,7 @@ namespace QuaSARQ {
         const   size_t              num_words_minor,
         const   size_t              num_qubits_padded,
         const   size_t              max_blocks,
-        const   size_t              pass_1_blocksize)
+        const   size_t              pass_1_log2_blocksize)
     { 
         assert(BLOCKX == blockDim.x);
         assert(BLOCKY == blockDim.y);
@@ -204,7 +204,7 @@ namespace QuaSARQ {
                     READ_GLOBAL_PREFIX(word_idx, zc_xor_prefix, xc_xor_prefix);
 
                     // Compute final prefixes and hence final {x,z}'c = {x,z}'c ^ {x,z}'t expressions.
-                    const size_t bid = PREFIX_INTERMEDIATE_INDEX(w, (tid_x / pass_1_blocksize));
+                    const size_t bid = PREFIX_INTERMEDIATE_INDEX(w, (tid_x >> pass_1_log2_blocksize));
                     XOR_FROM_INTERMEDIATE_PREFIX(bid, zc_xor_prefix, xc_xor_prefix);
 
                     compute_local_sign_per_block(local_destab_sign, zs[t_stab], zc_xor_prefix, zs[c_stab], zs[t_destab]);
@@ -236,7 +236,7 @@ namespace QuaSARQ {
                 num_words_minor, \
                 num_qubits_padded, \
                 max_blocks, \
-                pass_1_blocksize\
+                pass_1_log2_blocksize\
             )
 
     #define CALL_INJECTCX_PASS_2_FOR_BLOCK(X, Y) \
@@ -251,7 +251,7 @@ namespace QuaSARQ {
                 num_words_minor, \
                 num_qubits_padded, \
                 max_blocks, \
-                pass_1_blocksize\
+                pass_1_log2_blocksize\
             )
 
 	void call_injectcx_pass_1_kernel(
@@ -278,7 +278,7 @@ namespace QuaSARQ {
         const   size_t&             num_words_minor,
         const   size_t&             num_qubits_padded,
         const   size_t&             max_blocks,
-        const   size_t&             pass_1_blocksize,
+        const   size_t&             pass_1_log2_blocksize,
         const   dim3&               currentblock,
         const   dim3&               currentgrid,
         const   cudaStream_t&       stream) {
@@ -304,6 +304,7 @@ namespace QuaSARQ {
         currentblock = bestblockinjectprepare, currentgrid = bestgridinjectprepare;
         FORCE_TRIM_GRID_IN_XY(active_targets, num_words_minor);
         const size_t pass_1_blocksize = currentblock.x;
+        const size_t pass_1_log2_blocksize = ffs(pass_1_blocksize) - 1;
         const size_t pass_1_gridsize = ROUNDUP(active_targets, pass_1_blocksize);
         if (pass_1_gridsize > max_intermediate_blocks)
             LOGERROR("too many blocks for intermediate arrays");
@@ -344,7 +345,7 @@ namespace QuaSARQ {
         }
 
         // Intermeditae scan of blocks resulted in pass 1.
-        elapsed += scan_blocks(nextPow2(pass_1_gridsize), pass_1_blocksize, stream);
+        elapsed += scan_blocks(nextPow2(pass_1_gridsize), stream);
 
         // Verify intermediate-pass prefix.
         if (options.check_measurement) {
@@ -373,7 +374,7 @@ namespace QuaSARQ {
             num_words_minor,
             num_qubits_padded,
             max_intermediate_blocks,
-            pass_1_blocksize,
+            pass_1_log2_blocksize,
             currentblock,
             currentgrid,
             stream
@@ -427,6 +428,7 @@ namespace QuaSARQ {
         if (options.tune_injectfinal) {
             SYNCALL;
             const size_t pass_1_blocksize = bestblockinjectprepare.x;
+            const size_t pass_1_log2_blocksize = ffs(pass_1_blocksize) - 1;
             tune_inject_pass_2(
                 bestblockinjectfinal, bestgridinjectfinal,
                 2 * sizeof(word_std_t),
@@ -440,7 +442,7 @@ namespace QuaSARQ {
                 num_words_minor, 
                 num_qubits_padded,
                 max_intermediate_blocks,
-                pass_1_blocksize
+                pass_1_log2_blocksize
             );
             SYNCALL;
         }

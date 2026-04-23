@@ -826,7 +826,7 @@ namespace QuaSARQ {
 		const 	size_t& 		num_words_minor,
 		const 	size_t& 		max_blocks,
 		const 	size_t& 		max_sub_blocks,
-		const 	size_t& 		pass_1_blocksize) 
+		const 	size_t& 		pass_1_log2_blocksize) 
 	{
 		const char* opname = "prefix pass 2";
 		const size_t shared_element_bytes = 0;
@@ -837,7 +837,7 @@ namespace QuaSARQ {
 			num_words_minor, 
 			max_blocks, 
 			max_sub_blocks,
-			pass_1_blocksize);
+			pass_1_log2_blocksize);
 	}
 
 	void tune_inject_pass_1(
@@ -886,7 +886,7 @@ namespace QuaSARQ {
 		const 	size_t& 		num_words_minor,
 		const 	size_t& 		num_qubits_padded,
 		const 	size_t& 		max_blocks,
-		const 	size_t& 		pass_1_blocksize) 
+		const 	size_t& 		pass_1_log2_blocksize) 
 	{
 		const char* opname = "inject-cx pass 2";
 		const bool shared_size_yextend = false;
@@ -902,7 +902,7 @@ namespace QuaSARQ {
 			num_words_minor,
 			num_qubits_padded,
 			max_blocks,
-			pass_1_blocksize
+			pass_1_log2_blocksize
 		);
 		initThreadsPerBlockX = _initThreadsPerBlockX;
 	}
