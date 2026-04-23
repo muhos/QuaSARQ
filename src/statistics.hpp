@@ -88,6 +88,7 @@ namespace QuaSARQ {
             double injectx;
             double injectcx;
             double resetsigns;
+            double recordsigns;
         };
 
         struct {

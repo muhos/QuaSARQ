@@ -4,7 +4,7 @@
 
 namespace QuaSARQ {
 
-    void print_record(
+    void print_samples(
         const  Table&  samples, 
         const  size_t  num_qubits,
         const  size_t  num_shots) {
@@ -95,7 +95,7 @@ namespace QuaSARQ {
 		if (!options.sync) SYNCALL;
 		LOGHEADER(1, 4, "Sampling");
         samples_record.copy();
-        print_record(
+        print_samples(
             samples_record.host, 
             num_qubits, 
             num_shots

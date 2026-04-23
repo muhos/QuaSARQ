@@ -3,6 +3,7 @@
 #include "locker.cuh"
 #include "tableau.cuh"
 #include "circuit.cuh"
+#include "recorder.cuh"
 #include "prefix.cuh"
 #include "timer.hpp"
 #include "vector.hpp"
@@ -35,8 +36,8 @@ namespace QuaSARQ {
         Locker                          locker;
         Tableau                         tableau;
         Tableau                         inv_tableau;
-        Signs                           record;
-        Pivoting                        pivoting; 
+        Pivoting                        pivoting;
+        MeasurementRecorder             recorder;
         MeasurementChecker              mchecker;
         Prefix                          prefix;
         Statistics                      stats;
@@ -100,6 +101,7 @@ namespace QuaSARQ {
         void transpose(const bool& row_major, const cudaStream_t& stream);
         void reset_pivots(const size_t& num_pivots, const cudaStream_t& stream);
         void reset_signs(const size_t& num_gates, const depth_t& depth_level, const cudaStream_t& stream);
+        void record_measurements(const size_t& num_gates, const depth_t& depth_level, const cudaStream_t& stream);
         void find_random_measures(const size_t& num_pivots, const cudaStream_t& stream);
         void compact_targets(const qubit_t& qubit, const cudaStream_t& stream);
         void inject_swap(const qubit_t& qubit, const sign_t& rbit, const cudaStream_t& stream);
@@ -116,7 +118,6 @@ namespace QuaSARQ {
         void print_paulis(const Tableau& tab, const depth_t& depth_level = MAX_DEPTH, const bool& reversed = false);
         void print_signs(const Tableau& tab, const depth_t& depth_level);
         void print_gates(const DeviceCircuit& gates, const gate_ref_t& num_gates, const depth_t& depth_level);
-        void print_measurements(const depth_t& depth_level);
 
         // Timeout.
         static void handler_timeout(int) {

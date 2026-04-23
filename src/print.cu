@@ -398,28 +398,6 @@ namespace QuaSARQ {
 		fflush(stdout);
 	}
 
-	void Simulator::print_measurements(const depth_t& depth_level) {
-		if (!options.print_measurements) return;
-		if (!options.sync) SYNCALL;
-        LOGHEADER(0, 3, "Measurements");
-        SETCOLOR(CLBLUE, stdout);
-        const size_t MAX_ROW = 32;
-        PRINT("rec(0:%lld): ", (num_qubits < MAX_ROW ? num_qubits : MAX_ROW) - 1);
-        tableau.copy_to_host(nullptr, nullptr, &record);
-        const size_t offset = tableau.num_qubits_padded();
-        for (size_t i = 0; i < num_qubits; ++i) {
-            const size_t q = offset + i;
-            const sign_t sign = record[WORD_OFFSET(q)] & sign_t(BITMASK_GLOBAL(q)) ? 1 : 0;
-            if ((i + 1) % MAX_ROW == 0 && i + 1 < num_qubits) {
-                PRINT("\nrecord(%lld:%lld): ", i + 1, i + MAX_ROW);
-            }
-            PRINT("%d ", sign);       
-        }
-        LOG0("");
-        SETCOLOR(CNORMAL, stdout);
-		fflush(stdout);
-	}
-
     void Simulator::print_progress_header() {
         LOGN2(1, "   %-10s    %-10s    %-10s    %15s          %-9s", 
                 "Partition", "Step", "Gates", "Measurements", "Time (s)");
