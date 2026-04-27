@@ -67,7 +67,7 @@ ifeq ($(debug),1)
 else  ifeq ($(assert),1)
       NVCCFLAGS += -O3 
 else
-      NVCCFLAGS += -O3 -DNDEBUG -diag-suppress 68 -diag-suppress 186 -diag-suppress 20091
+      NVCCFLAGS += -O3 -DNDEBUG -diag-suppress 68 -diag-suppress 186 -diag-suppress 20091 -diag-suppress 20011
 endif
 
 # no colors

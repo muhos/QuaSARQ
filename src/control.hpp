@@ -8,7 +8,7 @@
 namespace QuaSARQ {
 
 	size_t	sysMemUsed				();
-	size_t	getAvailSysMem			();
+	void	getSysMem				(size_t& free_mem, size_t& total_mem);
 	void	getBuildInfo			(const int& verbose);
 	void	getCPUInfo				(const int& verbose);
 	int		getGPUInfo				(const int& verbose);

@@ -38,17 +38,22 @@ namespace QuaSARQ {
 		return memUsed;
 	}
 
-	size_t getAvailSysMem()
+	void getSysMem(size_t& free_mem, size_t& total_mem)
 	{
+		free_mem = total_mem = 0;
 #if defined(__linux__) || defined(__CYGWIN__)
-		long pages = sysconf(_SC_PHYS_PAGES);
-		long page_size = sysconf(_SC_PAGE_SIZE);
-		return pages * page_size;
+		struct sysinfo si;
+		if (sysinfo(&si) == 0) {
+			free_mem  = (size_t)si.freeram  * si.mem_unit;
+			total_mem = (size_t)si.totalram * si.mem_unit;
+		}
 #elif defined(_WIN32)
 		MEMORYSTATUSEX memInfo;
 		memInfo.dwLength = sizeof(MEMORYSTATUSEX);
-		GlobalMemoryStatusEx(&memInfo);
-		return memInfo.ullAvailPhys;
+		if (GlobalMemoryStatusEx(&memInfo)) {
+			free_mem  = (size_t)memInfo.ullAvailPhys;
+			total_mem = (size_t)memInfo.ullTotalPhys;
+		}
 #endif
 	}
 
@@ -165,8 +170,9 @@ namespace QuaSARQ {
 		while(isSpace(*cpu)) cpu++;
 		LOG2(verbose, "Available CPU: %s%s%s", CREPORTVAL, cpu, CNORMAL);
 #endif
-		size_t _free = getAvailSysMem();
-		LOG2(verbose, "Available system memory: %s%zd GB%s", CREPORTVAL, _free / GB, CNORMAL);
+		size_t _free, _total;
+		getSysMem(_free, _total);
+		LOG2(verbose, "Available System memory: %s%zd GB%s", CREPORTVAL, _free / GB, CNORMAL);
 		fflush(stdout);
 	}
 

@@ -181,7 +181,7 @@ namespace QuaSARQ {
 
     INLINE_ALL void __logchar(const char* s, FILE* f = nullptr) {
         if (f == nullptr)
-            LOGGPU(s);
+            LOGGPU("%s", s);
         else {
             while (*s) fputc(*s++, f);
         }

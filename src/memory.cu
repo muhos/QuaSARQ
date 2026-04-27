@@ -1,6 +1,7 @@
 
 #include "memory.cuh"
 #include "malloc.hpp"
+#include "control.hpp"
 
 using namespace QuaSARQ;
 
@@ -83,9 +84,6 @@ bool DeviceAllocator::create_gpu_pool(const size_t& limit) {
 	assert(_gpool.mem == nullptr);
 	_glimit = align_up(limit);
 	cudaMemGetInfo(&_gfree, &_gtot);
-	// Assume that CPU free memory is at least
-	// as much as the GPU memory.
-	_cfree = _gfree;
 	if (_gfree > GPU_PENALTY)
 		_gfree -= GPU_PENALTY;
 	if (_glimit > _gfree) {
@@ -152,7 +150,7 @@ bool DeviceAllocator::create_cpu_pool(const size_t& limit) {
 	}
 	assert(_cpool.mem == nullptr);
 	_climit = align_up(limit + ALIGNMENT * KB);
-	if (!_cfree) cudaMemGetInfo(&_cfree, &_ctot);
+	getSysMem(_cfree, _ctot);
 	if (_cfree > CPU_PENALTY)
 		_cfree -= CPU_PENALTY;
 	if (_climit > _cfree) {
@@ -194,7 +192,7 @@ bool DeviceAllocator::resize_cpu_pool(const size_t& new_size) {
 		_cpool.off = _cpool.cap = 0;
 	}
 	// Allocate new memory
-	if (new_size > _gfree) {
+	if (new_size > _cfree) {
 		LOG2(1, "failed due to insufficient memory.");
 	}
 	_cpool.cap = new_size;
