@@ -4,7 +4,7 @@
 QuaSARQ stands for Quantum Simulation and Automated Reasoning. 
 It is a parallel simulator of quantum stabilizer circuits capable of harnessing NVIDIA CUDA-enabled GPUs to accelerate the simulation of stabilizer gates. 
 
-# Build
+## Build
 To build the simulator, make sure you have a CUDA-capable GPU with pre-installed NVIDIA driver and CUDA toolkit.
 
 For installing CUDA v12, run the following commands on Ubuntu 24.04:<br>
@@ -20,14 +20,14 @@ installation guide in https://docs.nvidia.com/cuda/.
 Now, the simulator can be built via the command `cd src && make && make install`.<br>
 The `quasarq` binary and the library `libquasarq.a` will be created by default in the `build` directory.<br>
 
-## Debug and Testing
+### Debug and Testing
 Add `assert=1` argument with the make command to enable assertions or `debug=1` to collect debugging information.<br>
 
-# Usage
+## Usage
 The simulator can be used via the command `quasarq [<circuit>.<stim>/<qasm>][<option> ...]`.<br>
 For more options, type `quasarq -h` or `quasarq --helpmore`.
 
-# Simulation Benchmarking
+## Simulation Benchmarking
 QuaSARQ implements two GPU-accelerated simulation modes:
 - **Single-shot simulation**: applies parallel Gaussian elimination via a three-pass prefix-XOR formulation to handle projective measurements, eliminating sequential dependencies present in CPU-based approaches like Stim.
 - **Many-shot sampling**: uses GPU-based Pauli frames to amortize tableau collapse costs across thousands of shots in parallel without repeated Gaussian elimination.
@@ -47,7 +47,7 @@ Check our paper on [arXiv](https://arxiv.org/abs/2603.14641) for full algorithmi
   </tr>
 </table>
 
-# Equivalence Checking
+## Equivalence Checking
 QuaSARQ supports equivalence checking of two stabilizer circuits. For example, `quasarq C1.stim C2.stim` checks if `C1 == C2`. 
 The outcome will be `EQUIVALENT` or otherwise `NOT EQUIVALENT`, indicating the failing initial state.
 Check our paper in [TACAS'25](https://doi.org/10.1007/978-3-031-90660-2_6) for more insights.
