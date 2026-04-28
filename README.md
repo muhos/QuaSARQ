@@ -4,6 +4,8 @@
 QuaSARQ stands for Quantum Simulation and Automated Reasoning. 
 It is a parallel simulator of quantum stabilizer circuits capable of harnessing NVIDIA CUDA-enabled GPUs to accelerate the simulation of stabilizer gates. 
 
+---
+
 ## Build
 To build the simulator, make sure you have a CUDA-capable GPU with pre-installed NVIDIA driver and CUDA toolkit.
 
@@ -23,9 +25,13 @@ The `quasarq` binary and the library `libquasarq.a` will be created by default i
 ### Debug and Testing
 Add `assert=1` argument with the make command to enable assertions or `debug=1` to collect debugging information.<br>
 
+---
+
 ## Usage
 The simulator can be used via the command `quasarq [<circuit>.<stim>/<qasm>][<option> ...]`.<br>
 For more options, type `quasarq -h` or `quasarq --helpmore`.
+
+---
 
 ## Simulation Benchmarking
 QuaSARQ implements two GPU-accelerated simulation modes:
@@ -46,6 +52,8 @@ Check our paper on [arXiv](https://arxiv.org/abs/2603.14641) for full algorithmi
     <td><img src="graphs/heavy_runtime.png" alt="Heavy suite runtime vs Stim (d=100)" width="400"></td>
   </tr>
 </table>
+
+---
 
 ## Equivalence Checking
 QuaSARQ supports equivalence checking of two stabilizer circuits. For example, `quasarq C1.stim C2.stim` checks if `C1 == C2`. 
