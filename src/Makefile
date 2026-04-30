@@ -38,9 +38,15 @@ RELOC	  := -dc
 CCFLAGS   := -std=c++20 -fdiagnostics-show-option
 NVCCFLAGS := -m64 -std=c++20
 
-# Common includes 
-INCLUDES  := -I../../common/inc 
-EXTRALIB  := 
+# Common includes
+INCLUDES  := -I../../common/inc
+EXTRALIB  :=
+
+# cuarena library
+CUARENA_DIR := ../../cuarena
+CUARENA_LIB := $(CUARENA_DIR)/build/libcuarena.a
+INCLUDES    += -I$(CUARENA_DIR)/include
+EXTRALIB    += -L$(CUARENA_DIR)/build -lcuarena
 
 # generated binaries
 
@@ -63,11 +69,14 @@ endif
 
 # debug build flags
 ifeq ($(debug),1)
-      NVCCFLAGS += -g -G -DDEBUG
+      NVCCFLAGS         += -g -G -DDEBUG
+      CUARENA_BUILD_TYPE := Debug
 else  ifeq ($(assert),1)
-      NVCCFLAGS += -O3 
+      NVCCFLAGS         += -O3
+      CUARENA_BUILD_TYPE := Release
 else
-      NVCCFLAGS += -O3 -DNDEBUG -diag-suppress 68 -diag-suppress 186 -diag-suppress 20091 -diag-suppress 20011
+      NVCCFLAGS         += -O3 -DNDEBUG -diag-suppress 68 -diag-suppress 186 -diag-suppress 20091 -diag-suppress 20011
+      CUARENA_BUILD_TYPE := Release
 endif
 
 # no colors
@@ -138,13 +147,22 @@ all: $(BIN)
 endif
 
 
+$(CUARENA_LIB):
+	@cmake -B $(CUARENA_DIR)/build -S $(CUARENA_DIR) \
+	    -DCMAKE_BUILD_TYPE=$(CUARENA_BUILD_TYPE) \
+	    -DCMAKE_CUDA_ARCHITECTURES=native \
+	    -DCUARENA_BUILD_EXAMPLES=OFF \
+	    -DCUARENA_BUILD_TESTS=OFF \
+	    --log-level=WARNING
+	@cmake --build $(CUARENA_DIR)/build --target cuarena -j$$(nproc)
+
 $(LIB): $(cuobj) $(cppobj)
 	@$(ARCHIVE) "done" $@
 	@ar rc $@ $+
 	@ranlib $@
 	@$(DONE)
 
-$(BIN): $(mainsrc).$(CPPOBJEXT) $(LIB)
+$(BIN): $(mainsrc).$(CPPOBJEXT) $(LIB) $(CUARENA_LIB)
 	@$(ENDING) $@
 	@$(NVCC) $(ALL_LDFLAGS) $(GENCODE_FLAGS) -o $@ $(mainsrc).$(CPPOBJEXT) -L$(CUDA_PATH)/lib64 -lcudart -lnvidia-ml -L. -l$(BIN) $(EXTRALIB)
 	@$(DONE)

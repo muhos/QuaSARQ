@@ -124,7 +124,7 @@ void Equivalence::check() {
     // Create two tableaus in GPU memory.
     Power power;
     timer.start();
-    size_t estimated_num_partitions = get_num_partitions(2, num_qubits, winfo.max_window_bytes + other_wininfo.max_window_bytes, gpu_allocator.gpu_capacity());
+    size_t estimated_num_partitions = get_num_partitions(2, num_qubits, winfo.max_window_bytes + other_wininfo.max_window_bytes, gpu_allocator.gpu_available());
     num_partitions = tableau.alloc(num_qubits, 0, winfo.max_window_bytes, false, false, true, estimated_num_partitions);
     other_num_partitions = other_tableau.alloc(other_num_qubits, 0, other_wininfo.max_window_bytes, false, false, true, estimated_num_partitions);
     assert(num_partitions == other_num_partitions);

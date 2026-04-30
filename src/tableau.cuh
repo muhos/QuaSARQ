@@ -94,7 +94,7 @@ namespace QuaSARQ {
             _num_words                  = major_words * num_bits_minor;
             const size_t two_tables     = 2 * num_bits_minor;
             const size_t sign_sz        = sizeof(sign_t);
-            const size_t cap_before     = allocator.gpu_capacity();
+            const size_t cap_before     = allocator.gpu_available();
 
             size_t expected = 2 * _num_words * sizeof(word_std_t)
                             + _num_sign_words * sign_sz
@@ -113,7 +113,7 @@ namespace QuaSARQ {
             }
             if (forced_num_partitions && forced_num_partitions != _num_partitions) {
                 LOGERRORN("insufficient number of partitions.");
-                throw GPU_memory_exception();
+                throw tableau_memory_error();
             }
 
             // Last‐partition padding.
@@ -192,7 +192,7 @@ namespace QuaSARQ {
             LOGN2(1, "Allocating tableau for %s%lld qubits%s.. ",
                 CREPORTVAL, int64(num_qubits), CNORMAL);
 
-            const size_t cap_before = allocator.gpu_capacity();
+            const size_t cap_before = allocator.gpu_available();
             prefix                 |= num_shots > 0;
 
             size_t expected = prepare_memory(
@@ -206,7 +206,7 @@ namespace QuaSARQ {
 
             if (expected > cap_before) {
                 LOGERRORN("insufficient memory during tableau allocation.");
-                throw GPU_memory_exception();
+                throw tableau_memory_error();
             }
 
             // Allocate host‐pinned & device memory.
@@ -226,7 +226,7 @@ namespace QuaSARQ {
 
             bind_and_copy(prefix, alloc_signs);
 
-            const size_t cap_after = allocator.gpu_capacity();
+            const size_t cap_after = allocator.gpu_available();
             const size_t alloced   = cap_before - cap_after;
 
             SYNCALL;
@@ -270,7 +270,7 @@ namespace QuaSARQ {
 
             if (expected > cap_before) {
                 LOGERRORN("insufficient memory during resizing.");
-                throw GPU_memory_exception();
+                throw tableau_memory_error();
             }
 
             bind_and_copy(prefix, alloc_signs);

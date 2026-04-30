@@ -68,12 +68,22 @@ int main(int argc, char** argv) {
 		LOGERRORN("Emergency exit due to something not good, not good at all.");
 		return EXIT_FAILURE;
 	}
-    catch (GPU_memory_exception&) {
+    catch (tableau_memory_error&) {
 		CHECK(cudaDeviceReset());
 		LOGERRORN("Emergency exit due to GPU memory disaster.");
 		return EXIT_FAILURE;
 	}
-	catch (CPU_memory_exception&) {
+	catch (malloc_memory_error&) {
+		CHECK(cudaDeviceReset());
+		LOGERRORN("Emergency exit due to CPU memory disaster.");
+		return EXIT_FAILURE;
+	}
+	catch (cuarena::gpu_memory_error&) {
+		CHECK(cudaDeviceReset());
+		LOGERRORN("Emergency exit due to GPU memory disaster.");
+		return EXIT_FAILURE;
+	}
+	catch (cuarena::cpu_memory_error&) {
 		CHECK(cudaDeviceReset());
 		LOGERRORN("Emergency exit due to CPU memory disaster.");
 		return EXIT_FAILURE;

@@ -2,6 +2,8 @@
 
 #include <cstdio>
 
+namespace QuaSARQ {
+
 #if defined(NCOLORS)
 
 #define UNDERLINE	""
@@ -94,3 +96,5 @@
 
 
 #define SETCOLOR(COLOR, STD) fprintf(STD, "%s", COLOR)
+
+}

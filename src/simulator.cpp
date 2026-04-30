@@ -116,7 +116,7 @@ void Simulator::create_streams(cudaStream_t*& streams) {
 void Simulator::simulate(const size_t& p, const bool& reversed) {
     if (!tableau.size()) {
         LOGERRORN("cannot run simulation without allocating the tableau.");
-        throw GPU_memory_exception();
+        throw tableau_memory_error();
     }
     LOGHEADER(1, 4, "Simulation");
     if (options.progress_en) print_progress_header();
@@ -140,7 +140,7 @@ void check_simulate(Simulator& sim, const size_t& p, const size_t& prev_num_qubi
     DeviceCircuit& gpu_circuit = sim.get_gpu_circuit();
     if (!tableau.size()) {
         LOGERRORN("cannot run simulation without allocating the tableau.");
-        throw GPU_memory_exception();
+        throw tableau_memory_error();
     }
     LOGHEADER(1, 4, "Checking Simulation");
     if (options.progress_en) sim.print_progress_header();
