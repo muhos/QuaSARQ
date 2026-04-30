@@ -86,8 +86,11 @@ void Simulator::initialize() {
     // Creating CPU pool (pinned memory)
     // is done after parsing as it causes
     // degradation to CPU performance.
-    gpu_allocator.create_cpu_pool(winfo.max_window_bytes 
-                                + (num_qubits + 2) * sizeof(pivot_t));
+    gpu_allocator.create_cpu_pool(sizeof(Table) * 3
+                                + winfo.max_window_bytes 
+                                + (num_qubits + 2) * sizeof(pivot_t)
+                                + KB * gpu_allocator.alignment()
+                                );
     if (!options.tuner_en) register_config();
     create_streams(custreams);
     locker.alloc();

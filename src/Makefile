@@ -43,7 +43,7 @@ INCLUDES  := -I../../common/inc
 EXTRALIB  :=
 
 # cuarena library
-CUARENA_DIR := ../../cuarena
+CUARENA_DIR ?= ../../cuarena
 CUARENA_LIB := $(CUARENA_DIR)/build/libcuarena.a
 INCLUDES    += -I$(CUARENA_DIR)/include
 EXTRALIB    += -L$(CUARENA_DIR)/build -lcuarena
@@ -153,8 +153,8 @@ $(CUARENA_LIB):
 	    -DCMAKE_CUDA_ARCHITECTURES=native \
 	    -DCUARENA_BUILD_EXAMPLES=OFF \
 	    -DCUARENA_BUILD_TESTS=OFF \
-	    --log-level=WARNING
-	@cmake --build $(CUARENA_DIR)/build --target cuarena -j$$(nproc)
+		> /dev/null
+	@cmake --build $(CUARENA_DIR)/build --target cuarena -j$$(nproc) > /dev/null
 
 $(LIB): $(cuobj) $(cppobj)
 	@$(ARCHIVE) "done" $@
@@ -196,5 +196,8 @@ install: all
 clean:
 	rm -f *.$(CPPOBJEXT) *.$(CUOBJEXT) $(LIB) $(BIN)
 	rm -rf $(BUILD_DIR) $(PTX_DIR)
+	@echo -n "cleaning up cuarena... "
+	@cmake --build $(CUARENA_DIR)/build --target clean -- --no-print-directory
+	@echo "done"
 
 .PHONY: all clean install

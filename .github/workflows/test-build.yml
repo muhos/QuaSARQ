@@ -11,16 +11,14 @@ on:
 
 jobs:
   build:
-
-    runs-on: ubuntu-24.04
-
+    runs-on: ubuntu-latest
+    container: nvidia/cuda:12.6.0-devel-ubuntu24.04
     steps:
-    - uses: actions/checkout@v3
-    - name: configure
-      run: |
-          wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
-          sudo dpkg -i cuda-keyring_1.1-1_all.deb
-          sudo apt-get update
-          sudo apt-get -y install cuda-toolkit-12-8
-    - name: make check
-      run: make -C src assert=1
+      - uses: actions/checkout@v4
+      - name: Install CMake
+        run: apt-get update && apt-get install -y cmake
+      - name: Build
+        run: |
+            git clone https://github.com/muhos/cuarena.git $HOME/cuarena
+            export CUARENA_DIR=$HOME/cuarena
+            make -C src assert=1
