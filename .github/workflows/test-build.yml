@@ -15,10 +15,11 @@ jobs:
     container: nvidia/cuda:12.6.0-devel-ubuntu24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Install CMake
-        run: apt-get update && apt-get install -y cmake
+      - name: Install dependencies
+        run: apt-get update && apt-get install -y cmake git build-essential
+      - name: Clone cuarena
+        run: git clone https://github.com/muhos/cuarena.git $HOME/cuarena
       - name: Build
         run: |
-            git clone https://github.com/muhos/cuarena.git $HOME/cuarena
             export CUARENA_DIR=$HOME/cuarena
             make -C src assert=1
