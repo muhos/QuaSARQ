@@ -60,7 +60,6 @@ int main(int argc, char** argv) {
 			delete sim;
         }
 
-        LOGRULER(1, '-', RULERLEN);
 		return EXIT_SUCCESS;
 	}
 	catch (std::bad_alloc&) {

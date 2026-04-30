@@ -6,10 +6,19 @@ It is a parallel simulator of quantum stabilizer circuits capable of harnessing 
 
 ---
 
-## Build
-To build the simulator, make sure you have a CUDA-capable GPU with pre-installed NVIDIA driver and CUDA toolkit.
+## Requirements
+- CUDA-capable GPU with a pre-installed NVIDIA driver
+- [CUDA Toolkit](https://docs.nvidia.com/cuda/) v12 or later
+- [cuarena](https://github.com/muhos/cuarena)  GPU memory allocator library
+- CMake 3.18 or later (to build cuarena)
+- GCC/G++ with C++20 support
 
-For installing CUDA v12, run the following commands on Ubuntu 24.04:<br>
+---
+
+## Build
+
+### 1. Install CUDA
+For Ubuntu 24.04:<br>
 
 `wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb`<br>
 `sudo dpkg -i cuda-keyring_1.1-1_all.deb`<br>
@@ -19,11 +28,28 @@ For installing CUDA v12, run the following commands on Ubuntu 24.04:<br>
 The source code is also platform-compatible with Windows and WSL2. To install CUDA on those platforms, follow the
 installation guide in https://docs.nvidia.com/cuda/.
 
-Now, the simulator can be built via the command `cd src && make && make install`.<br>
-The `quasarq` binary and the library `libquasarq.a` will be created by default in the `build` directory.<br>
+### 2. Install QuaSARQ
+
+- Clone the cuarena library before building QuaSARQ:
+
+```
+git clone https://github.com/muhos/cuarena.git /path/to/cuarena
+```
+
+- Build the simulator by pointing it at the cuarena directory:
+
+```
+cd src && make CUARENA_DIR=/path/to/cuarena && make install
+```
+
+Make will build cuarena first then the `quasarq` binary and the library `libquasarq.a` will be created by default in the `build` directory.<br>
 
 ### Debug and Testing
 Add `assert=1` argument with the make command to enable assertions or `debug=1` to collect debugging information.<br>
+
+```
+make CUARENA_DIR=/path/to/cuarena assert=1
+```
 
 ---
 
