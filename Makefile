@@ -39,11 +39,11 @@ CCFLAGS   := -std=c++20 -fdiagnostics-show-option
 NVCCFLAGS := -m64 -std=c++20
 
 # Common includes
-INCLUDES  := -I../../common/inc
+INCLUDES  := -I../common/inc
 EXTRALIB  :=
 
 # cuarena library
-CUARENA_DIR ?= ../../cuarena
+CUARENA_DIR ?= $(HOME)/cuarena
 CUARENA_LIB := $(CUARENA_DIR)/build/libcuarena.a
 INCLUDES    += -I$(CUARENA_DIR)/include
 EXTRALIB    += -L$(CUARENA_DIR)/build -lcuarena
@@ -97,7 +97,7 @@ endif
 NVCCFLAGS += -DWORD_SIZE_$(WORDSIZE)
 
 # combine all flags
-ALL_CCFLAGS := 
+ALL_CCFLAGS :=
 ALL_CCFLAGS += $(NVCCFLAGS)
 ALL_CCFLAGS += $(addprefix -Xcompiler ,$(CCFLAGS))
 
@@ -111,19 +111,22 @@ GENCODE_FLAGS := -arch=native
 
 # target rules
 
+SRC_DIR   := src
+BUILD_DIR := build
 CPPOBJEXT := o
 CUOBJEXT  := cuda.o
-BUILD_DIR := ../build
 PTX_DIR   := ptx
 PTXEXT    := ptx
 
-mainsrc   := main
-cusrc     := $(sort $(wildcard *.cu))
-allcppsrc := $(sort $(wildcard *.cpp))
-cppsrc    := $(filter-out $(mainsrc).cpp,$(allcppsrc))
-cuobj     := $(patsubst %.cu,%.$(CUOBJEXT),$(cusrc))
-cppobj    := $(patsubst %.cpp,%.$(CPPOBJEXT),$(cppsrc))
-ptxfiles  := $(patsubst %.cu,$(PTX_DIR)/%.$(PTXEXT),$(cusrc))
+mainsrc  := main
+cusrc    := $(sort $(wildcard $(SRC_DIR)/*.cu))
+allcppsrc:= $(sort $(wildcard $(SRC_DIR)/*.cpp))
+cppmain  := $(SRC_DIR)/$(mainsrc).cpp
+cppsrc   := $(filter-out $(cppmain),$(allcppsrc))
+mainobj  := $(SRC_DIR)/$(mainsrc).$(CPPOBJEXT)
+cuobj    := $(patsubst $(SRC_DIR)/%.cu,$(SRC_DIR)/%.$(CUOBJEXT),$(cusrc))
+cppobj   := $(patsubst $(SRC_DIR)/%.cpp,$(SRC_DIR)/%.$(CPPOBJEXT),$(cppsrc))
+ptxfiles := $(patsubst $(SRC_DIR)/%.cu,$(PTX_DIR)/%.$(PTXEXT),$(cusrc))
 
 ifneq ($(MAKECMDGOALS),clean)
 	ifeq ($(cusrc),)
@@ -143,61 +146,58 @@ endif
 ifeq ($(ptx),1)
 all: $(ptxfiles)
 else
-all: $(BIN)
+all: $(BUILD_DIR)/$(BIN)
 endif
 
 
 $(CUARENA_LIB):
-	@cmake -B $(CUARENA_DIR)/build -S $(CUARENA_DIR) \
+	@[ -f $(CUARENA_DIR)/build/CMakeCache.txt ] || \
+	    cmake -B $(CUARENA_DIR)/build -S $(CUARENA_DIR) \
 	    -DCMAKE_BUILD_TYPE=$(CUARENA_BUILD_TYPE) \
 	    -DCMAKE_CUDA_ARCHITECTURES=native \
 	    -DCUARENA_BUILD_EXAMPLES=OFF \
 	    -DCUARENA_BUILD_TESTS=OFF \
-		> /dev/null
-	@cmake --build $(CUARENA_DIR)/build --target cuarena -j$$(nproc) > /dev/null
+	    > /dev/null
+	@cmake --build $(CUARENA_DIR)/build --target cuArena > /dev/null
 
-$(LIB): $(cuobj) $(cppobj)
+$(BUILD_DIR)/$(LIB): $(cuobj) $(cppobj)
 	@$(ARCHIVE) "done" $@
+	@mkdir -p $(BUILD_DIR)
 	@ar rc $@ $+
 	@ranlib $@
 	@$(DONE)
 
-$(BIN): $(mainsrc).$(CPPOBJEXT) $(LIB) $(CUARENA_LIB)
+$(BUILD_DIR)/$(BIN): $(mainobj) $(BUILD_DIR)/$(LIB) $(CUARENA_LIB)
 	@$(ENDING) $@
-	@$(NVCC) $(ALL_LDFLAGS) $(GENCODE_FLAGS) -o $@ $(mainsrc).$(CPPOBJEXT) -L$(CUDA_PATH)/lib64 -lcudart -lnvidia-ml -L. -l$(BIN) $(EXTRALIB)
+	@$(NVCC) $(ALL_LDFLAGS) $(GENCODE_FLAGS) -o $@ $(mainobj) \
+	    -L$(CUDA_PATH)/lib64 -lcudart -lnvidia-ml \
+	    -L$(BUILD_DIR) -l$(BIN) $(EXTRALIB)
 	@$(DONE)
 
-$(mainsrc).$(CPPOBJEXT): $(mainsrc).cpp
+$(mainobj): $(cppmain)
 	@$(PROGRESS) $<
-	@$(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $< 
+	@$(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $<
 
-%.$(CUOBJEXT): %.cu
+$(SRC_DIR)/%.$(CUOBJEXT): $(SRC_DIR)/%.cu
 	@$(PROGRESS) $<
-	@$(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) $(RELOC) -o $@ -c $< 
-	
-%.$(CPPOBJEXT): %.cpp
+	@$(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) $(RELOC) -o $@ -c $<
+
+$(SRC_DIR)/%.$(CPPOBJEXT): $(SRC_DIR)/%.cpp
 	@$(PROGRESS) $<
 	@$(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $<
 
 $(PTX_DIR):
 	@mkdir -p $@
 
-$(PTX_DIR)/%.$(PTXEXT): %.cu | $(PTX_DIR)
+$(PTX_DIR)/%.$(PTXEXT): $(SRC_DIR)/%.cu | $(PTX_DIR)
 	@$(PROGRESS) $<
 	@$(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) --ptx -o $@ $<
 
-install: all
-	@$(INSTALL) $(BIN)
-	@mkdir -p $(BUILD_DIR)
-	@cp $(BIN) $(BUILD_DIR)
-	@cp $(LIB) $(BUILD_DIR)
-	@$(DONE)
-
 clean:
-	rm -f *.$(CPPOBJEXT) *.$(CUOBJEXT) $(LIB) $(BIN)
+	rm -f $(SRC_DIR)/*.$(CPPOBJEXT) $(SRC_DIR)/*.$(CUOBJEXT)
 	rm -rf $(BUILD_DIR) $(PTX_DIR)
 	@echo -n "cleaning up cuarena... "
 	@cmake --build $(CUARENA_DIR)/build --target clean -- --no-print-directory
 	@echo "done"
 
-.PHONY: all clean install
+.PHONY: all clean

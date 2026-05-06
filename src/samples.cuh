@@ -21,8 +21,8 @@ namespace QuaSARQ {
         }
 
         void alloc(const Tableau& tableau, DeviceAllocator& gpu_allocator) {
-            device = gpu_allocator.allocate<Table>(1);
-            device_data = gpu_allocator.allocate<word_t>(tableau.num_words_per_table());
+            device = gpu_allocator.allocate<Table>(1, Region::Stable);
+            device_data = gpu_allocator.allocate<word_t>(tableau.num_words_per_table(), Region::Stable);
             Table tmp;
             tmp.alloc(device_data, tableau.num_qubits_padded(), tableau.num_words_major(), tableau.num_words_minor());
             CHECK(cudaMemcpyAsync(device, &tmp, sizeof(Table), cudaMemcpyHostToDevice));

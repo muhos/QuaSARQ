@@ -94,7 +94,7 @@ namespace QuaSARQ {
             _num_words                  = major_words * num_bits_minor;
             const size_t two_tables     = 2 * num_bits_minor;
             const size_t sign_sz        = sizeof(sign_t);
-            const size_t cap_before     = allocator.gpu_available();
+            const size_t cap_before     = gpu_stable_avail(allocator);
 
             size_t expected = 2 * _num_words * sizeof(word_std_t)
                             + _num_sign_words * sign_sz
@@ -192,7 +192,7 @@ namespace QuaSARQ {
             LOGN2(1, "Allocating tableau for %s%lld qubits%s.. ",
                 CREPORTVAL, int64(num_qubits), CNORMAL);
 
-            const size_t cap_before = allocator.gpu_available();
+            const size_t cap_before = gpu_stable_avail(allocator);
             prefix                 |= num_shots > 0;
 
             size_t expected = prepare_memory(
@@ -215,18 +215,18 @@ namespace QuaSARQ {
             if (!prefix && alloc_signs)
                 _h_ss = new (allocator.allocate_pinned<Signs>(1)) Signs();
 
-            _xs      = allocator.allocate<Table>(1);
-            _xs_data = allocator.allocate<word_t>(_num_words);
-            _zs      = allocator.allocate<Table>(1);
-            _zs_data = allocator.allocate<word_t>(_num_words);
+            _xs      = allocator.allocate<Table>(1, Region::Stable);
+            _xs_data = allocator.allocate<word_t>(_num_words, Region::Stable);
+            _zs      = allocator.allocate<Table>(1, Region::Stable);
+            _zs_data = allocator.allocate<word_t>(_num_words, Region::Stable);
             if (!prefix && alloc_signs) {
-                _ss      = allocator.allocate<Signs>(1);
-                _ss_data = allocator.allocate<sign_t>(_num_sign_words);
+                _ss      = allocator.allocate<Signs>(1, Region::Stable);
+                _ss_data = allocator.allocate<sign_t>(_num_sign_words, Region::Stable);
             }
 
             bind_and_copy(prefix, alloc_signs);
 
-            const size_t cap_after = allocator.gpu_available();
+            const size_t cap_after = gpu_stable_avail(allocator);
             const size_t alloced   = cap_before - cap_after;
 
             SYNCALL;

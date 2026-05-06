@@ -163,7 +163,7 @@ namespace QuaSARQ {
             const size_t max_array_size = num_qubits * num_words_minor;
             LOGN2(2, "allocating %lld MB for global prefix.. ", 
                 ratio(int64(max_array_size * sizeof(PrefixCell)), MB));
-            global_prefix = allocator.allocate<PrefixCell>(max_array_size);
+            global_prefix = allocator.allocate<PrefixCell>(max_array_size, Region::Stable);
             LOGDONE(2, 4);
         }
         #else
@@ -177,12 +177,12 @@ namespace QuaSARQ {
             LOGN2(2, "allocating memory for %lld intermediate blocks.. ", int64(max_intermediate_blocks));
             #if PREFIX_INTERLEAVE
             if (intermediate_prefix == nullptr)
-                intermediate_prefix = allocator.allocate<PrefixCell>(max_array_size);
+                intermediate_prefix = allocator.allocate<PrefixCell>(max_array_size, Region::Stable);
             #else
             if (intermediate_prefix_z == nullptr)
-                intermediate_prefix_z = allocator.allocate<word_std_t>(max_array_size);
+                intermediate_prefix_z = allocator.allocate<word_std_t>(max_array_size, Region::Stable);
             if (intermediate_prefix_x == nullptr)
-                intermediate_prefix_x = allocator.allocate<word_std_t>(max_array_size);
+                intermediate_prefix_x = allocator.allocate<word_std_t>(max_array_size, Region::Stable);
             #endif
             LOGDONE(2, 4);
             const size_t at_least_sub_blocks = 
@@ -193,12 +193,12 @@ namespace QuaSARQ {
             LOGN2(2, "allocating memory for %lld sub-blocks.. ", int64(max_sub_blocks));
             #if PREFIX_INTERLEAVE
             if (subblock_prefix == nullptr)
-                subblock_prefix = allocator.allocate<PrefixCell>(max_array_size);
+                subblock_prefix = allocator.allocate<PrefixCell>(max_array_size, Region::Stable);
             #else
             if (subblocks_prefix_z == nullptr)
-                subblocks_prefix_z = allocator.allocate<word_std_t>(max_array_size);
+                subblocks_prefix_z = allocator.allocate<word_std_t>(max_array_size, Region::Stable);
             if (subblocks_prefix_x == nullptr)
-                subblocks_prefix_x = allocator.allocate<word_std_t>(max_array_size);
+                subblocks_prefix_x = allocator.allocate<word_std_t>(max_array_size, Region::Stable);
             #endif
             LOGDONE(2, 4);
         }

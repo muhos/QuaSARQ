@@ -29,7 +29,7 @@ namespace QuaSARQ {
 
         inline void alloc(const size_t& num_qubits) {
             const size_t num_qubits_padded = get_num_padded_bits(num_qubits);
-            device = allocator.allocate<bool>(num_qubits_padded);
+            device = allocator.allocate<bool>(num_qubits_padded, Region::Stable);
             host.resize(num_qubits_padded);
         }
 

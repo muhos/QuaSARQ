@@ -81,7 +81,15 @@ void Simulator::initialize() {
     getCPUInfo(1);
     getGPUInfo(1);
     LOGHEADER(1, 4, "Initial");
-    gpu_allocator.create_gpu_pool();
+    {
+        size_t gfree = 0, gtot = 0;
+        cudaMemGetInfo(&gfree, &gtot);
+        static constexpr size_t CUARENA_GPU_PENALTY = 256 * MB;
+        static constexpr size_t MIN_DYNAMIC = 128 * MB;
+        const size_t pool_est = (gfree > CUARENA_GPU_PENALTY) ? gfree - CUARENA_GPU_PENALTY : 0;
+        const size_t stable_bytes = (pool_est > MIN_DYNAMIC) ? pool_est - MIN_DYNAMIC : 0;
+        gpu_allocator.create_gpu_pool(0, cuArena::GPUMemoryType::Device, 0, stable_bytes);
+    }
     parse();
     // Creating CPU pool (pinned memory)
     // is done after parsing as it causes

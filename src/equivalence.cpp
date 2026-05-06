@@ -21,7 +21,7 @@ Equivalence::Equivalence() :
         assert(!circuit.empty());
         create_streams(other_custreams);
         inject_faulty();
-        gpu_allocator.resize_cpu_pool(winfo.max_window_bytes + other_wininfo.max_window_bytes + KB * 2);
+        gpu_allocator.resize_cpu_pool(winfo.max_window_bytes + other_wininfo.max_window_bytes + KB * gpu_allocator.alignment());
     }
 
 Equivalence::Equivalence(const string& path_to_circuit, const string& path_to_other) :
@@ -45,7 +45,7 @@ Equivalence::Equivalence(const string& path_to_circuit, const string& path_to_ot
             stats.time.initial += other_stats.time.initial;
             stats.time.schedule += other_stats.time.schedule;
         }
-        gpu_allocator.resize_cpu_pool(winfo.max_window_bytes + other_wininfo.max_window_bytes + KB * 2);
+        gpu_allocator.resize_cpu_pool(winfo.max_window_bytes + other_wininfo.max_window_bytes + KB * gpu_allocator.alignment());
     }
 
 void Equivalence::inject_faulty() {
@@ -124,7 +124,7 @@ void Equivalence::check() {
     // Create two tableaus in GPU memory.
     Power power;
     timer.start();
-    size_t estimated_num_partitions = get_num_partitions(2, num_qubits, winfo.max_window_bytes + other_wininfo.max_window_bytes, gpu_allocator.gpu_available());
+    size_t estimated_num_partitions = get_num_partitions(2, num_qubits, winfo.max_window_bytes + other_wininfo.max_window_bytes, gpu_stable_avail(gpu_allocator));
     num_partitions = tableau.alloc(num_qubits, 0, winfo.max_window_bytes, false, false, true, estimated_num_partitions);
     other_num_partitions = other_tableau.alloc(other_num_qubits, 0, other_wininfo.max_window_bytes, false, false, true, estimated_num_partitions);
     assert(num_partitions == other_num_partitions);

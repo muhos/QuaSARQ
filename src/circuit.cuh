@@ -75,14 +75,14 @@ namespace QuaSARQ {
 			if (this->max_references < max_references) {
 				LOGN2(2, "Resizing a (pinned) window for %lld references.. ", int64(max_references));
 				this->max_references = max_references;
-				_references = allocator.allocate<gate_ref_t>(max_references);
+				_references = allocator.allocate<gate_ref_t>(max_references, Region::Stable);
 				allocator.resize_pinned<gate_ref_t>(_pinned_references, max_references);
 				LOGDONE(2, 4);
 			}
 			if (this->max_buckets < max_buckets) {
 				LOGN2(2, "Resizing a (pinned) window for %lld buckets.. ", int64(max_buckets));
 				this->max_buckets = max_buckets;
-				_buckets = allocator.allocate<bucket_t>(max_buckets);
+				_buckets = allocator.allocate<bucket_t>(max_buckets, Region::Stable);
 				allocator.resize_pinned<bucket_t>(_pinned_buckets, max_buckets);
 				LOGDONE(2, 4);
 			}

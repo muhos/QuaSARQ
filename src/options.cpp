@@ -70,8 +70,8 @@ namespace QuaSARQ {
 
     FOREACH_GATE(GATE2FREQINPUT);
 
-    STRING_OPT opt_configpath("config-path", "Set the path of the kernel configuration file", "./kernel.config");
-    STRING_OPT opt_statepath("state-path", "Set the path of the quantum state file", "./<circuit>_paulis.qstate");
+    STRING_OPT opt_configpath("config-path", "Set the path of the kernel configuration file", "src/kernel.config");
+    STRING_OPT opt_statepath("state-path", "Set the path of the quantum state file", "build/<circuit>_paulis.qstate");
 
     Options::Options() {
         RESETSTRUCT(this);

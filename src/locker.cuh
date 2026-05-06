@@ -43,8 +43,8 @@ namespace QuaSARQ {
 			{}
 
 		void alloc() {
-			_dlocker = allocator.allocate<DeviceLocker>(1);
-			_mutex = allocator.allocate<int>(1);
+			_dlocker = allocator.allocate<DeviceLocker>(1, Region::Stable);
+			_mutex = allocator.allocate<int>(1, Region::Stable);
 
 			DeviceLocker *tmp = new DeviceLocker();
 			assert(_mutex != nullptr);

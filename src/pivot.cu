@@ -169,7 +169,7 @@ namespace QuaSARQ {
         if (!auxiliary_bytes) {
             assert(auxiliary == nullptr);
             cub::DeviceSelect::If(nullptr, auxiliary_bytes, pivots, d_active_pivots, num_qubits, *this, stream);
-            auxiliary = allocator.allocate<byte_t>(auxiliary_bytes);
+            auxiliary = allocator.allocate<byte_t>(auxiliary_bytes, Region::Stable);
         }
         if (auxiliary == nullptr) {
             LOGERROR("auxiliary buffer is not allocated");

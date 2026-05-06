@@ -77,12 +77,12 @@ int main(int argc, char** argv) {
 		LOGERRORN("Emergency exit due to CPU memory disaster.");
 		return EXIT_FAILURE;
 	}
-	catch (cuarena::gpu_memory_error&) {
+	catch (cuArena::gpu_memory_error&) {
 		CHECK(cudaDeviceReset());
 		LOGERRORN("Emergency exit due to GPU memory disaster.");
 		return EXIT_FAILURE;
 	}
-	catch (cuarena::cpu_memory_error&) {
+	catch (cuArena::cpu_memory_error&) {
 		CHECK(cudaDeviceReset());
 		LOGERRORN("Emergency exit due to CPU memory disaster.");
 		return EXIT_FAILURE;

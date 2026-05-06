@@ -7,10 +7,10 @@ src/*.out
 src/*.txt
 src/*.qstate
 src/*.stim
-src/circuits
 src/.vscode
 src/*.sh
 src/.DS_Store
+circuits
 build
 .DS_Store
 .vscode
