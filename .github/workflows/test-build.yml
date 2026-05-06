@@ -18,7 +18,7 @@ jobs:
       - name: Install dependencies
         run: apt-get update && apt-get install -y cmake git build-essential
       - name: Clone cuarena
-        run: git clone https://github.com/muhos/cuarena.git $HOME/cuarena
+        run: git clone https://github.com/muhos/cuArena.git $HOME/cuarena
       - name: Build
         run: |
             export CUARENA_DIR=$HOME/cuarena
