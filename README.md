@@ -54,8 +54,58 @@ make CUARENA_DIR=/path/to/cuArena assert=1
 ---
 
 ## Usage
-The simulator can be used via the command `quasarq [<circuit>.<stim>/<qasm>][<option> ...]`.<br>
-For more options, type `quasarq -h` or `quasarq --helpmore`.
+
+```
+quasarq [<circuit.stim|circuit.qasm>] [<circuit2.stim|circuit2.qasm>] [<option> ...]
+```
+
+QuaSARQ operates in four modes depending on the arguments given.
+
+**Single-shot simulation**: simulate a circuit from a file and report the final stabilizer state:
+```
+quasarq circuit.stim
+quasarq circuit.qasm --verbose=2
+```
+
+**Many-shot sampling**: sample measurement outcomes over many shots using GPU-based Pauli frames:
+```
+quasarq circuit.stim --shots=1024
+quasarq circuit.stim --shots=10000 --seed=42
+```
+
+**Equivalence checking**: verify that two circuits produce identical stabilizer evolution:
+```
+quasarq circuit1.stim circuit2.stim
+```
+Prints `EQUIVALENT` or `NOT EQUIVALENT` (with the failing initial state). Accepts `.stim` and `.qasm` files in any combination.
+
+**Random circuit generation** — generate and simulate a random stabilizer circuit without an input file:
+```
+quasarq --qubits=1000 --depth=500
+quasarq --qubits=5000 --depth=1000 --shots=256
+```
+
+### Key options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--shots=<n>` | Number of measurement shots (enables sampling mode) | 0 |
+| `--qubits=<n>` | Number of qubits for random generation | 1 |
+| `--depth=<n>` | Circuit depth for random generation | 1 |
+| `--initial=<0\|1\|2>` | Initial state: 0 = \|0⟩, 1 = \|+⟩, 2 = \|i⟩ | 0 |
+| `--timeout=<s>` | Abort after this many seconds | 0 (off) |
+| `--verbose=<0..3>` | Verbosity level | 1 |
+| `--seed=<n>` | Random seed for sampling | 0 |
+| `--write-circuit=<1\|2>` | Write generated circuit to file (1: stim, 2: chp) | 0 |
+| `-report` / `-no-report` | Print statistics after simulation | on |
+| `-progress` / `-no-progress` | Show per-step progress | on |
+| `-q` | Quiet mode (suppress all output) | off |
+
+For the full option list run:
+```
+quasarq -h
+quasarq --helpmore
+```
 
 ---
 
