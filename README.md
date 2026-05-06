@@ -79,7 +79,7 @@ quasarq circuit1.stim circuit2.stim
 ```
 Prints `EQUIVALENT` or `NOT EQUIVALENT` (with the failing initial state). Accepts `.stim` and `.qasm` files in any combination.
 
-**Random circuit generation** — generate and simulate a random stabilizer circuit without an input file:
+**Random circuit generation**: generate and simulate a random stabilizer circuit without an input file:
 ```
 quasarq --qubits=1000 --depth=500
 quasarq --qubits=5000 --depth=1000 --shots=256
