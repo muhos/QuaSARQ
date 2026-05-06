@@ -22,4 +22,4 @@ jobs:
       - name: Build
         run: |
             export CUARENA_DIR=$HOME/cuarena
-            make -C src assert=1
+            make assert=1
