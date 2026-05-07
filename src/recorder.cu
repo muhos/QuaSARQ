@@ -57,7 +57,7 @@ namespace QuaSARQ {
         if (obs.empty()) return;
         if (!recorder.is_copied()) recorder.copy();
         const Vec<bool>& rec = recorder.host_record();
-        LOGHEADER(1, 4, "Logical observable outcomes");
+        LOGHEADER(1, 4, "Observables");
         for (uint32 i = 0; i < obs.num_observables(); i++) {
             bool outcome = false;
             for (uint32 j = obs.ref_starts[i]; j < obs.ref_starts[i] + obs.ref_counts[i]; j++)
