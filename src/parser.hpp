@@ -53,7 +53,7 @@ namespace QuaSARQ {
 
     struct ObservableData {
 
-        Vec<size_t, uint32>  record_refs; // absolute indices starting from 0.
+        Vec<uint32, uint32>  record_refs; // measurement-history indices.
         Vec<uint32, uint32>  ref_starts;
         Vec<uint32, uint32>  ref_counts;
         Vec<uint32, uint32>  ids;
@@ -87,8 +87,8 @@ namespace QuaSARQ {
 
         void* buffer;
         char* eof;
+        uint32 measures_count;
         size_t size, max_qubits;
-        size_t measures_count;
         Gate_stats gate_stats;
         CircuitQueue circuit_queue;
         ObservableData observables;
@@ -103,9 +103,9 @@ namespace QuaSARQ {
         CircuitIO() :
             buffer(nullptr)
             , eof(nullptr)
+            , measures_count(0)
             , size(0)
             , max_qubits(0)
-            , measures_count(0)
             , measuring(false)
         {
             init();
@@ -116,6 +116,7 @@ namespace QuaSARQ {
         void init() {
             circuit_queue.reserve(MB);
             gate_stats.alloc();
+            observables.init();
         }
 
         void destroy() {
@@ -319,8 +320,8 @@ namespace QuaSARQ {
                         str = peek + 5; // skip "rec[-"
                         uint32 n = toInteger(str);
                         if (str < eof && *str == ']') str++; // consume ']'
-                        if (n == 0 || n > (uint32)measures_count)
-                            LOGERROR("OBSERVABLE_INCLUDE: rec[-%u] out of range (measures count=%zu).", n, measures_count);
+                        if (n == 0 || n > measures_count)
+                            LOGERROR("OBSERVABLE_INCLUDE: rec[-%u] out of range (measures so far: %zu)", n, measures_count);
                         observables.record_refs.push(measures_count - n);
                         ref_count++;
                     } else {

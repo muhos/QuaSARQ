@@ -192,7 +192,9 @@ void Simulator::simulate() {
         #endif
         prefix.alloc(tableau, config_qubits);
         pivoting.alloc(num_qubits);
-        recorder.alloc(num_qubits);
+        if (!circuit_io.measures_count)
+            LOGERRORN("cannot run simulation with measurement gates but no measurements.");
+        recorder.alloc(circuit_io.measures_count);
         if (options.check_measurement)
             mchecker.alloc(num_qubits);
     }
@@ -223,5 +225,6 @@ void Simulator::simulate() {
     stats.tableau.gigabytes = ratio((double)tableau.size() * sizeof(word_std_t), double(GB));
     stats.tableau.seconds = (stats.time.simulation / 1000.0) / (num_partitions * depth);
     stats.tableau.calc_speed();
+    print_observables();
     report();
 }

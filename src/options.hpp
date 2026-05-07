@@ -18,6 +18,7 @@ namespace QuaSARQ {
         CONFIG(gates, "gates") \
         CONFIG(signs, "signs") \
         CONFIG(record, "record") \
+        CONFIG(observable, "observable") \
         CONFIG(sample, "sampling outcome") \
         CONFIG(initialstate, "initial state (in Pauli strings)") \
         CONFIG(stepstate, "step state (in Pauli strings)") \

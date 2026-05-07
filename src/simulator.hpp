@@ -121,6 +121,7 @@ namespace QuaSARQ {
         void        print_paulis            (const Tableau& tab, const depth_t& depth_level = MAX_DEPTH, const bool& reversed = false);
         void        print_signs             (const Tableau& tab, const depth_t& depth_level);
         void        print_gates             (const DeviceCircuit& gates, const gate_ref_t& num_gates, const depth_t& depth_level);
+        void        print_observables       ();
 
         // Timeout.
         static void handler_timeout         (int) {

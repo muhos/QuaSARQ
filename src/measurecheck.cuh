@@ -7,6 +7,7 @@
 #include "prefixintra.cuh"
 #include "vector.hpp"
 #include "circuit.hpp"
+#include "recorder.cuh"
 
 namespace QuaSARQ {
 
@@ -51,6 +52,7 @@ namespace QuaSARQ {
 		Vec<pivot_t> d_compact_pivots;
 		Vec<bool> anticommuting;
 		Vec<bool> record;
+		size_t measures_count;
 
 		size_t num_qubits;
 		size_t num_qubits_padded;
@@ -185,7 +187,7 @@ namespace QuaSARQ {
 
 		void check_inject_x(const Tableau& other_input, const pivot_t* other_pivots, const size_t& num_pivots, const sign_t& random_bit);
 
-		void check_record_measurements(const Tableau& other_input, const Vec<bool>& other_record, const Circuit& circuit, const depth_t& depth_level);
+		void check_record_measurements(const Tableau& other_input, const MeasurementRecorder& other_recorder, const Circuit& circuit, const depth_t& depth_level);
 
 		void inject_swap_cpu();
 

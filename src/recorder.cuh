@@ -12,16 +12,17 @@ namespace QuaSARQ {
 
         DeviceAllocator& allocator;
 
-        bool* device;
-        Vec<bool> host;
-
-        bool copied;
+        bool*       device;
+        Vec<bool>   host;
+        size_t      step_gates;
+        bool        copied;
 
     public:
 
         MeasurementRecorder(DeviceAllocator& allocator) :
             allocator(allocator),
             device(nullptr),
+            step_gates(0),
             copied(false)
         {}
 
@@ -30,34 +31,35 @@ namespace QuaSARQ {
             host.clear(true);
         }
 
-        inline void reset_copied() {
-            copied = false;
+        inline void reset_copied() { copied = false; }
+        inline bool is_copied()  const { return copied; }
+        inline size_t step_history() const { return step_gates; }
+        inline size_t total_history()  const { return host.size(); }
+
+        inline void alloc(const size_t& measures_count) {
+            device = allocator.allocate<bool>(measures_count, Region::Stable);
+            assert(device != nullptr);
+            host.resize(measures_count);
+            step_gates = 0;
         }
 
-        inline bool is_copied() const {
-            return copied;
-        }
-
-        inline void alloc(const size_t& num_qubits) {
-            const size_t num_qubits_padded = get_num_padded_bits(num_qubits);
-            device = allocator.allocate<bool>(num_qubits_padded, Region::Stable);
-            host.resize(num_qubits_padded);
-        }
+        inline void advance(const size_t& num_gates) { step_gates += num_gates; }
 
         inline void copy() {
-            if (device != nullptr) {
-                CHECK(cudaMemcpy(host.data(), device, host.size(), cudaMemcpyDeviceToHost));
+            if (device != nullptr && step_gates > 0) {
+                CHECK(cudaMemcpy(host.data(), device, step_gates, cudaMemcpyDeviceToHost));
                 copied = true;
             }
         }
 
-        inline void print(const size_t& num_qubits) {
+        inline void print(const size_t& num_gates) {
             if (!options.print_record) return;
             if (!options.sync) SYNCALL;
             LOGHEADER(1, 4, "Recorded measurements");
             copy();
-            for (size_t q = 0; q < num_qubits; q++) {
-                PRINT("%-2d", host[q]);
+            const size_t from = step_gates - num_gates;
+            for (size_t i = from; i < step_gates; i++) {
+                PRINT("%-2d", host[i]);
             }
             PRINT("\n");
             fflush(stdout);
@@ -74,7 +76,7 @@ namespace QuaSARQ {
             return host;
         }
 
-        inline 
+        inline
         const Vec<bool>& host_record() const {
             if (host.empty()) LOGERROR("recorder not allocated");
             if (!copied) LOGERROR("record not copied to host");
