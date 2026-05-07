@@ -63,64 +63,67 @@ namespace QuaSARQ {
 
     public:
 
-       ~Simulator();
-        Simulator();
-        Simulator(const string& path);
+       ~Simulator   ();
+        Simulator   ();
+        Simulator   (const string& path);
 
         // File IO.
-        bool open_file(FILE*& file, arg_t file_path, arg_t file_mode);
-        void close_file(FILE*& file);
+        bool    open_file      (FILE*& file, arg_t file_path, arg_t file_mode);
+        void    close_file     (FILE*& file);
 
         // Getters.
-        Tableau&        get_tableau() { return tableau; }
-        Circuit&        get_circuit() { return circuit; }
-        DeviceCircuit&  get_gpu_circuit() { return gpu_circuit; }
-        bool            is_measuring() const { return measuring; }
+        Tableau&                get_tableau     () { return tableau; }
+        Circuit&                get_circuit     () { return circuit; }
+        DeviceCircuit&          get_gpu_circuit () { return gpu_circuit; }
+        bool                    is_measuring    () const { return measuring; }
+        ObservableData&         get_observables () { return circuit_io.observables; }
+        const ObservableData&   get_observables () const { return circuit_io.observables; }
 
         // Random circuit generation.
-        Gatetypes get_rand_gate(const bool& multi_input = true, const bool& force_multi_input = false);
-        void get_rand_qubit(const qubit_t& control, qubit_t& qubit);
-        void shuffle_qubits();
-        void generate();
-
-        void initialize();
-        void report();
-        void parse();
-        void simulate();
-        size_t parse(Statistics& stats, const char* path);
-        size_t schedule(Statistics& stats, Circuit& circuit);
-        void simulate(const size_t& p, const bool& reversed);
+        Gatetypes   get_rand_gate   (const bool& multi_input = true, const bool& force_multi_input = false);
+        void        get_rand_qubit  (const qubit_t& control, qubit_t& qubit);
+        void        shuffle_qubits  ();
+        void        generate        ();
+        void        initialize      ();
+        void        report          ();
+        void        parse           ();
+        void        simulate        ();
+        size_t      parse           (Statistics& stats, const char* path);
+        size_t      schedule        (Statistics& stats, Circuit& circuit);
+        void        simulate        (const size_t& p, const bool& reversed);
 
         // Launch a kernel to make identity tableau.
-        void identity(Tableau& tab, const size_t& offset_per_partition, const size_t& num_qubits_per_partition, const cudaStream_t* streams, const InitialState& istate = Zero);
+        void        identity        (Tableau& tab, const size_t& offset_per_partition, const size_t& num_qubits_per_partition, const cudaStream_t* streams, const InitialState& istate = Zero);
 
         // Advances the simulation by 1-time step.
-        void step(const size_t& p, const depth_t& depth_level, const bool& reversed = false);
+        void        step            (const size_t& p, const depth_t& depth_level, const bool& reversed = false);
         
         // Do measurements in a single simulation step.
-        void transpose(const bool& row_major, const cudaStream_t& stream);
-        void reset_pivots(const size_t& num_pivots, const cudaStream_t& stream);
-        void reset_signs(const size_t& num_gates, const depth_t& depth_level, const cudaStream_t& stream);
-        void record_measurements(const size_t& num_gates, const depth_t& depth_level, const cudaStream_t& stream);
-        void find_random_measures(const size_t& num_pivots, const cudaStream_t& stream);
-        void compact_targets(const qubit_t& qubit, const cudaStream_t& stream);
-        void inject_swap(const qubit_t& qubit, const sign_t& rbit, const cudaStream_t& stream);
-        void inject_x(const qubit_t& qubit, const sign_t& rbit, const cudaStream_t& stream);
-        void inject_cx(const uint32& active_targets, const cudaStream_t& stream);
-        void tune_assuming_maximum_targets(const depth_t& depth_level);
-        int64 measure_indeterminate(const depth_t& depth_level, const cudaStream_t& stream = 0);
-        void measure(const size_t& p, const depth_t& depth_level, const bool& reversed = false);
+        void        transpose               (const bool& row_major, const cudaStream_t& stream);
+        void        reset_pivots            (const size_t& num_pivots, const cudaStream_t& stream);
+        void        reset_signs             (const size_t& num_gates, const depth_t& depth_level, const cudaStream_t& stream);
+        void        record_measurements     (const size_t& num_gates, const depth_t& depth_level, const cudaStream_t& stream);
+        void        find_random_measures    (const size_t& num_pivots, const cudaStream_t& stream);
+        void        compact_targets         (const qubit_t& qubit, const cudaStream_t& stream);
+        void        inject_swap             (const qubit_t& qubit, const sign_t& rbit, const cudaStream_t& stream);
+        void        inject_x                (const qubit_t& qubit, const sign_t& rbit, const cudaStream_t& stream);
+        void        inject_cx               (const uint32& active_targets, const cudaStream_t& stream);
+        int64       measure_indeterminate   (const depth_t& depth_level, const cudaStream_t& stream = 0);
+        void        measure                 (const size_t& p, const depth_t& depth_level, const bool& reversed = false);
+
+        // Tuners.
+        void        tune_assuming_maximum_targets(const depth_t& depth_level);
 
         // Printers.
-        void print_progress_header();
-        void print_progress(const size_t& p, const depth_t& depth_level, const bool& passed = false);
-        void print_tableau(const Tableau& tab, const depth_t& depth_level = MAX_DEPTH, const bool& reversed = false, const bool& prefix = false);
-        void print_paulis(const Tableau& tab, const depth_t& depth_level = MAX_DEPTH, const bool& reversed = false);
-        void print_signs(const Tableau& tab, const depth_t& depth_level);
-        void print_gates(const DeviceCircuit& gates, const gate_ref_t& num_gates, const depth_t& depth_level);
+        void        print_progress_header   ();
+        void        print_progress          (const size_t& p, const depth_t& depth_level, const bool& passed = false);
+        void        print_tableau           (const Tableau& tab, const depth_t& depth_level = MAX_DEPTH, const bool& reversed = false, const bool& prefix = false);
+        void        print_paulis            (const Tableau& tab, const depth_t& depth_level = MAX_DEPTH, const bool& reversed = false);
+        void        print_signs             (const Tableau& tab, const depth_t& depth_level);
+        void        print_gates             (const DeviceCircuit& gates, const gate_ref_t& num_gates, const depth_t& depth_level);
 
         // Timeout.
-        static void handler_timeout(int) {
+        static void handler_timeout         (int) {
             fflush(stderr), fflush(stdout);
             LOG1("%s%s%s", CYELLOW, "TIME OUT", CNORMAL);
             timeout = true;

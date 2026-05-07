@@ -51,6 +51,34 @@ namespace QuaSARQ {
         }
     };
 
+    struct ObservableData {
+
+        Vec<size_t, uint32>  record_refs; // absolute indices starting from 0.
+        Vec<uint32, uint32>  ref_starts;
+        Vec<uint32, uint32>  ref_counts;
+        Vec<uint32, uint32>  ids;
+
+        ObservableData() {}
+
+        void init() {
+            record_refs.reserve(32);
+            ref_starts.reserve(4);
+            ref_counts.reserve(4);
+            ids.reserve(4);
+        }
+
+        void destroy() {
+            record_refs.clear(true);
+            ref_starts.clear(true);
+            ref_counts.clear(true);
+            ids.clear(true);
+        }
+
+        uint32 num_observables() const { return ids.size(); }
+
+        bool empty() const { return ids.empty(); }
+    };
+
     struct CircuitIO {
 
         #define DELIM '\n'
@@ -60,8 +88,10 @@ namespace QuaSARQ {
         void* buffer;
         char* eof;
         size_t size, max_qubits;
+        size_t measures_count;
         Gate_stats gate_stats;
         CircuitQueue circuit_queue;
+        ObservableData observables;
         bool measuring;
 
 #if defined(__linux__) || defined(__CYGWIN__)
@@ -75,8 +105,9 @@ namespace QuaSARQ {
             , eof(nullptr)
             , size(0)
             , max_qubits(0)
+            , measures_count(0)
             , measuring(false)
-        { 
+        {
             init();
         }
 
@@ -219,12 +250,11 @@ namespace QuaSARQ {
             gatestr[gatename_len] = '\0';
             str += gatename_len;
 
-            // Drop for now: TICK, QUBIT_COORDS, DETECTOR, SHIFT_COORDS, OBSERVABLE_INCLUDE.
+            // Drop for now: TICK, QUBIT_COORDS, DETECTOR, SHIFT_COORDS.
             if (strcmp(gatestr, "TICK")               == 0 ||
                 strcmp(gatestr, "QUBIT_COORDS")        == 0 ||
                 strcmp(gatestr, "DETECTOR")             == 0 ||
-                strcmp(gatestr, "SHIFT_COORDS")         == 0 ||
-                strcmp(gatestr, "OBSERVABLE_INCLUDE")   == 0) {
+                strcmp(gatestr, "SHIFT_COORDS")         == 0) {
                 eatLine(str);
                 return;
             }
@@ -256,10 +286,49 @@ namespace QuaSARQ {
                         const ParsedGate& g = block[j];
                         target.push(g);
                         gstats.types[g.type]++;
+                        if ((g.type == M || g.type == MR) && &target == &circuit_queue)
+                            measures_count++;
                     }
                 }
                 block.clear(true);
                 bstats.destroy();
+                return;
+            }
+
+            // OBSERVABLE_INCLUDE(k) rec[-1] rec[-2] ...
+            if (strcmp(gatestr, "OBSERVABLE_INCLUDE") == 0) {
+                uint32 obs_id = 0;
+                if (str < eof && *str == '(') {
+                    str++; // consume '('
+                    obs_id = toInteger(str);
+                    eatWS(str);
+                    if (str < eof && *str == ')') str++; // consume ')'
+                }
+                observables.ids.push(obs_id);
+                observables.ref_starts.push((uint32)observables.record_refs.size());
+                uint32 ref_count = 0;
+                while (str < eof && *str != DELIM) {
+                    if (*str == UNIX_DELIM) { str++; continue; }
+                    char* peek = str;
+                    eatWS(peek);
+                    if (peek >= eof || *peek == DELIM || *peek == '\0') break;
+                    // Expect rec[-n]
+                    if (peek + 4 < eof &&
+                        peek[0] == 'r' && peek[1] == 'e' && peek[2] == 'c' &&
+                        peek[3] == '[' && peek[4] == '-') {
+                        str = peek + 5; // skip "rec[-"
+                        uint32 n = toInteger(str);
+                        if (str < eof && *str == ']') str++; // consume ']'
+                        if (n == 0 || n > (uint32)measures_count)
+                            LOGERROR("OBSERVABLE_INCLUDE: rec[-%u] out of range (measures count=%zu).", n, measures_count);
+                        observables.record_refs.push(measures_count - n);
+                        ref_count++;
+                    } else {
+                        eatLine(str);
+                        break;
+                    }
+                }
+                observables.ref_counts.push(ref_count);
                 return;
             }
 
@@ -283,8 +352,6 @@ namespace QuaSARQ {
             const bool is_2qubit = isGate2(int(type));
             while (str < eof && *str != DELIM) {
                 if (*str == UNIX_DELIM) { str++; continue; }
-                // If next non-space char is not a digit, we're done with
-                // this line (handles trailing annotations like rec[-n]).
                 char* peek = str;
                 eatWS(peek);
                 if (!isDigit(*peek)) { eatLine(str); return; }
@@ -297,10 +364,11 @@ namespace QuaSARQ {
                 }
                 target.push(ParsedGate(c, t, type));
                 gstats.types[type]++;
+                if ((type == M || type == MR) && &target == &circuit_queue)
+                    measures_count++;
             }
         }
 
-        // Public entry point: parse one instruction into circuit_queue.
         void read_gate(char*& str) {
             read_gate_into(str, circuit_queue, gate_stats);
         }
