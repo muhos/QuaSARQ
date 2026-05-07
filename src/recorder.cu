@@ -18,7 +18,7 @@ namespace QuaSARQ {
             record[q] = bool(ss_stab[WORD_OFFSET(q)] & BITMASK_GLOBAL(q));
         }
     }
-
+    
     void Simulator::record_measurements(const size_t& num_gates, const depth_t& depth_level, const cudaStream_t& stream) {
         dim3 currentblock, currentgrid;
         currentblock = bestblockreset, currentgrid = bestgridreset;
@@ -34,6 +34,7 @@ namespace QuaSARQ {
             gpu_circuit.gates(), 
             num_gates,
             tableau.num_words_minor());
+        recorder.reset_copied();
         if (options.sync) {
             LASTERR("failed to reset signs");
             cutimer.stop(stream);
@@ -41,9 +42,40 @@ namespace QuaSARQ {
             if (options.profile) stats.profile.time.recordsigns += elapsed;
             LOGENDING(2, 4, "(time %.3f ms)", elapsed);
         } else LOGDONE(2, 4);
-        // if (options.check_measurement) {
-        //     mchecker.check_record_measurements(tableau, circuit, depth_level);
-        // }
+        if (options.check_measurement) {
+            recorder.copy();
+            mchecker.check_record_measurements(tableau, recorder.host_record(), circuit, depth_level);
+        }
+    }
+
+    void MeasurementChecker::check_record_measurements(const Tableau& other_input, const Vec<bool>& other_record, const Circuit& circuit, const depth_t& depth_level) {
+        SYNCALL;
+
+        if (!input_copied) {
+            LOGERROR("device input not copied to the checker");
+        }
+
+        LOGN2(2, "  Checking measurements record at depth level %d.. ", depth_level);
+
+        copy_input(other_input, true);
+
+        record.resize(num_qubits_padded);
+
+        const auto num_gates = circuit[depth_level].size();
+        for (auto i = 0; i < num_gates; i++) {
+            const Gate& m = circuit.gate(depth_level, i);
+            if (!isMeasurement(m.type))
+                LOGERROR("host gate %d at depth level %d is not a measurement gate", i, depth_level);
+            const size_t q = m.wires[0];
+            const size_t q_w = WORD_OFFSET(q);
+            const word_std_t q_mask = BITMASK_GLOBAL(q);
+            record[q] = bool(h_ss[q_w + num_words_minor] & q_mask);
+            if (record[q] != other_record[q]) {
+                LOGERROR("Measurement record mismatch at qubit %lld", q);
+            }
+        }
+
+        LOG2(2, "%sPASSED.%s", CGREEN, CNORMAL);
     }
         
 

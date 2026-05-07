@@ -45,6 +45,8 @@ namespace QuaSARQ {
             stats.circuit.measure_stats.random_per_window = MAX(random_measures, stats.circuit.measure_stats.random_per_window);
         }
 
+        record_measurements(num_gates_per_window, depth_level, kernel_stream1);
+
         transpose(false, kernel_stream1);
     }
 

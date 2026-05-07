@@ -357,7 +357,7 @@ namespace QuaSARQ {
         }
 
         if (circuit.is_measuring(depth_level)) {
-            recorder.print();
+            recorder.print(num_qubits);
         }
 
     } // End of function.

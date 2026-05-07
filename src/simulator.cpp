@@ -192,6 +192,7 @@ void Simulator::simulate() {
         #endif
         prefix.alloc(tableau, config_qubits);
         pivoting.alloc(num_qubits);
+        recorder.alloc(num_qubits);
         if (options.check_measurement)
             mchecker.alloc(num_qubits);
     }

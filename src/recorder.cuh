@@ -15,16 +15,27 @@ namespace QuaSARQ {
         bool* device;
         Vec<bool> host;
 
+        bool copied;
+
     public:
 
         MeasurementRecorder(DeviceAllocator& allocator) :
             allocator(allocator),
-            device(nullptr)
+            device(nullptr),
+            copied(false)
         {}
 
         ~MeasurementRecorder() {
             device = nullptr;
             host.clear(true);
+        }
+
+        inline void reset_copied() {
+            copied = false;
+        }
+
+        inline bool is_copied() const {
+            return copied;
         }
 
         inline void alloc(const size_t& num_qubits) {
@@ -36,24 +47,38 @@ namespace QuaSARQ {
         inline void copy() {
             if (device != nullptr) {
                 CHECK(cudaMemcpy(host.data(), device, host.size(), cudaMemcpyDeviceToHost));
+                copied = true;
             }
         }
 
-        inline void print(const size_t& num_qubits = 0) {
+        inline void print(const size_t& num_qubits) {
             if (!options.print_record) return;
             if (!options.sync) SYNCALL;
             LOGHEADER(1, 4, "Recorded measurements");
             copy();
-            const size_t size = !num_qubits ? host.size() : num_qubits;
-            for (size_t q = 0; q < size; q++) {
-                PRINT("%-2d\n", host[q]);
+            for (size_t q = 0; q < num_qubits; q++) {
+                PRINT("%-2d", host[q]);
             }
+            PRINT("\n");
             fflush(stdout);
         }
 
         inline bool* device_record() {
             if (device == nullptr) LOGERROR("recorder not allocated");
             return device;
+        }
+
+        inline Vec<bool>& host_record() {
+            if (host.empty()) LOGERROR("recorder not allocated");
+            if (!copied) LOGERROR("record not copied to host");
+            return host;
+        }
+
+        inline 
+        const Vec<bool>& host_record() const {
+            if (host.empty()) LOGERROR("recorder not allocated");
+            if (!copied) LOGERROR("record not copied to host");
+            return host;
         }
     };
 
