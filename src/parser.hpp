@@ -56,7 +56,7 @@ namespace QuaSARQ {
         Vec<uint32, uint32>  record_refs; // measurement-history indices.
         Vec<uint32, uint32>  ref_starts;
         Vec<uint32, uint32>  ref_counts;
-        Vec<uint32, uint32>  ids;
+        Vec<uint32, uint32>  ids;         // the observable id (the k in OBSERVABLE_INCLUDE(k))
 
         ObservableData() {}
 

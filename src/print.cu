@@ -422,7 +422,7 @@ namespace QuaSARQ {
             stats.circuit.measure_stats.random_per_window = 0;
             size_t prev_num_gates = circuit[depth_level].size();
             size_t definite_measures = is_measuring ? prev_num_gates - random_measures : 0;
-            if (is_measuring) SETCOLOR(CLBLUE, stdout);
+            if (is_measuring) SETCOLOR(CBCYAN, stdout);
             else SETCOLOR(CORANGE1, stdout);
             LOGN2(1, "%c  %-10lld    %-10lld    %-10lld    %-10lld  %-10lld   %-7.3f", 
                     is_measuring ? 'm' : 'u',

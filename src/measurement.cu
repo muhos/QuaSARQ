@@ -45,8 +45,6 @@ namespace QuaSARQ {
             stats.circuit.measure_stats.random_per_window = MAX(random_measures, stats.circuit.measure_stats.random_per_window);
         }
 
-        record_measurements(num_gates_per_window, depth_level, kernel_stream1);
-
         transpose(false, kernel_stream1);
     }
 
@@ -164,6 +162,9 @@ namespace QuaSARQ {
         // If measuring window has R gates, we need to reset signs for the next window to be correct.
         if (may_reset_signs) {
             reset_signs(num_gates_per_window, depth_level, stream);
+        }
+        else {
+            record_measurements(num_gates_per_window, depth_level, stream);
         }
 
         return random_measures;

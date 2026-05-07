@@ -62,10 +62,10 @@ namespace QuaSARQ {
             bool outcome = false;
             for (uint32 j = obs.ref_starts[i]; j < obs.ref_starts[i] + obs.ref_counts[i]; j++)
                 outcome ^= rec[obs.record_refs[j]];
-            LOG1(" %sObservable %-3u%s: %s%d%s  (%s)",
-                CREPORT, obs.ids[i], CNORMAL,
-                outcome ? CRED : CGREEN, (int)outcome, CNORMAL,
-                outcome ? "LOGICAL ERROR" : "NO LOGICAL ERROR");
+            LOG1(" %sObservable %-8u:%s %s%d  (%s)%s",
+                CBCYAN, obs.ids[i], CNORMAL,
+                outcome ? CRED : CGREEN, (int)outcome,
+                outcome ? "LOGICAL ERROR" : "NO LOGICAL ERROR", CNORMAL);
         }
     }
 

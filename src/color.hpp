@@ -64,6 +64,7 @@ namespace QuaSARQ {
 #define CLBLUE      "\x1B[94m"
 #define CLMAGENTA   "\x1B[95m"
 #define CLCYAN      "\x1B[96m"
+#define CBCYAN      "\x1B[1;96m"
 #define CGREEN0		"\x1B[38;5;78m"
 #define CGREEN1		"\x1B[38;5;77m"
 #define CGREEN2		"\x1B[38;5;76m"
