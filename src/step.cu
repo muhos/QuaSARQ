@@ -72,7 +72,8 @@ namespace QuaSARQ {
             }
             case DEPOLARIZE1: { 
                 LOAD_Q1_WORDS;
-                do_depolarize1(signs_word, x_words_q1, z_words_q1, state, gate.get_prob(), r, i); 
+                
+                do_depolarize1(signs_word, x_words_q1, z_words_q1, state, gate.get_prob(), seed, i); 
                 break; 
             }
             case CX: { 
@@ -161,6 +162,8 @@ namespace QuaSARQ {
                 zs->data() + w,
                 refs,
                 gates,
+                st, 
+                seed,
                 num_gates,
                 num_words_major
             );
@@ -201,6 +204,8 @@ namespace QuaSARQ {
                 z_gens_word,
                 refs,
                 gates,
+                st,
+                seed,
                 num_gates,
                 num_words_major
             );
@@ -239,10 +244,10 @@ namespace QuaSARQ {
                 Tableau &		tableau,
         const 	size_t & 		num_gates_per_window,
         const 	size_t & 		num_words_major,
+        const   uint64 &        seed,
         const 	dim3 &			currentblock,
         const 	dim3 &			currentgrid,
         const 	size_t & 		shared_size,
-        const   uint64 &        seed,
         const 	cudaStream_t &	stream)
     {
         if (currentblock.x == 1) {
@@ -346,10 +351,10 @@ namespace QuaSARQ {
                 tableau, 
                 num_gates_per_window, 
                 num_words_major, 
+                options.seed,
                 bestblockstep, 
                 bestgridstep, 
                 reduce_smem_size, 
-                options.seed,
                 kernel_stream);
 
             if (options.sync) { 

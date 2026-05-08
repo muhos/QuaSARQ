@@ -41,10 +41,10 @@ namespace QuaSARQ {
                 Tableau &		tableau,
         const 	size_t & 		num_gates_per_window,
         const 	size_t & 		num_words_major,
+        const   uint64 &        seed,
         const 	dim3 &			currentblock,
         const 	dim3 &			currentgrid,
         const 	size_t & 		shared_size,
-        const   uint64 &        seed,
         const 	cudaStream_t &	stream);
 
     void tune_step(

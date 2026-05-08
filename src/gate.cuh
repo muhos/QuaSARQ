@@ -104,13 +104,17 @@ namespace QuaSARQ {
         inline
         void print_host(const bool& nonl = false) const {
             if (type < NR_GATETYPES) {
-                PRINT(" %5s(", H_G2S[type]);
+                PRINT(" %-12s", H_G2S[type]);
             }
             else {
-                PRINT("  Unknown(");
+                PRINT("  Unknown");
             }
+            if (isDepolarize(int(type))) {
+                PRINT("(p=%.3f)", get_prob());
+            }
+            PRINT("(");
             for (input_size_t i = 0; i < size; i++) { 
-                PRINT("%6d", wires[i]);
+                PRINT("%8d", wires[i]);
                 if (i < size - 1)
                     PRINT(" , ");
             }
@@ -120,13 +124,17 @@ namespace QuaSARQ {
         INLINE_DEVICE
         void print(const bool& nonl = false) const {
             if (type < NR_GATETYPES) {
-                LOGGPU(" %5s(", G2S[type]);
+                LOGGPU(" %-12s", G2S[type]);
             }
             else {
-                LOGGPU("  Unknown(");
+                LOGGPU("  Unknown");
             }
+            if (isDepolarize(int(type))) {
+                LOGGPU("(p=%.3f)", get_prob());
+            }
+            LOGGPU("(");
             for (input_size_t i = 0; i < size; i++) { 
-                LOGGPU("%6d", wires[i]);
+                LOGGPU("%8d", wires[i]);
                 if (i < size - 1)
                     LOGGPU(" , ");
             }

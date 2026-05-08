@@ -525,7 +525,8 @@ namespace QuaSARQ {
 			gate_buckets,
 			tableau,
 			data_size_in_x, 
-			data_size_in_y);
+			data_size_in_y,
+			seed);
 		initThreadsPerBlockX = _initThreadsPerBlockX;
 	}
 	
