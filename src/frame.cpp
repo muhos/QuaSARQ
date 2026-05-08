@@ -19,6 +19,7 @@ void Framing::sample() {
     tableau.reset_xtable();
     randomize(tableau.zdata(), tableau.num_words_per_table(), 0);
     gpu_circuit.initiate(num_qubits, winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
+    gpu_circuit.init_noise_states(options.seed, winfo.max_parallel_gates, kernel_streams[0]);
     timer.stop();
     stats.time.initial += timer.elapsed();
     // Start step-wise simulation.

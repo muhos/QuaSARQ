@@ -1,5 +1,7 @@
 #pragma once
 
+#include <curand_kernel.h>
+
 #include "table.cuh"
 #include "signs.cuh"
 #include "gate.cuh"
@@ -14,5 +16,6 @@ namespace QuaSARQ {
 	typedef const bucket_t* __restrict__ const_buckets_t;
     typedef const gate_ref_t* __restrict__ const_refs_t;
     typedef const word_std_t* __restrict__ const_words_t;
+    typedef curandStatePhilox4_32_10_t curand_algorithm_t;
 
 }

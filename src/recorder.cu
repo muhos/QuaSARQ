@@ -37,6 +37,7 @@ namespace QuaSARQ {
             tableau.num_words_minor(),
             recorder.step_history());
         recorder.reset_copied();
+        recorder.advance(num_gates);
         if (options.sync) {
             LASTERR("failed to reset signs");
             cutimer.stop(stream);
@@ -48,7 +49,6 @@ namespace QuaSARQ {
             recorder.copy();
             mchecker.check_record_measurements(tableau, recorder, circuit, depth_level);
         }
-        recorder.advance(num_gates);
     }
 
     void Simulator::print_observables() {
@@ -83,17 +83,18 @@ namespace QuaSARQ {
             LOGERROR("other record is empty");
         }
 
+        record.resize(other_record.size());
+
         LOGN2(2, "  Checking measurements record at depth level %d.. ", depth_level);
 
         copy_input(other_input, true);
 
-        if (measures_count != other_recorder.step_history()) {
-            LOGERROR("measurements count mismatch: expected %lld, got %lld", measures_count, other_recorder.step_history());
+        const auto num_gates = circuit[depth_level].size();
+
+        if (measures_count + num_gates != other_recorder.step_history()) {
+            LOGERROR("measurements count mismatch: expected %lld, got %lld", measures_count + num_gates, other_recorder.step_history());
         }
 
-        record.resize(measures_count);
-
-        const auto num_gates = circuit[depth_level].size();
         for (auto i = 0; i < num_gates; i++) {
             const Gate& m = circuit.gate(depth_level, i);
             if (!isMeasurement(m.type))

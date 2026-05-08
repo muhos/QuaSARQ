@@ -14,8 +14,7 @@ namespace QuaSARQ {
                 word_t*         z_gens_word,
                 const_refs_t    refs,
                 const_buckets_t gates,
-                curandStatePhilox4_32_10_t& state, 
-        const   uint64&         seed, 
+        const   uint32*         noise_paulis,
         const   size_t&         num_gates,
         const   size_t&         num_words_major
     ) {
@@ -34,89 +33,88 @@ namespace QuaSARQ {
             const size_t q1_word_idx = q1 * num_words_major;
 
             #if DEBUG_STEP
-            LOGGPU("  word(%-4lld): Gate(%-5s, r:%-4u, s:%d), qubits(%-3lld, %-3lld)\n", 
+            LOGGPU("  word(%-4lld): Gate(%-5s, r:%-4u, s:%d), qubits(%-3lld, %-3lld)\n",
                 w, G2S[gate.type], r, gate.size, q1, gate.wires[gate.size - 1]);
             #endif
 
             switch (gate.type) {
             case I: { break; }
-            case H: { 
+            case H: {
                 LOAD_Q1_WORDS;
-                do_H(signs_word, words_q1); 
-                break; 
+                do_H(signs_word, words_q1);
+                break;
             }
-            case S: { 
+            case S: {
                 LOAD_Q1_WORDS;
-                do_S(signs_word, words_q1); 
-                break; 
+                do_S(signs_word, words_q1);
+                break;
             }
-            case S_DAG: { 
+            case S_DAG: {
                 LOAD_Q1_WORDS;
-                do_Sdg(signs_word, words_q1); 
-                break; 
+                do_Sdg(signs_word, words_q1);
+                break;
             }
-            case Z: { 
+            case Z: {
                 LOAD_X_WORDS(q1);
-                sign_update_X_or_Z(signs_word, x_words_q1); 
-                break; 
+                sign_update_X_or_Z(signs_word, x_words_q1);
+                break;
             }
-            case X: { 
+            case X: {
                 LOAD_Z_WORDS(q1);
-                sign_update_X_or_Z(signs_word, z_words_q1); 
-                break; 
+                sign_update_X_or_Z(signs_word, z_words_q1);
+                break;
             }
-            case Y: { 
+            case Y: {
                 LOAD_Q1_WORDS;
-                sign_update_Y(signs_word, x_words_q1, z_words_q1); 
-                break; 
+                sign_update_Y(signs_word, x_words_q1, z_words_q1);
+                break;
             }
-            case DEPOLARIZE1: { 
+            case DEPOLARIZE1: {
                 LOAD_Q1_WORDS;
-                
-                do_depolarize1(signs_word, x_words_q1, z_words_q1, state, gate.get_prob(), seed, i); 
-                break; 
+                const uint32 pauli = (noise_paulis != nullptr) ? noise_paulis[i] : 0;
+                do_depolarize1(signs_word, x_words_q1, z_words_q1, pauli);
+                break;
             }
-            case CX: { 
+            case CX: {
                 LOAD_Q2_WORDS(num_words_major);
-                do_CX(signs_word, q1, q2); break; 
+                do_CX(signs_word, q1, q2); break;
             }
-            case CZ: { 
+            case CZ: {
                 LOAD_Q2_WORDS(num_words_major);
-                do_CZ(signs_word, q1, q2); break; 
+                do_CZ(signs_word, q1, q2); break;
             }
-            case CY: { 
+            case CY: {
                 LOAD_Q2_WORDS(num_words_major);
-                do_CY(signs_word, q1, q2); break; 
+                do_CY(signs_word, q1, q2); break;
             }
-            case SWAP: { 
+            case SWAP: {
                 LOAD_Q2_WORDS(num_words_major);
-                do_SWAP(x_words_q1, x_words_q2); do_SWAP(z_words_q1, z_words_q2); break; 
+                do_SWAP(x_words_q1, x_words_q2); do_SWAP(z_words_q1, z_words_q2); break;
             }
-            case ISWAP: { 
+            case ISWAP: {
                 LOAD_Q2_WORDS(num_words_major);
-                do_iSWAP(signs_word, q1, q2); break; 
+                do_iSWAP(signs_word, q1, q2); break;
             }
-            case ISWAP_DAG: { 
+            case ISWAP_DAG: {
                 LOAD_Q2_WORDS(num_words_major);
-                do_iSWAPdg(signs_word, q1, q2); break; 
+                do_iSWAPdg(signs_word, q1, q2); break;
             }
             default: break;
             }
         }
     }
 
-    __global__ 
+    __global__
     void step_2D_atomic(
                 const_refs_t 	refs,
                 const_buckets_t gates,
-        const   uint64          seed, 
+        const   uint32*         noise_paulis,
         const 	size_t 			num_gates,
         const 	size_t 			num_words_major,
-                Table *			xs, 
+                Table *			xs,
                 Table *			zs,
-                Signs *			ss) 
+                Signs *			ss)
     {
-        curandStatePhilox4_32_10_t st;
         sign_t* signs = ss->data();
         for_parallel_y(w, num_words_major) {
             sign_t signs_word = signs[w];
@@ -126,8 +124,7 @@ namespace QuaSARQ {
                 zs->data() + w,
                 refs,
                 gates,
-                st,
-                seed,
+                noise_paulis,
                 num_gates,
                 num_words_major
             );
@@ -138,18 +135,17 @@ namespace QuaSARQ {
     }
 
     template<int B>
-    __global__ 
+    __global__
     void step_2D(
-                        const_refs_t 	refs,
-                        const_buckets_t gates,
-                const   uint64&         seed, 
-                const 	size_t 			num_gates,
-                const 	size_t 			num_words_major,
-                        Table *			xs, 
-                        Table *			zs,
-                        Signs *			ss) 
+                    const_refs_t 	refs,
+                    const_buckets_t gates,
+            const   uint32*         noise_paulis,
+            const 	size_t 			num_gates,
+            const 	size_t 			num_words_major,
+                    Table *			xs,
+                    Table *			zs,
+                    Signs *			ss)
     {
-        curandStatePhilox4_32_10_t st;
         uint32 tx = threadIdx.x;
         sign_t* smem = SharedMemory<sign_t>();
         sign_t* shared_signs = smem + threadIdx.y * B;
@@ -162,8 +158,7 @@ namespace QuaSARQ {
                 zs->data() + w,
                 refs,
                 gates,
-                st, 
-                seed,
+                noise_paulis,
                 num_gates,
                 num_words_major
             );
@@ -177,19 +172,18 @@ namespace QuaSARQ {
     }
 
     template<int B>
-    __global__ 
+    __global__
     void step_2D_warped(
                 const_refs_t 	refs,
                 const_buckets_t gates,
-        const   uint64&         seed, 
+        const   uint32*         noise_paulis,
         const 	size_t 			num_gates,
         const 	size_t 			num_words_major,
-                Table *			xs, 
+                Table *			xs,
                 Table *			zs,
-                Signs *			ss) 
+                Signs *			ss)
     {
         assert(B <= 32);
-        curandStatePhilox4_32_10_t st;
         uint32 tx = threadIdx.x;
         sign_t* signs = ss->data();
         for_parallel_y(w, num_words_major) {
@@ -204,8 +198,7 @@ namespace QuaSARQ {
                 z_gens_word,
                 refs,
                 gates,
-                st,
-                seed,
+                noise_paulis,
                 num_gates,
                 num_words_major
             );
@@ -220,7 +213,7 @@ namespace QuaSARQ {
         step_2D_warped<B> <<<currentgrid, currentblock, 0, stream>>> ( \
             refs, \
             gates, \
-            seed, \
+            noise_paulis, \
             num_gates_per_window, \
             num_words_major, \
             XZ_TABLE(tableau), \
@@ -231,7 +224,7 @@ namespace QuaSARQ {
         step_2D<B> <<<currentgrid, currentblock, shared_size, stream>>> ( \
             refs, \
             gates, \
-            seed, \
+            noise_paulis, \
             num_gates_per_window, \
             num_words_major, \
             XZ_TABLE(tableau), \
@@ -239,25 +232,38 @@ namespace QuaSARQ {
         );
 
         void call_step_2D(
-                const_refs_t 	refs,
-                const_buckets_t gates,
-                Tableau &		tableau,
-        const 	size_t & 		num_gates_per_window,
-        const 	size_t & 		num_words_major,
-        const   uint64 &        seed,
-        const 	dim3 &			currentblock,
-        const 	dim3 &			currentgrid,
-        const 	size_t & 		shared_size,
-        const 	cudaStream_t &	stream)
+                const_refs_t                refs,
+                const_buckets_t             gates,
+                Tableau &                   tableau,
+        const   size_t &                    num_gates_per_window,
+        const   size_t &                    num_words_major,
+                curand_algorithm_t*         noise_states,
+                uint32*                     noise_paulis,
+        const   dim3 &                      currentblock,
+        const   dim3 &                      currentgrid,
+        const   size_t &                    shared_size,
+        const   cudaStream_t &              stream)
     {
-        if (currentblock.x == 1) {
-            step_2D_atomic << < currentgrid, currentblock, 0, stream >> > (
+        // Sample noise.
+        if (noise_states != nullptr && noise_paulis != nullptr) {
+            dim3 sblock(256), sgrid;
+            OPTIMIZEBLOCKS(sgrid.x, num_gates_per_window, sblock.x);
+            sample_noise_k<<<sgrid, sblock, 0, stream>>>(
+                noise_states, 
+                noise_paulis, 
                 refs, 
                 gates, 
-                seed,
-                num_gates_per_window, 
-                num_words_major, 
-                XZ_TABLE(tableau), 
+                num_gates_per_window);
+        }
+        // Apply gates.
+        if (currentblock.x == 1) {
+            step_2D_atomic<<<currentgrid, currentblock, 0, stream>>>(
+                refs,
+                gates,
+                noise_paulis,
+                num_gates_per_window,
+                num_words_major,
+                XZ_TABLE(tableau),
                 tableau.signs());
         }
         else if (currentblock.x > 1 && currentblock.x <= maxWarpSize) {
@@ -304,28 +310,40 @@ namespace QuaSARQ {
             SYNCALL;
             LOG1(" Debugging at %sdepth %2d:", reversed ? "reversed " : "", depth_level);
             OPTIMIZESHARED(reduce_smem_size, 1, shared_element_bytes);
-            step_2D_atomic << < dim3(1, 1), dim3(1, 1) >> > (
-                gpu_circuit.references(), 
-                gpu_circuit.gates(), 
-                options.seed,
-                num_gates_per_window, 
-                num_words_major, 
-                XZ_TABLE(tableau), 
-                tableau.signs());
+            {
+                if (gpu_circuit.noise_states() != nullptr) {
+                    dim3 sblock(256), sgrid;
+                    OPTIMIZEBLOCKS(sgrid.x, num_gates_per_window, sblock.x);
+                    sample_noise_k<<<sgrid, sblock>>>(
+                        gpu_circuit.noise_states(), 
+                        gpu_circuit.noise_paulis(),
+                        gpu_circuit.references(), 
+                        gpu_circuit.gates(), 
+                        num_gates_per_window);
+                }
+                step_2D_atomic<<<dim3(1, 1), dim3(1, 1)>>>(
+                    gpu_circuit.references(),
+                    gpu_circuit.gates(),
+                    gpu_circuit.noise_paulis(),
+                    num_gates_per_window,
+                    num_words_major,
+                    XZ_TABLE(tableau),
+                    tableau.signs());
+            }
             LASTERR("failed to launch step kernel");
             SYNCALL;
             #else
 
             if (options.tune_step) {
                 tune_step(
-                    // best kernel config to be found. 
+                    // best kernel config to be found.
                     bestblockstep, bestgridstep
                     // shared memory size.
                     , shared_element_bytes, true
-                    // data length.         
+                    // data length.
                     , num_gates_per_window, num_words_major
-                    // seed for randomization in noise gates.
-                    , options.seed
+                    // noise state buffers.
+                    , gpu_circuit.noise_states(), gpu_circuit.noise_paulis()
                     // kernel arguments.
                     , gpu_circuit.references(), gpu_circuit.gates(), tableau
                 );
@@ -346,15 +364,16 @@ namespace QuaSARQ {
 
             double elapsed = 0;
             call_step_2D(
-                gpu_circuit.references(), 
-                gpu_circuit.gates(), 
-                tableau, 
-                num_gates_per_window, 
-                num_words_major, 
-                options.seed,
-                bestblockstep, 
-                bestgridstep, 
-                reduce_smem_size, 
+                gpu_circuit.references(),
+                gpu_circuit.gates(),
+                tableau,
+                num_gates_per_window,
+                num_words_major,
+                gpu_circuit.noise_states(),
+                gpu_circuit.noise_paulis(),
+                bestblockstep,
+                bestgridstep,
+                reduce_smem_size,
                 kernel_stream);
 
             if (options.sync) { 

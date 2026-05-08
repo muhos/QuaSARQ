@@ -131,7 +131,9 @@ void Equivalence::check() {
     const size_t num_qubits_per_partition = num_partitions > 1 ? tableau.num_words_major() * WORD_BITS : num_qubits;
     const size_t other_num_qubits_per_partition = other_num_partitions > 1 ? other_tableau.num_words_major() * WORD_BITS : other_num_qubits;
     gpu_circuit.initiate(num_qubits, winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
+    gpu_circuit.init_noise_states(options.seed, winfo.max_parallel_gates, kernel_streams[0]);
     other_gpu_circuit.initiate(num_qubits, other_wininfo.max_parallel_gates, other_wininfo.max_parallel_gates_buckets);
+    other_gpu_circuit.init_noise_states(options.seed, other_wininfo.max_parallel_gates, kernel_streams[0]);
     timer.stop();
     stats.time.initial += timer.elapsed();
     // Start step-wise equivalence.

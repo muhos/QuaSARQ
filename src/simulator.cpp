@@ -200,6 +200,7 @@ void Simulator::simulate() {
     }
     const size_t num_qubits_per_partition = num_partitions > 1 ? tableau.num_words_major() * WORD_BITS : num_qubits;
     gpu_circuit.initiate(num_qubits, winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
+    gpu_circuit.init_noise_states(options.seed, winfo.max_parallel_gates, kernel_streams[0]);
     timer.stop();
     stats.time.initial += timer.elapsed();
     // Start step-wise simulation.

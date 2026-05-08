@@ -37,7 +37,7 @@ namespace QuaSARQ {
                 Table *			zs,
                 Table *			samples) 
     {
-        curandStatePhilox4_32_10_t st;
+        curand_algorithm_t st;
         for_parallel_y(i, num_gates) {
             for_parallel_x(w, num_words_minor) {
                 const gate_ref_t r = refs[i];

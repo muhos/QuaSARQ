@@ -1,5 +1,6 @@
 #pragma once
 
+#include <curand_kernel.h>
 #include "datatypes.cuh"
 
 namespace QuaSARQ {
@@ -24,39 +25,41 @@ namespace QuaSARQ {
         LOAD_X_WORDS(q2); \
         LOAD_Z_WORDS(q2)
 
-    __global__ 
+    __global__
     void step_2D_atomic(
-                const_refs_t 	refs,
+                const_refs_t    refs,
                 const_buckets_t gates,
-        const   uint64          seed,
-        const 	size_t 			num_gates,
-        const 	size_t 			num_words_major,
-                Table *			xs, 
-                Table *			zs,
-                Signs *			ss);
+        const   uint32*         noise_paulis,
+        const   size_t          num_gates,
+        const   size_t          num_words_major,
+                Table *         xs,
+                Table *         zs,
+                Signs *         ss);
 
     void call_step_2D(
-                const_refs_t 	refs,
-                const_buckets_t gates,
-                Tableau &		tableau,
-        const 	size_t & 		num_gates_per_window,
-        const 	size_t & 		num_words_major,
-        const   uint64 &        seed,
-        const 	dim3 &			currentblock,
-        const 	dim3 &			currentgrid,
-        const 	size_t & 		shared_size,
-        const 	cudaStream_t &	stream);
+                const_refs_t                refs,
+                const_buckets_t             gates,
+                Tableau &                   tableau,
+        const   size_t &                    num_gates_per_window,
+        const   size_t &                    num_words_major,
+                curand_algorithm_t*         noise_states,
+                uint32*                     noise_paulis,
+        const   dim3 &                      currentblock,
+        const   dim3 &                      currentgrid,
+        const   size_t &                    shared_size,
+        const   cudaStream_t &              stream);
 
     void tune_step(
-                dim3 &			bestBlock,
-                dim3 &			bestGrid,
-        const 	size_t &		shared_element_bytes,
-        const 	bool &			shared_size_yextend,
-        const 	size_t &		data_size_in_x,
-        const 	size_t &		data_size_in_y,
-        const   uint64 &        seed,
-                const_refs_t 	gate_refs,
-                const_buckets_t gate_buckets,
-                Tableau &		tableau);
+                dim3 &                      bestBlock,
+                dim3 &                      bestGrid,
+        const   size_t &                    shared_element_bytes,
+        const   bool &                      shared_size_yextend,
+        const   size_t &                    data_size_in_x,
+        const   size_t &                    data_size_in_y,
+                curand_algorithm_t*         noise_states,
+                uint32*                     noise_paulis,
+                const_refs_t                gate_refs,
+                const_buckets_t             gate_buckets,
+                Tableau &                   tableau);
 
 }

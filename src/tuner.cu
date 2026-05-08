@@ -80,6 +80,7 @@ namespace QuaSARQ {
 			pivoting.alloc(num_qubits);
 		}
 		gpu_circuit.initiate(num_qubits, winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
+		gpu_circuit.init_noise_states(options.seed, winfo.max_parallel_gates, kernel_streams[0]);
 		// Start tuning simulation with max qubits.
 		do {
 			LOG2(1, "Tuning all kernels for %s%zd qubits%s, %zd partition..", CREPORTVAL, num_qubits, CNORMAL, num_partitions);
@@ -504,16 +505,17 @@ namespace QuaSARQ {
 	}
 
 	void tune_step(
-				dim3& 				bestBlock,
-				dim3& 				bestGrid,
-		const 	size_t& 			shared_element_bytes,
-		const 	bool& 				shared_size_yextend,
-		const 	size_t& 			data_size_in_x,
-		const 	size_t& 			data_size_in_y,
-		const 	uint64& 			seed,
-				const_refs_t 		gate_refs,
-				const_buckets_t 	gate_buckets,
-				Tableau& 			tableau)
+				dim3& 						bestBlock,
+				dim3& 						bestGrid,
+		const 	size_t& 					shared_element_bytes,
+		const 	bool& 						shared_size_yextend,
+		const 	size_t& 					data_size_in_x,
+		const 	size_t& 					data_size_in_y,
+				curand_algorithm_t* 		noise_states,
+				uint32* 					noise_paulis,
+				const_refs_t 				gate_refs,
+				const_buckets_t 			gate_buckets,
+				Tableau& 					tableau)
 	{
 		assert(gate_ref_t(data_size_in_x) == data_size_in_x);
 		const char* opname = "step";
@@ -521,12 +523,13 @@ namespace QuaSARQ {
 		initThreadsPerBlockX = 1;
 		TUNE_2D_CALL(
 			call_step_2D,
-			gate_refs, 
+			gate_refs,
 			gate_buckets,
 			tableau,
-			data_size_in_x, 
+			data_size_in_x,
 			data_size_in_y,
-			seed);
+			noise_states,
+			noise_paulis);
 		initThreadsPerBlockX = _initThreadsPerBlockX;
 	}
 	

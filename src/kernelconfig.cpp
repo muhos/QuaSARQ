@@ -36,46 +36,45 @@ namespace QuaSARQ {
 		if (fetched ## CONFIG) { \
 			LOG2(2, " read " #CONFIG " configuration with %lld distance: grid(%d, %d), block(%d, %d)", min_diff, bestgrid ## CONFIG.x, bestgrid ## CONFIG.y, bestblock ## CONFIG.x, bestblock ## CONFIG.y); \
 		}
-}
 
-using namespace QuaSARQ;
-
-void Simulator::register_config() {
-    if (!open_file(config_file, options.configpath, "rb")) {
-		LOGERROR("cannot proceed without registering kernel configuration.");
-	}
-    struct stat st;
-	if (!canAccess(options.configpath, st)) { 
-		LOGERROR("kernel configuration file is inaccessible.");
-	}
-	if (!st.st_size) return;
-	assert(st.st_size < UINT32_MAX);
-    char* buffer = calloc<char>(st.st_size);
-	if (!fread(buffer, 1, st.st_size, config_file))
-		LOGERROR("cannot read kernel configuration file.");
-	int64 min_diff = UINT32_MAX;
-    config_qubits = 0;
-	FOREACH_CONFIG(CONFIG2FETCHED);
-	FOREACH_CONFIG(CONFIG2BOOL);
-	char* line = buffer;
-    while (line[0] != '\0') {
-		if (line[0] == '\001' || line[0] == '\003') {
-			eatLine(line);
-			continue;
-		} 
-        config_qubits = toInteger(line);
-        if (!config_qubits)
-            LOGERROR("Expected non-zero number of qubits."); 
-		int64 diff = abs(int64(num_qubits) - config_qubits);
-		assert(diff >= 0);
-		eatWS(line);
-		FOREACH_CONFIG(CONFIG2FETCHED_LOGIC);
-		if (diff <= min_diff) {
-			min_diff = diff;
-			FOREACH_CONFIG(CONFIG2APPLY);
+	void Simulator::register_config() {
+		if (!open_file(config_file, options.configpath, "rb")) {
+			LOGERROR("cannot proceed without registering kernel configuration.");
 		}
-    }
-	FOREACH_CONFIG(CONFIG2PRINT);
-    close_file(config_file);
-    std::free(buffer);
+		struct stat st;
+		if (!canAccess(options.configpath, st)) { 
+			LOGERROR("kernel configuration file is inaccessible.");
+		}
+		if (!st.st_size) return;
+		assert(st.st_size < UINT32_MAX);
+		char* buffer = calloc<char>(st.st_size);
+		if (!fread(buffer, 1, st.st_size, config_file))
+			LOGERROR("cannot read kernel configuration file.");
+		int64 min_diff = UINT32_MAX;
+		config_qubits = 0;
+		FOREACH_CONFIG(CONFIG2FETCHED);
+		FOREACH_CONFIG(CONFIG2BOOL);
+		char* line = buffer;
+		while (line[0] != '\0') {
+			if (line[0] == '\001' || line[0] == '\003') {
+				eatLine(line);
+				continue;
+			} 
+			config_qubits = toInteger(line);
+			if (!config_qubits)
+				LOGERROR("Expected non-zero number of qubits."); 
+			int64 diff = std::abs((long long)num_qubits - (long long)config_qubits);
+			assert(diff >= 0);
+			eatWS(line);
+			FOREACH_CONFIG(CONFIG2FETCHED_LOGIC);
+			if (diff <= min_diff) {
+				min_diff = diff;
+				FOREACH_CONFIG(CONFIG2APPLY);
+			}
+		}
+		FOREACH_CONFIG(CONFIG2PRINT);
+		close_file(config_file);
+		std::free(buffer);
+	}
+
 }

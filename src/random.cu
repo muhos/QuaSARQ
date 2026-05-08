@@ -9,7 +9,7 @@ namespace QuaSARQ {
         const   size_t      num_words,
         const   uint64      seed)
     {
-        curandStatePhilox4_32_10_t st;
+        curand_algorithm_t st;
         for_parallel_x(w, num_words) {
             randomize_word(data[w], st, seed, global_tx);
         }

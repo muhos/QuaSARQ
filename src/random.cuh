@@ -5,7 +5,7 @@
 namespace QuaSARQ {
 
     INLINE_DEVICE float random_uniform(
-        curandStatePhilox4_32_10_t& state,
+        curand_algorithm_t& state,
         const uint64&               seed,
         const size_t&               tid)
     {
@@ -15,7 +15,7 @@ namespace QuaSARQ {
 
     INLINE_DEVICE void randomize_word(
         word_std_t&                 word, 
-        curandStatePhilox4_32_10_t& state, 
+        curand_algorithm_t& state, 
         const uint64&               seed, 
         const size_t&               tid) 
     {
@@ -34,7 +34,7 @@ namespace QuaSARQ {
 
     INLINE_DEVICE void randomize_word(
         word_t&                     word, 
-        curandStatePhilox4_32_10_t& state, 
+        curand_algorithm_t& state, 
         const uint64&               seed, 
         const size_t&               tid) 
     {

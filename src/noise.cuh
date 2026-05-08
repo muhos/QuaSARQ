@@ -1,30 +1,37 @@
 #pragma once
 
 #include "definitions.cuh"
+#include "datatypes.cuh"
 #include "operators.cuh"
-#include "random.cuh"
 #include "word.cuh"
 #include "grid.cuh"
+#include "gate.cuh"
 
 namespace QuaSARQ {
 
+    __global__
+    void setup_noise_k(
+        curand_algorithm_t*         noise_states,
+        const uint64                seed,
+        const size_t                max_gates);
+
+    __global__
+   void sample_noise_k(
+        curand_algorithm_t*         noise_states,
+        uint32*                     noise_paulis,
+        const_refs_t                refs,
+        const_buckets_t             gates,
+        const size_t                num_gates);
+
     INLINE_DEVICE
     void do_depolarize1(
-        sign_t& signs_word, 
-        word_t& x_words_q1,
-        word_t& z_words_q1,
-        curandStatePhilox4_32_10_t& state, 
-        const float& noise_p, 
-        const uint64& seed, 
-        const grid_t& tid) 
+        sign_t&       signs_word,
+        word_t&       x_words_q1,
+        word_t&       z_words_q1,
+        const uint32& pauli)
     {
-        const float r = random_uniform(state, seed, tid);
-        printf("--> Depolarizing gate %llu with p = %.3f, r = %.3f\n", tid, noise_p, r);
-        if (r < noise_p) {
-            const uint32 p = 1 + (curand(&state) % 3);
-            if (p & 1) sign_update_X_or_Z(signs_word, z_words_q1); // X
-            if (p & 2) sign_update_X_or_Z(signs_word, x_words_q1); // Z
-        }
+        if (pauli & 1u) sign_update_X_or_Z(signs_word, z_words_q1); // X error
+        if (pauli & 2u) sign_update_X_or_Z(signs_word, x_words_q1); // Z error
     }
 
 }

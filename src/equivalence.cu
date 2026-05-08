@@ -98,12 +98,13 @@ namespace QuaSARQ {
                 SYNC(copy_stream1);
                 SYNC(copy_stream2);
                 call_step_2D(
-                    gpu_circuit.references(), 
-                    gpu_circuit.gates(), 
-                    tableau, 
-                    num_gates_per_window, 
-                    num_words_major, 
-                    options.seed,
+                    gpu_circuit.references(),
+                    gpu_circuit.gates(),
+                    tableau,
+                    num_gates_per_window,
+                    num_words_major,
+                    gpu_circuit.noise_states(),
+                    gpu_circuit.noise_paulis(),
                     bestblockstep,
                     bestgridstep,
                     reduce_smem_size,
@@ -114,12 +115,13 @@ namespace QuaSARQ {
                 SYNC(other_copy_stream1);
                 SYNC(other_copy_stream2);
                 call_step_2D(
-                    other_gpu_circuit.references(), 
-                    other_gpu_circuit.gates(), 
-                    other_tableau, 
-                    other_num_gates_per_window, 
-                    other_num_words_major, 
-                    options.seed,
+                    other_gpu_circuit.references(),
+                    other_gpu_circuit.gates(),
+                    other_tableau,
+                    other_num_gates_per_window,
+                    other_num_words_major,
+                    other_gpu_circuit.noise_states(),
+                    other_gpu_circuit.noise_paulis(),
                     bestblockstep,
                     bestgridstep,
                     reduce_smem_size,
