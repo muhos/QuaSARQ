@@ -10,6 +10,8 @@ namespace QuaSARQ {
 	typedef unsigned char byte_t;
 	typedef unsigned short uint16;
 	typedef unsigned int uint32;
+	typedef uint32 qubit_t;
+	typedef uint32 depth_t;
 	typedef signed long long int int64;
 	typedef unsigned long long int uint64;
 

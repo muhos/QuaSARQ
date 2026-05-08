@@ -1,6 +1,7 @@
 #pragma once
 
 #include "vector.hpp"
+#include "limits.hpp"
 #include "gate.cuh"
 
 using std::string;
@@ -14,11 +15,9 @@ namespace QuaSARQ {
      * circuit of any gate type of any number of inputs.  
     */
 
-    typedef uint32 depth_t;
     typedef Vec<bucket_t, size_t> buckets_container;
     typedef Vec<gate_ref_t, size_t> Window;
     typedef Vec<bool, size_t> Marker;
-
 
     constexpr depth_t MAX_DEPTH = UINT32_MAX;
 	constexpr size_t GATEBUCKETS = (GATESIZE / BUCKETSIZE);

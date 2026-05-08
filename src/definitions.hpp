@@ -46,11 +46,11 @@ using std::ifstream;
 namespace QuaSARQ {
 
 
-	inline bool isDigit				(const char& ch) { return (ch ^ 48) <= 9; }
-	inline bool isSpace				(const char& ch) { return (ch >= 9 && ch <= 13) || ch == 32; }
-	inline void eatWS				(char*& str) { while (isSpace(*str)) str++; }
-	inline void eatLine				(char*& str) { while (*str) if (*str++ == '\n') return; }
-	inline uint32 toInteger			(char*& str)
+	inline bool 	isDigit				(const char& ch) { return (ch ^ 48) <= 9; }
+	inline bool 	isSpace				(const char& ch) { return (ch >= 9 && ch <= 13) || ch == 32; }
+	inline void 	eatWS				(char*& str) { while (isSpace(*str)) str++; }
+	inline void 	eatLine				(char*& str) { while (*str) if (*str++ == '\n') return; }
+	inline uint32 	toInteger			(char*& str)
 	{
 		eatWS(str);
 		if (!isDigit(*str)) LOGERROR("expected a digit but 0x%0X is found", *str);
@@ -58,7 +58,7 @@ namespace QuaSARQ {
 		while (isDigit(*str)) n = n * 10 + (*str++ - '0');
 		return n;
 	}
-	inline size_t toInteger			(char*& str, uint32& sign)
+	inline size_t 	toInteger			(char*& str, uint32& sign)
 	{
 		eatWS(str);
 		sign = 0;
@@ -69,7 +69,22 @@ namespace QuaSARQ {
 		while (isDigit(*str)) n = n * 10ULL + (*str++ - '0');
 		return n;
 	}
-	inline uint32 nextPow2(uint32 x) {
+	inline float 	toFloat				(char*& str)
+	{
+		eatWS(str);
+		float n = 0.0f, frac = 0.0f;
+		float div = 1.0f;
+		bool has_frac = false;
+		if (!isDigit(*str)) LOGERROR("expected a digit but 0x%0X is found", *str);
+		while (isDigit(*str)) n = n * 10.0f + float(*str++ - '0');
+		if (*str == '.') {
+			str++;
+			has_frac = true;
+			while (isDigit(*str)) { frac = frac * 10.0f + float(*str++ - '0'); div *= 10.0f; }
+		}
+		return has_frac ? (n + frac / div) : n;
+	}
+	inline uint32 	nextPow2			(uint32 x) {
 		if (x <= 1) {
 			return 1;
 		}
@@ -116,7 +131,7 @@ namespace QuaSARQ {
 		}
 		return 0;
 	}
-	inline bool canAccess(const char* path, struct stat& st)
+	inline bool 	canAccess		(const char* path, struct stat& st)
 	{
 		if (stat(path, &st)) return false;
 #ifdef _WIN32

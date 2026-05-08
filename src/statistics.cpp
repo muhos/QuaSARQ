@@ -3,7 +3,7 @@
 using namespace QuaSARQ;
 
 #define GATE2STATISTIC(GATE) \
-	LOG1(" %s %-10s  %19s %s%-12zd (%%%-3.0f)%s", \
+	LOG1(" %s %-16s  %13s %s%-12zd (%%%-3.0f)%s", \
 			CREPORT, #GATE, ":", CREPORTVAL, stats.circuit.gate_stats.types[GATE], \
 			percent((double)stats.circuit.gate_stats.types[GATE], stats.circuit.num_gates), CNORMAL);	\
 
