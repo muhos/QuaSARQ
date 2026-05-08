@@ -1,5 +1,4 @@
-#include "frame.hpp"
-#include "random.cuh"
+#include "frame.cuh"
 #include "locker.cuh"
 
 namespace QuaSARQ {
@@ -26,18 +25,17 @@ namespace QuaSARQ {
         }
     }
 
-        __global__ 
+        __global__
     void record_sample(
-                const_refs_t 	refs,
-                const_buckets_t gates,
-        const 	size_t 			num_gates,
-        const 	size_t 			num_words_minor,
-        const   uint64          seed,
-                Table *			xs, 
-                Table *			zs,
-                Table *			samples) 
+                const_refs_t        refs,
+                const_buckets_t     gates,
+        const   size_t              num_gates,
+        const   size_t              num_words_minor,
+                curand_algorithm_t* rand_states,
+                Table *             xs,
+                Table *             zs,
+                Table *             samples)
     {
-        curand_algorithm_t st;
         for_parallel_y(i, num_gates) {
             for_parallel_x(w, num_words_minor) {
                 const gate_ref_t r = refs[i];
@@ -48,12 +46,17 @@ namespace QuaSARQ {
                 assert(q != INVALID_QUBIT);
                 const size_t q_word_idx = q * num_words_minor + w;
                 (*samples)[q_word_idx] ^= (*xs)[q_word_idx];
-                randomize_word(
-                    (*zs)[q_word_idx], 
-                    st, 
-                    seed, 
-                    w * num_gates + i
-                );
+                curand_algorithm_t local = rand_states[i * num_words_minor + w];
+                #if defined(WORD_SIZE_8)
+                    (*zs)[q_word_idx] = word_t(curand(&local) & 0xFFu);
+                #elif defined(WORD_SIZE_32)
+                    (*zs)[q_word_idx] = word_t(curand(&local));
+                #elif defined(WORD_SIZE_64)
+                    word_std_t hi = word_std_t(curand(&local));
+                    word_std_t lo = word_std_t(curand(&local));
+                    (*zs)[q_word_idx] = word_t((hi << 32) | lo);
+                #endif
+                rand_states[i * num_words_minor + w] = local;
             }
         }
     }
@@ -66,16 +69,16 @@ namespace QuaSARQ {
         std::swap(currentblock.x, currentblock.y);
         std::swap(currentgrid.x, currentgrid.y);
         LOGN2(2, "Recording %lld measurements under %lld shots with block(x:%u, y:%u) and grid(x:%u, y:%u).. ",
-            num_gates_per_window, tableau.num_words_minor() * WORD_BITS, 
+            num_gates_per_window, tableau.num_words_minor() * WORD_BITS,
             currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
         double elapsed = 0;
         if (options.sync) cutimer.start(stream);
-        record_sample <<< currentgrid, currentblock, 0, stream >>> (
-            gpu_circuit.references(), 
-            gpu_circuit.gates(), 
-            num_gates_per_window, 
+        record_sample<<<currentgrid, currentblock, 0, stream>>>(
+            gpu_circuit.references(),
+            gpu_circuit.gates(),
+            num_gates_per_window,
             tableau.num_words_minor(),
-            options.seed,
+            rand_states,
             XZ_TABLE(tableau),
             samples_record.device
         );

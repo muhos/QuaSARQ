@@ -5,7 +5,7 @@
 #include "logging.hpp"
 #include "banner.hpp"
 #include "input.hpp"
-#include "frame.hpp"
+#include "frame.cuh"
 #include "tuner.cuh"
 
 using namespace std;

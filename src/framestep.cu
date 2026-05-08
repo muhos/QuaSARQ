@@ -1,4 +1,4 @@
-#include "frame.hpp"
+#include "frame.cuh"
 #include "step.cuh"
 #include "operators.cuh"
 #include "random.cuh"

@@ -72,14 +72,28 @@ namespace QuaSARQ {
 
             if (p < num_partitions && d < depth) {
                 LOG1(" Debugging circuit-1 at depth %2d:", d);
-                step_2D_atomic << < dim3(1, 1), dim3(1, 1) >> > (gpu_circuit.references(), gpu_circuit.gates(), num_gates_per_window, num_words_major, XZ_TABLE(tableau), tableau.signs());
+                step_2D_atomic << < dim3(1, 1), dim3(1, 1) >> > (
+                    gpu_circuit.references(), 
+                    gpu_circuit.gates(), 
+                    num_gates_per_window, 
+                    num_words_major, 
+                    XZ_TABLE(tableau), 
+                    tableau.signs()
+                );
                 LASTERR("failed to launch step kernel");
                 SYNCALL;
             }
 
             if (p < other_num_partitions && d < other_depth) {
                 LOG1(" Debugging circuit-2 at depth %2d:", d);
-                step_2D_atomic << < dim3(1, 1), dim3(1, 1) >> > (other_gpu_circuit.references(), other_gpu_circuit.gates(), other_num_gates_per_window, other_num_words_major, XZ_TABLE(other_tableau), other_tableau.signs());
+                step_2D_atomic << < dim3(1, 1), dim3(1, 1) >> > (
+                    other_gpu_circuit.references(), 
+                    other_gpu_circuit.gates(), 
+                    other_num_gates_per_window, 
+                    other_num_words_major, 
+                    XZ_TABLE(other_tableau), o
+                    ther_tableau.signs()
+                );
                 LASTERR("failed to launch other step kernel");
                 SYNCALL;             
             }
@@ -150,7 +164,13 @@ namespace QuaSARQ {
         // Check equivalence of two tableaus.
         SYNCALL;
         equivalent = 1;
-        equivalence_1D << < bestgrididentity, bestblockidentity >> > (XZ_TABLE(tableau), tableau.signs(), XZ_TABLE(other_tableau), other_tableau.signs(), MIN(tableau.num_words_per_table(), other_tableau.num_words_per_table()));
+        equivalence_1D << < bestgrididentity, bestblockidentity >> > (
+            XZ_TABLE(tableau), 
+            tableau.signs(), 
+            XZ_TABLE(other_tableau), 
+            other_tableau.signs(), 
+            MIN(tableau.num_words_per_table(), other_tableau.num_words_per_table())
+        );
         LASTERR("failed to launch equivalence kernel");
         SYNC(0);
         if (equivalent)
