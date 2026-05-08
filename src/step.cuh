@@ -28,6 +28,7 @@ namespace QuaSARQ {
     void step_2D_atomic(
                 const_refs_t 	refs,
                 const_buckets_t gates,
+        const   uint64          seed,
         const 	size_t 			num_gates,
         const 	size_t 			num_words_major,
                 Table *			xs, 
@@ -38,11 +39,12 @@ namespace QuaSARQ {
                 const_refs_t 	refs,
                 const_buckets_t gates,
                 Tableau &		tableau,
-        const 	size_t 			num_gates_per_window,
-        const 	size_t 			num_words_major,
+        const 	size_t & 		num_gates_per_window,
+        const 	size_t & 		num_words_major,
         const 	dim3 &			currentblock,
         const 	dim3 &			currentgrid,
-        const 	size_t 			shared_size,
+        const 	size_t & 		shared_size,
+        const   uint64 &        seed,
         const 	cudaStream_t &	stream);
 
     void tune_step(
@@ -52,6 +54,7 @@ namespace QuaSARQ {
         const 	bool &			shared_size_yextend,
         const 	size_t &		data_size_in_x,
         const 	size_t &		data_size_in_y,
+        const   uint64 &        seed,
                 const_refs_t 	gate_refs,
                 const_buckets_t gate_buckets,
                 Tableau &		tableau);

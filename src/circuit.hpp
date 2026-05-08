@@ -212,15 +212,17 @@ namespace QuaSARQ {
             return GATE_PTR(gate_ref); 
         }
 
-        inline 
+        inline
         Gate*       addGate     (const depth_t& depth_level, const byte_t& type, const Vec<qubit_t, input_size_t>& inputs) {
 			assert(depth_level < MAX_DEPTH);
 			const input_size_t size = inputs.size();
-			gate_ref_t r = (gate_ref_t) buckets_container::alloc(NBUCKETS(size));
+			const size_t extra = isDepolarize(int(type)) ? 1 : 0;
+			const size_t buckets = NBUCKETS(size + extra);
+			const gate_ref_t r = (gate_ref_t) buckets_container::alloc(buckets);
 			Gate* gate = new (GATE_PTR(r)) Gate(size);
 			assert(gate->size == size);
-			assert(gate->capacity() == NBUCKETS(size) * sizeof(bucket_t));
 			gate->type = type;
+			assert(gate->capacity() == buckets * sizeof(bucket_t));
 			for (input_size_t i = 0; i < size; i++)
 				gate->wires[i] = inputs[i];
             if (windows.size() <= depth_level) {
@@ -228,7 +230,7 @@ namespace QuaSARQ {
                 nbuckets.expand(depth_level + 1, 0);
             }
 			windows[depth_level].push(r);
-			nbuckets[depth_level] += NBUCKETS(size);
+			nbuckets[depth_level] += buckets;
 			assert(nbuckets[depth_level] <= num_buckets());
 			++ngates;
 			return gate;
@@ -237,12 +239,13 @@ namespace QuaSARQ {
         inline
         Gate*       addGate     (const depth_t& depth_level, const byte_t& type, const input_size_t size, const qubit_t& c, const qubit_t& t = INVALID_QUBIT) {
             assert(depth_level < MAX_DEPTH);
-            const size_t buckets = NBUCKETS(size);
+            const size_t extra = isDepolarize(int(type)) ? 1 : 0;
+            const size_t buckets = NBUCKETS(size + extra);
             gate_ref_t r = (gate_ref_t)buckets_container::alloc(buckets);
             Gate* gate = new GATE_PTR(r) Gate(size);
             assert(gate->size == size);
-            assert(gate->capacity() == buckets * sizeof(bucket_t));
             gate->type = type;
+            assert(gate->capacity() == buckets * sizeof(bucket_t));
             gate->wires[0] = c;
             if (windows.size() <= depth_level) {
                 windows.expand(depth_level + 1);

@@ -4,6 +4,15 @@
 
 namespace QuaSARQ {
 
+    INLINE_DEVICE float random_uniform(
+        curandStatePhilox4_32_10_t& state,
+        const uint64&               seed,
+        const size_t&               tid)
+    {
+        curand_init(seed, tid, 0, &state);
+        return curand_uniform(&state);
+    }
+
     INLINE_DEVICE void randomize_word(
         word_std_t&                 word, 
         curandStatePhilox4_32_10_t& state, 

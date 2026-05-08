@@ -1,7 +1,8 @@
 #include "simulator.hpp"
 #include "step.cuh"
-#include "operators.cuh"
+#include "noise.cuh"
 #include "collapse.cuh"
+#include "operators.cuh"
 #include "templatedim.cuh"
 
 namespace QuaSARQ {
@@ -13,6 +14,8 @@ namespace QuaSARQ {
                 word_t*         z_gens_word,
                 const_refs_t    refs,
                 const_buckets_t gates,
+                curandStatePhilox4_32_10_t& state, 
+        const   uint64&         seed, 
         const   size_t&         num_gates,
         const   size_t&         num_words_major
     ) {
@@ -67,6 +70,11 @@ namespace QuaSARQ {
                 sign_update_Y(signs_word, x_words_q1, z_words_q1); 
                 break; 
             }
+            case DEPOLARIZE1: { 
+                LOAD_Q1_WORDS;
+                do_depolarize1(signs_word, x_words_q1, z_words_q1, state, gate.get_prob(), r, i); 
+                break; 
+            }
             case CX: { 
                 LOAD_Q2_WORDS(num_words_major);
                 do_CX(signs_word, q1, q2); break; 
@@ -100,12 +108,14 @@ namespace QuaSARQ {
     void step_2D_atomic(
                 const_refs_t 	refs,
                 const_buckets_t gates,
+        const   uint64          seed, 
         const 	size_t 			num_gates,
         const 	size_t 			num_words_major,
                 Table *			xs, 
                 Table *			zs,
                 Signs *			ss) 
     {
+        curandStatePhilox4_32_10_t st;
         sign_t* signs = ss->data();
         for_parallel_y(w, num_words_major) {
             sign_t signs_word = signs[w];
@@ -115,6 +125,8 @@ namespace QuaSARQ {
                 zs->data() + w,
                 refs,
                 gates,
+                st,
+                seed,
                 num_gates,
                 num_words_major
             );
@@ -129,12 +141,14 @@ namespace QuaSARQ {
     void step_2D(
                         const_refs_t 	refs,
                         const_buckets_t gates,
+                const   uint64&         seed, 
                 const 	size_t 			num_gates,
                 const 	size_t 			num_words_major,
                         Table *			xs, 
                         Table *			zs,
                         Signs *			ss) 
     {
+        curandStatePhilox4_32_10_t st;
         uint32 tx = threadIdx.x;
         sign_t* smem = SharedMemory<sign_t>();
         sign_t* shared_signs = smem + threadIdx.y * B;
@@ -164,6 +178,7 @@ namespace QuaSARQ {
     void step_2D_warped(
                 const_refs_t 	refs,
                 const_buckets_t gates,
+        const   uint64&         seed, 
         const 	size_t 			num_gates,
         const 	size_t 			num_words_major,
                 Table *			xs, 
@@ -171,6 +186,7 @@ namespace QuaSARQ {
                 Signs *			ss) 
     {
         assert(B <= 32);
+        curandStatePhilox4_32_10_t st;
         uint32 tx = threadIdx.x;
         sign_t* signs = ss->data();
         for_parallel_y(w, num_words_major) {
@@ -199,6 +215,7 @@ namespace QuaSARQ {
         step_2D_warped<B> <<<currentgrid, currentblock, 0, stream>>> ( \
             refs, \
             gates, \
+            seed, \
             num_gates_per_window, \
             num_words_major, \
             XZ_TABLE(tableau), \
@@ -209,27 +226,30 @@ namespace QuaSARQ {
         step_2D<B> <<<currentgrid, currentblock, shared_size, stream>>> ( \
             refs, \
             gates, \
+            seed, \
             num_gates_per_window, \
             num_words_major, \
             XZ_TABLE(tableau), \
             tableau.signs() \
         );
 
-    void call_step_2D(
-                const_refs_t    refs,
+        void call_step_2D(
+                const_refs_t 	refs,
                 const_buckets_t gates,
-                Tableau&        tableau,
-        const   size_t          num_gates_per_window,
-        const   size_t          num_words_major,
-        const   dim3&           currentblock,
-        const   dim3&           currentgrid,
-        const   size_t          shared_size,
-        const   cudaStream_t&   stream)
+                Tableau &		tableau,
+        const 	size_t & 		num_gates_per_window,
+        const 	size_t & 		num_words_major,
+        const 	dim3 &			currentblock,
+        const 	dim3 &			currentgrid,
+        const 	size_t & 		shared_size,
+        const   uint64 &        seed,
+        const 	cudaStream_t &	stream)
     {
         if (currentblock.x == 1) {
             step_2D_atomic << < currentgrid, currentblock, 0, stream >> > (
                 refs, 
                 gates, 
+                seed,
                 num_gates_per_window, 
                 num_words_major, 
                 XZ_TABLE(tableau), 
@@ -282,6 +302,7 @@ namespace QuaSARQ {
             step_2D_atomic << < dim3(1, 1), dim3(1, 1) >> > (
                 gpu_circuit.references(), 
                 gpu_circuit.gates(), 
+                options.seed,
                 num_gates_per_window, 
                 num_words_major, 
                 XZ_TABLE(tableau), 
@@ -298,6 +319,8 @@ namespace QuaSARQ {
                     , shared_element_bytes, true
                     // data length.         
                     , num_gates_per_window, num_words_major
+                    // seed for randomization in noise gates.
+                    , options.seed
                     // kernel arguments.
                     , gpu_circuit.references(), gpu_circuit.gates(), tableau
                 );
@@ -326,6 +349,7 @@ namespace QuaSARQ {
                 bestblockstep, 
                 bestgridstep, 
                 reduce_smem_size, 
+                options.seed,
                 kernel_stream);
 
             if (options.sync) { 

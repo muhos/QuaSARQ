@@ -510,6 +510,7 @@ namespace QuaSARQ {
 		const 	bool& 				shared_size_yextend,
 		const 	size_t& 			data_size_in_x,
 		const 	size_t& 			data_size_in_y,
+		const 	uint64& 			seed,
 				const_refs_t 		gate_refs,
 				const_buckets_t 	gate_buckets,
 				Tableau& 			tableau)

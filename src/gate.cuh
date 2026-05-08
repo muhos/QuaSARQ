@@ -25,6 +25,24 @@ namespace QuaSARQ {
         FOREACH_GATE(GATE2STR)
     };
 
+    // Returns true for 2-qubit gates (including DEPOLARIZE2).
+    INLINE_ALL 
+    bool isGate2(const int& type) {
+        return type >= int(NR_GATETYPES_1) && type < int(NR_GATETYPES);
+    }
+
+    // Returns true for measurement gates.
+    INLINE_ALL 
+    bool isMeasurement(const int& type) {
+        return type == int(R) || type == int(M) || type == int(MR);
+    }
+
+    // Returns true for depolarizing noise gates.
+    INLINE_ALL 
+    bool isDepolarize(const int& type) {
+        return type == int(DEPOLARIZE1) || type == int(DEPOLARIZE2);
+    }
+
     /**
      * Gate structure.
      * Stores its type and dynamic number of inputs.
@@ -39,14 +57,36 @@ namespace QuaSARQ {
         qubit_t wires[0];
 
         INLINE_ALL 
-        Gate() : type(I), size(1) { }
+        Gate() : type(I), size(1) { 
+            assert(sizeof(qubit_t) >= sizeof(float));
+        }
 
         INLINE_ALL 
         explicit Gate(const input_size_t& size) : 
-            type(I), size(size) { }
+            type(I), size(size) { 
+                assert(sizeof(qubit_t) >= sizeof(float));
+            }
 
-		INLINE_ALL 
-        size_t capacity() const { assert(size); return size_t(size) * sizeof(qubit_t) + sizeof(*this); }
+		INLINE_ALL
+        size_t capacity() const {
+            assert(size);
+            const size_t extra = isDepolarize(int(type)) ? 1 : 0;
+            return (size_t(size) + extra) * sizeof(qubit_t) + sizeof(*this);
+        }
+
+        // Store depolarizing probability in the last wire.
+        // Only valid when isDepolarize(type) and sizeof(float) <= sizeof(qubit_t).
+        INLINE_ALL
+        void set_prob(const float& p) {
+            memcpy(&wires[size], &p, sizeof(float));
+        }
+
+        INLINE_ALL
+        float get_prob() const {
+            float p;
+            memcpy(&p, &wires[size], sizeof(float));
+            return p;
+        }
 
         INLINE_ALL
         void dagger() {
