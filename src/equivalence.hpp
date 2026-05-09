@@ -16,7 +16,7 @@ namespace QuaSARQ {
         DeviceCircuit 					other_gpu_circuit;
 		Statistics                      other_stats;
 		cudaStream_t*                   other_custreams;
-		WindowInfo                      other_wininfo;
+		WindowInfo                      other_winfo;
 		string 							ogate, rgate;
 		char							failed_state;
 

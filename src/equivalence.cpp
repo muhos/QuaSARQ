@@ -4,7 +4,7 @@
 using namespace QuaSARQ;
 
 #define OTHER_GATE2STATISTIC(GATE) \
-	LOG1(" %s %-5s  %24s %s%-12zd (%%%-3.0f)%s", \
+	LOG1(" %s %-16s  %13s %s%-12zd (%%%-3.0f)%s", \
 			CREPORT, #GATE, ":", CREPORTVAL, other_stats.circuit.gate_stats.types[GATE], \
 			percent((double)other_stats.circuit.gate_stats.types[GATE], other_stats.circuit.num_gates), CNORMAL);	\
 
@@ -21,7 +21,7 @@ Equivalence::Equivalence() :
         assert(!circuit.empty());
         create_streams(other_custreams);
         inject_faulty();
-        gpu_allocator.resize_cpu_pool(winfo.max_window_bytes + other_wininfo.max_window_bytes + KB * gpu_allocator.alignment());
+        gpu_allocator.resize_cpu_pool(winfo.max_window_bytes + other_winfo.max_window_bytes + KB * gpu_allocator.alignment());
     }
 
 Equivalence::Equivalence(const string& path_to_circuit, const string& path_to_other) :
@@ -45,12 +45,12 @@ Equivalence::Equivalence(const string& path_to_circuit, const string& path_to_ot
             stats.time.initial += other_stats.time.initial;
             stats.time.schedule += other_stats.time.schedule;
         }
-        gpu_allocator.resize_cpu_pool(winfo.max_window_bytes + other_wininfo.max_window_bytes + KB * gpu_allocator.alignment());
+        gpu_allocator.resize_cpu_pool(winfo.max_window_bytes + other_winfo.max_window_bytes + KB * gpu_allocator.alignment());
     }
 
 void Equivalence::inject_faulty() {
     circuit.copyTo(other_circuit);
-    other_wininfo = winfo;
+    other_winfo = winfo;
     other_num_qubits = num_qubits;
     other_depth = depth;
     other_stats = stats;
@@ -120,20 +120,22 @@ void Equivalence::check() {
     LOGHEADER(1, 4, "Equivalence checking");
     if (num_qubits != other_num_qubits) {
         LOG2(1, "%s NOT EQUIVALENT%s due to misaligned qubits.", CRED, CNORMAL);
+        report(false);
+        return;
     }
     // Create two tableaus in GPU memory.
     Power power;
     timer.start();
-    size_t estimated_num_partitions = get_num_partitions(2, num_qubits, winfo.max_window_bytes + other_wininfo.max_window_bytes, gpu_stable_avail(gpu_allocator));
+    size_t estimated_num_partitions = get_num_partitions(2, num_qubits, winfo.max_window_bytes + other_winfo.max_window_bytes, gpu_stable_avail(gpu_allocator));
     num_partitions = tableau.alloc(num_qubits, 0, winfo.max_window_bytes, false, false, true, estimated_num_partitions);
-    other_num_partitions = other_tableau.alloc(other_num_qubits, 0, other_wininfo.max_window_bytes, false, false, true, estimated_num_partitions);
+    other_num_partitions = other_tableau.alloc(other_num_qubits, 0, other_winfo.max_window_bytes, false, false, true, estimated_num_partitions);
     assert(num_partitions == other_num_partitions);
     const size_t num_qubits_per_partition = num_partitions > 1 ? tableau.num_words_major() * WORD_BITS : num_qubits;
     const size_t other_num_qubits_per_partition = other_num_partitions > 1 ? other_tableau.num_words_major() * WORD_BITS : other_num_qubits;
     gpu_circuit.initiate(num_qubits, winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
     gpu_circuit.init_noise_states(options.seed, winfo.max_parallel_gates, kernel_streams[0]);
-    other_gpu_circuit.initiate(num_qubits, other_wininfo.max_parallel_gates, other_wininfo.max_parallel_gates_buckets);
-    other_gpu_circuit.init_noise_states(options.seed, other_wininfo.max_parallel_gates, kernel_streams[0]);
+    other_gpu_circuit.initiate(num_qubits, other_winfo.max_parallel_gates, other_winfo.max_parallel_gates_buckets);
+    other_gpu_circuit.init_noise_states(options.seed, other_winfo.max_parallel_gates, kernel_streams[0]);
     timer.stop();
     stats.time.initial += timer.elapsed();
     // Start step-wise equivalence.

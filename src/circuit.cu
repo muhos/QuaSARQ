@@ -5,11 +5,11 @@ namespace QuaSARQ {
 
     void DeviceCircuit::initiate(const size_t& max_qubits, const size_t& max_references, const size_t& max_buckets) {
         if (!max_qubits || max_qubits > MAX_QUBITS)
-            LOGERROR("maximum number of qubits per window is invalid.");
+            LOGERROR("maximum number of qubits %lld per window is invalid.", int64(max_qubits));
         if (!max_references || max_references > MAX_QUBITS)
-            LOGERROR("maximum number of references per window is invalid.");
+            LOGERROR("maximum number of references %lld per window is invalid.", int64(max_references));
         if (!max_buckets || max_buckets > NO_REF)
-            LOGERROR("maximum number of buckets per window is invalid.");		
+            LOGERROR("maximum number of buckets %lld per window is invalid.", int64(max_buckets));		
         if (this->max_references < max_references) {
             LOGN2(2, "Resizing a (pinned) window for %lld references.. ", int64(max_references));
             this->max_references = max_references;

@@ -123,8 +123,12 @@ namespace QuaSARQ {
             observables.init();
         }
 
-        void destroy() {
+        void destroy(const bool& free = false) {
             circuit_queue.clear(true);
+            if (free) {
+                observables.destroy();
+                measures_count = 0;
+            }
             gate_stats.destroy();
             if (buffer != nullptr) {
 #if defined(__linux__) || defined(__CYGWIN__)

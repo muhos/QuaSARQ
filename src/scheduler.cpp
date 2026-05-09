@@ -427,7 +427,7 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
     stats.circuit.bytes = stats.circuit.num_gates * sizeof(gate_ref_t) + circuit.num_buckets() * BUCKETSIZE;
     locked.clear(true);
     locked_qubits.clear(true);
-    circuit_io.destroy();
+    circuit_io.destroy(true);
     // Sort gates in each depth level.
     // Must be disabled during checking 
     // to avoid messing up the references.
