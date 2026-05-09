@@ -89,7 +89,7 @@ namespace QuaSARQ {
         void        parse           ();
         void        simulate        ();
         size_t      parse           (Statistics& stats, const char* path);
-        size_t      schedule        (Statistics& stats, Circuit& circuit);
+        size_t      schedule        (Statistics& stats, Circuit& circuit, WindowInfo& target_winfo);
         void        simulate        (const size_t& p, const bool& reversed);
 
         // Launch a kernel to make identity tableau.

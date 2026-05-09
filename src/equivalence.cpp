@@ -41,7 +41,7 @@ Equivalence::Equivalence(const string& path_to_circuit, const string& path_to_ot
         else {
             assert(!circuit_io.size);
             other_num_qubits = parse(other_stats, path_to_other.c_str());
-            other_depth = schedule(other_stats, other_circuit);
+            other_depth = schedule(other_stats, other_circuit, other_winfo);
             stats.time.initial += other_stats.time.initial;
             stats.time.schedule += other_stats.time.schedule;
         }

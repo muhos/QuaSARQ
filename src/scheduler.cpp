@@ -289,7 +289,7 @@ size_t Simulator::parse(Statistics& stats, const char* path) {
     return max_qubits;
 }
 
-size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
+size_t Simulator::schedule(Statistics& stats, Circuit& circuit, WindowInfo& target_winfo) {
     LOGN2(1, "Scheduling %s%zd%s gates for parallel simulation.. ", CREPORTVAL, stats.circuit.num_gates, CNORMAL);
     LOG2(2, "");
     timer.start();
@@ -309,7 +309,7 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
 
         // Add measurements to circuit if exist.
         if (measurements.size()) {
-            add_measurements(circuit, measurements, winfo, max_depth);
+            add_measurements(circuit, measurements, target_winfo, max_depth);
             max_depth++;
             measuring_depth++;
             assert(max_depth == circuit.depth());
@@ -405,7 +405,7 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
     
         assert(circuit.num_buckets() >= num_gate_buckets_per_window);
         if (max_depth < circuit.depth()) {
-            winfo.max(circuit[max_depth].size(), (circuit.num_buckets() - num_gate_buckets_per_window));
+            target_winfo.max(circuit[max_depth].size(), (circuit.num_buckets() - num_gate_buckets_per_window));
             max_depth++;
         }
     }
@@ -414,7 +414,7 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit) {
 
     // Add last measurements if exist.
     if (measurements.size()) {
-        add_measurements(circuit, measurements, winfo, max_depth);
+        add_measurements(circuit, measurements, target_winfo, max_depth);
         max_depth++;
         measuring_depth++;
         assert(max_depth == circuit.depth());
@@ -458,7 +458,7 @@ void Simulator::parse() {
     else {
         assert(circuit_mode == PARSED_CIRCUIT);
         num_qubits = parse(stats, circuit_path.c_str());
-        depth = schedule(stats, circuit);
+        depth = schedule(stats, circuit, winfo);
     }
     fflush(stdout), fflush(stderr);
     if (options.check_scheduler)
