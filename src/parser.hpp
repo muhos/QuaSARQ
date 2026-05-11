@@ -120,15 +120,13 @@ namespace QuaSARQ {
         void init() {
             circuit_queue.reserve(MB);
             gate_stats.alloc();
+            measures_count = 0;
+            observables.destroy();
             observables.init();
         }
 
-        void destroy(const bool& free = false) {
+        void destroy() {
             circuit_queue.clear(true);
-            if (free) {
-                observables.destroy();
-                measures_count = 0;
-            }
             gate_stats.destroy();
             if (buffer != nullptr) {
 #if defined(__linux__) || defined(__CYGWIN__)

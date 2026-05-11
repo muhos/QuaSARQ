@@ -22,17 +22,16 @@ namespace QuaSARQ {
         const size_t                num_gates)
     {
         for_parallel_x(i, num_gates) {
-            const gate_ref_t r    = refs[i];
-            const Gate&      gate = (const Gate&) gates[r];
+            const gate_ref_t ref  = refs[i];
+            const Gate&      gate = (const Gate&) gates[ref];
             uint32 pauli = 0;
-            if (gate.type == DEPOLARIZE1) {
-                curand_algorithm_t local = noise_states[i];    
-                const float r = curand_uniform(&local);        
-                if (r < gate.get_prob()) {
-                    pauli = 1u + (curand(&local) % 3u);
-                }
-                noise_states[i] = local; // advance sequence
+            curand_algorithm_t local = noise_states[i];
+            const float prob = curand_uniform(&local);
+            if (prob < gate.get_prob()) {
+                pauli = gate.type == DEPOLARIZE1 ? 1u + (curand(&local) % 3u) :
+                        gate.type == DEPOLARIZE2 ? 1u + (curand(&local) % 15u) : 0;
             }
+            noise_states[i] = local; // advance sequence
             noise_paulis[i] = pauli;
         }
     }

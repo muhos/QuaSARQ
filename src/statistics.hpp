@@ -38,6 +38,7 @@ namespace QuaSARQ {
     };
 
     struct Measures {
+        size_t count;
         size_t random, definite;
         size_t random_per_window;
         size_t depth;

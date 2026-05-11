@@ -23,15 +23,18 @@ namespace QuaSARQ {
         const_buckets_t             gates,
         const size_t                num_gates);
 
-    INLINE_DEVICE
-    void do_depolarize1(
-        sign_t&       signs_word,
-        word_t&       x_words_q1,
-        word_t&       z_words_q1,
-        const uint32& pauli)
-    {
-        if (pauli & 1u) sign_update_X_or_Z(signs_word, z_words_q1); // X error
-        if (pauli & 2u) sign_update_X_or_Z(signs_word, x_words_q1); // Z error
+    #define do_depolarize1(signs_word, x_words_q1, z_words_q1, pauli) \
+    { \
+        if (pauli & 1u) sign_update_X_or_Z(signs_word, z_words_q1); /* X error */ \
+        if (pauli & 2u) sign_update_X_or_Z(signs_word, x_words_q1); /* Z error */ \
+    }
+
+    #define do_depolarize2(signs_word, x_words_q1, z_words_q1, x_words_q2, z_words_q2, pauli) \
+    { \
+        if (pauli & 1u) sign_update_X_or_Z(signs_word, z_words_q1); /* X on q1 */ \
+        if (pauli & 2u) sign_update_X_or_Z(signs_word, x_words_q1); /* Z on q1 */ \
+        if (pauli & 4u) sign_update_X_or_Z(signs_word, z_words_q2); /* X on q2 */ \
+        if (pauli & 8u) sign_update_X_or_Z(signs_word, x_words_q2); /* Z on q2 */ \
     }
 
 }

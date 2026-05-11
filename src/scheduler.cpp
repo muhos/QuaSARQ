@@ -283,6 +283,7 @@ size_t Simulator::parse(Statistics& stats, const char* path) {
     assert(circuit_io.circuit_queue.size() == circuit_io.gate_stats.all());
     stats.circuit.num_gates = circuit_io.circuit_queue.size();
     stats.circuit.gate_stats = circuit_io.gate_stats;
+    stats.circuit.measure_stats.count = circuit_io.measures_count;
     measuring = circuit_io.measuring;
     timer.stop();
     stats.time.initial += timer.elapsed();
@@ -427,7 +428,7 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit, WindowInfo& targ
     stats.circuit.bytes = stats.circuit.num_gates * sizeof(gate_ref_t) + circuit.num_buckets() * BUCKETSIZE;
     locked.clear(true);
     locked_qubits.clear(true);
-    circuit_io.destroy(true);
+    circuit_io.destroy();
     // Sort gates in each depth level.
     // Must be disabled during checking 
     // to avoid messing up the references.

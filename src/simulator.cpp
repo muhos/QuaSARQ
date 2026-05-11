@@ -192,9 +192,9 @@ void Simulator::simulate() {
         #endif
         prefix.alloc(tableau, config_qubits);
         pivoting.alloc(num_qubits);
-        if (!circuit_io.measures_count)
+        if (!stats.circuit.measure_stats.count)
             LOGERRORN("cannot run simulation with measurement gates but no measurements.");
-        recorder.alloc(circuit_io.measures_count);
+        recorder.alloc(stats.circuit.measure_stats.count);
         if (options.check_measurement)
             mchecker.alloc(num_qubits);
     }
