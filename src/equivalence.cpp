@@ -22,6 +22,7 @@ Equivalence::Equivalence() :
         create_streams(other_custreams);
         inject_faulty();
         circuit_io.observables.destroy();
+        circuit_io.detectors.destroy();
         gpu_allocator.resize_cpu_pool(winfo.max_window_bytes + other_winfo.max_window_bytes + KB * gpu_allocator.alignment());
     }
 
@@ -47,6 +48,7 @@ Equivalence::Equivalence(const string& path_to_circuit, const string& path_to_ot
             stats.time.schedule += other_stats.time.schedule;
         }
         circuit_io.observables.destroy();
+        circuit_io.detectors.destroy();
         gpu_allocator.resize_cpu_pool(winfo.max_window_bytes + other_winfo.max_window_bytes + KB * gpu_allocator.alignment());
     }
 

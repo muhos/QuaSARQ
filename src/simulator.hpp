@@ -122,6 +122,7 @@ namespace QuaSARQ {
         void        print_signs             (const Tableau& tab, const depth_t& depth_level);
         void        print_gates             (const DeviceCircuit& gates, const gate_ref_t& num_gates, const depth_t& depth_level);
         void        print_observables       ();
+        void        print_detectors         ();
 
         // Timeout.
         static void handler_timeout         (int) {

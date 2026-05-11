@@ -227,5 +227,6 @@ void Simulator::simulate() {
     stats.tableau.seconds = (stats.time.simulation / 1000.0) / (num_partitions * depth);
     stats.tableau.calc_speed();
     print_observables();
+    print_detectors();
     report();
 }

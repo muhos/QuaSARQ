@@ -20,11 +20,10 @@ namespace QuaSARQ {
         gatestr[gatename_len] = '\0';
         str += gatename_len;
 
-        // Drop for now: TICK, QUBIT_COORDS, DETECTOR, SHIFT_COORDS.
-        if (strcmp(gatestr, "TICK")               == 0 ||
-            strcmp(gatestr, "QUBIT_COORDS")        == 0 ||
-            strcmp(gatestr, "DETECTOR")             == 0 ||
-            strcmp(gatestr, "SHIFT_COORDS")         == 0) {
+        // Drop: TICK, QUBIT_COORDS, SHIFT_COORDS (not needed for QuaSARQ).
+        if (strcmp(gatestr, "TICK")         == 0 ||
+            strcmp(gatestr, "QUBIT_COORDS") == 0 ||
+            strcmp(gatestr, "SHIFT_COORDS") == 0) {
             eatLine(str);
             return;
         }
@@ -62,6 +61,36 @@ namespace QuaSARQ {
             }
             block.clear(true);
             bstats.destroy();
+            return;
+        }
+
+        // DETECTOR(x, y, t, ...) rec[-1] rec[-2] ...
+        if (strcmp(gatestr, "DETECTOR") == 0) {
+            // Skip optional coordinates.
+            if (str < eof && *str == '(') {
+                while (str < eof && *str != ')' && *str != DELIM) str++;
+                if (str < eof && *str == ')') str++;
+            }
+            detectors.ref_starts.push(detectors.record_refs.size());
+            uint32 ref_count = 0;
+            while (str < eof && *str != DELIM) {
+                if (*str == UNIX_DELIM) { str++; continue; }
+                char* peek = str;
+                eatWS(peek);
+                if (peek >= eof || *peek == DELIM || *peek == '\0') break;
+                if (peek + 4 < eof &&
+                    peek[0]=='r' && peek[1]=='e' && peek[2]=='c' &&
+                    peek[3]=='[' && peek[4]=='-') {
+                    str = peek + 5;
+                    uint32 n = toInteger(str);
+                    if (str < eof && *str == ']') str++;
+                    if (n == 0 || n > measures_count)
+                        LOGERROR("DETECTOR: rec[-%u] out of range (measures so far: %u).", n, measures_count);
+                    detectors.record_refs.push(measures_count - n);
+                    ref_count++;
+                } else { eatLine(str); break; }
+            }
+            detectors.ref_counts.push(ref_count);
             return;
         }
 

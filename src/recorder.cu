@@ -57,16 +57,47 @@ namespace QuaSARQ {
         if (obs.empty()) return;
         if (!recorder.is_copied()) recorder.copy();
         const Vec<bool>& rec = recorder.host_record();
-        LOGHEADER(1, 4, "Observables");
-        for (uint32 i = 0; i < obs.num_observables(); i++) {
-            bool outcome = false;
+        const uint32 n = obs.num_observables();
+        Vec<bool, uint32> outcomes(n, false);
+        uint32 fired = 0;
+        for (uint32 i = 0; i < n; i++) {
             for (uint32 j = obs.ref_starts[i]; j < obs.ref_starts[i] + obs.ref_counts[i]; j++)
-                outcome ^= rec[obs.record_refs[j]];
-            LOG1(" %sObservable %-8u:%s %s%d  (%s)%s",
-                CBCYAN, obs.ids[i], CNORMAL,
-                outcome ? CRED : CGREEN, (int)outcome,
-                outcome ? "LOGICAL ERROR" : "NO LOGICAL ERROR", CNORMAL);
+                outcomes[i] ^= rec[obs.record_refs[j]];
+            if (outcomes[i]) fired++;
         }
+        LOGHEADER(1, 4, "Observables");
+        string bitstring;
+        bitstring.reserve(n * 2);
+        for (uint32 i = 0; i < n; i++)
+            bitstring += string(outcomes[i] ? CRED : CGREEN) + (outcomes[i] ? '1' : '0');
+        LOG1(" %sOutcome: %s%s", CBCYAN, CNORMAL, bitstring.c_str());
+        LOG1(" %sLogical errors: %s%s%u / %u%s",
+            CBCYAN, CNORMAL, fired ? CRED : CGREEN, fired, n, CNORMAL);
+    }
+
+    void Simulator::print_detectors() {
+        if (!options.print_detector) return;
+        const DetectorData& det = circuit_io.detectors;
+        if (det.empty()) return;
+        if (!recorder.is_copied()) recorder.copy();
+        const Vec<bool>& rec = recorder.host_record();
+        const uint32 n = det.num_detectors();
+        Vec<bool, uint32> outcomes(n, false);
+        uint32 fired = 0;
+        for (uint32 i = 0; i < n; i++) {
+            for (uint32 j = det.ref_starts[i]; j < det.ref_starts[i] + det.ref_counts[i]; j++)
+                outcomes[i] ^= rec[det.record_refs[j]];
+            if (outcomes[i]) fired++;
+        }
+        LOGHEADER(1, 4, "Detectors");
+        string bitstring;
+        bitstring.reserve(n * 2);
+        for (uint32 i = 0; i < n; i++)
+            bitstring += string(outcomes[i] ? CRED : CGREEN) + (outcomes[i] ? '1' : '0');
+        LOG1(" %sDetection bitstring     :%s %s",
+            CBCYAN, CNORMAL, bitstring.c_str());
+        LOG1(" %sDetection events fired  :%s %s%u / %u%s",
+            CBCYAN, CNORMAL, fired ? CRED : CGREEN, fired, n, CNORMAL);
     }
 
     void MeasurementChecker::check_record_measurements(const Tableau& other_input, const MeasurementRecorder& other_recorder, 

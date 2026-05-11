@@ -57,7 +57,7 @@ namespace QuaSARQ {
 
     struct ObservableData {
 
-        Vec<uint32, uint32>  record_refs; // measurement-history indices.
+        Vec<uint32, uint32>  record_refs; // measurement-history indices per observable.
         Vec<uint32, uint32>  ref_starts;
         Vec<uint32, uint32>  ref_counts;
         Vec<uint32, uint32>  ids;         // the observable id (the k in OBSERVABLE_INCLUDE(k))
@@ -83,6 +83,31 @@ namespace QuaSARQ {
         bool empty() const { return ids.empty(); }
     };
 
+    struct DetectorData {
+
+        Vec<uint32, uint32>  record_refs; // measurement-history indices per detector.
+        Vec<uint32, uint32>  ref_starts;
+        Vec<uint32, uint32>  ref_counts;
+
+        DetectorData() {}
+
+        void init() {
+            record_refs.reserve(64);
+            ref_starts.reserve(16);
+            ref_counts.reserve(16);
+        }
+
+        void destroy() {
+            record_refs.clear(true);
+            ref_starts.clear(true);
+            ref_counts.clear(true);
+        }
+
+        uint32 num_detectors() const { return ref_starts.size(); }
+
+        bool empty() const { return ref_starts.empty(); }
+    };
+
     struct CircuitIO {
 
         #define DELIM '\n'
@@ -96,6 +121,7 @@ namespace QuaSARQ {
         Gate_stats gate_stats;
         CircuitQueue circuit_queue;
         ObservableData observables;
+        DetectorData detectors;
         bool measuring;
 
 #if defined(__linux__) || defined(__CYGWIN__)
@@ -123,6 +149,8 @@ namespace QuaSARQ {
             measures_count = 0;
             observables.destroy();
             observables.init();
+            detectors.destroy();
+            detectors.init();
         }
 
         void destroy() {
