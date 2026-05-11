@@ -107,6 +107,8 @@ namespace QuaSARQ {
 		curand_algorithm_t* noise_states		() { return _noise_states; }
 		inline
 		uint32*             noise_paulis		() { return _noise_paulis; }
+		inline
+		size_t              max_noise_gates		() const { return _max_noise_gates; }
 
 	};
 }
