@@ -20,7 +20,8 @@ namespace QuaSARQ {
         CONFIG(record, "record") \
         CONFIG(observable, "observable") \
         CONFIG(detector, "detection events") \
-        CONFIG(sample, "sampling outcome") \
+        CONFIG(sample, "sampling outcome in shot-per-line format") \
+        CONFIG(sample_qubits, "sampling outcome in qubit-per-line format") \
         CONFIG(initialstate, "initial state (in Pauli strings)") \
         CONFIG(stepstate, "step state (in Pauli strings)") \
         CONFIG(finalstate, "final state (in Pauli strings)") \

@@ -3,8 +3,8 @@
 
 namespace QuaSARQ {
 
-    void print_samples(
-        const  Table&  samples, 
+    void print_samples_qubits(
+        const  Table&  samples,
         const  size_t  num_qubits,
         const  size_t  num_shots) {
         string qidx = "q%-4lld";
@@ -22,6 +22,21 @@ namespace QuaSARQ {
                 PRINT("%d", bit);
             }
             PRINT(" ,   count: %d\n", count);
+        }
+    }
+
+    void print_samples(
+        const  Table&  samples,
+        const  size_t  num_qubits,
+        const  size_t  num_shots) {
+        for (size_t s = 0; s < num_shots; s++) {
+            for (size_t q = 0; q < num_qubits; q++) {
+                const size_t word_idx = q * samples.num_words_minor() + WORD_OFFSET(s);
+                const word_std_t& word = samples[word_idx];
+                const word_std_t bitpos = s & WORD_MASK;
+                PRINT("%d", int((word >> bitpos) & 1));
+            }
+            PRINT("\n");
         }
     }
 
@@ -94,15 +109,17 @@ namespace QuaSARQ {
     }
 
     void Framing::print() {
-        if (!options.print_sample) return;
-		if (!options.sync) SYNCALL;
-		LOGHEADER(1, 4, "Sampling");
+        if (!options.print_sample && !options.print_sample_qubits) return;
+        if (!options.sync) SYNCALL;
         samples_record.copy();
-        print_samples(
-            samples_record.host, 
-            num_qubits, 
-            num_shots
-        );
+        if (options.print_sample) {
+            LOGHEADER(1, 4, "Sampling (shot per line)");
+            print_samples(samples_record.host, num_qubits, num_shots);
+        }
+        if (options.print_sample_qubits) {
+            LOGHEADER(1, 4, "Sampling (qubit per line)");
+            print_samples_qubits(samples_record.host, num_qubits, num_shots);
+        }
         fflush(stdout);
     }
 

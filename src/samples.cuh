@@ -15,7 +15,7 @@ namespace QuaSARQ {
         ~Samples() {
             device = nullptr;
             device_data = nullptr;
-            if (options.print_sample) {
+            if (options.print_sample || options.print_sample_qubits) {
                 host.destroy();
             }
         }
@@ -26,7 +26,7 @@ namespace QuaSARQ {
             Table tmp;
             tmp.alloc(device_data, tableau.num_qubits_padded(), tableau.num_words_major(), tableau.num_words_minor());
             CHECK(cudaMemcpyAsync(device, &tmp, sizeof(Table), cudaMemcpyHostToDevice));
-            if (options.print_sample)
+            if (options.print_sample || options.print_sample_qubits)
                 host.alloc_host(tableau.num_qubits_padded(), tableau.num_words_major(), tableau.num_words_minor());
         }
 
