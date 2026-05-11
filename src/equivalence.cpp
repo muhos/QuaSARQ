@@ -8,7 +8,7 @@ using namespace QuaSARQ;
 			CREPORT, #GATE, ":", CREPORTVAL, other_stats.circuit.gate_stats.types[GATE], \
 			percent((double)other_stats.circuit.gate_stats.types[GATE], other_stats.circuit.num_gates), CNORMAL);	\
 
-Equivalence::Equivalence() : 
+Equivalence::Equivalence() :
     other_num_qubits(options.num_qubits)
     , other_num_partitions(1)
     , other_depth(options.depth)
@@ -16,11 +16,12 @@ Equivalence::Equivalence() :
     , other_tableau(gpu_allocator)
     , other_gpu_circuit(gpu_allocator)
     , other_custreams(nullptr)
-    , Simulator() 
-    { 
+    , Simulator()
+    {
         assert(!circuit.empty());
         create_streams(other_custreams);
         inject_faulty();
+        circuit_io.observables.destroy();
         gpu_allocator.resize_cpu_pool(winfo.max_window_bytes + other_winfo.max_window_bytes + KB * gpu_allocator.alignment());
     }
 
@@ -45,6 +46,7 @@ Equivalence::Equivalence(const string& path_to_circuit, const string& path_to_ot
             stats.time.initial += other_stats.time.initial;
             stats.time.schedule += other_stats.time.schedule;
         }
+        circuit_io.observables.destroy();
         gpu_allocator.resize_cpu_pool(winfo.max_window_bytes + other_winfo.max_window_bytes + KB * gpu_allocator.alignment());
     }
 
@@ -133,9 +135,7 @@ void Equivalence::check() {
     const size_t num_qubits_per_partition = num_partitions > 1 ? tableau.num_words_major() * WORD_BITS : num_qubits;
     const size_t other_num_qubits_per_partition = other_num_partitions > 1 ? other_tableau.num_words_major() * WORD_BITS : other_num_qubits;
     gpu_circuit.initiate(num_qubits, winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
-    gpu_circuit.init_noise_states(options.seed, winfo.max_parallel_gates, kernel_streams[0]);
-    other_gpu_circuit.initiate(num_qubits, other_winfo.max_parallel_gates, other_winfo.max_parallel_gates_buckets);
-    other_gpu_circuit.init_noise_states(options.seed, other_winfo.max_parallel_gates, kernel_streams[0]);
+    other_gpu_circuit.initiate(other_num_qubits, other_winfo.max_parallel_gates, other_winfo.max_parallel_gates_buckets);
     timer.stop();
     stats.time.initial += timer.elapsed();
     // Start step-wise equivalence.
