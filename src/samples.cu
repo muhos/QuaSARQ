@@ -116,9 +116,9 @@ namespace QuaSARQ {
         LOGHEADER(1, 4, "Detectors");
         for (size_t s = 0; s < num_shots; s++) {
             string bitstring;
-            bitstring.reserve(dets.num_instructions * 2);
+            bitstring.reserve(dets.pinned.num_instructions * 2);
             uint32 fired = 0;
-            for (uint32 i = 0; i < dets.num_instructions; i++) {
+            for (uint32 i = 0; i < dets.pinned.num_instructions; i++) {
                 bool outcome = false;
                 for (uint32 j = dets.starts[i]; j < dets.starts[i] + dets.counts[i]; j++) {
                     const qubit_t q = measures_to_qubits[dets.refs[j]];
@@ -141,9 +141,9 @@ namespace QuaSARQ {
         uint32 total_errors = 0;
         for (size_t s = 0; s < num_shots; s++) {
             string bitstring;
-            bitstring.reserve(obs.num_observables * 16);
+            bitstring.reserve(obs.pinned.num_observables * 16);
             uint32 fired = 0;
-            for (uint32 i = 0; i < obs.num_observables; i++) {
+            for (uint32 i = 0; i < obs.pinned.num_observables; i++) {
                 bool outcome = false;
                 for (uint32 j = obs.records.starts[i]; j < obs.records.starts[i] + obs.records.counts[i]; j++) {
                     const qubit_t q = measures_to_qubits[obs.records.refs[j]];
@@ -157,7 +157,7 @@ namespace QuaSARQ {
         }
         LOG1(" %sLogical errors across all shots: %s%s%u / %zu%s",
             CREPORT, CNORMAL, total_errors ? CRED : CGREEN,
-            total_errors, num_shots * obs.num_observables, CNORMAL);
+            total_errors, num_shots * obs.pinned.num_observables, CNORMAL);
     }
 
     void Framing::print() {

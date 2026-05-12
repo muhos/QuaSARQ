@@ -60,23 +60,32 @@ namespace QuaSARQ {
         Vec<uint32, uint32>  starts;  // the start index in record_refs for each instruction.
         Vec<uint32, uint32>  counts;  // the number of record_refs for each instruction.
 
-        uint32* pin_refs;
-        uint32* pin_starts;
-        uint32* pin_counts;
+        struct RawArrays {
+            uint32* refs;
+            uint32* starts;
+            uint32* counts;
 
-        size_t num_instructions;
-        size_t num_counts;
-        size_t num_refs;
+            size_t num_instructions;
+            size_t num_counts;
+            size_t num_refs;
 
-        RecordRefs() :
-                pin_refs(nullptr)
-                , pin_starts(nullptr)
-                , pin_counts(nullptr)
-                , num_instructions(0)
-                , num_counts(0)
-                , num_refs(0) {}
+            RawArrays() : 
+                refs(nullptr), starts(nullptr), counts(nullptr),
+                num_instructions(0), num_counts(0), num_refs(0) { }
+
+            bool is_allocated() const {
+                return !(refs == nullptr || starts == nullptr || counts == nullptr);
+            }
+        };
+
+        RawArrays pinned, device;
+
+        bool moved_to_pinned;
+
+        RecordRefs() : pinned(), device(), moved_to_pinned(false) {}
 
         void init() {
+            moved_to_pinned = false;
             refs.reserve(64);
             starts.reserve(16);
             counts.reserve(16);
@@ -94,29 +103,13 @@ namespace QuaSARQ {
                    counts.size() * sizeof(uint32);
         }
 
-        void alloc_pinned(DeviceAllocator& allocator) {
-            if (pin_refs != nullptr || pin_starts != nullptr || pin_counts != nullptr) {
-                LOGERROR("pinned memory already allocated for detector data");
-            }
-            pin_refs = allocator.allocate_pinned<uint32>(refs.size());
-            pin_starts = allocator.allocate_pinned<uint32>(starts.size());
-            pin_counts = allocator.allocate_pinned<uint32>(counts.size());
-        }
+        void alloc_pinned(DeviceAllocator& allocator);
+        void alloc_device(DeviceAllocator& allocator);
 
-        void move_to_pinned() {
-            if (pin_refs == nullptr || pin_starts == nullptr || pin_counts == nullptr) {
-                LOGERROR("pinned memory not allocated for detector data");
-            }
-            std::memcpy(pin_refs, refs.data(), refs.size() * sizeof(uint32));
-            std::memcpy(pin_starts, starts.data(), starts.size() * sizeof(uint32));
-            std::memcpy(pin_counts, counts.data(), counts.size() * sizeof(uint32));
-            num_instructions = starts.size();
-            num_counts = counts.size();
-            num_refs = refs.size();
-            destroy();
-        }
+        void move_to_pinned();
+        void copy_to_device(const cudaStream_t& stream);
 
-        bool empty() const { return !num_instructions; }
+        bool empty() const { return !pinned.num_instructions; }
     };
 
     typedef RecordRefs DetectorData;
@@ -126,13 +119,18 @@ namespace QuaSARQ {
         RecordRefs records;
         Vec<uint32, uint32>  ids; // the observable id (the k in OBSERVABLE_INCLUDE(k))
 
-        uint32* pin_ids;
-        size_t num_observables;
+        struct RawIds {
+            uint32* ids;
+            size_t num_observables;
 
+            RawIds() : ids(nullptr), num_observables(0) {}
+        };
 
-        ObservableData() :
-              pin_ids(nullptr)
-            , num_observables(0) {}
+        RawIds pinned, device;
+
+        bool moved_to_pinned;
+
+        ObservableData() : records(), pinned(), device(), moved_to_pinned(false) {}
 
         void init() {
             records.init();
@@ -149,28 +147,13 @@ namespace QuaSARQ {
                    ids.size() * sizeof(uint32);
         }
 
-        void alloc_pinned(DeviceAllocator& allocator) {
-            records.alloc_pinned(allocator);
-            if (pin_ids != nullptr) {
-                LOGERROR("pinned memory already allocated for observable data");
-            }
-            pin_ids = allocator.allocate_pinned<uint32>(ids.size());
-        }
+        void alloc_pinned(DeviceAllocator& allocator);
+        void alloc_device(DeviceAllocator& allocator);
+        void move_to_pinned();
+        void copy_to_device(const cudaStream_t& stream);
 
-        void move_to_pinned() {
-            records.move_to_pinned();
-            if (pin_ids == nullptr) {
-                LOGERROR("pinned memory not allocated for observable data");
-            }
-            std::memcpy(pin_ids, ids.data(), ids.size() * sizeof(uint32));
-            num_observables = ids.size();
-            destroy();
-        }
-
-        bool empty() const { return !num_observables; }
+        bool empty() const { return !pinned.num_observables; }
     };
-
-    
 
     struct CircuitIO {
 
@@ -247,9 +230,9 @@ namespace QuaSARQ {
 
         void read_gate(char*& str) {
             read_gate_into(str, circuit_queue, gate_stats);
-            detectors.num_instructions = detectors.starts.size();
-            observables.num_observables = observables.ids.size();
-            observables.records.num_instructions = observables.records.starts.size();
+            detectors.pinned.num_instructions = detectors.starts.size();
+            observables.pinned.num_observables = observables.ids.size();
+            observables.records.pinned.num_instructions = observables.records.starts.size();
         }
 
     };

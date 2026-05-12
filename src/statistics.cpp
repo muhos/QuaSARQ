@@ -79,9 +79,9 @@ void Simulator::report()
 		LOG1(" %s  Random                       : %s%-12zd%s", CREPORT, CREPORTVAL, stats.circuit.measure_stats.random, CNORMAL);
 		LOG1(" %s  Definite                     : %s%-12zd%s", CREPORT, CREPORTVAL, stats.circuit.measure_stats.definite, CNORMAL);
 		if (!circuit_io.observables.empty())
-			LOG1(" %sObservables                    : %s%-12u%s", CREPORT, CREPORTVAL, circuit_io.observables.num_observables, CNORMAL);
+			LOG1(" %sObservables                    : %s%-12u%s", CREPORT, CREPORTVAL, circuit_io.observables.pinned.num_observables, CNORMAL);
 		if (!circuit_io.detectors.empty())
-			LOG1(" %sDetectors                      : %s%-12u%s", CREPORT, CREPORTVAL, circuit_io.detectors.num_instructions, CNORMAL);
+			LOG1(" %sDetectors                      : %s%-12u%s", CREPORT, CREPORTVAL, circuit_io.detectors.pinned.num_instructions, CNORMAL);
 		LOG1(" %sClifford gates                 : %s%-12zd%s", CREPORT, CREPORTVAL, stats.circuit.num_gates, CNORMAL);
 		FOREACH_GATE(GATE2STATISTIC);
 	}

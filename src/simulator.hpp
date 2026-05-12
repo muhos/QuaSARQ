@@ -46,7 +46,7 @@ namespace QuaSARQ {
         FILE*                           state_file;
         size_t                          config_qubits;
         cudaStream_t*                   custreams;
-        cudaStream_t                    copy_streams[2];
+        cudaStream_t                    copy_streams[3];
         cudaStream_t                    kernel_streams[2];
         WindowInfo                      winfo;
         bool                            measuring;
@@ -80,23 +80,32 @@ namespace QuaSARQ {
         const ObservableData&   get_observables () const { return circuit_io.observables; }
 
         // Random circuit generation.
-        Gatetypes   get_rand_gate   (const bool& multi_input = true, const bool& force_multi_input = false);
-        void        get_rand_qubit  (const qubit_t& control, qubit_t& qubit);
-        void        shuffle_qubits  ();
-        void        generate        ();
-        void        initialize      ();
-        void        report          ();
-        void        parse           ();
-        void        simulate        ();
-        size_t      parse           (Statistics& stats, const char* path);
-        size_t      schedule        (Statistics& stats, Circuit& circuit, WindowInfo& target_winfo);
-        void        simulate        (const size_t& p, const bool& reversed);
+        Gatetypes   get_rand_gate       (const bool& multi_input = true, const bool& force_multi_input = false);
+        void        get_rand_qubit      (const qubit_t& control, qubit_t& qubit);
+        void        shuffle_qubits      ();
+        void        generate            ();
+
+        // Main functions.
+        void        initialize          ();
+        void        report              ();
+        void        parse               ();
+        void        reserve             ();
+        void        simulate            ();
+        size_t      parse               (Statistics& stats, const char* path);
+        size_t      schedule            (Statistics& stats, Circuit& circuit, WindowInfo& target_winfo);
+        void        simulate            (const size_t& p, const bool& reversed);
+
+        // Handling observables and detectors on device.
+        void        alloc_observables   ();
+        void        alloc_detectors     ();
+        void        copy_observables    (const cudaStream_t& stream);
+        void        copy_detectors      (const cudaStream_t& stream);
 
         // Launch a kernel to make identity tableau.
-        void        identity        (Tableau& tab, const size_t& offset_per_partition, const size_t& num_qubits_per_partition, const cudaStream_t* streams, const InitialState& istate = Zero);
+        void        identity            (Tableau& tab, const size_t& offset_per_partition, const size_t& num_qubits_per_partition, const cudaStream_t* streams, const InitialState& istate = Zero);
 
         // Advances the simulation by 1-time step.
-        void        step            (const size_t& p, const depth_t& depth_level, const bool& reversed = false);
+        void        step                (const size_t& p, const depth_t& depth_level, const bool& reversed = false);
         
         // Do measurements in a single simulation step.
         void        transpose               (const bool& row_major, const cudaStream_t& stream);

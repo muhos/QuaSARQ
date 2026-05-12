@@ -10,8 +10,6 @@
 
 namespace QuaSARQ {
 
-	enum Context { CPU, GPU, UNKNOWN };
-
 	#define INLINE inline
 
 	#ifdef __GNUC__
@@ -73,5 +71,8 @@ namespace QuaSARQ {
 	#define SYNC(STREAM) CHECK(cudaStreamSynchronize(STREAM))
 
 	#define SYNCALL CHECK(cudaDeviceSynchronize())
+
+	#define NUM_COPY_STREAMS 4
+	#define NUM_COMPUTE_STREAMS 2
 
 }

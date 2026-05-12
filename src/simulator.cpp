@@ -76,38 +76,39 @@ Simulator::Simulator(const string& path) :
     initialize();
 }
 
+void Simulator::reserve() {
+    const size_t circuit_obs_dets_bytes = circuit_mode == RANDOM_CIRCUIT ? 0 :
+                                          circuit_io.observables.bytes() + circuit_io.detectors.bytes();
+    // Creating GPU pool (device memory)
+    size_t gfree = 0, gtot = 0;
+    cudaMemGetInfo(&gfree, &gtot);
+    static constexpr size_t CUARENA_GPU_PENALTY = 256 * MB;
+    static constexpr size_t MIN_DYNAMIC = 128 * MB;
+    const size_t pool_est = (gfree > CUARENA_GPU_PENALTY) ? gfree - CUARENA_GPU_PENALTY : 0;
+    const size_t stable_bytes = circuit_obs_dets_bytes + 
+                                (pool_est > MIN_DYNAMIC) ? pool_est - MIN_DYNAMIC : 0;
+    gpu_allocator.create_gpu_pool(0, cuArena::GPUMemoryType::Device, 0, stable_bytes);
+    // Creating CPU pool (pinned memory)
+    const size_t pinned_bytes = 
+        sizeof(Table) * 3 + 
+        winfo.max_window_bytes + 
+        (num_qubits + 2) * sizeof(pivot_t) + 
+        KB * gpu_allocator.alignment() + 
+        circuit_obs_dets_bytes;
+    gpu_allocator.create_cpu_pool(pinned_bytes);
+    if (circuit_mode == PARSED_CIRCUIT) {
+        //alloc_observables();
+        //alloc_detectors();
+    }
+}
+
 void Simulator::initialize() {
     LOGHEADER(1, 4, "Build");
     getCPUInfo(1);
     getGPUInfo(1);
     LOGHEADER(1, 4, "Initial");
-    {
-        size_t gfree = 0, gtot = 0;
-        cudaMemGetInfo(&gfree, &gtot);
-        static constexpr size_t CUARENA_GPU_PENALTY = 256 * MB;
-        static constexpr size_t MIN_DYNAMIC = 128 * MB;
-        const size_t pool_est = (gfree > CUARENA_GPU_PENALTY) ? gfree - CUARENA_GPU_PENALTY : 0;
-        const size_t stable_bytes = (pool_est > MIN_DYNAMIC) ? pool_est - MIN_DYNAMIC : 0;
-        gpu_allocator.create_gpu_pool(0, cuArena::GPUMemoryType::Device, 0, stable_bytes);
-    }
     parse();
-    // Creating CPU pool (pinned memory)
-    // is done after parsing as it causes
-    // degradation to CPU performance.
-    {
-        const size_t pinned_bytes = 
-            sizeof(Table) * 3 + 
-            winfo.max_window_bytes + 
-            (num_qubits + 2) * sizeof(pivot_t) + 
-            KB * gpu_allocator.alignment() + 
-            circuit_io.observables.bytes() +
-            circuit_io.detectors.bytes();
-        gpu_allocator.create_cpu_pool(pinned_bytes);
-        circuit_io.observables.alloc_pinned(gpu_allocator);
-        circuit_io.detectors.alloc_pinned(gpu_allocator);
-        //circuit_io.observables.move_to_pinned();
-        //circuit_io.detectors.move_to_pinned();
-    }
+    reserve();
     if (!options.tuner_en) register_config();
     create_streams(custreams);
     locker.alloc();
@@ -122,11 +123,10 @@ void Simulator::create_streams(cudaStream_t*& streams) {
         streams = new cudaStream_t[options.streams];
         for (int i = 0; i < options.streams; i++) 
             cudaStreamCreate(streams + i);
-        // We need at least two copy streams and two kernel streams.
-        copy_streams[0] = streams[0];
-        copy_streams[1] = streams[1];
-        kernel_streams[0] = streams[2];
-        kernel_streams[1] = streams[3];
+        for (int i = 0; i < NUM_COPY_STREAMS; i++) 
+            copy_streams[i] = streams[i];
+        for (int i = 0; i < NUM_COMPUTE_STREAMS; i++) 
+            kernel_streams[i] = streams[NUM_COPY_STREAMS + i];
         LOGDONE(1, 4);
     }
 }
@@ -214,6 +214,8 @@ void Simulator::simulate() {
     stats.time.initial += timer.elapsed();
     // Start step-wise simulation.
     timer.start();
+    copy_detectors(copy_streams[2]);
+    copy_observables(copy_streams[3]);
     for (size_t p = 0; p < num_partitions && !timeout; p++) {
         // Create identity.
         const size_t prev_num_qubits = num_qubits_per_partition * p;

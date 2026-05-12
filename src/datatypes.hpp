@@ -27,5 +27,8 @@ namespace QuaSARQ {
 		RANDOM_CIRCUIT, 
 		PARSED_CIRCUIT 
 	};
+
+	// Memory contexts.
+	enum Context { CPU, GPU, UNKNOWN };
 	
 }
