@@ -6,12 +6,11 @@
 #include "datatypes.hpp"
 #include "circuit.hpp"
 #include "vector.hpp"
+#include "memory.cuh"
 
 using std::to_string;
 
 namespace QuaSARQ {
-
-    enum CircuitMode { RANDOM_CIRCUIT, PARSED_CIRCUIT };
 
     #define WRITE_STATS(GATE) \
         stream += comment + "\t\t" + string(#GATE) + ": " + to_string(stats.circuit.gate_stats.types[GATE]) + " \t"; \
@@ -55,58 +54,123 @@ namespace QuaSARQ {
         }
     };
 
-    struct ObservableData {
+    struct RecordRefs {
 
-        Vec<uint32, uint32>  record_refs; // measurement-history indices per observable.
-        Vec<uint32, uint32>  ref_starts;
-        Vec<uint32, uint32>  ref_counts;
-        Vec<uint32, uint32>  ids;         // the observable id (the k in OBSERVABLE_INCLUDE(k))
+        Vec<uint32, uint32>  refs; // measurement-history indices per instruction.
+        Vec<uint32, uint32>  starts;  // the start index in record_refs for each instruction.
+        Vec<uint32, uint32>  counts;  // the number of record_refs for each instruction.
 
-        ObservableData() {}
+        uint32* pin_refs;
+        uint32* pin_starts;
+        uint32* pin_counts;
+
+        size_t num_instructions;
+        size_t num_counts;
+        size_t num_refs;
+
+        RecordRefs() :
+                pin_refs(nullptr)
+                , pin_starts(nullptr)
+                , pin_counts(nullptr)
+                , num_instructions(0)
+                , num_counts(0)
+                , num_refs(0) {}
 
         void init() {
-            record_refs.reserve(32);
-            ref_starts.reserve(4);
-            ref_counts.reserve(4);
+            refs.reserve(64);
+            starts.reserve(16);
+            counts.reserve(16);
+        }
+
+        void destroy() {
+            refs.clear(true);
+            starts.clear(true);
+            counts.clear(true);
+        }
+
+        size_t bytes() const {
+            return refs.size() * sizeof(uint32) + 
+                   starts.size() * sizeof(uint32) + 
+                   counts.size() * sizeof(uint32);
+        }
+
+        void alloc_pinned(DeviceAllocator& allocator) {
+            if (pin_refs != nullptr || pin_starts != nullptr || pin_counts != nullptr) {
+                LOGERROR("pinned memory already allocated for detector data");
+            }
+            pin_refs = allocator.allocate_pinned<uint32>(refs.size());
+            pin_starts = allocator.allocate_pinned<uint32>(starts.size());
+            pin_counts = allocator.allocate_pinned<uint32>(counts.size());
+        }
+
+        void move_to_pinned() {
+            if (pin_refs == nullptr || pin_starts == nullptr || pin_counts == nullptr) {
+                LOGERROR("pinned memory not allocated for detector data");
+            }
+            std::memcpy(pin_refs, refs.data(), refs.size() * sizeof(uint32));
+            std::memcpy(pin_starts, starts.data(), starts.size() * sizeof(uint32));
+            std::memcpy(pin_counts, counts.data(), counts.size() * sizeof(uint32));
+            num_instructions = starts.size();
+            num_counts = counts.size();
+            num_refs = refs.size();
+            destroy();
+        }
+
+        bool empty() const { return !num_instructions; }
+    };
+
+    typedef RecordRefs DetectorData;
+
+    struct ObservableData {
+
+        RecordRefs records;
+        Vec<uint32, uint32>  ids; // the observable id (the k in OBSERVABLE_INCLUDE(k))
+
+        uint32* pin_ids;
+        size_t num_observables;
+
+
+        ObservableData() :
+              pin_ids(nullptr)
+            , num_observables(0) {}
+
+        void init() {
+            records.init();
             ids.reserve(4);
         }
 
         void destroy() {
-            record_refs.clear(true);
-            ref_starts.clear(true);
-            ref_counts.clear(true);
+            records.destroy();
             ids.clear(true);
         }
 
-        uint32 num_observables() const { return ids.size(); }
-
-        bool empty() const { return ids.empty(); }
-    };
-
-    struct DetectorData {
-
-        Vec<uint32, uint32>  record_refs; // measurement-history indices per detector.
-        Vec<uint32, uint32>  ref_starts;
-        Vec<uint32, uint32>  ref_counts;
-
-        DetectorData() {}
-
-        void init() {
-            record_refs.reserve(64);
-            ref_starts.reserve(16);
-            ref_counts.reserve(16);
+        size_t bytes() const {
+            return records.bytes() +
+                   ids.size() * sizeof(uint32);
         }
 
-        void destroy() {
-            record_refs.clear(true);
-            ref_starts.clear(true);
-            ref_counts.clear(true);
+        void alloc_pinned(DeviceAllocator& allocator) {
+            records.alloc_pinned(allocator);
+            if (pin_ids != nullptr) {
+                LOGERROR("pinned memory already allocated for observable data");
+            }
+            pin_ids = allocator.allocate_pinned<uint32>(ids.size());
         }
 
-        uint32 num_detectors() const { return ref_starts.size(); }
+        void move_to_pinned() {
+            records.move_to_pinned();
+            if (pin_ids == nullptr) {
+                LOGERROR("pinned memory not allocated for observable data");
+            }
+            std::memcpy(pin_ids, ids.data(), ids.size() * sizeof(uint32));
+            num_observables = ids.size();
+            destroy();
+        }
 
-        bool empty() const { return ref_starts.empty(); }
+        bool empty() const { return !num_observables; }
     };
+
+    
 
     struct CircuitIO {
 
@@ -183,6 +247,9 @@ namespace QuaSARQ {
 
         void read_gate(char*& str) {
             read_gate_into(str, circuit_queue, gate_stats);
+            detectors.num_instructions = detectors.starts.size();
+            observables.num_observables = observables.ids.size();
+            observables.records.num_instructions = observables.records.starts.size();
         }
 
     };

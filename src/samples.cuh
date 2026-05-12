@@ -12,12 +12,20 @@ namespace QuaSARQ {
         Table  host;
 
         Samples() : device(nullptr), device_data(nullptr) {}
+        
+        inline
+        bool needs_host() {
+            return options.print_sample         ||
+                   options.print_sample_qubits  ||
+                   options.print_detector       ||
+                   options.print_observable;
+        }
+
         ~Samples() {
             device = nullptr;
             device_data = nullptr;
-            if (options.print_sample || options.print_sample_qubits) {
+            if (needs_host())
                 host.destroy();
-            }
         }
 
         void alloc(const Tableau& tableau, DeviceAllocator& gpu_allocator) {
@@ -26,7 +34,7 @@ namespace QuaSARQ {
             Table tmp;
             tmp.alloc(device_data, tableau.num_qubits_padded(), tableau.num_words_major(), tableau.num_words_minor());
             CHECK(cudaMemcpyAsync(device, &tmp, sizeof(Table), cudaMemcpyHostToDevice));
-            if (options.print_sample || options.print_sample_qubits)
+            if (needs_host())
                 host.alloc_host(tableau.num_qubits_padded(), tableau.num_words_major(), tableau.num_words_minor());
         }
 

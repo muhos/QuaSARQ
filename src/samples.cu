@@ -108,10 +108,73 @@ namespace QuaSARQ {
         } else LOGDONE(2, 4);
     }
 
+    void Framing::print_detectors_sampled(const Vec<qubit_t, uint32>& measures_to_qubits) {
+        if (!options.print_detector) return;
+        const DetectorData& dets = circuit_io.detectors;
+        if (dets.empty()) return;
+        const Table& samples_host = samples_record.host;
+        LOGHEADER(1, 4, "Detectors");
+        for (size_t s = 0; s < num_shots; s++) {
+            string bitstring;
+            bitstring.reserve(dets.num_instructions * 2);
+            uint32 fired = 0;
+            for (uint32 i = 0; i < dets.num_instructions; i++) {
+                bool outcome = false;
+                for (uint32 j = dets.starts[i]; j < dets.starts[i] + dets.counts[i]; j++) {
+                    const qubit_t q = measures_to_qubits[dets.refs[j]];
+                    const word_std_t word = samples_host[q * samples_host.num_words_minor() + WORD_OFFSET(s)];
+                    outcome ^= bool((word >> (s & WORD_MASK)) & 1);
+                }
+                if (outcome) fired++;
+                bitstring += string(outcome ? CRED : CGREEN) + (outcome ? '1' : '0') + CNORMAL;
+            }
+            PRINT(" shot %-6zd: %s  (%u fired)\n", s, bitstring.c_str(), fired);
+        }
+    }
+
+    void Framing::print_observables_sampled(const Vec<qubit_t, uint32>& measures_to_qubits) {
+        if (!options.print_observable) return;
+        const ObservableData& obs = circuit_io.observables;
+        if (obs.empty()) return;
+        const Table& samples_host = samples_record.host;
+        LOGHEADER(1, 4, "Observables");
+        uint32 total_errors = 0;
+        for (size_t s = 0; s < num_shots; s++) {
+            string bitstring;
+            bitstring.reserve(obs.num_observables * 16);
+            uint32 fired = 0;
+            for (uint32 i = 0; i < obs.num_observables; i++) {
+                bool outcome = false;
+                for (uint32 j = obs.records.starts[i]; j < obs.records.starts[i] + obs.records.counts[i]; j++) {
+                    const qubit_t q = measures_to_qubits[obs.records.refs[j]];
+                    const word_std_t word = samples_host[q * samples_host.num_words_minor() + WORD_OFFSET(s)];
+                    outcome ^= bool((word >> (s & WORD_MASK)) & 1);
+                }
+                if (outcome) { fired++; total_errors++; }
+                bitstring += string(outcome ? CRED : CGREEN) + (outcome ? '1' : '0') + CNORMAL;
+            }
+            PRINT(" shot %-6zd: %s\n", s, bitstring.c_str());
+        }
+        LOG1(" %sLogical errors across all shots: %s%s%u / %zu%s",
+            CREPORT, CNORMAL, total_errors ? CRED : CGREEN,
+            total_errors, num_shots * obs.num_observables, CNORMAL);
+    }
+
     void Framing::print() {
-        if (!options.print_sample && !options.print_sample_qubits) return;
+        if (!samples_record.needs_host()) return;
         if (!options.sync) SYNCALL;
         samples_record.copy();
+        Vec<qubit_t, uint32> measures_to_qubits;
+        if (options.print_detector || options.print_observable) {
+            measures_to_qubits.reserve(stats.circuit.measure_stats.count);
+            for (depth_t d = 0; d < depth; d++) {
+                if (!circuit.is_measuring(d)) continue;
+                for (uint32 g = 0; g < circuit[d].size(); g++) {
+                    const Gate& gate = circuit.gate(d, g);
+                    measures_to_qubits.push(gate.wires[0]);
+                }
+            }
+        }
         if (options.print_sample) {
             LOGHEADER(1, 4, "Sampling (shot per line)");
             print_samples(samples_record.host, num_qubits, num_shots);
@@ -120,6 +183,8 @@ namespace QuaSARQ {
             LOGHEADER(1, 4, "Sampling (qubit per line)");
             print_samples_qubits(samples_record.host, num_qubits, num_shots);
         }
+        print_detectors_sampled(measures_to_qubits);
+        print_observables_sampled(measures_to_qubits);
         fflush(stdout);
     }
 

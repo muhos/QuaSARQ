@@ -57,12 +57,12 @@ namespace QuaSARQ {
         if (obs.empty()) return;
         if (!recorder.is_copied()) recorder.copy();
         const Vec<bool>& rec = recorder.host_record();
-        const uint32 n = obs.num_observables();
+        const uint32 n = obs.num_observables;
         Vec<bool, uint32> outcomes(n, false);
         uint32 fired = 0;
         for (uint32 i = 0; i < n; i++) {
-            for (uint32 j = obs.ref_starts[i]; j < obs.ref_starts[i] + obs.ref_counts[i]; j++)
-                outcomes[i] ^= rec[obs.record_refs[j]];
+            for (uint32 j = obs.records.starts[i]; j < obs.records.starts[i] + obs.records.counts[i]; j++)
+                outcomes[i] ^= rec[obs.records.refs[j]];
             if (outcomes[i]) fired++;
         }
         LOGHEADER(1, 4, "Observables");
@@ -81,12 +81,12 @@ namespace QuaSARQ {
         if (det.empty()) return;
         if (!recorder.is_copied()) recorder.copy();
         const Vec<bool>& rec = recorder.host_record();
-        const uint32 n = det.num_detectors();
+        const uint32 n = det.num_instructions;
         Vec<bool, uint32> outcomes(n, false);
         uint32 fired = 0;
         for (uint32 i = 0; i < n; i++) {
-            for (uint32 j = det.ref_starts[i]; j < det.ref_starts[i] + det.ref_counts[i]; j++)
-                outcomes[i] ^= rec[det.record_refs[j]];
+            for (uint32 j = det.starts[i]; j < det.starts[i] + det.counts[i]; j++)
+                outcomes[i] ^= rec[det.refs[j]];
             if (outcomes[i]) fired++;
         }
         LOGHEADER(1, 4, "Detectors");

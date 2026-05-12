@@ -21,5 +21,11 @@ namespace QuaSARQ {
 		Plus, 
 		Imag
 	};
+
+	// Circuit generation modes
+	enum CircuitMode { 
+		RANDOM_CIRCUIT, 
+		PARSED_CIRCUIT 
+	};
 	
 }

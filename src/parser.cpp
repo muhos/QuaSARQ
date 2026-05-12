@@ -71,7 +71,7 @@ namespace QuaSARQ {
                 while (str < eof && *str != ')' && *str != DELIM) str++;
                 if (str < eof && *str == ')') str++;
             }
-            detectors.ref_starts.push(detectors.record_refs.size());
+            detectors.starts.push(detectors.refs.size());
             uint32 ref_count = 0;
             while (str < eof && *str != DELIM) {
                 if (*str == UNIX_DELIM) { str++; continue; }
@@ -86,11 +86,11 @@ namespace QuaSARQ {
                     if (str < eof && *str == ']') str++;
                     if (n == 0 || n > measures_count)
                         LOGERROR("DETECTOR: rec[-%u] out of range (measures so far: %u).", n, measures_count);
-                    detectors.record_refs.push(measures_count - n);
+                    detectors.refs.push(measures_count - n);
                     ref_count++;
                 } else { eatLine(str); break; }
             }
-            detectors.ref_counts.push(ref_count);
+            detectors.counts.push(ref_count);
             return;
         }
 
@@ -104,7 +104,7 @@ namespace QuaSARQ {
                 if (str < eof && *str == ')') str++;
             }
             observables.ids.push(obs_id);
-            observables.ref_starts.push((uint32)observables.record_refs.size());
+            observables.records.starts.push(observables.records.refs.size());
             uint32 ref_count = 0;
             while (str < eof && *str != DELIM) {
                 if (*str == UNIX_DELIM) { str++; continue; }
@@ -120,14 +120,14 @@ namespace QuaSARQ {
                     if (str < eof && *str == ']') str++;
                     if (n == 0 || n > measures_count)
                         LOGERROR("OBSERVABLE_INCLUDE: rec[-%u] out of range (measures so far: %zu)", n, measures_count);
-                    observables.record_refs.push(measures_count - n);
+                    observables.records.refs.push(measures_count - n);
                     ref_count++;
                 } else {
                     eatLine(str);
                     break;
                 }
             }
-            observables.ref_counts.push(ref_count);
+            observables.records.counts.push(ref_count);
             return;
         }
 
