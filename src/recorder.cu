@@ -61,16 +61,16 @@ namespace QuaSARQ {
         const uint32               num_instructions,
               bool*                outcomes)
     {
-        bool* s_record = SharedMemory<bool>();
+        bool* sh_record = SharedMemory<bool>();
         for (grid_t k = threadIdx.x; k < record_size; k += blockDim.x)
-            s_record[k] = record[k];
+            sh_record[k] = record[k];
         __syncthreads();
         for_parallel_x(i, num_instructions) {
             bool result = false;
             const uint32 start = starts[i];
             const uint32 count = counts[i];
             for (uint32 j = start; j < start + count; j++)
-                result ^= s_record[refs[j]];
+                result ^= sh_record[refs[j]];
             outcomes[i] = result;
         }
     }
@@ -86,13 +86,13 @@ namespace QuaSARQ {
         const uint32               num_instructions,
               bool*                outcomes)
     {
-        bool* s_record = SharedMemory<bool>();
+        bool* sh_record = SharedMemory<bool>();
         const grid_t i = global_tx;
         bool result = false;
         for (uint32 tile_start = 0; tile_start < record_size; tile_start += tile_size) {
             const uint32 this_tile = MIN(tile_size, record_size - tile_start);
             for (grid_t k = threadIdx.x; k < this_tile; k += blockDim.x)
-                s_record[k] = record[tile_start + k];
+                sh_record[k] = record[tile_start + k];
             __syncthreads();
             if (i < num_instructions) {
                 const uint32 start = starts[i];
@@ -100,7 +100,7 @@ namespace QuaSARQ {
                 for (uint32 j = start; j < start + count; j++) {
                     const uint32 ref = refs[j];
                     if (ref >= tile_start && ref < tile_start + this_tile)
-                        result ^= s_record[ref - tile_start];
+                        result ^= sh_record[ref - tile_start];
                 }
             }
             __syncthreads();
@@ -136,7 +136,6 @@ namespace QuaSARQ {
         }
         LASTERR(label);
         CHECK(cudaMemcpyAsync(h_outcomes, d_outcomes, n * sizeof(bool), cudaMemcpyDeviceToHost, stream));
-        CHECK(cudaStreamSynchronize(stream));
     }
 
     void Simulator::print_observables() {
@@ -156,11 +155,11 @@ namespace QuaSARQ {
             record_size, n,
             d_outcomes, h_outcomes, stream,
             "eval_record_refs (observables) failed");
-        gpu_allocator.deallocate<bool>(d_outcomes);
         LOGHEADER(1, 4, "Observables");
         string bitstring;
         bitstring.reserve(n * 2);
         uint32 fired = 0;
+        SYNC(stream); // sync h_outcomes.
         for (uint32 i = 0; i < n; i++) {
             if (h_outcomes[i]) fired++;
             bitstring += string(h_outcomes[i] ? CRED : CGREEN) + (h_outcomes[i] ? '1' : '0');
@@ -168,6 +167,7 @@ namespace QuaSARQ {
         LOG1(" %sOutcome: %s%s", CBCYAN, CNORMAL, bitstring.c_str());
         LOG1(" %sLogical errors: %s%s%u / %u%s",
             CBCYAN, CNORMAL, fired ? CRED : CGREEN, fired, n, CNORMAL);
+        gpu_allocator.deallocate<bool>(d_outcomes);
         gpu_allocator.deallocate_pinned<bool>(h_outcomes);
     }
 
