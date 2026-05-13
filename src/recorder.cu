@@ -52,44 +52,110 @@ namespace QuaSARQ {
     }
 
     __global__
-    void eval_observables_k(
+    void eval_record_refs_smem_k(
         const uint32* __restrict__ refs,
         const uint32* __restrict__ starts,
         const uint32* __restrict__ counts,
         const bool*   __restrict__ record,
-        const uint32               num_observables,
+        const uint32               record_size,
+        const uint32               num_instructions,
               bool*                outcomes)
     {
-        for_parallel_x(i, num_observables) {
+        bool* s_record = SharedMemory<bool>();
+        for (grid_t k = threadIdx.x; k < record_size; k += blockDim.x)
+            s_record[k] = record[k];
+        __syncthreads();
+        for_parallel_x(i, num_instructions) {
             bool result = false;
             const uint32 start = starts[i];
             const uint32 count = counts[i];
             for (uint32 j = start; j < start + count; j++)
-                result ^= record[refs[j]];
+                result ^= s_record[refs[j]];
             outcomes[i] = result;
         }
+    }
+
+    __global__
+    void eval_record_refs_tiled_k(
+        const uint32* __restrict__ refs,
+        const uint32* __restrict__ starts,
+        const uint32* __restrict__ counts,
+        const bool*   __restrict__ record,
+        const uint32               record_size,
+        const uint32               tile_size,
+        const uint32               num_instructions,
+              bool*                outcomes)
+    {
+        bool* s_record = SharedMemory<bool>();
+        const grid_t i = global_tx;
+        bool result = false;
+        for (uint32 tile_start = 0; tile_start < record_size; tile_start += tile_size) {
+            const uint32 this_tile = MIN(tile_size, record_size - tile_start);
+            for (grid_t k = threadIdx.x; k < this_tile; k += blockDim.x)
+                s_record[k] = record[tile_start + k];
+            __syncthreads();
+            if (i < num_instructions) {
+                const uint32 start = starts[i];
+                const uint32 count = counts[i];
+                for (uint32 j = start; j < start + count; j++) {
+                    const uint32 ref = refs[j];
+                    if (ref >= tile_start && ref < tile_start + this_tile)
+                        result ^= s_record[ref - tile_start];
+                }
+            }
+            __syncthreads();
+        }
+        if (i < num_instructions)
+            outcomes[i] = result;
+    }
+
+    inline void launch_eval_record_refs(
+        const uint32*      d_refs,
+        const uint32*      d_starts,
+        const uint32*      d_counts,
+        const bool*        d_record,
+        const uint32       record_size,
+        const uint32       n,
+              bool*        d_outcomes,
+              bool*        h_outcomes,
+        const cudaStream_t stream,
+        const char*        label)
+    {
+        dim3 block(128, 1), grid;
+        OPTIMIZEBLOCKS(grid.x, n, block.x);
+        const size_t record_bytes = record_size * sizeof(bool);
+        const size_t max_shared = maxGPUSharedMem;
+        if (record_bytes <= max_shared) {
+            eval_record_refs_smem_k<<<grid, block, record_bytes, stream>>>(
+                d_refs, d_starts, d_counts, d_record, record_size, n, d_outcomes);
+        } 
+        else {
+            const uint32 tile_size = (uint32)(max_shared / sizeof(bool));
+            eval_record_refs_tiled_k<<<grid, block, max_shared, stream>>>(
+                d_refs, d_starts, d_counts, d_record, record_size, tile_size, n, d_outcomes);
+        }
+        LASTERR(label);
+        CHECK(cudaMemcpyAsync(h_outcomes, d_outcomes, n * sizeof(bool), cudaMemcpyDeviceToHost, stream));
+        CHECK(cudaStreamSynchronize(stream));
     }
 
     void Simulator::print_observables() {
         if (!options.print_observable) return;
         const ObservableData& obs = circuit_io.observables;
         if (obs.empty()) return;
-        const uint32 n = (uint32)obs.pinned.num_observables;
+        const uint32 n            = (uint32)obs.pinned.num_observables;
+        const uint32 record_size  = (uint32)recorder.step_history();
         const cudaStream_t stream = kernel_streams[0];
         bool* d_outcomes = gpu_allocator.allocate<bool>(n, Region::Dynamic);
         bool* h_outcomes = gpu_allocator.allocate_pinned<bool>(n);
-        dim3 block(128, 1), grid;
-        OPTIMIZEBLOCKS(grid.x, n, block.x);
-        eval_observables_k<<<grid, block, 0, stream>>>(
+        launch_eval_record_refs(
             obs.records.device.refs,
             obs.records.device.starts,
             obs.records.device.counts,
             recorder.device_record(),
-            n,
-            d_outcomes);
-        LASTERR("eval_observables_k failed");
-        CHECK(cudaMemcpyAsync(h_outcomes, d_outcomes, n * sizeof(bool), cudaMemcpyDeviceToHost, stream));
-        CHECK(cudaStreamSynchronize(stream));
+            record_size, n,
+            d_outcomes, h_outcomes, stream,
+            "eval_record_refs (observables) failed");
         gpu_allocator.deallocate<bool>(d_outcomes);
         LOGHEADER(1, 4, "Observables");
         string bitstring;
@@ -109,25 +175,33 @@ namespace QuaSARQ {
         if (!options.print_detector) return;
         const DetectorData& det = circuit_io.detectors;
         if (det.empty()) return;
-        if (!recorder.is_copied()) recorder.copy();
-        const Vec<bool>& rec = recorder.host_record();
-        const uint32 n = det.pinned.num_instructions;
-        Vec<bool, uint32> outcomes(n, false);
-        uint32 fired = 0;
-        for (uint32 i = 0; i < n; i++) {
-            for (uint32 j = det.starts[i]; j < det.starts[i] + det.counts[i]; j++)
-                outcomes[i] ^= rec[det.refs[j]];
-            if (outcomes[i]) fired++;
-        }
+        const uint32 n            = (uint32)det.pinned.num_instructions;
+        const uint32 record_size  = (uint32)recorder.step_history();
+        const cudaStream_t stream = kernel_streams[0];
+        bool* d_outcomes = gpu_allocator.allocate<bool>(n, Region::Dynamic);
+        bool* h_outcomes = gpu_allocator.allocate_pinned<bool>(n);
+        launch_eval_record_refs(
+            det.device.refs,
+            det.device.starts,
+            det.device.counts,
+            recorder.device_record(),
+            record_size, n,
+            d_outcomes, h_outcomes, stream,
+            "eval_record_refs (detectors) failed");
+        gpu_allocator.deallocate<bool>(d_outcomes);
         LOGHEADER(1, 4, "Detectors");
         string bitstring;
         bitstring.reserve(n * 2);
-        for (uint32 i = 0; i < n; i++)
-            bitstring += string(outcomes[i] ? CRED : CGREEN) + (outcomes[i] ? '1' : '0');
+        uint32 fired = 0;
+        for (uint32 i = 0; i < n; i++) {
+            if (h_outcomes[i]) fired++;
+            bitstring += string(h_outcomes[i] ? CRED : CGREEN) + (h_outcomes[i] ? '1' : '0');
+        }
         LOG1(" %sDetection bitstring     :%s %s",
             CBCYAN, CNORMAL, bitstring.c_str());
         LOG1(" %sDetection events fired  :%s %s%u / %u%s",
             CBCYAN, CNORMAL, fired ? CRED : CGREEN, fired, n, CNORMAL);
+        gpu_allocator.deallocate_pinned<bool>(h_outcomes);
     }
         
 
