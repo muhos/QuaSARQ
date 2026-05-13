@@ -53,13 +53,13 @@ namespace QuaSARQ {
 
     __global__
     void eval_record_refs_smem_k(
+              char*                bitstring,
         const uint32* __restrict__ refs,
         const uint32* __restrict__ starts,
         const uint32* __restrict__ counts,
         const bool*   __restrict__ record,
         const uint32               record_size,
-        const uint32               num_instructions,
-              bool*                outcomes)
+        const uint32               num_instructions)
     {
         bool* sh_record = SharedMemory<bool>();
         for (grid_t k = threadIdx.x; k < record_size; k += blockDim.x)
@@ -71,20 +71,20 @@ namespace QuaSARQ {
             const uint32 count = counts[i];
             for (uint32 j = start; j < start + count; j++)
                 result ^= sh_record[refs[j]];
-            outcomes[i] = result;
+            bitstring[i] = result ? '1' : '0';
         }
     }
 
     __global__
     void eval_record_refs_tiled_k(
+              char*                bitstring,
         const uint32* __restrict__ refs,
         const uint32* __restrict__ starts,
         const uint32* __restrict__ counts,
         const bool*   __restrict__ record,
         const uint32               record_size,
         const uint32               tile_size,
-        const uint32               num_instructions,
-              bool*                outcomes)
+        const uint32               num_instructions)
     {
         bool* sh_record = SharedMemory<bool>();
         const grid_t i = global_tx;
@@ -106,36 +106,53 @@ namespace QuaSARQ {
             __syncthreads();
         }
         if (i < num_instructions)
-            outcomes[i] = result;
+            bitstring[i] = result ? '1' : '0';
     }
 
     inline void launch_eval_record_refs(
+              char*        d_bitstring,
+              char*        h_bitstring,
         const uint32*      d_refs,
         const uint32*      d_starts,
         const uint32*      d_counts,
         const bool*        d_record,
         const uint32       record_size,
         const uint32       n,
-              bool*        d_outcomes,
-              bool*        h_outcomes,
         const cudaStream_t stream,
         const char*        label)
     {
         dim3 block(128, 1), grid;
         OPTIMIZEBLOCKS(grid.x, n, block.x);
         const size_t record_bytes = record_size * sizeof(bool);
-        const size_t max_shared = maxGPUSharedMem;
+        const size_t max_shared   = maxGPUSharedMem;
         if (record_bytes <= max_shared) {
             eval_record_refs_smem_k<<<grid, block, record_bytes, stream>>>(
-                d_refs, d_starts, d_counts, d_record, record_size, n, d_outcomes);
-        } 
-        else {
+                d_bitstring, d_refs, d_starts, d_counts, d_record, record_size, n);
+        } else {
             const uint32 tile_size = (uint32)(max_shared / sizeof(bool));
             eval_record_refs_tiled_k<<<grid, block, max_shared, stream>>>(
-                d_refs, d_starts, d_counts, d_record, record_size, tile_size, n, d_outcomes);
+                d_bitstring, d_refs, d_starts, d_counts, d_record, record_size, tile_size, n);
         }
         LASTERR(label);
-        CHECK(cudaMemcpyAsync(h_outcomes, d_outcomes, n * sizeof(bool), cudaMemcpyDeviceToHost, stream));
+        CHECK(cudaMemcpyAsync(h_bitstring, d_bitstring, n * sizeof(char), cudaMemcpyDeviceToHost, stream));
+    }
+
+    inline void print_bitstring(char* bs, const uint32& n, uint32& fired) {
+        bs[n] = '\0';
+        for (uint32 i = 0; i < n; i++)
+            if (bs[i] == '1') fired++;
+        LOGHEADER(1, 4, "Observables");
+        if (options.color_bitstring) {
+            string colored;
+            colored.reserve(n * 2);
+            for (uint32 i = 0; i < n; i++)
+                colored += string(bs[i] == '1' ? CRED : CGREEN) + bs[i];
+            LOGN1(" %s%s", colored.c_str(), CNORMAL);
+        } 
+        else {
+            LOGN1(" %s%s%s", CLBLUE, bs, CNORMAL);
+        }
+        LOG1(" (%s%u / %u%s)", fired ? CRED : CGREEN, fired, n, CNORMAL);
     }
 
     void Simulator::print_observables() {
@@ -145,30 +162,21 @@ namespace QuaSARQ {
         const uint32 n            = (uint32)obs.pinned.num_observables;
         const uint32 record_size  = (uint32)recorder.step_history();
         const cudaStream_t stream = kernel_streams[0];
-        bool* d_outcomes = gpu_allocator.allocate<bool>(n, Region::Dynamic);
-        bool* h_outcomes = gpu_allocator.allocate_pinned<bool>(n);
+        char* d_bitstring = gpu_allocator.allocate<char>(n, Region::Dynamic);
+        char* h_bitstring = gpu_allocator.allocate_pinned<char>(n + 1);
         launch_eval_record_refs(
+            d_bitstring, h_bitstring,
             obs.records.device.refs,
             obs.records.device.starts,
             obs.records.device.counts,
             recorder.device_record(),
-            record_size, n,
-            d_outcomes, h_outcomes, stream,
+            record_size, n, stream,
             "eval_record_refs (observables) failed");
-        LOGHEADER(1, 4, "Observables");
-        string bitstring;
-        bitstring.reserve(n * 2);
+        SYNC(stream);
         uint32 fired = 0;
-        SYNC(stream); // sync h_outcomes.
-        for (uint32 i = 0; i < n; i++) {
-            if (h_outcomes[i]) fired++;
-            bitstring += string(h_outcomes[i] ? CRED : CGREEN) + (h_outcomes[i] ? '1' : '0');
-        }
-        LOG1(" %sOutcome: %s%s", CBCYAN, CNORMAL, bitstring.c_str());
-        LOG1(" %sLogical errors: %s%s%u / %u%s",
-            CBCYAN, CNORMAL, fired ? CRED : CGREEN, fired, n, CNORMAL);
-        gpu_allocator.deallocate<bool>(d_outcomes);
-        gpu_allocator.deallocate_pinned<bool>(h_outcomes);
+        print_bitstring(h_bitstring, n, fired);
+        gpu_allocator.deallocate_pinned<char>(h_bitstring);
+        gpu_allocator.deallocate<char>(d_bitstring);
     }
 
     void Simulator::print_detectors() {
@@ -178,30 +186,21 @@ namespace QuaSARQ {
         const uint32 n            = (uint32)det.pinned.num_instructions;
         const uint32 record_size  = (uint32)recorder.step_history();
         const cudaStream_t stream = kernel_streams[0];
-        bool* d_outcomes = gpu_allocator.allocate<bool>(n, Region::Dynamic);
-        bool* h_outcomes = gpu_allocator.allocate_pinned<bool>(n);
+        char* d_bitstring = gpu_allocator.allocate<char>(n, Region::Dynamic);
+        char* h_bitstring = gpu_allocator.allocate_pinned<char>(n + 1);
         launch_eval_record_refs(
+            d_bitstring, h_bitstring,
             det.device.refs,
             det.device.starts,
             det.device.counts,
             recorder.device_record(),
-            record_size, n,
-            d_outcomes, h_outcomes, stream,
+            record_size, n, stream,
             "eval_record_refs (detectors) failed");
-        gpu_allocator.deallocate<bool>(d_outcomes);
-        LOGHEADER(1, 4, "Detectors");
-        string bitstring;
-        bitstring.reserve(n * 2);
+        SYNC(stream);
         uint32 fired = 0;
-        for (uint32 i = 0; i < n; i++) {
-            if (h_outcomes[i]) fired++;
-            bitstring += string(h_outcomes[i] ? CRED : CGREEN) + (h_outcomes[i] ? '1' : '0');
-        }
-        LOG1(" %sDetection bitstring     :%s %s",
-            CBCYAN, CNORMAL, bitstring.c_str());
-        LOG1(" %sDetection events fired  :%s %s%u / %u%s",
-            CBCYAN, CNORMAL, fired ? CRED : CGREEN, fired, n, CNORMAL);
-        gpu_allocator.deallocate_pinned<bool>(h_outcomes);
+        print_bitstring(h_bitstring, n, fired);
+        gpu_allocator.deallocate_pinned<char>(h_bitstring);
+        gpu_allocator.deallocate<char>(d_bitstring);
     }
         
 

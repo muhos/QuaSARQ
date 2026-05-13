@@ -50,6 +50,7 @@ namespace QuaSARQ {
     BOOL_OPT opt_disable_concurrency("disable-concurrency", "disable concurrency in equivalence checking", false);
     BOOL_OPT opt_tune_all("tune-all", "enable tuning for all kernels", false);
     BOOL_OPT opt_check_all("check-all", "enable checking for all supported procedures", false);
+    BOOL_OPT opt_color_bitstring("color-bitstring", "color bitstrings of observables and detectors ('1': red, '0': green)", false);
     FOREACH_CONFIG(CONFIG2TUNEINPUT);
     FOREACH_CHECK(CONFIG2CHECKINPUT);
     FOREACH_PRINT(CONFIG2PRINTINPUT);
@@ -117,6 +118,8 @@ namespace QuaSARQ {
                         tune_prefixprepare || tune_prefixfinal ||
                         tune_prefixsingle || tune_newpivots ||
                         tune_injectswap);
+
+        color_bitstring = opt_color_bitstring;
 
         initialstate = InitialState(int(opt_initialstate));
         num_qubits = opt_num_qubits;
