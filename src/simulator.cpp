@@ -42,7 +42,7 @@ Simulator::Simulator() :
     , state_file(nullptr)
     , config_qubits(0)
 	, custreams(nullptr)
-    , copy_streams{ 0, 0 }
+    , copy_streams{ 0, 0, 0, 0 }
     , kernel_streams{ 0, 0 }
     , measuring(false)
 {
@@ -69,7 +69,7 @@ Simulator::Simulator(const string& path) :
     , state_file(nullptr)
     , config_qubits(0)
     , custreams(nullptr)
-    , copy_streams{ 0, 0 }
+    , copy_streams{ 0, 0, 0, 0 }
     , kernel_streams{ 0, 0 }
     , measuring(false)
 {
@@ -94,11 +94,12 @@ void Simulator::reserve() {
         winfo.max_window_bytes + 
         (num_qubits + 2) * sizeof(pivot_t) + 
         KB * gpu_allocator.alignment() + 
-        circuit_obs_dets_bytes;
+        circuit_obs_dets_bytes +
+        circuit_io.observables.pinned.num_observables;
     gpu_allocator.create_cpu_pool(pinned_bytes);
     if (circuit_mode == PARSED_CIRCUIT) {
-        //alloc_observables();
-        //alloc_detectors();
+        alloc_observables();
+        alloc_detectors();
     }
 }
 

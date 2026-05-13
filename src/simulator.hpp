@@ -46,8 +46,8 @@ namespace QuaSARQ {
         FILE*                           state_file;
         size_t                          config_qubits;
         cudaStream_t*                   custreams;
-        cudaStream_t                    copy_streams[3];
-        cudaStream_t                    kernel_streams[2];
+        cudaStream_t                    copy_streams[NUM_COPY_STREAMS];
+        cudaStream_t                    kernel_streams[NUM_COMPUTE_STREAMS];
         WindowInfo                      winfo;
         bool                            measuring;
         static bool                     timeout;

@@ -2,7 +2,7 @@
 
 namespace QuaSARQ {
 
-    void RecordRefs::alloc_pinned(DeviceAllocator& allocator) {
+    void DetectorData::alloc_pinned(DeviceAllocator& allocator) {
         if (pinned.is_allocated()) return;
         pinned.refs = allocator.allocate_pinned<uint32>(refs.size());
         pinned.starts = allocator.allocate_pinned<uint32>(starts.size());
@@ -10,14 +10,14 @@ namespace QuaSARQ {
         moved_to_pinned = false;
     }
 
-    void RecordRefs::alloc_device(DeviceAllocator& allocator) {
+    void DetectorData::alloc_device(DeviceAllocator& allocator) {
         if (device.is_allocated()) return;
         device.refs = allocator.allocate<uint32>(refs.size());
         device.starts = allocator.allocate<uint32>(starts.size());
         device.counts = allocator.allocate<uint32>(counts.size());
     }
 
-    void RecordRefs::move_to_pinned() {
+    void DetectorData::move_to_pinned() {
         if (!pinned.is_allocated()) {
             LOGERROR("pinned memory not allocated for record refs");
         }
@@ -31,7 +31,7 @@ namespace QuaSARQ {
         moved_to_pinned = true;
     }
 
-    void RecordRefs::copy_to_device(const cudaStream_t& stream) {
+    void DetectorData::copy_to_device(const cudaStream_t& stream) {
         if (!device.is_allocated()) {
             LOGERROR("device memory not allocated for record refs");
         }
@@ -90,12 +90,14 @@ namespace QuaSARQ {
     void Simulator::alloc_detectors() {
         if (!options.print_detector) return;
         circuit_io.detectors.alloc_pinned(gpu_allocator);
+        circuit_io.detectors.alloc_device(gpu_allocator);
         circuit_io.detectors.move_to_pinned();
     }
 
     void Simulator::alloc_observables() {
         if (!options.print_observable) return;
         circuit_io.observables.alloc_pinned(gpu_allocator);
+        circuit_io.observables.alloc_device(gpu_allocator);
         circuit_io.observables.move_to_pinned();
     }
 
@@ -106,7 +108,7 @@ namespace QuaSARQ {
 
     void Simulator::copy_observables(const cudaStream_t& stream) {
         if (!options.print_observable) return;
-        circuit_io.observables.records.copy_to_device(stream);
+        circuit_io.observables.copy_to_device(stream);
     }
         
 
