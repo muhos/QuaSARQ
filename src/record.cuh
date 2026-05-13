@@ -1,8 +1,10 @@
+#pragma once
+
 #include "vector.hpp"
 #include "memory.cuh"
 
 namespace QuaSARQ {
-    
+
     struct RecordRefs {
 
         Vec<uint32, uint32>  refs; // measurement-history indices per instruction.

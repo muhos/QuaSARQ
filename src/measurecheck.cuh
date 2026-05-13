@@ -8,6 +8,7 @@
 #include "vector.hpp"
 #include "circuit.hpp"
 #include "recorder.cuh"
+#include "record.cuh"
 
 namespace QuaSARQ {
 
@@ -75,6 +76,12 @@ namespace QuaSARQ {
 			{}
 
 		~MeasurementChecker() { destroy();}
+
+		void reset_state() {
+			qubit = INVALID_QUBIT;
+			pivot = INVALID_PIVOT;
+			input_copied  = false;
+		}
 
 		void destroy() {
 			num_qubits = 0; 
@@ -188,6 +195,10 @@ namespace QuaSARQ {
 		void check_inject_x(const Tableau& other_input, const pivot_t* other_pivots, const size_t& num_pivots, const sign_t& random_bit);
 
 		void check_record_measurements(const Tableau& other_input, const MeasurementRecorder& other_recorder, const Circuit& circuit, const depth_t& depth_level);
+        
+		void check_observables(const ObservableData& obs, const char* bitstring, const uint32& n);
+        
+		void check_detectors(const DetectorData& det, const char* bitstring, const uint32& n);
 
 		void inject_swap_cpu();
 

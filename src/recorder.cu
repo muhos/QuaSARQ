@@ -175,6 +175,7 @@ namespace QuaSARQ {
         SYNC(stream);
         uint32 fired = 0;
         print_bitstring(h_bitstring, n, fired);
+        mchecker.check_observables(circuit_io.observables, h_bitstring, n);
         gpu_allocator.deallocate_pinned<char>(h_bitstring);
         gpu_allocator.deallocate<char>(d_bitstring);
     }
@@ -199,9 +200,10 @@ namespace QuaSARQ {
         SYNC(stream);
         uint32 fired = 0;
         print_bitstring(h_bitstring, n, fired);
+        mchecker.check_detectors(circuit_io.detectors, h_bitstring, n);
         gpu_allocator.deallocate_pinned<char>(h_bitstring);
         gpu_allocator.deallocate<char>(d_bitstring);
     }
-        
+
 
 }

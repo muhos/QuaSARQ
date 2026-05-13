@@ -13,8 +13,6 @@ namespace QuaSARQ {
         CONFIG(tableau) \
         CONFIG(transpose) \
         CONFIG(measurement) \
-        CONFIG(observable) \
-        CONFIG(detector) \
 
     #define FOREACH_PRINT(CONFIG) \
         CONFIG(gates, "gates") \
