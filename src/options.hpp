@@ -53,6 +53,7 @@ namespace QuaSARQ {
         bool quiet_en;
         bool report_en;
         bool progress_en;
+        bool force_report_en;
 
         bool check_all;
         bool tuner_en;

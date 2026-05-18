@@ -43,6 +43,7 @@ namespace QuaSARQ {
 
     BOOL_OPT opt_quiet_en("q", "be quiet", false);
     BOOL_OPT opt_report_en("report", "report statistics", true);
+    BOOL_OPT opt_force_report_en("force-report", "force reporting statistics in quiet mode", false);
     BOOL_OPT opt_progress_en("progress", "report progress", true);
     BOOL_OPT opt_equivalence_en("equivalence", "do equivalence checking", false);
     BOOL_OPT opt_sync("sync", "synchronize all kernels and data transfers", false);
@@ -95,6 +96,7 @@ namespace QuaSARQ {
         quiet_en = opt_quiet_en;
         report_en = opt_report_en;
         progress_en = opt_progress_en;
+        force_report_en = opt_force_report_en;
         verbose = opt_verbose;
         if (options.quiet_en) options.verbose = 0;
         else if (!options.verbose) options.quiet_en = true;
@@ -148,6 +150,8 @@ namespace QuaSARQ {
         if (equivalence_en) {
             tuner_en = false;
         }
+        if (num_shots && !print_sample)
+            print_sample = true;
         if (verbose > 1) {
             LOG2(1, "%s  Enabled synchronization with verbosity level %s%zd%s.%s", CARGDEFAULT, CARGVALUE, verbose, CARGDEFAULT, CNORMAL);
             sync = true;

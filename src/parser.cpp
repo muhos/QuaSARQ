@@ -3,7 +3,30 @@
 
 namespace QuaSARQ {
 
-    void CircuitIO::read_gate_into(char*& str, CircuitQueue& target, Gate_stats& gstats) {
+    void CircuitIO::parse_rec_refs(char*& str, RecordRefs& dest, const uint32& mc, const bool& deferred, const char* label) {
+        dest.starts.push(dest.refs.size());
+        uint32 ref_count = 0;
+        while (str < eof && *str != DELIM) {
+            if (*str == UNIX_DELIM) { str++; continue; }
+            char* peek = str;
+            eatWS(peek);
+            if (peek >= eof || *peek == DELIM || *peek == '\0') break;
+            if (peek + 4 < eof &&
+                peek[0]=='r' && peek[1]=='e' && peek[2]=='c' &&
+                peek[3]=='[' && peek[4]=='-') {
+                str = peek + 5;
+                uint32 n = toInteger(str);
+                if (str < eof && *str == ']') str++;
+                if (n == 0 || n > mc)
+                    LOGERROR("%s: rec[-%u] out of range (measures so far: %u).", label, n, mc);
+                dest.refs.push(deferred ? n : mc - n);
+                ref_count++;
+            } else { eatLine(str); break; }
+        }
+        dest.counts.push(ref_count);
+    }
+
+    void CircuitIO::read_gate_into(char*& str, CircuitQueue& target, Gate_stats& gstats, ParsedBlock* pb) {
         eatWS(str);
         if (str >= eof || *str == '\0') return;
         // Parse gate / directive name: alpha, underscore, or digit.
@@ -30,6 +53,8 @@ namespace QuaSARQ {
 
         // REPEAT block.
         if (strcmp(gatestr, "REPEAT") == 0) {
+            if (pb != nullptr)
+                LOGERROR("nested REPEAT blocks are not supported.");
             eatWS(str);
             uint32 count = toInteger(str);
             eatWS(str);
@@ -37,30 +62,45 @@ namespace QuaSARQ {
                 LOGERROR("expected '{' after REPEAT %u.", count);
             str++; // consume '{'
 
-            CircuitQueue block;
-            block.reserve(256);
-            Gate_stats bstats;
-            bstats.alloc();
-
+            ParsedBlock block;
             while (str < eof) {
                 eatWS(str);
                 if (*str == '}') { str++; break; }
                 if (*str == '\0') break;
                 if (*str == '#') { eatLine(str); continue; }
-                read_gate_into(str, block, bstats);
+                read_gate_into(str, block.gates, block.gstats, &block);
             }
 
+            // Unroll count times.
+            const uint32 measures_before = measures_count;
             for (uint32 i = 0; i < count; i++) {
-                for (size_t j = 0; j < block.size(); j++) {
-                    const ParsedGate& g = block[j];
+                for (size_t j = 0; j < block.gates.size(); j++) {
+                    const ParsedGate& g = block.gates[j];
                     target.push(g);
                     gstats.types[g.type]++;
                     if ((g.type == M || g.type == MR) && &target == &circuit_queue)
                         measures_count++;
                 }
+                for (uint32 j = 0; j < block.det.starts.size(); j++) {
+                    const uint32 mc = measures_before + i * block.measures + block.det_mc[j];
+                    detectors.starts.push(detectors.refs.size());
+                    const uint32 s = block.det.starts[j];
+                    const uint32 c = block.det.counts[j];
+                    for (uint32 k = s; k < s + c; k++)
+                        detectors.refs.push(mc - block.det.refs[k]);
+                    detectors.counts.push(c);
+                }
+                for (uint32 j = 0; j < block.obs.ids.size(); j++) {
+                    const uint32 mc = measures_before + i * block.measures + block.obs_mc[j];
+                    observables.ids.push(block.obs.ids[j]);
+                    observables.records.starts.push(observables.records.refs.size());
+                    const uint32 s = block.obs.records.starts[j];
+                    const uint32 c = block.obs.records.counts[j];
+                    for (uint32 k = s; k < s + c; k++)
+                        observables.records.refs.push(mc - block.obs.records.refs[k]);
+                    observables.records.counts.push(c);
+                }
             }
-            block.clear(true);
-            bstats.destroy();
             return;
         }
 
@@ -71,26 +111,10 @@ namespace QuaSARQ {
                 while (str < eof && *str != ')' && *str != DELIM) str++;
                 if (str < eof && *str == ')') str++;
             }
-            detectors.starts.push(detectors.refs.size());
-            uint32 ref_count = 0;
-            while (str < eof && *str != DELIM) {
-                if (*str == UNIX_DELIM) { str++; continue; }
-                char* peek = str;
-                eatWS(peek);
-                if (peek >= eof || *peek == DELIM || *peek == '\0') break;
-                if (peek + 4 < eof &&
-                    peek[0]=='r' && peek[1]=='e' && peek[2]=='c' &&
-                    peek[3]=='[' && peek[4]=='-') {
-                    str = peek + 5;
-                    uint32 n = toInteger(str);
-                    if (str < eof && *str == ']') str++;
-                    if (n == 0 || n > measures_count)
-                        LOGERROR("DETECTOR: rec[-%u] out of range (measures so far: %u).", n, measures_count);
-                    detectors.refs.push(measures_count - n);
-                    ref_count++;
-                } else { eatLine(str); break; }
-            }
-            detectors.counts.push(ref_count);
+            const uint32 mc = measures_count + (pb ? pb->measures : 0);
+            RecordRefs& dest = pb ? pb->det : detectors;
+            if (pb) pb->det_mc.push(pb->measures);
+            parse_rec_refs(str, dest, mc, pb != nullptr, "DETECTOR");
             return;
         }
 
@@ -102,35 +126,17 @@ namespace QuaSARQ {
                 obs_id = toInteger(str);
                 eatWS(str);
                 if (str < eof && *str == ')') str++;
-            }
-            observables.ids.push(obs_id);
-            observables.records.starts.push(observables.records.refs.size());
-            uint32 ref_count = 0;
-            while (str < eof && *str != DELIM) {
-                if (*str == UNIX_DELIM) { str++; continue; }
-                char* peek = str;
-                eatWS(peek);
-                if (peek >= eof || *peek == DELIM || *peek == '\0') break;
-                // Expect rec[-n]
-                if (peek + 4 < eof &&
-                    peek[0] == 'r' && peek[1] == 'e' && peek[2] == 'c' &&
-                    peek[3] == '[' && peek[4] == '-') {
-                    str = peek + 5; // skip "rec[-"
-                    uint32 n = toInteger(str);
-                    if (str < eof && *str == ']') str++;
-                    if (n == 0 || n > measures_count)
-                        LOGERROR("OBSERVABLE_INCLUDE: rec[-%u] out of range (measures so far: %zu)", n, measures_count);
-                    observables.records.refs.push(measures_count - n);
-                    ref_count++;
-                } else {
-                    eatLine(str);
-                    break;
-                }
-            }
-            observables.records.counts.push(ref_count);
+            }      
+            const uint32 mc = measures_count + (pb ? pb->measures : 0);
+            ObservableData& dest_obs = pb ? pb->obs : observables;
+            RecordRefs& dest_rec     = pb ? pb->obs.records : observables.records;
+            dest_obs.ids.push(obs_id);
+            if (pb) pb->obs_mc.push(pb->measures);
+            parse_rec_refs(str, dest_rec, mc, pb != nullptr, "OBSERVABLE_INCLUDE");
             return;
         }
 
+        // Propability in Depolarizing gates.
         float gate_prob = 0.0f;
         if (*str == '(') {
             str++;
@@ -138,6 +144,8 @@ namespace QuaSARQ {
             eatWS(str);
             if (str < eof && *str == ')') str++;
         }
+
+        // Translate gate name to type.
         int gateindex = translate_gate(gatestr, gatename_len);
         if (gateindex < 0) {
             eatLine(str);
@@ -148,6 +156,7 @@ namespace QuaSARQ {
 
         if (type == M || type == MR) measuring = true;
 
+        // Store gate with its qubits.
         const bool is_2qubit = isGate2(int(type));
         while (str < eof && *str != DELIM) {
             if (*str == UNIX_DELIM) { str++; continue; }
@@ -163,8 +172,12 @@ namespace QuaSARQ {
             }
             target.push(ParsedGate(c, t, type, gate_prob));
             gstats.types[type]++;
-            if ((type == M || type == MR) && &target == &circuit_queue)
-                measures_count++;
+            if (type == M || type == MR) {
+                if (&target == &circuit_queue)
+                    measures_count++;
+                else if (pb != nullptr)
+                    pb->measures++;
+            }
         }
     }
 

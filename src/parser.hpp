@@ -54,6 +54,34 @@ namespace QuaSARQ {
         }
     };
 
+    struct ParsedBlock {
+        CircuitQueue            gates;
+        Gate_stats              gstats;
+        RecordRefs              det;
+        Vec<uint32, uint32>     det_mc;    // measures count within body just before each detector
+        ObservableData          obs;
+        Vec<uint32, uint32>     obs_mc;    // measures count within body just before each observable
+        uint32                  measures;  // total M/MR gates in one REPEAT iteration
+
+        ParsedBlock() : measures(0) {
+            gates.reserve(256);
+            gstats.alloc();
+            det.init();
+            det_mc.reserve(8);
+            obs.init();
+            obs_mc.reserve(4);
+        }
+
+        ~ParsedBlock() {
+            gates.clear(true);
+            gstats.destroy();
+            det.destroy();
+            det_mc.clear(true);
+            obs.destroy();
+            obs_mc.clear(true);
+        }
+    };
+
     struct CircuitIO {
 
         #define DELIM '\n'
@@ -125,7 +153,9 @@ namespace QuaSARQ {
 
         int translate_gate(char* in, const int& gatelen);
 
-        void read_gate_into(char*& str, CircuitQueue& target, Gate_stats& gstats);
+        void parse_rec_refs(char*& str, RecordRefs& dest, const uint32& mc, const bool& deferred, const char* label);
+
+        void read_gate_into(char*& str, CircuitQueue& target, Gate_stats& gstats, ParsedBlock* pb = nullptr);
 
         void read_gate(char*& str) {
             read_gate_into(str, circuit_queue, gate_stats);

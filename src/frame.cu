@@ -49,7 +49,8 @@ void Framing::sample() {
 }
 
 void Framing::report() {
-    if (options.quiet_en) {
+    if (options.quiet_en && options.force_report_en) {
+        LOGHEADER(0, 4, "Statistics");
         PRINT("%-30s : %-12zd\n", "Shots", num_shots);
     }
     Simulator::report();

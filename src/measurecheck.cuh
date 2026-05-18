@@ -80,7 +80,7 @@ namespace QuaSARQ {
 		void reset_state() {
 			qubit = INVALID_QUBIT;
 			pivot = INVALID_PIVOT;
-			input_copied  = false;
+			input_copied = false;
 		}
 
 		void destroy() {

@@ -85,7 +85,8 @@ void Simulator::report()
 		LOG1(" %sClifford gates                 : %s%-12zd%s", CREPORT, CREPORTVAL, stats.circuit.num_gates, CNORMAL);
 		FOREACH_GATE(GATE2STATISTIC);
 	}
-	if (options.quiet_en) {
+	if (options.quiet_en && options.force_report_en) {
+		if (!options.num_shots) LOGHEADER(0, 4, "Statistics");
 		PRINT("%-30s : %-12zd\n", "Qubits",   num_qubits);
 		PRINT("%-30s : %-12u\n",  "Depth",    depth);
 		PRINT("%-30s : %-12zd\n", "Gates",    stats.circuit.num_gates);
@@ -102,5 +103,6 @@ void Simulator::report()
 		}
 		PRINT("%-30s : %-12.3f  GB\n", "Memory", ratio((double)gpu_allocator.gpu_used(), double(GB)));
 		PRINT("%-30s : %-12.3f  joules\n", "Energy", stats.power.joules);
+		LOGRULER(0, '-', RULERLEN);
 	}
 }
