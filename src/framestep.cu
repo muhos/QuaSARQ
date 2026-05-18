@@ -44,17 +44,6 @@ namespace QuaSARQ {
             case I: { break; }
             case R: {
                 x_gens_word[q1_word_idx] = 0;
-                curand_algorithm_t local = rand_states[i * num_words_minor + w_offset];
-                #if defined(WORD_SIZE_8)
-                    z_gens_word[q1_word_idx] = word_t(curand(&local) & 0xFFu);
-                #elif defined(WORD_SIZE_32)
-                    z_gens_word[q1_word_idx] = word_t(curand(&local));
-                #elif defined(WORD_SIZE_64)
-                    word_std_t hi = word_std_t(curand(&local));
-                    word_std_t lo = word_std_t(curand(&local));
-                    z_gens_word[q1_word_idx] = word_t((hi << 32) | lo);
-                #endif
-                rand_states[i * num_words_minor + w_offset] = local;
                 break;
             }
             case H: { 

@@ -16,13 +16,13 @@ Framing::Framing(const string& path, const size_t& num_shots) :
 void Framing::sample() {
     Power power;
     timer.start();
-    // Create and randomize tableau in GPU memory.
+    // Create tableau in GPU memory and reset all for now.
     num_partitions = tableau.alloc(num_qubits, num_shots, winfo.max_window_bytes, false, false, false);
     tableau.reset_xtable();
+    tableau.reset_ztable();
     gpu_circuit.initiate(num_qubits, winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
     gpu_circuit.init_noise_states(options.seed, winfo.max_parallel_gates, kernel_streams[0]);
     init_rand_states(options.seed ^ 0x9e3779b97f4a7c15ULL, tableau.num_words_per_table(), kernel_streams[1]);
-    randomize(tableau.zdata(), tableau.num_words_per_table(), kernel_streams[1]);
     SYNCALL;
     timer.stop();
     stats.time.initial += timer.elapsed();

@@ -61,34 +61,14 @@ namespace QuaSARQ {
                 assert(q != INVALID_QUBIT);
                 const size_t q_word_idx = q * num_words_minor + w;
 
-                // Pre-generate a random word consumed by all measurement types.
-                // For MZ (M)/MRZ (MR): randomizes the Z frame (to guarantee anticommutation).
-                // For MX/MRX: would randomize the X frame.
-                // For MY/MRY: would randomize both frames.
-                curand_algorithm_t local = rand_states[i * num_words_minor + w];
-                #if defined(WORD_SIZE_8)
-                    const word_t rnd = word_t(curand(&local) & 0xFFu);
-                #elif defined(WORD_SIZE_32)
-                    const word_t rnd = word_t(curand(&local));
-                #elif defined(WORD_SIZE_64)
-                    const word_std_t hi = word_std_t(curand(&local));
-                    const word_std_t lo = word_std_t(curand(&local));
-                    const word_t rnd = word_t((hi << 32) | lo);
-                #endif
-                rand_states[i * num_words_minor + w] = local;
-
                 switch (gate.type) {
                 case M: {
-                    // X errors flip the Z-basis outcome.
                     (*samples)[q_word_idx] ^= (*xs)[q_word_idx];
-                    (*zs)[q_word_idx] = rnd;
                     break;
                 }
                 case MR: {
-                    // Record outcome, then reset qubit to 0.
                     (*samples)[q_word_idx] ^= (*xs)[q_word_idx];
                     (*xs)[q_word_idx] = 0;
-                    (*zs)[q_word_idx] = rnd;
                     break;
                 }
                 default: break;
