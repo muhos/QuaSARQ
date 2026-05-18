@@ -134,6 +134,7 @@ namespace QuaSARQ {
         int64 random_measures = 0;
         int64 max_random_measures = 0;
         bool may_reset_signs = false;
+        bool has_mr_gates    = false;
         for(size_t i = 0; i < num_gates_per_window && !timeout; i++) {
             const Gate& curr_gate = circuit.gate(depth_level, i);
             const pivot_t curr_pivot = host_pivots[i];
@@ -153,22 +154,29 @@ namespace QuaSARQ {
                     inject_x(qubit, rbit, stream);
                     if (curr_gate.type == R)
                         may_reset_signs = true;
+                    if (curr_gate.type == MR) {
+                        may_reset_signs = true;
+                        has_mr_gates    = true;
+                    }
                     random_measures++;
                 }
                 max_random_measures++;
             }
         }
 
-        // If measuring window has R gates, we need to 
-        // reset signs for the next window to be correct.
-        if (may_reset_signs) {
+        if (has_mr_gates) {
+            record_measurements(num_gates_per_window, depth_level, stream);
+            reset_signs(num_gates_per_window, depth_level, stream);
+        }
+        else if (may_reset_signs) {
             reset_signs(num_gates_per_window, depth_level, stream);
         }
         else {
             record_measurements(num_gates_per_window, depth_level, stream);
         }
 
-        // Reset per-gate state so check_initial_pivots on the next window is clean.
+        // Reset per-gate state so check_initial_pivots 
+        // on the next window is clean.
         mchecker.reset_state();
 
         return random_measures;

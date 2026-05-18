@@ -8,13 +8,15 @@ namespace QuaSARQ {
 
     INLINE_DEVICE
     void update_forall_gate(
-                word_t*         x_gens_word,
-                word_t*         z_gens_word,
-                const_refs_t    refs,
-                const_buckets_t gates,
-        const   size_t&         num_gates,
-        const   size_t&         num_words_minor
-    ) 
+                word_t*             x_gens_word,
+                word_t*             z_gens_word,
+                const_refs_t        refs,
+                const_buckets_t     gates,
+        const   size_t&             num_gates,
+        const   size_t&             num_words_minor,
+                curand_algorithm_t* rand_states,
+        const   size_t              w_offset
+    )
     {
         for_parallel_x(i, num_gates) {
 
@@ -31,7 +33,7 @@ namespace QuaSARQ {
             const size_t q1_word_idx = q1 * num_words_minor;
 
             #if DEBUG_STEP
-            LOGGPU("  word(%-4lld): Gate(%-5s, r:%-4u, s:%d), qubits(%-3lld, %-3lld)\n", 
+            LOGGPU("  word(%-4lld): Gate(%-5s, r:%-4u, s:%d), qubits(%-3lld, %-3lld)\n",
                 w, G2S[gate.type], r, gate.size, q1, gate.wires[gate.size - 1]);
             #endif
 
@@ -40,6 +42,21 @@ namespace QuaSARQ {
             case X:
             case Y:
             case I: { break; }
+            case R: {
+                x_gens_word[q1_word_idx] = 0;
+                curand_algorithm_t local = rand_states[i * num_words_minor + w_offset];
+                #if defined(WORD_SIZE_8)
+                    z_gens_word[q1_word_idx] = word_t(curand(&local) & 0xFFu);
+                #elif defined(WORD_SIZE_32)
+                    z_gens_word[q1_word_idx] = word_t(curand(&local));
+                #elif defined(WORD_SIZE_64)
+                    word_std_t hi = word_std_t(curand(&local));
+                    word_std_t lo = word_std_t(curand(&local));
+                    z_gens_word[q1_word_idx] = word_t((hi << 32) | lo);
+                #endif
+                rand_states[i * num_words_minor + w_offset] = local;
+                break;
+            }
             case H: { 
                 LOAD_Q1_WORDS;
                 update_H(words_q1); 
@@ -79,14 +96,15 @@ namespace QuaSARQ {
         }
     }
 
-    __global__ 
+    __global__
     void frame_step_2D(
-                const_refs_t 	refs,
-                const_buckets_t gates,
-        const 	size_t 			num_gates,
-        const 	size_t 			num_words_minor,
-                Table *			xs, 
-                Table *			zs) 
+                const_refs_t        refs,
+                const_buckets_t     gates,
+        const   size_t              num_gates,
+        const   size_t              num_words_minor,
+                Table *             xs,
+                Table *             zs,
+                curand_algorithm_t* rand_states)
     {
         for_parallel_y(w, num_words_minor) {
             update_forall_gate(
@@ -95,7 +113,9 @@ namespace QuaSARQ {
                 refs,
                 gates,
                 num_gates,
-                num_words_minor
+                num_words_minor,
+                rand_states,
+                w
             );
         }
     }
@@ -127,11 +147,12 @@ namespace QuaSARQ {
             SYNCALL;
             LOG1(" Debugging at depth %2d:", depth_level);
             frame_step_2D << < dim3(1, 1), dim3(1, 1) >> > (
-                gpu_circuit.references(), 
-                gpu_circuit.gates(), 
-                num_gates_per_window, 
-                num_words_major, 
-                XZ_TABLE(tableau));
+                gpu_circuit.references(),
+                gpu_circuit.gates(),
+                num_gates_per_window,
+                num_words_major,
+                XZ_TABLE(tableau),
+                rand_states);
             LASTERR("failed to launch step kernel");
             SYNCALL;
             #else
@@ -142,9 +163,9 @@ namespace QuaSARQ {
             SYNC(copy_stream1);
             SYNC(copy_stream2);
 
-            LOGN2(2, "Running frame-step with block(x:%u, y:%u) and grid(x:%u, y:%u) per depth level %d %s.. ", 
-                bestblockstep.x, bestblockstep.y, bestgridstep.x, bestgridstep.y, 
-                depth_level, 
+            LOGN2(2, "Running frame-step with block(x:%u, y:%u) and grid(x:%u, y:%u) per depth level %d %s.. ",
+                bestblockstep.x, bestblockstep.y, bestgridstep.x, bestgridstep.y,
+                depth_level,
                 sync ? "synchroneously" : "asynchroneously");
 
             // Run simulation.
@@ -153,11 +174,12 @@ namespace QuaSARQ {
             double elapsed = 0;
 
             frame_step_2D <<< bestgridstep, bestblockstep, 0, kernel_stream >>> (
-                gpu_circuit.references(), 
-                gpu_circuit.gates(), 
-                num_gates_per_window, 
-                num_words_minor, 
-                XZ_TABLE(tableau));
+                gpu_circuit.references(),
+                gpu_circuit.gates(),
+                num_gates_per_window,
+                num_words_minor,
+                XZ_TABLE(tableau),
+                rand_states);
 
             if (options.sync) { 
                 LASTERR("failed to launch step kernel");
