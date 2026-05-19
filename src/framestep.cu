@@ -42,11 +42,6 @@ namespace QuaSARQ {
             case X:
             case Y:
             case I: { break; }
-            case R: {
-                x_gens_word[q1_word_idx] = 0;
-                z_gens_word[q1_word_idx] = curand_word(&rand_states[q1_word_idx + w_offset]);
-                break;
-            }
             case H: { 
                 LOAD_Q1_WORDS;
                 update_H(words_q1); 

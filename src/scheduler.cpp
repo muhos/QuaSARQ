@@ -83,12 +83,16 @@ Gatetypes Simulator::get_rand_gate(const bool& multi_input, const bool& force_mu
 // Add measurements to circuit.
 void add_measurements(Circuit& circuit, Vec<M_OP, size_t>& measurements, WindowInfo& winfo, const depth_t& depth_level) {
     const size_t num_gate_buckets_per_window = circuit.num_buckets();
+    bool is_recording = true;
     for (size_t i = 0; i < measurements.size(); i++) {
         const M_OP& m = measurements[i];
+        if (isReset(m.type)) is_recording = false;
         circuit.addGate(depth_level, m.type, 1, m.qubit);
     }
     measurements.clear();
     circuit.markMeasure(depth_level);
+    if (is_recording)
+        circuit.markRecord(depth_level);
     assert(circuit.num_buckets() >= num_gate_buckets_per_window);
     assert(depth_level <= circuit.depth());
     winfo.max(circuit[depth_level].size(), (circuit.num_buckets() - num_gate_buckets_per_window));

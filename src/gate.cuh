@@ -37,6 +37,11 @@ namespace QuaSARQ {
         return type == int(R) || type == int(M) || type == int(MR);
     }
 
+    INLINE_ALL
+    bool isReset(const int& type) {
+        return type == int(R);
+    }
+
     // Returns true for depolarizing noise gates.
     INLINE_ALL 
     bool isDepolarize(const int& type) {

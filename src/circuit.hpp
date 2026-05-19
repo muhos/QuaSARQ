@@ -15,9 +15,16 @@ namespace QuaSARQ {
      * circuit of any gate type of any number of inputs.  
     */
 
+    struct Flags {
+        bool measuring : 1;
+        bool recording : 1;
+
+        Flags() : measuring(false), recording(false) { }
+    };
+
     typedef Vec<bucket_t, size_t> buckets_container;
     typedef Vec<gate_ref_t, size_t> Window;
-    typedef Vec<bool, size_t> Marker;
+    typedef Vec<Flags, size_t> WindowFlags;
 
     constexpr depth_t MAX_DEPTH = UINT32_MAX;
 	constexpr size_t GATEBUCKETS = (GATESIZE / BUCKETSIZE);
@@ -48,7 +55,7 @@ namespace QuaSARQ {
 
         Vec<Window, depth_t> windows; 
         Vec<size_t, depth_t> nbuckets;
-        Marker               measuring_windows;
+        WindowFlags          window_flags;
         size_t ngates;
 
     public:
@@ -71,7 +78,7 @@ namespace QuaSARQ {
             assert(sizeof(qubit_t) == BUCKETSIZE);
             assert(depth < MAX_DEPTH);
             windows.resize(depth); 
-            measuring_windows.resize(depth, false); 
+            window_flags.resize(depth, Flags()); 
             nbuckets.resize(depth, 0);
         }
 
@@ -114,8 +121,16 @@ namespace QuaSARQ {
         inline
         bool       is_measuring (const depth_t& depth_level) const { 
             assert(depth_level < MAX_DEPTH);
-            if (depth_level < measuring_windows.size())
-                return measuring_windows[depth_level]; 
+            if (depth_level < window_flags.size())
+                return window_flags[depth_level].measuring; 
+            return false;
+        }
+
+        inline
+        bool       is_recording (const depth_t& depth_level) const { 
+            assert(depth_level < MAX_DEPTH);
+            if (depth_level < window_flags.size())
+                return window_flags[depth_level].recording; 
             return false;
         }
 
@@ -265,11 +280,20 @@ namespace QuaSARQ {
 
         inline 
         void        markMeasure (const depth_t& depth_level) {
-            if (measuring_windows.size() <= depth_level) {
-                measuring_windows.expand(depth_level + 1, false);
+            if (window_flags.size() <= depth_level) {
+                window_flags.expand(depth_level + 1, Flags());
             }
-            if (!measuring_windows[depth_level]) 
-                measuring_windows[depth_level] = true;
+            if (!window_flags[depth_level].measuring) 
+                window_flags[depth_level].measuring = true;
+        }
+
+        inline
+        void        markRecord  (const depth_t& depth_level) {
+            if (window_flags.size() <= depth_level) {
+                window_flags.expand(depth_level + 1, Flags());
+            }
+            if (!window_flags[depth_level].recording) 
+                window_flags[depth_level].recording = true;
         }
 
         inline

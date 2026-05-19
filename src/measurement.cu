@@ -164,15 +164,11 @@ namespace QuaSARQ {
             }
         }
 
-        if (has_mr_gates) {
+        if (has_mr_gates || !may_reset_signs) {
             record_measurements(num_gates_per_window, depth_level, stream);
-            reset_signs(num_gates_per_window, depth_level, stream);
         }
-        else if (may_reset_signs) {
+        if (may_reset_signs) {
             reset_signs(num_gates_per_window, depth_level, stream);
-        }
-        else {
-            record_measurements(num_gates_per_window, depth_level, stream);
         }
 
         // Reset per-gate state so check_initial_pivots 

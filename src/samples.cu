@@ -41,7 +41,7 @@ namespace QuaSARQ {
         }
     }
 
-        __global__
+    __global__
     void record_sample(
                 const_refs_t        refs,
                 const_buckets_t     gates,
@@ -65,19 +65,22 @@ namespace QuaSARQ {
                 const size_t m_word_idx = (measurement_offset + i) * num_words_minor + w;
 
                 switch (gate.type) {
+                case R: {
+                    (*xs)[q_word_idx] = 0;
+                    break;
+                }
                 case M: {
                     (*samples)[m_word_idx] ^= (*xs)[q_word_idx];
-                    (*zs)[q_word_idx] = curand_word(&rand_states[q_word_idx]);
                     break;
                 }
                 case MR: {
                     (*samples)[m_word_idx] ^= (*xs)[q_word_idx];
                     (*xs)[q_word_idx] = 0;
-                    (*zs)[q_word_idx] = curand_word(&rand_states[q_word_idx]);
                     break;
                 }
                 default: break;
                 }
+                (*zs)[q_word_idx] = curand_word(&rand_states[q_word_idx]);
             }
         }
     }
@@ -104,7 +107,7 @@ namespace QuaSARQ {
             XZ_TABLE(tableau),
             samples_record.device
         );
-        measurement_offset += num_gates_per_window;
+        measurement_offset += circuit.is_recording(depth_level) ? num_gates_per_window : 0;
         stats.circuit.measure_stats.random += num_gates_per_window;
         stats.circuit.measure_stats.definite = 0;
         stats.circuit.measure_stats.random_per_window = MAX(num_gates_per_window, stats.circuit.measure_stats.random_per_window);
@@ -173,6 +176,7 @@ namespace QuaSARQ {
     void Framing::print() {
         if (!samples_record.needs_host()) return;
         if (!options.sync) SYNCALL;
+
         samples_record.copy();
         const size_t num_measurements = stats.circuit.measure_stats.count;
         if (options.print_sample) {

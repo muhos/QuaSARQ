@@ -31,12 +31,8 @@ namespace QuaSARQ {
 		{ \
 			assert((N) <= cap); \
 			T* begin = _mem + (OFF); \
-			if (!VAL) \
-				std::memset(begin, 0, ((N) - (OFF)) * sizeof(T)); \
-			else { \
-				const T* end = _mem + (N); \
-				while (begin != end) *begin++ = VAL; \
-			} \
+			const T* end = _mem + (N); \
+			while (begin != end) *begin++ = VAL; \
 		}
 
 		__forceinline bool		check		(const S& idx) const {
