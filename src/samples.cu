@@ -1,20 +1,21 @@
 #include "frame.cuh"
 #include "locker.cuh"
+#include "random.cuh"
 
 namespace QuaSARQ {
 
-    void print_samples_qubits(
-        const  Table&  samples,
-        const  size_t  num_qubits,
-        const  size_t  num_shots) {
-        string qidx = "q%-4lld";
-        if (num_qubits > 1000)
-            qidx = "q%-10lld";
-        for (size_t q = 0; q < num_qubits; q++) {
-            PRINT(qidx.c_str(), int64(q));
+    void print_samples_measures(
+        const  Table&   samples,
+        const  size_t&  num_measurements,
+        const  size_t&  num_shots) {
+        string midx = "m%-4lld";
+        if (num_measurements > 1000)
+            midx = "m%-10lld";
+        for (size_t m = 0; m < num_measurements; m++) {
+            PRINT(midx.c_str(), int64(m));
             int count = 0;
             for (size_t s = 0; s < num_shots; s++) {
-                const size_t word_idx = q * samples.num_words_minor() + WORD_OFFSET(s);
+                const size_t word_idx = m * samples.num_words_minor() + WORD_OFFSET(s);
                 const word_std_t& word = samples[word_idx];
                 const word_std_t bitpos = s & WORD_MASK;
                 const int bit = (word >> bitpos) & 1;
@@ -26,12 +27,12 @@ namespace QuaSARQ {
     }
 
     void print_samples(
-        const  Table&  samples,
-        const  size_t  num_qubits,
-        const  size_t  num_shots) {
+        const  Table&   samples,
+        const  size_t&  num_measurements,
+        const  size_t&  num_shots) {
         for (size_t s = 0; s < num_shots; s++) {
-            for (size_t q = 0; q < num_qubits; q++) {
-                const size_t word_idx = q * samples.num_words_minor() + WORD_OFFSET(s);
+            for (size_t m = 0; m < num_measurements; m++) {
+                const size_t word_idx = m * samples.num_words_minor() + WORD_OFFSET(s);
                 const word_std_t& word = samples[word_idx];
                 const word_std_t bitpos = s & WORD_MASK;
                 PRINT("%d", int((word >> bitpos) & 1));
@@ -46,6 +47,7 @@ namespace QuaSARQ {
                 const_buckets_t     gates,
         const   size_t              num_gates,
         const   size_t              num_words_minor,
+        const   size_t              measurement_offset,
                 curand_algorithm_t* rand_states,
                 Table *             xs,
                 Table *             zs,
@@ -60,15 +62,18 @@ namespace QuaSARQ {
                 const size_t q = gate.wires[0];
                 assert(q != INVALID_QUBIT);
                 const size_t q_word_idx = q * num_words_minor + w;
+                const size_t m_word_idx = (measurement_offset + i) * num_words_minor + w;
 
                 switch (gate.type) {
                 case M: {
-                    (*samples)[q_word_idx] ^= (*xs)[q_word_idx];
+                    (*samples)[m_word_idx] ^= (*xs)[q_word_idx];
+                    (*zs)[q_word_idx] = curand_word(&rand_states[q_word_idx]);
                     break;
                 }
                 case MR: {
-                    (*samples)[q_word_idx] ^= (*xs)[q_word_idx];
+                    (*samples)[m_word_idx] ^= (*xs)[q_word_idx];
                     (*xs)[q_word_idx] = 0;
+                    (*zs)[q_word_idx] = curand_word(&rand_states[q_word_idx]);
                     break;
                 }
                 default: break;
@@ -94,10 +99,12 @@ namespace QuaSARQ {
             gpu_circuit.gates(),
             num_gates_per_window,
             tableau.num_words_minor(),
+            measurement_offset,
             rand_states,
             XZ_TABLE(tableau),
             samples_record.device
         );
+        measurement_offset += num_gates_per_window;
         stats.circuit.measure_stats.random += num_gates_per_window;
         stats.circuit.measure_stats.definite = 0;
         stats.circuit.measure_stats.random_per_window = MAX(num_gates_per_window, stats.circuit.measure_stats.random_per_window);
@@ -109,7 +116,7 @@ namespace QuaSARQ {
         } else LOGDONE(2, 4);
     }
 
-    void Framing::print_detectors_sampled(const Vec<qubit_t, uint32>& measures_to_qubits) {
+    void Framing::print_detectors_sampled() {
         if (!options.print_detector) return;
         const DetectorData& dets = circuit_io.detectors;
         if (dets.empty()) return;
@@ -122,8 +129,9 @@ namespace QuaSARQ {
             for (uint32 i = 0; i < dets.pinned.num_instructions; i++) {
                 bool outcome = false;
                 for (uint32 j = dets.starts[i]; j < dets.starts[i] + dets.counts[i]; j++) {
-                    const qubit_t q = measures_to_qubits[dets.refs[j]];
-                    const word_std_t word = samples_host[q * samples_host.num_words_minor() + WORD_OFFSET(s)];
+                    // dets.refs[j] is a measurement index in circuit order.
+                    const size_t m_idx = dets.refs[j];
+                    const word_std_t word = samples_host[m_idx * samples_host.num_words_minor() + WORD_OFFSET(s)];
                     outcome ^= bool((word >> (s & WORD_MASK)) & 1);
                 }
                 if (outcome) fired++;
@@ -133,7 +141,7 @@ namespace QuaSARQ {
         }
     }
 
-    void Framing::print_observables_sampled(const Vec<qubit_t, uint32>& measures_to_qubits) {
+    void Framing::print_observables_sampled() {
         if (!options.print_observable) return;
         const ObservableData& obs = circuit_io.observables;
         if (obs.empty()) return;
@@ -147,8 +155,9 @@ namespace QuaSARQ {
             for (uint32 i = 0; i < obs.pinned.num_observables; i++) {
                 bool outcome = false;
                 for (uint32 j = obs.records.starts[i]; j < obs.records.starts[i] + obs.records.counts[i]; j++) {
-                    const qubit_t q = measures_to_qubits[obs.records.refs[j]];
-                    const word_std_t word = samples_host[q * samples_host.num_words_minor() + WORD_OFFSET(s)];
+                    // obs.records.refs[j] is a measurement index in circuit order.
+                    const size_t m_idx = obs.records.refs[j];
+                    const word_std_t word = samples_host[m_idx * samples_host.num_words_minor() + WORD_OFFSET(s)];
                     outcome ^= bool((word >> (s & WORD_MASK)) & 1);
                 }
                 if (outcome) { fired++; total_errors++; }
@@ -165,27 +174,17 @@ namespace QuaSARQ {
         if (!samples_record.needs_host()) return;
         if (!options.sync) SYNCALL;
         samples_record.copy();
-        Vec<qubit_t, uint32> measures_to_qubits;
-        if (options.print_detector || options.print_observable) {
-            measures_to_qubits.reserve(stats.circuit.measure_stats.count);
-            for (depth_t d = 0; d < depth; d++) {
-                if (!circuit.is_measuring(d)) continue;
-                for (uint32 g = 0; g < circuit[d].size(); g++) {
-                    const Gate& gate = circuit.gate(d, g);
-                    measures_to_qubits.push(gate.wires[0]);
-                }
-            }
-        }
+        const size_t num_measurements = stats.circuit.measure_stats.count;
         if (options.print_sample) {
             LOGHEADER(1, 4, "Sampling (shot per line)");
-            print_samples(samples_record.host, num_qubits, num_shots);
+            print_samples(samples_record.host, num_measurements, num_shots);
         }
         if (options.print_sample_qubits) {
-            LOGHEADER(1, 4, "Sampling (qubit per line)");
-            print_samples_qubits(samples_record.host, num_qubits, num_shots);
+            LOGHEADER(1, 4, "Sampling (measurement per line)");
+            print_samples_measures(samples_record.host, num_measurements, num_shots);
         }
-        print_detectors_sampled(measures_to_qubits);
-        print_observables_sampled(measures_to_qubits);
+        print_detectors_sampled();
+        print_observables_sampled();
         fflush(stdout);
     }
 

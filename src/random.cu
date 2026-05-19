@@ -22,15 +22,7 @@ namespace QuaSARQ {
     {
         for_parallel_x(w, num_words) {
             curand_algorithm_t local = states[w];
-            #if defined(WORD_SIZE_8)
-                data[w] = static_cast<word_std_t>(curand(&local) & 0xFFu);
-            #elif defined(WORD_SIZE_32)
-                data[w] = static_cast<word_std_t>(curand(&local));
-            #elif defined(WORD_SIZE_64)
-                word_std_t hi = static_cast<word_std_t>(curand(&local));
-                word_std_t lo = static_cast<word_std_t>(curand(&local));
-                data[w] = (hi << 32) | lo;
-            #endif
+            data[w] = curand_word(&local);
             states[w] = local;
         }
     }

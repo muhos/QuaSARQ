@@ -28,14 +28,17 @@ namespace QuaSARQ {
                 host.destroy();
         }
 
-        void alloc(const Tableau& tableau, DeviceAllocator& gpu_allocator) {
+        void alloc(const size_t& num_measurements, const size_t& num_words_minor, DeviceAllocator& gpu_allocator) {
+            const size_t num_words_major = get_num_words(num_measurements);
+            const size_t num_measures_padded = num_words_major * WORD_BITS;
+            const size_t num_words = num_words_major * (num_words_minor * WORD_BITS);
             device = gpu_allocator.allocate<Table>(1, Region::Stable);
-            device_data = gpu_allocator.allocate<word_t>(tableau.num_words_per_table(), Region::Stable);
+            device_data = gpu_allocator.allocate<word_t>(num_words, Region::Stable);
             Table tmp;
-            tmp.alloc(device_data, tableau.num_qubits_padded(), tableau.num_words_major(), tableau.num_words_minor());
-            CHECK(cudaMemcpyAsync(device, &tmp, sizeof(Table), cudaMemcpyHostToDevice));
+            tmp.alloc(device_data, num_measures_padded, num_words_major, num_words_minor);
+            CHECK(cudaMemcpy(device, &tmp, sizeof(Table), cudaMemcpyHostToDevice));
             if (needs_host())
-                host.alloc_host(tableau.num_qubits_padded(), tableau.num_words_major(), tableau.num_words_minor());
+                host.alloc_host(num_measures_padded, num_words_major, num_words_minor);
         }
 
         void copy() {

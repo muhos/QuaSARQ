@@ -44,6 +44,7 @@ namespace QuaSARQ {
             case I: { break; }
             case R: {
                 x_gens_word[q1_word_idx] = 0;
+                z_gens_word[q1_word_idx] = curand_word(&rand_states[q1_word_idx + w_offset]);
                 break;
             }
             case H: { 
