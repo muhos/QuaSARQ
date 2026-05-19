@@ -43,7 +43,7 @@ namespace QuaSARQ {
 
         void copy() {
             if (device_data != nullptr) {
-                CHECK(cudaMemcpy(host.data(), device_data, host.size(), cudaMemcpyDeviceToHost));
+                CHECK(cudaMemcpy(host.data(), device_data, host.size() * sizeof(word_t), cudaMemcpyDeviceToHost));
             }
         }
     };

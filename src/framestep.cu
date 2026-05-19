@@ -128,8 +128,12 @@ namespace QuaSARQ {
 
         // Copy current window to GPU memory.
         gpu_circuit.copyfrom(stats, circuit, depth_level, false, options.sync, copy_stream1, copy_stream2);
-        
+
         print_gates(gpu_circuit, num_gates_per_window, depth_level);
+
+        // Sync copy streams before launching kernel.
+        SYNC(copy_stream1);
+        SYNC(copy_stream2);
 
         if (!circuit.is_measuring(depth_level)) {
 
@@ -148,10 +152,6 @@ namespace QuaSARQ {
             #else
 
             TRIM_BLOCK_IN_DEBUG_MODE(bestblockstep, bestgridstep, num_gates_per_window, num_words_minor);
-
-            // sync data transfer.
-            SYNC(copy_stream1);
-            SYNC(copy_stream2);
 
             LOGN2(2, "Running frame-step with block(x:%u, y:%u) and grid(x:%u, y:%u) per depth level %d %s.. ",
                 bestblockstep.x, bestblockstep.y, bestgridstep.x, bestgridstep.y,
