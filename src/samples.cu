@@ -107,6 +107,7 @@ namespace QuaSARQ {
             XZ_TABLE(tableau),
             samples_record.device
         );
+        assert(!circuit.is_recording(depth_level) || "R-only window invariant violated: window mixes R with M/MR");
         measurement_offset += circuit.is_recording(depth_level) ? num_gates_per_window : 0;
         stats.circuit.measure_stats.random += num_gates_per_window;
         stats.circuit.measure_stats.definite = 0;
