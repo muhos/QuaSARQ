@@ -11,7 +11,9 @@ Framing::Framing(const string& path, const size_t& num_shots) :
     , num_shots(num_shots)
     , rand_states(nullptr)
     , rand_states_size(0)
-{ }
+{ 
+    write_measures_to_file |= (num_shots > options.min_shots_write);
+}
 
 void Framing::sample() {
     Power power;

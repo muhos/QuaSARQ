@@ -279,59 +279,35 @@ namespace QuaSARQ {
         gpu_allocator.deallocate<char>(d_bitstring);
     }
 
-    inline 
-    FILE* open_output_file(const string& path) {
-        FILE* f = fopen(path.c_str(), "w");
-        if (f == nullptr)
-            LOGERROR("failed to open output file \"%s\"", path.c_str());
-        LOG1(" %sWriting to \"%s%s%s\".%s", CREPORT, CREPORTVAL, path.c_str(), CREPORT, CNORMAL);
-        return f;
-    }
-
     void Framing::print() {
         const bool any_print = samples_record.needs_host() || options.print_detector || options.print_observable;
         if (!any_print) return;
         if (!options.sync) SYNCALL;
-        const size_t num_measurements = stats.circuit.measure_stats.count;
-        const bool write_to_file = num_shots > 100 || num_measurements > 100;
-        string base;
-        if (write_to_file) {
-            LOGHEADER(1, 4, "File output");
-            base = circuit_path;
-            const size_t dot = base.rfind('.');
-            if (dot != string::npos) base = base.substr(0, dot);
-            if (base.empty()) base = "quasarq";
-        }
+        if (write_measures_to_file) LOGHEADER(1, 4, "File output");
         if (samples_record.needs_host()) {
             samples_record.copy();
             if (options.print_sample) {
-                FILE* out = stdout;
-                if (write_to_file) out = open_output_file(base + "_samples.01");
-                else LOGHEADER(0, 4, "Sampling (shot per line)");
-                print_samples(samples_record.host, num_measurements, num_shots, out);
-                if (write_to_file) fclose(out);
+                FILE* out = write_measures_to_file ? open_output_file("_samples.01") : stdout;
+                if (!write_measures_to_file) LOGHEADER(0, 4, "Sampling (shot per line)");
+                print_samples(samples_record.host, stats.circuit.measure_stats.count, num_shots, out);
+                if (write_measures_to_file) fclose(out);
             }
             if (options.print_sample_qubits) {
-                FILE* out = stdout;
-                if (write_to_file) out = open_output_file(base + "_samples_qubits.01");
-                else LOGHEADER(0, 4, "Sampling (measurement per line)");
-                print_samples_measures(samples_record.host, num_measurements, num_shots, out);
-                if (write_to_file) fclose(out);
+                FILE* out = write_measures_to_file ? open_output_file("_samples_qubits.01") : stdout;
+                if (!write_measures_to_file) LOGHEADER(0, 4, "Sampling (measurement per line)");
+                print_samples_measures(samples_record.host, stats.circuit.measure_stats.count, num_shots, out);
+                if (write_measures_to_file) fclose(out);
             }
         }
-        if (write_to_file && options.print_detector) {
-            FILE* out = open_output_file(base + "_dets.01");
+        if (options.print_detector) {
+            FILE* out = write_measures_to_file ? open_output_file("_dets.01") : stdout;
             print_detectors_sampled(out);
-            fclose(out);
-        } else {
-            print_detectors_sampled(stdout);
+            if (write_measures_to_file) fclose(out);
         }
-        if (write_to_file && options.print_observable) {
-            FILE* out = open_output_file(base + "_obs.01");
+        if (options.print_observable) {
+            FILE* out = write_measures_to_file ? open_output_file("_obs.01") : stdout;
             print_observables_sampled(out);
-            fclose(out);
-        } else {
-            print_observables_sampled(stdout);
+            if (write_measures_to_file) fclose(out);
         }
         fflush(stdout);
     }

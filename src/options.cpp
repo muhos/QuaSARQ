@@ -63,6 +63,8 @@ namespace QuaSARQ {
     INT_OPT opt_timeout("timeout", "set the timeout in seconds", 0, INT32R(0, INT32_MAX));
     INT_OPT opt_print_limit("print-limit", "set the limit to print quantum state to <circuit>_paulis.qstate file", 1000, INT32R(0, INT32_MAX));
     INT_OPT opt_num_shots("shots", "set the number of shots when sampling the circuit", 0, INT32R(0, INT32_MAX));
+    INT_OPT opt_min_shots_write("min-shots-write", "minimum number of shots for writing obs/dets/samples to file", 100, INT32R(0, INT32_MAX));
+    INT_OPT opt_min_measures_write("min-measures-write", "minimum number of measures for writing obs/dets/samples to file", 100, INT32R(0, INT32_MAX));
 
     INT64_OPT opt_tuneinitial_qubits("tune-initial-qubits", "set the initial number of qubits to start with in the tuner", 1000, INT64R(1, UINT32_MAX));
     INT64_OPT opt_tunestep_qubits("tune-step-qubits", "set the increase of qubits", 1000, INT64R(1, UINT32_MAX));
@@ -126,6 +128,8 @@ namespace QuaSARQ {
         initialstate = InitialState(int(opt_initialstate));
         num_qubits = opt_num_qubits;
         num_shots = opt_num_shots;
+        min_shots_write = opt_min_shots_write;
+        min_measures_write = opt_min_measures_write;
         depth = opt_depth;
         streams = opt_streams;
         sync = opt_sync;

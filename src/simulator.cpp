@@ -45,6 +45,7 @@ Simulator::Simulator() :
     , copy_streams{ 0, 0, 0, 0 }
     , kernel_streams{ 0, 0 }
     , measuring(false)
+    , write_measures_to_file(false)
 {
     initialize();
 }
@@ -72,6 +73,7 @@ Simulator::Simulator(const string& path) :
     , copy_streams{ 0, 0, 0, 0 }
     , kernel_streams{ 0, 0 }
     , measuring(false)
+    , write_measures_to_file(false)
 {
     initialize();
 }

@@ -50,6 +50,7 @@ namespace QuaSARQ {
         cudaStream_t                    kernel_streams[NUM_COMPUTE_STREAMS];
         WindowInfo                      winfo;
         bool                            measuring;
+        bool                            write_measures_to_file;
         static bool                     timeout;
         
         enum { 
@@ -70,6 +71,7 @@ namespace QuaSARQ {
         // File IO.
         bool    open_file      (FILE*& file, arg_t file_path, arg_t file_mode);
         void    close_file     (FILE*& file);
+        FILE*   open_output_file(const string& suffix);
 
         // Getters.
         Tableau&                get_tableau     () { return tableau; }

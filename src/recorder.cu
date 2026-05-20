@@ -137,28 +137,33 @@ namespace QuaSARQ {
         CHECK(cudaMemcpyAsync(h_bitstring, d_bitstring, n * sizeof(char), cudaMemcpyDeviceToHost, stream));
     }
 
-    inline void print_bitstring(char* bs, uint32& fired, const uint32& n, const char* label) {
+    inline 
+    void print_bitstring(char* bs, uint32& fired, const uint32& n, const char* label, FILE* out) {
         bs[n] = '\0';
         for (uint32 i = 0; i < n; i++)
             if (bs[i] == '1') fired++;
-        LOGHEADER(0, 4, label);
-        if (options.color_bitstring) {
-            string colored;
-            colored.reserve(n * 2);
-            for (uint32 i = 0; i < n; i++)
-                colored += string(bs[i] == '1' ? CRED : CGREEN) + bs[i];
-            LOGN1(" %s%s", colored.c_str(), CNORMAL);
-        } 
-        else {
-            LOGN1(" %s%s%s", CLBLUE, bs, CNORMAL);
+        LOGHEADER(1, 4, label);
+        if (out == stdout) {
+            if (options.color_bitstring) {
+                string colored;
+                colored.reserve(n * 2);
+                for (uint32 i = 0; i < n; i++)
+                    colored += string(bs[i] == '1' ? CRED : CGREEN) + bs[i];
+                LOGN1(" %s%s", colored.c_str(), CNORMAL);
+            } else {
+                LOGN1(" %s%s%s", CLBLUE, bs, CNORMAL);
+            }
+            LOG1(" (%s%u / %u%s)", fired ? CRED : CGREEN, fired, n, CNORMAL);
+        } else {
+            PRINTFILE("%s\n", out, bs);
         }
-        LOG1(" (%s%u / %u%s)", fired ? CRED : CGREEN, fired, n, CNORMAL);
     }
 
     void Simulator::print_observables() {
         if (!options.print_observable) return;
         const ObservableData& obs = circuit_io.observables;
         if (obs.empty()) return;
+        FILE* out = write_measures_to_file ? open_output_file("_obs.01") : stdout;
         const uint32 n            = (uint32)obs.pinned.num_observables;
         const uint32 record_size  = (uint32)recorder.step_history();
         const cudaStream_t stream = kernel_streams[0];
@@ -174,7 +179,8 @@ namespace QuaSARQ {
             "eval_record_refs (observables) failed");
         SYNC(stream);
         uint32 fired = 0;
-        print_bitstring(h_bitstring, fired, n, "Observables");
+        print_bitstring(h_bitstring, fired, n, "Observables", out);
+        if (write_measures_to_file) fclose(out);
         mchecker.check_observables(circuit_io.observables, h_bitstring, n);
         gpu_allocator.deallocate_pinned<char>(h_bitstring);
         gpu_allocator.deallocate<char>(d_bitstring);
@@ -184,6 +190,7 @@ namespace QuaSARQ {
         if (!options.print_detector) return;
         const DetectorData& det = circuit_io.detectors;
         if (det.empty()) return;
+        FILE* out = write_measures_to_file ? open_output_file("_det.01") : stdout;
         const uint32 n            = (uint32)det.pinned.num_instructions;
         const uint32 record_size  = (uint32)recorder.step_history();
         const cudaStream_t stream = kernel_streams[0];
@@ -199,7 +206,8 @@ namespace QuaSARQ {
             "eval_record_refs (detectors) failed");
         SYNC(stream);
         uint32 fired = 0;
-        print_bitstring(h_bitstring, fired, n, "Detectors");
+        print_bitstring(h_bitstring, fired, n, "Detectors", out);
+        if (write_measures_to_file) fclose(out);
         mchecker.check_detectors(circuit_io.detectors, h_bitstring, n);
         gpu_allocator.deallocate_pinned<char>(h_bitstring);
         gpu_allocator.deallocate<char>(d_bitstring);

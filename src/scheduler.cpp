@@ -465,6 +465,7 @@ void Simulator::parse() {
         num_qubits = parse(stats, circuit_path.c_str());
         depth = schedule(stats, circuit, winfo);
     }
+    write_measures_to_file = stats.circuit.measure_stats.count > options.min_measures_write;
     if (options.print_detector && circuit_io.detectors.empty()) {
         LOG2(1, "%sDisabled printing detectors as circuit does not contain any.%s", CARGDEFAULT, CNORMAL);
         options.print_detector = false;
