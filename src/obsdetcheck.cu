@@ -15,20 +15,23 @@ namespace QuaSARQ {
         return result ? '1' : '0';
     }
 
-    void MeasurementChecker::check_observables(
+    bool MeasurementChecker::check_observables(
         const ObservableData& obs,
         const char*           bitstring,
-        const uint32&         n)
+        const uint32&         n,
+        const bool&           skip_reporting_passed)
     {
-        if (!options.check_measurement) return;
+        if (!options.check_measurement) return false;
 
-        if (obs.empty()) return;
+        if (obs.empty()) return false;
 
         if (record.empty()) {
             LOGERROR("measurements not recorded");
         }
-        LOG2(1, "");
-        LOGN2(1, " Checking observable bitstring.. ");
+        if (!skip_reporting_passed) {
+            LOG2(1, "");
+            LOGN2(1, " Checking observable bitstring.. ");
+        }
         bool all_passed = true;
         for (uint32 i = 0; i < n; i++) {
             const char expected = eval_instruction_cpu(
@@ -41,23 +44,27 @@ namespace QuaSARQ {
                 all_passed = false;
             }
         }
-        if (all_passed) LOG2(1, "%sPASSED.%s", CGREEN, CNORMAL);
+        if (all_passed && !skip_reporting_passed) LOGPASSED(1);
+        return all_passed;
     }
 
-    void MeasurementChecker::check_detectors(
+    bool MeasurementChecker::check_detectors(
         const DetectorData& det,
         const char*         bitstring,
-        const uint32&       n)
+        const uint32&       n,
+        const bool&         skip_reporting_passed)
     {
-        if (!options.check_measurement) return;
+        if (!options.check_measurement) return false;
 
-        if (det.empty()) return;
+        if (det.empty()) return false;
 
         if (record.empty()) {
             LOGERROR("measurements not recorded");
         }
-        LOG2(1, "");
-        LOGN2(1, " Checking detector bitstring.. ");
+        if (!skip_reporting_passed) {
+            LOG2(1, "");
+            LOGN2(1, " Checking detector bitstring.. ");
+        }
         bool all_passed = true;
         for (uint32 i = 0; i < n; i++) {
             const char expected = eval_instruction_cpu(
@@ -70,7 +77,8 @@ namespace QuaSARQ {
                 all_passed = false;
             }
         }
-        if (all_passed) LOG2(1, "%sPASSED.%s", CGREEN, CNORMAL);
+        if (all_passed && !skip_reporting_passed) LOGPASSED(1);
+        return all_passed;
     }
 
 

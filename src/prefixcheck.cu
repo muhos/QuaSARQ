@@ -120,7 +120,7 @@ namespace QuaSARQ {
             }
         }
 
-        LOG2(2, "%sPASSED.%s", CGREEN, CNORMAL);
+        LOGPASSED(2);
     }
 
     void MeasurementChecker::check_prefix_intermediate_pass(
@@ -180,7 +180,7 @@ namespace QuaSARQ {
                 }
             }
         }    
-        LOG2(2, "%sPASSED.%s", CGREEN, CNORMAL);
+        LOGPASSED(2);
     }
 
     void MeasurementChecker::check_prefix_pass_2(
@@ -287,7 +287,7 @@ namespace QuaSARQ {
             }
         }
 
-        LOG2(2, "%sPASSED.%s", CGREEN, CNORMAL);
+        LOGPASSED(2);
     }
 
 }

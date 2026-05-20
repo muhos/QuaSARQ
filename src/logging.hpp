@@ -250,3 +250,4 @@ public:
 #define LOGN2(V, FMT, ...)          Logger::logN2(V, FMT, ##__VA_ARGS__)
 #define LOGDONE(V, MV)              Logger::done(V, MV)
 #define LOGENDING(V, MV, FMT, ...)  Logger::ending(V, MV, FMT, ##__VA_ARGS__)
+#define LOGPASSED(V)                Logger::log2(V, "%sPASSED.%s", CGREEN, CNORMAL)

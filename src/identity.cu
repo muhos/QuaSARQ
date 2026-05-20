@@ -113,7 +113,7 @@ namespace QuaSARQ {
             if (!check_identity(tableau, offset_per_partition, num_qubits_per_partition, measuring)) {
                 LOGERROR("creating identity failed.");
             }
-            LOG2(1, "%sPASSED.%s", CGREEN, CNORMAL);
+            LOGPASSED(1);
         }
         if (options.print_initialtableau) 
             print_tableau(tab, MAX_DEPTH, false);

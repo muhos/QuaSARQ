@@ -90,7 +90,7 @@ namespace QuaSARQ {
             }
         }
 
-        LOG2(2, "%sPASSED.%s", CGREEN, CNORMAL);
+        LOGPASSED(2);
     }
 }
 

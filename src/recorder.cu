@@ -141,7 +141,7 @@ namespace QuaSARQ {
         bs[n] = '\0';
         for (uint32 i = 0; i < n; i++)
             if (bs[i] == '1') fired++;
-        LOGHEADER(1, 4, label);
+        LOGHEADER(0, 4, label);
         if (options.color_bitstring) {
             string colored;
             colored.reserve(n * 2);

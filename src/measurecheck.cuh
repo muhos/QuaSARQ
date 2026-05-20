@@ -200,9 +200,9 @@ namespace QuaSARQ {
 
 		void check_record_samples(const Tableau& other_input, const Samples& other_samples, const Circuit& circuit, const depth_t& depth_level, const size_t& measurement_offset_before, const size_t& num_words_minor);
         
-		void check_observables(const ObservableData& obs, const char* bitstring, const uint32& n);
+		bool check_observables(const ObservableData& obs, const char* bitstring, const uint32& n, const bool& skip_reporting_passed = false);
         
-		void check_detectors(const DetectorData& det, const char* bitstring, const uint32& n);
+		bool check_detectors(const DetectorData& det, const char* bitstring, const uint32& n, const bool& skip_reporting_passed = false);
 
 		void load_record_shot(const Samples& samples, const size_t& num_measurements, const size_t& num_words_minor, const size_t& shot);
 

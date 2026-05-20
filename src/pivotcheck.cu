@@ -70,7 +70,7 @@ namespace QuaSARQ {
                 LOGERROR("minimum pivot %d (calculated by CPU) and %d and do not match at gate index %lld", 
                     pivot, other_pivots[i], size_t(i));
         }
-        LOG2(2, "%sPASSED.%s", CGREEN, CNORMAL);
+        LOGPASSED(2);
     }
 
     void MeasurementChecker::check_compact_pivots(const qubit_t& qubit, const pivot_t* other_pivots, const size_t& other_num_pivots) {
@@ -91,7 +91,7 @@ namespace QuaSARQ {
                 LOGERROR("pivots %d (calculated by CPU) and %d and do not match at index %lld", 
                     h_compact_pivots[i], d_compact_pivots[i], i);
         }
-        LOG2(2, "%sPASSED.%s", CGREEN, CNORMAL);
+        LOGPASSED(2);
     }
 
 }

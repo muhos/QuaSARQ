@@ -216,15 +216,20 @@ namespace QuaSARQ {
             n, num_shots, stream,
             "eval_frame_refs (detectors) failed");
         SYNC(stream);
-        LOGHEADER(1, 4, "Detectors");
+        LOGHEADER(0, 4, "Detectors");
+        bool all_passed = true;
         for (size_t s = 0; s < num_shots; s++) {
             const char* row = h_bitstring + s * n;
             uint32 fired = 0;
             print_frame_shot(row, n, fired);
             if (options.check_measurement) {
                 mchecker.load_record_shot(samples_record, stats.circuit.measure_stats.count, tableau.num_words_minor(), s);
-                mchecker.check_detectors(circuit_io.detectors, row, n);
+                all_passed &= mchecker.check_detectors(circuit_io.detectors, row, n, true);
             }
+        }
+        if (all_passed && options.check_measurement) {
+            LOGN2(1, " Checking detector bitstrings ");
+            LOGPASSED(1);
         }
         gpu_allocator.deallocate_pinned<char>(h_bitstring);
         gpu_allocator.deallocate<char>(d_bitstring);
@@ -248,8 +253,9 @@ namespace QuaSARQ {
             n, num_shots, stream,
             "eval_frame_refs (observables) failed");
         SYNC(stream);
-        LOGHEADER(1, 4, "Observables");
+        LOGHEADER(0, 4, "Observables");
         uint32 total_errors = 0;
+        bool all_passed = true;
         for (size_t s = 0; s < num_shots; s++) {
             const char* row = h_bitstring + s * n;
             uint32 fired = 0;
@@ -257,12 +263,16 @@ namespace QuaSARQ {
             total_errors += fired;
             if (options.check_measurement) {
                 mchecker.load_record_shot(samples_record, stats.circuit.measure_stats.count, tableau.num_words_minor(), s);
-                mchecker.check_observables(circuit_io.observables, row, n);
+                all_passed &= mchecker.check_observables(circuit_io.observables, row, n, true);
             }
         }
         LOG1(" %sLogical errors across all shots: %s%s%u / %zu%s",
             CREPORT, CNORMAL, total_errors ? CRED : CGREEN,
             total_errors, num_shots * obs.pinned.num_observables, CNORMAL);
+        if (all_passed && options.check_measurement) {
+            LOGN2(1, " Checking observable bitstrings ");
+            LOGPASSED(1);
+        }
         gpu_allocator.deallocate_pinned<char>(h_bitstring);
         gpu_allocator.deallocate<char>(d_bitstring);
     }
@@ -275,11 +285,11 @@ namespace QuaSARQ {
             samples_record.copy();
             const size_t num_measurements = stats.circuit.measure_stats.count;
             if (options.print_sample) {
-                LOGHEADER(1, 4, "Sampling (shot per line)");
+                LOGHEADER(0, 4, "Sampling (shot per line)");
                 print_samples(samples_record.host, num_measurements, num_shots);
             }
             if (options.print_sample_qubits) {
-                LOGHEADER(1, 4, "Sampling (measurement per line)");
+                LOGHEADER(0, 4, "Sampling (measurement per line)");
                 print_samples_measures(samples_record.host, num_measurements, num_shots);
             }
         }

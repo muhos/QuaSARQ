@@ -184,7 +184,7 @@ void check_simulate(Simulator& sim, const size_t& p, const size_t& prev_num_qubi
         
         LOGN2(2, "  checking tableau integrity from %d up to %d depth levels.. ", start_depth, end_depth);
         const bool passed = check_identity(tableau, prev_num_qubits, num_qubits, sim.is_measuring());
-        if (passed) LOG2(2, "%sPASSED.%s", CGREEN, CNORMAL);
+        if (passed) LOGPASSED(2);
         else LOG2(2, "%sFAILED.%s", CRED, CNORMAL);
         if (options.progress_en) sim.print_progress(p, end_depth - 1, passed);
         end_depth++;

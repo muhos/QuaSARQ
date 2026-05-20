@@ -124,7 +124,7 @@ void check_parallel_gates(const Circuit& circuit, const size_t& num_qubits) {
         }
         locked.reset();
     }
-    LOG2(1, "%sPASSED.%s", CGREEN, CNORMAL);
+    LOGPASSED(1);
 }
 
 void Simulator::generate() {
@@ -464,6 +464,14 @@ void Simulator::parse() {
         assert(circuit_mode == PARSED_CIRCUIT);
         num_qubits = parse(stats, circuit_path.c_str());
         depth = schedule(stats, circuit, winfo);
+    }
+    if (options.print_detector && circuit_io.detectors.empty()) {
+        LOG2(1, "%sDisabled printing detectors as circuit does not contain any.%s", CARGDEFAULT, CNORMAL);
+        options.print_detector = false;
+    }
+    if (options.print_observable && circuit_io.observables.empty()) {
+        LOG2(1, "%sDisabled printing observables as circuit does not contain any.%s", CARGDEFAULT, CNORMAL);
+        options.print_observable = false;
     }
     fflush(stdout), fflush(stderr);
     if (options.check_scheduler)
