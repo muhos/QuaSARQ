@@ -137,11 +137,11 @@ namespace QuaSARQ {
         CHECK(cudaMemcpyAsync(h_bitstring, d_bitstring, n * sizeof(char), cudaMemcpyDeviceToHost, stream));
     }
 
-    inline void print_bitstring(char* bs, const uint32& n, uint32& fired) {
+    inline void print_bitstring(char* bs, uint32& fired, const uint32& n, const char* label) {
         bs[n] = '\0';
         for (uint32 i = 0; i < n; i++)
             if (bs[i] == '1') fired++;
-        LOGHEADER(1, 4, "Observables");
+        LOGHEADER(1, 4, label);
         if (options.color_bitstring) {
             string colored;
             colored.reserve(n * 2);
@@ -174,7 +174,7 @@ namespace QuaSARQ {
             "eval_record_refs (observables) failed");
         SYNC(stream);
         uint32 fired = 0;
-        print_bitstring(h_bitstring, n, fired);
+        print_bitstring(h_bitstring, fired, n, "Observables");
         mchecker.check_observables(circuit_io.observables, h_bitstring, n);
         gpu_allocator.deallocate_pinned<char>(h_bitstring);
         gpu_allocator.deallocate<char>(d_bitstring);
@@ -199,7 +199,7 @@ namespace QuaSARQ {
             "eval_record_refs (detectors) failed");
         SYNC(stream);
         uint32 fired = 0;
-        print_bitstring(h_bitstring, n, fired);
+        print_bitstring(h_bitstring, fired, n, "Detectors");
         mchecker.check_detectors(circuit_io.detectors, h_bitstring, n);
         gpu_allocator.deallocate_pinned<char>(h_bitstring);
         gpu_allocator.deallocate<char>(d_bitstring);

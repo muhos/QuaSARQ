@@ -119,6 +119,7 @@ namespace QuaSARQ {
             LOGENDING(2, 4, "(time %.3f ms)", elapsed);
         } else LOGDONE(2, 4);
     }
+    
 
     void Framing::print_detectors_sampled() {
         if (!options.print_detector) return;
