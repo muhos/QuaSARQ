@@ -17,6 +17,10 @@ void Framing::sample() {
     Power power;
     timer.start();
     num_partitions = tableau.alloc(num_qubits, num_shots, winfo.max_window_bytes, false, false, false);
+    if (options.check_measurement) {
+        mchecker.record.resize(stats.circuit.measure_stats.count);
+        mchecker.samples.resize(stats.circuit.measure_stats.count * tableau.num_words_minor(), word_std_t(0));
+    }
     tableau.reset_xtable();
     gpu_circuit.initiate(num_qubits, winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
     gpu_circuit.init_noise_states(options.seed, winfo.max_parallel_gates, kernel_streams[0]);

@@ -2,13 +2,8 @@
 
 namespace QuaSARQ {
 
-    void MeasurementChecker::check_record_measurements(const Tableau& other_input, const MeasurementRecorder& other_recorder, 
-        const Circuit& circuit, const depth_t& depth_level) {
+    void MeasurementChecker::check_record_measurements(const MeasurementRecorder& other_recorder, const Circuit& circuit, const depth_t& depth_level) {
         SYNCALL;
-
-        if (!input_copied) {
-            LOGERROR("device input not copied to the checker");
-        }
 
         const Vec<bool>& other_record = other_recorder.host_record();
 
@@ -19,8 +14,6 @@ namespace QuaSARQ {
         record.resize(other_record.size());
 
         LOGN2(2, "  Checking measurements record at depth level %d.. ", depth_level);
-
-        copy_input(other_input, true);
 
         const auto num_gates = circuit[depth_level].size();
 

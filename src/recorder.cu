@@ -47,7 +47,7 @@ namespace QuaSARQ {
         } else LOGDONE(2, 4);
         if (options.check_measurement) {
             recorder.copy();
-            mchecker.check_record_measurements(tableau, recorder, circuit, depth_level);
+            mchecker.check_record_measurements(recorder, circuit, depth_level);
         }
     }
 

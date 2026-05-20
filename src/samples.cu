@@ -155,6 +155,9 @@ namespace QuaSARQ {
     }
 
     void Framing::shot(const depth_t& depth_level, const cudaStream_t& stream) {
+        if (options.check_measurement) {
+            mchecker.copy_input(tableau);
+        }
         const size_t num_gates_per_window = circuit[depth_level].size();
         dim3 currentblock(1, 1), currentgrid(1, 1);
         currentblock = bestblockstep;
@@ -177,6 +180,7 @@ namespace QuaSARQ {
             samples_record.device
         );
         assert(!circuit.is_recording(depth_level) || "R-only window invariant violated: window mixes R with M/MR");
+        const size_t prev_measurement_offset = measurement_offset;
         measurement_offset += circuit.is_recording(depth_level) ? num_gates_per_window : 0;
         stats.circuit.measure_stats.random += num_gates_per_window;
         stats.circuit.measure_stats.definite = 0;
@@ -187,6 +191,11 @@ namespace QuaSARQ {
             elapsed = cutimer.elapsed();
             LOGENDING(2, 4, "(time %.3f ms)", elapsed);
         } else LOGDONE(2, 4);
+        if (options.check_measurement) {
+            samples_record.copy();
+            mchecker.check_record_samples(tableau, samples_record, circuit, depth_level, prev_measurement_offset, tableau.num_words_minor());
+            mchecker.reset_state();
+        }
     }
 
     void Framing::print_detectors_sampled() {
@@ -212,8 +221,10 @@ namespace QuaSARQ {
             const char* row = h_bitstring + s * n;
             uint32 fired = 0;
             print_frame_shot(row, n, fired);
-            if (options.check_measurement)
+            if (options.check_measurement) {
+                mchecker.load_record_shot(samples_record, stats.circuit.measure_stats.count, tableau.num_words_minor(), s);
                 mchecker.check_detectors(circuit_io.detectors, row, n);
+            }
         }
         gpu_allocator.deallocate_pinned<char>(h_bitstring);
         gpu_allocator.deallocate<char>(d_bitstring);
@@ -244,8 +255,10 @@ namespace QuaSARQ {
             uint32 fired = 0;
             print_frame_shot(row, n, fired);
             total_errors += fired;
-            if (options.check_measurement)
+            if (options.check_measurement) {
+                mchecker.load_record_shot(samples_record, stats.circuit.measure_stats.count, tableau.num_words_minor(), s);
                 mchecker.check_observables(circuit_io.observables, row, n);
+            }
         }
         LOG1(" %sLogical errors across all shots: %s%s%u / %zu%s",
             CREPORT, CNORMAL, total_errors ? CRED : CGREEN,

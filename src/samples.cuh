@@ -16,7 +16,8 @@ namespace QuaSARQ {
         inline
         bool needs_host() {
             return options.print_sample        ||
-                   options.print_sample_qubits;
+                   options.print_sample_qubits ||
+                   options.check_measurement;
         }
 
         ~Samples() {
