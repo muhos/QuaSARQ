@@ -7,12 +7,13 @@ namespace QuaSARQ {
     void print_samples_measures(
         const  Table&   samples,
         const  size_t&  num_measurements,
-        const  size_t&  num_shots) {
+        const  size_t&  num_shots,
+               FILE*    out) {
         string midx = "m%-4lld";
         if (num_measurements > 1000)
             midx = "m%-10lld";
         for (size_t m = 0; m < num_measurements; m++) {
-            PRINT(midx.c_str(), int64(m));
+            PRINTFILE(midx.c_str(), out, int64(m));
             int count = 0;
             for (size_t s = 0; s < num_shots; s++) {
                 const size_t word_idx = m * samples.num_words_minor() + WORD_OFFSET(s);
@@ -20,24 +21,25 @@ namespace QuaSARQ {
                 const word_std_t bitpos = s & WORD_MASK;
                 const int bit = (word >> bitpos) & 1;
                 count += bit;
-                PRINT("%d", bit);
+                PRINTFILE("%d", out, bit);
             }
-            PRINT(" ,   count: %d\n", count);
+            PRINTFILE(" ,   count: %d\n", out, count);
         }
     }
 
     void print_samples(
         const  Table&   samples,
         const  size_t&  num_measurements,
-        const  size_t&  num_shots) {
+        const  size_t&  num_shots,
+               FILE*    out) {
         for (size_t s = 0; s < num_shots; s++) {
             for (size_t m = 0; m < num_measurements; m++) {
                 const size_t word_idx = m * samples.num_words_minor() + WORD_OFFSET(s);
                 const word_std_t& word = samples[word_idx];
                 const word_std_t bitpos = s & WORD_MASK;
-                PRINT("%d", int((word >> bitpos) & 1));
+                PRINTFILE("%d", out, int((word >> bitpos) & 1));
             }
-            PRINT("\n");
+            PRINTFILE("\n", out);
         }
     }
 
@@ -135,23 +137,23 @@ namespace QuaSARQ {
         CHECK(cudaMemcpyAsync(h_bitstring, d_bitstring, n * num_shots * sizeof(char), cudaMemcpyDeviceToHost, stream));
     }
 
-    inline 
-    void print_frame_shot(const char* row, const uint32& n, uint32& fired) {
-        if (options.color_bitstring) {
+    inline
+    void print_frame_shot(const char* row, const uint32& n, uint32& fired, FILE* out) {
+        if (options.color_bitstring && out == stdout) {
             string colored;
             colored.reserve(n * 2);
             for (uint32 i = 0; i < n; i++) {
                 if (row[i] == '1') fired++;
                 colored += string(row[i] == '1' ? CRED : CGREEN) + row[i];
             }
-            PRINT("%s%s", colored.c_str(), CNORMAL);
+            PRINTFILE("%s%s", out, colored.c_str(), CNORMAL);
         } else {
             for (uint32 i = 0; i < n; i++) {
                 if (row[i] == '1') fired++;
-                PRINT("%c", row[i]);
+                PRINTFILE("%c", out, row[i]);
             }
         }
-        PRINT("\n");
+        PRINTFILE("\n", out);
     }
 
     void Framing::shot(const depth_t& depth_level, const cudaStream_t& stream) {
@@ -198,7 +200,7 @@ namespace QuaSARQ {
         }
     }
 
-    void Framing::print_detectors_sampled() {
+    void Framing::print_detectors_sampled(FILE* out) {
         if (!options.print_detector) return;
         const DetectorData& dets = circuit_io.detectors;
         if (dets.empty()) return;
@@ -216,12 +218,12 @@ namespace QuaSARQ {
             n, num_shots, stream,
             "eval_frame_refs (detectors) failed");
         SYNC(stream);
-        LOGHEADER(0, 4, "Detectors");
+        if (out == stdout) LOGHEADER(0, 4, "Detectors");
         bool all_passed = true;
         for (size_t s = 0; s < num_shots; s++) {
             const char* row = h_bitstring + s * n;
             uint32 fired = 0;
-            print_frame_shot(row, n, fired);
+            print_frame_shot(row, n, fired, out);
             if (options.check_measurement) {
                 mchecker.load_record_shot(samples_record, stats.circuit.measure_stats.count, tableau.num_words_minor(), s);
                 all_passed &= mchecker.check_detectors(circuit_io.detectors, row, n, true);
@@ -235,7 +237,7 @@ namespace QuaSARQ {
         gpu_allocator.deallocate<char>(d_bitstring);
     }
 
-    void Framing::print_observables_sampled() {
+    void Framing::print_observables_sampled(FILE* out) {
         if (!options.print_observable) return;
         const ObservableData& obs = circuit_io.observables;
         if (obs.empty()) return;
@@ -253,13 +255,13 @@ namespace QuaSARQ {
             n, num_shots, stream,
             "eval_frame_refs (observables) failed");
         SYNC(stream);
-        LOGHEADER(0, 4, "Observables");
+        if (out == stdout) LOGHEADER(0, 4, "Observables");
         uint32 total_errors = 0;
         bool all_passed = true;
         for (size_t s = 0; s < num_shots; s++) {
             const char* row = h_bitstring + s * n;
             uint32 fired = 0;
-            print_frame_shot(row, n, fired);
+            print_frame_shot(row, n, fired, out);
             total_errors += fired;
             if (options.check_measurement) {
                 mchecker.load_record_shot(samples_record, stats.circuit.measure_stats.count, tableau.num_words_minor(), s);
@@ -277,24 +279,60 @@ namespace QuaSARQ {
         gpu_allocator.deallocate<char>(d_bitstring);
     }
 
+    inline 
+    FILE* open_output_file(const string& path) {
+        FILE* f = fopen(path.c_str(), "w");
+        if (f == nullptr)
+            LOGERROR("failed to open output file \"%s\"", path.c_str());
+        LOG1(" %sWriting to \"%s%s%s\".%s", CREPORT, CREPORTVAL, path.c_str(), CREPORT, CNORMAL);
+        return f;
+    }
+
     void Framing::print() {
         const bool any_print = samples_record.needs_host() || options.print_detector || options.print_observable;
         if (!any_print) return;
         if (!options.sync) SYNCALL;
+        const size_t num_measurements = stats.circuit.measure_stats.count;
+        const bool write_to_file = num_shots > 100 || num_measurements > 100;
+        string base;
+        if (write_to_file) {
+            LOGHEADER(1, 4, "File output");
+            base = circuit_path;
+            const size_t dot = base.rfind('.');
+            if (dot != string::npos) base = base.substr(0, dot);
+            if (base.empty()) base = "quasarq";
+        }
         if (samples_record.needs_host()) {
             samples_record.copy();
-            const size_t num_measurements = stats.circuit.measure_stats.count;
             if (options.print_sample) {
-                LOGHEADER(0, 4, "Sampling (shot per line)");
-                print_samples(samples_record.host, num_measurements, num_shots);
+                FILE* out = stdout;
+                if (write_to_file) out = open_output_file(base + "_samples.01");
+                else LOGHEADER(0, 4, "Sampling (shot per line)");
+                print_samples(samples_record.host, num_measurements, num_shots, out);
+                if (write_to_file) fclose(out);
             }
             if (options.print_sample_qubits) {
-                LOGHEADER(0, 4, "Sampling (measurement per line)");
-                print_samples_measures(samples_record.host, num_measurements, num_shots);
+                FILE* out = stdout;
+                if (write_to_file) out = open_output_file(base + "_samples_qubits.01");
+                else LOGHEADER(0, 4, "Sampling (measurement per line)");
+                print_samples_measures(samples_record.host, num_measurements, num_shots, out);
+                if (write_to_file) fclose(out);
             }
         }
-        print_detectors_sampled();
-        print_observables_sampled();
+        if (write_to_file && options.print_detector) {
+            FILE* out = open_output_file(base + "_dets.01");
+            print_detectors_sampled(out);
+            fclose(out);
+        } else {
+            print_detectors_sampled(stdout);
+        }
+        if (write_to_file && options.print_observable) {
+            FILE* out = open_output_file(base + "_obs.01");
+            print_observables_sampled(out);
+            fclose(out);
+        } else {
+            print_observables_sampled(stdout);
+        }
         fflush(stdout);
     }
 

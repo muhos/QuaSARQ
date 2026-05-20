@@ -24,8 +24,8 @@ namespace QuaSARQ {
         void randomize(word_std_t *data, const size_t& num_words, const cudaStream_t& stream);
         void shot(const depth_t& depth_level, const cudaStream_t& stream);
         void step(const depth_t& depth_level);
-        void print_observables_sampled();
-        void print_detectors_sampled();
+        void print_observables_sampled(FILE* out = stdout);
+        void print_detectors_sampled(FILE* out = stdout);
         void print();
         void report();
         void sample();
