@@ -218,12 +218,10 @@ void Simulator::simulate() {
     copy_detectors(copy_streams[2]);
     copy_observables(copy_streams[3]);
     for (size_t p = 0; p < num_partitions && !timeout; p++) {
-        // Create identity.
         const size_t prev_num_qubits = num_qubits_per_partition * p;
         assert(prev_num_qubits < num_qubits);
         LOGN2(1, "Partition %zd: ", p);
         identity(tableau, prev_num_qubits, (p == num_partitions - 1) ? (num_qubits - prev_num_qubits) : num_qubits_per_partition, custreams, options.initialstate);
-        // Stepwise simulation.
         if (options.check_tableau)
             check_simulate(*this, p, prev_num_qubits, num_qubits_per_partition, timeout);
         else

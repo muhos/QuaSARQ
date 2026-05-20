@@ -85,6 +85,75 @@ namespace QuaSARQ {
         }
     }
 
+    __global__
+    void eval_frame_refs_k(
+              char*                bitstring,
+        const uint32* __restrict__ refs,
+        const uint32* __restrict__ starts,
+        const uint32* __restrict__ counts,
+        const Table*               samples,
+        const size_t               num_words_minor,
+        const uint32               n,
+        const size_t               num_shots)
+    {
+        for_parallel_y(s, num_shots) {
+            for_parallel_x(i, n) {
+                bool result = false;
+                const uint32 start = starts[i];
+                const uint32 count = counts[i];
+                for (uint32 j = start; j < start + count; j++) {
+                    const size_t m_idx = refs[j];
+                    const word_std_t word = (*samples)[m_idx * num_words_minor + WORD_OFFSET(s)];
+                    result ^= bool((word >> (s & WORD_MASK)) & 1);
+                }
+                bitstring[s * n + i] = result ? '1' : '0';
+            }
+        }
+    }
+
+    inline 
+    void launch_eval_frame_refs(
+              char*         d_bitstring,
+              char*         h_bitstring,
+        const uint32*       d_refs,
+        const uint32*       d_starts,
+        const uint32*       d_counts,
+        const Table*        d_samples,
+        const size_t&       num_words_minor,
+        const uint32&       n,
+        const size_t&       num_shots,
+        const cudaStream_t& stream,
+        const char*         label)
+    {
+        dim3 block(32, 8), grid(1, 1);
+        OPTIMIZEBLOCKS2D(grid.x, n, block.x);
+        OPTIMIZEBLOCKS2D(grid.y, (uint32)num_shots, block.y);
+        eval_frame_refs_k<<<grid, block, 0, stream>>>(
+            d_bitstring, d_refs, d_starts, d_counts,
+            d_samples, num_words_minor, n, num_shots);
+        LASTERR(label);
+        CHECK(cudaMemcpyAsync(h_bitstring, d_bitstring, n * num_shots * sizeof(char), cudaMemcpyDeviceToHost, stream));
+    }
+
+    inline 
+    void print_frame_shot(const char* row, const uint32& n, uint32& fired) {
+        if (options.color_bitstring) {
+            string colored;
+            colored.reserve(n * 2);
+            for (uint32 i = 0; i < n; i++) {
+                if (row[i] == '1') fired++;
+                colored += string(row[i] == '1' ? CRED : CGREEN) + row[i];
+            }
+            PRINT("%s%s", colored.c_str(), CNORMAL);
+        } else {
+            for (uint32 i = 0; i < n; i++) {
+                if (row[i] == '1') fired++;
+                PRINT("%c", row[i]);
+            }
+        }
+        PRINT("\n");
+    }
+
     void Framing::shot(const depth_t& depth_level, const cudaStream_t& stream) {
         const size_t num_gates_per_window = circuit[depth_level].size();
         dim3 currentblock(1, 1), currentgrid(1, 1);
@@ -119,75 +188,87 @@ namespace QuaSARQ {
             LOGENDING(2, 4, "(time %.3f ms)", elapsed);
         } else LOGDONE(2, 4);
     }
-    
 
     void Framing::print_detectors_sampled() {
         if (!options.print_detector) return;
         const DetectorData& dets = circuit_io.detectors;
         if (dets.empty()) return;
-        const Table& samples_host = samples_record.host;
+        const uint32 n            = (uint32)dets.pinned.num_instructions;
+        const cudaStream_t stream = kernel_streams[0];
+        char* d_bitstring = gpu_allocator.allocate<char>((size_t)n * num_shots, Region::Dynamic);
+        char* h_bitstring = gpu_allocator.allocate_pinned<char>((size_t)n * num_shots);
+        launch_eval_frame_refs(
+            d_bitstring, h_bitstring,
+            dets.device.refs,
+            dets.device.starts,
+            dets.device.counts,
+            samples_record.device,
+            tableau.num_words_minor(),
+            n, num_shots, stream,
+            "eval_frame_refs (detectors) failed");
+        SYNC(stream);
         LOGHEADER(1, 4, "Detectors");
         for (size_t s = 0; s < num_shots; s++) {
-            string bitstring;
-            bitstring.reserve(dets.pinned.num_instructions * 2);
+            const char* row = h_bitstring + s * n;
             uint32 fired = 0;
-            for (uint32 i = 0; i < dets.pinned.num_instructions; i++) {
-                bool outcome = false;
-                for (uint32 j = dets.starts[i]; j < dets.starts[i] + dets.counts[i]; j++) {
-                    // dets.refs[j] is a measurement index in circuit order.
-                    const size_t m_idx = dets.refs[j];
-                    const word_std_t word = samples_host[m_idx * samples_host.num_words_minor() + WORD_OFFSET(s)];
-                    outcome ^= bool((word >> (s & WORD_MASK)) & 1);
-                }
-                if (outcome) fired++;
-                bitstring += string(outcome ? CRED : CGREEN) + (outcome ? '1' : '0') + CNORMAL;
-            }
-            PRINT(" shot %-6zd: %s  (%u fired)\n", s, bitstring.c_str(), fired);
+            print_frame_shot(row, n, fired);
+            if (options.check_measurement)
+                mchecker.check_detectors(circuit_io.detectors, row, n);
         }
+        gpu_allocator.deallocate_pinned<char>(h_bitstring);
+        gpu_allocator.deallocate<char>(d_bitstring);
     }
 
     void Framing::print_observables_sampled() {
         if (!options.print_observable) return;
         const ObservableData& obs = circuit_io.observables;
         if (obs.empty()) return;
-        const Table& samples_host = samples_record.host;
+        const uint32 n            = (uint32)obs.pinned.num_observables;
+        const cudaStream_t stream = kernel_streams[0];
+        char* d_bitstring = gpu_allocator.allocate<char>((size_t)n * num_shots, Region::Dynamic);
+        char* h_bitstring = gpu_allocator.allocate_pinned<char>((size_t)n * num_shots);
+        launch_eval_frame_refs(
+            d_bitstring, h_bitstring,
+            obs.records.device.refs,
+            obs.records.device.starts,
+            obs.records.device.counts,
+            samples_record.device,
+            tableau.num_words_minor(),
+            n, num_shots, stream,
+            "eval_frame_refs (observables) failed");
+        SYNC(stream);
         LOGHEADER(1, 4, "Observables");
         uint32 total_errors = 0;
         for (size_t s = 0; s < num_shots; s++) {
-            string bitstring;
-            bitstring.reserve(obs.pinned.num_observables * 16);
+            const char* row = h_bitstring + s * n;
             uint32 fired = 0;
-            for (uint32 i = 0; i < obs.pinned.num_observables; i++) {
-                bool outcome = false;
-                for (uint32 j = obs.records.starts[i]; j < obs.records.starts[i] + obs.records.counts[i]; j++) {
-                    // obs.records.refs[j] is a measurement index in circuit order.
-                    const size_t m_idx = obs.records.refs[j];
-                    const word_std_t word = samples_host[m_idx * samples_host.num_words_minor() + WORD_OFFSET(s)];
-                    outcome ^= bool((word >> (s & WORD_MASK)) & 1);
-                }
-                if (outcome) { fired++; total_errors++; }
-                bitstring += string(outcome ? CRED : CGREEN) + (outcome ? '1' : '0') + CNORMAL;
-            }
-            PRINT(" shot %-6zd: %s\n", s, bitstring.c_str());
+            print_frame_shot(row, n, fired);
+            total_errors += fired;
+            if (options.check_measurement)
+                mchecker.check_observables(circuit_io.observables, row, n);
         }
         LOG1(" %sLogical errors across all shots: %s%s%u / %zu%s",
             CREPORT, CNORMAL, total_errors ? CRED : CGREEN,
             total_errors, num_shots * obs.pinned.num_observables, CNORMAL);
+        gpu_allocator.deallocate_pinned<char>(h_bitstring);
+        gpu_allocator.deallocate<char>(d_bitstring);
     }
 
     void Framing::print() {
-        if (!samples_record.needs_host()) return;
+        const bool any_print = samples_record.needs_host() || options.print_detector || options.print_observable;
+        if (!any_print) return;
         if (!options.sync) SYNCALL;
-
-        samples_record.copy();
-        const size_t num_measurements = stats.circuit.measure_stats.count;
-        if (options.print_sample) {
-            LOGHEADER(1, 4, "Sampling (shot per line)");
-            print_samples(samples_record.host, num_measurements, num_shots);
-        }
-        if (options.print_sample_qubits) {
-            LOGHEADER(1, 4, "Sampling (measurement per line)");
-            print_samples_measures(samples_record.host, num_measurements, num_shots);
+        if (samples_record.needs_host()) {
+            samples_record.copy();
+            const size_t num_measurements = stats.circuit.measure_stats.count;
+            if (options.print_sample) {
+                LOGHEADER(1, 4, "Sampling (shot per line)");
+                print_samples(samples_record.host, num_measurements, num_shots);
+            }
+            if (options.print_sample_qubits) {
+                LOGHEADER(1, 4, "Sampling (measurement per line)");
+                print_samples_measures(samples_record.host, num_measurements, num_shots);
+            }
         }
         print_detectors_sampled();
         print_observables_sampled();

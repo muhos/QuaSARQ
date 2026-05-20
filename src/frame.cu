@@ -32,6 +32,8 @@ void Framing::sample() {
     samples_record.alloc(stats.circuit.measure_stats.count, tableau.num_words_minor(), gpu_allocator);
     gpu_circuit.reset_circuit_offset(0);
     measurement_offset = 0;
+    copy_detectors(copy_streams[2]);
+    copy_observables(copy_streams[3]);
     for (depth_t d = 0; d < depth && !timeout; d++)
         step(d);
 	SYNCALL;
