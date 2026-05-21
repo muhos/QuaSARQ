@@ -149,7 +149,7 @@ namespace QuaSARQ {
                     if (active_pivots > 1) {
                         inject_cx(active_pivots - 1, stream);
                     }
-                    const sign_t rbit = mrand.brand();
+                    const sign_t rbit = reference_mode ? sign_t(0) : mrand.brand();
                     inject_swap(qubit, rbit, stream);
                     inject_x(qubit, rbit, stream);
                     if (curr_gate.type == R)

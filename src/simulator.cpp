@@ -35,6 +35,7 @@ Simulator::Simulator() :
     , locker(gpu_allocator)
     , tableau(gpu_allocator)
     , inv_tableau(gpu_allocator)
+    , ref_tableau(gpu_allocator)
     , pivoting(gpu_allocator)
     , recorder(gpu_allocator)
     , prefix(gpu_allocator, mchecker)
@@ -46,6 +47,7 @@ Simulator::Simulator() :
     , kernel_streams{ 0, 0 }
     , measuring(false)
     , write_measures_to_file(false)
+    , reference_mode(false)
 {
     initialize();
 }
@@ -63,6 +65,7 @@ Simulator::Simulator(const string& path) :
     , locker(gpu_allocator)
     , tableau(gpu_allocator)
     , inv_tableau(gpu_allocator)
+    , ref_tableau(gpu_allocator)
     , pivoting(gpu_allocator)
     , recorder(gpu_allocator)
     , prefix(gpu_allocator, mchecker)
@@ -74,6 +77,7 @@ Simulator::Simulator(const string& path) :
     , kernel_streams{ 0, 0 }
     , measuring(false)
     , write_measures_to_file(false)
+    , reference_mode(false)
 {
     initialize();
 }
@@ -134,6 +138,34 @@ void Simulator::create_streams(cudaStream_t*& streams) {
     }
 }
 
+void Simulator::rsample() {
+    if (!measuring || !stats.circuit.measure_stats.count) return;
+    reference_mode = true;
+    tableau.swap_tableaus(ref_tableau);
+    num_partitions = tableau.alloc(num_qubits, 0, winfo.max_window_bytes, false, measuring, true);
+    #if ROW_MAJOR
+    inv_tableau.alloc(num_qubits, 0, 0, false, measuring, false);
+    #endif
+    prefix.alloc(tableau, config_qubits);
+    pivoting.alloc(num_qubits);
+    recorder.alloc(stats.circuit.measure_stats.count);
+    const size_t num_qubits_per_partition = num_partitions > 1 ? tableau.num_words_major() * WORD_BITS : num_qubits;
+    gpu_circuit.initiate(num_qubits, winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
+    for (size_t p = 0; p < num_partitions && !timeout; p++) {
+        const size_t prev_num_qubits = num_qubits_per_partition * p;
+        assert(prev_num_qubits < num_qubits);
+        identity(tableau, prev_num_qubits,
+                 (p == num_partitions - 1) ? (num_qubits - prev_num_qubits) : num_qubits_per_partition,
+                 custreams, options.initialstate);
+        simulate(p, false);
+    }
+    SYNCALL;
+    recorder.copy();
+    reference_sample.copyFrom(recorder.host_record());
+    tableau.swap_tableaus(ref_tableau);
+    reference_mode = false;
+}
+
 // Simulate circuit by moving window
 // over parallel gates of each depth level.
 void Simulator::simulate(const size_t& p, const bool& reversed) {
@@ -141,7 +173,8 @@ void Simulator::simulate(const size_t& p, const bool& reversed) {
         LOGERRORN("cannot run simulation without allocating the tableau.");
         throw tableau_memory_error();
     }
-    LOGHEADER(1, 4, "Simulation");
+    if (reference_mode) LOGHEADER(1, 4, "Simulation (reference mode)");
+    else LOGHEADER(1, 4, "Simulation");
     if (options.progress_en) print_progress_header();
     if (reversed) {
         gpu_circuit.reset_circuit_offset(circuit.reference(depth - 1, 0));
@@ -196,7 +229,6 @@ void check_simulate(Simulator& sim, const size_t& p, const size_t& prev_num_qubi
 void Simulator::simulate() {
     Power power;
     timer.start();
-    // Create tableau(s) in GPU memory.
     num_partitions = tableau.alloc(num_qubits, 0, winfo.max_window_bytes, false, measuring, true);
     if (measuring) {
         #if ROW_MAJOR
@@ -212,10 +244,10 @@ void Simulator::simulate() {
     }
     const size_t num_qubits_per_partition = num_partitions > 1 ? tableau.num_words_major() * WORD_BITS : num_qubits;
     gpu_circuit.initiate(num_qubits, winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
-    gpu_circuit.init_noise_states(options.seed, winfo.max_parallel_gates, kernel_streams[0]);
+    if (!reference_mode)
+        gpu_circuit.init_noise_states(options.seed, winfo.max_parallel_gates, kernel_streams[0]);
     timer.stop();
     stats.time.initial += timer.elapsed();
-    // Start step-wise simulation.
     timer.start();
     copy_detectors(copy_streams[2]);
     copy_observables(copy_streams[3]);
@@ -223,7 +255,9 @@ void Simulator::simulate() {
         const size_t prev_num_qubits = num_qubits_per_partition * p;
         assert(prev_num_qubits < num_qubits);
         LOGN2(1, "Partition %zd: ", p);
-        identity(tableau, prev_num_qubits, (p == num_partitions - 1) ? (num_qubits - prev_num_qubits) : num_qubits_per_partition, custreams, options.initialstate);
+        identity(tableau, prev_num_qubits, 
+            (p == num_partitions - 1) ? (num_qubits - prev_num_qubits) : num_qubits_per_partition, 
+            custreams, options.initialstate);
         if (options.check_tableau)
             check_simulate(*this, p, prev_num_qubits, num_qubits_per_partition, timeout);
         else
@@ -238,7 +272,9 @@ void Simulator::simulate() {
     stats.tableau.gigabytes = ratio((double)tableau.size() * sizeof(word_std_t), double(GB));
     stats.tableau.seconds = (stats.time.simulation / 1000.0) / (num_partitions * depth);
     stats.tableau.calc_speed();
-    print_observables();
-    print_detectors();
-    report();
+    if (!reference_mode) {
+        print_observables();
+        print_detectors();
+        report();
+    }
 }

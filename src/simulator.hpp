@@ -36,6 +36,7 @@ namespace QuaSARQ {
         Locker                          locker;
         Tableau                         tableau;
         Tableau                         inv_tableau;
+        Tableau                         ref_tableau;
         Pivoting                        pivoting;
         MeasurementRecorder             recorder;
         MeasurementChecker              mchecker;
@@ -51,6 +52,8 @@ namespace QuaSARQ {
         WindowInfo                      winfo;
         bool                            measuring;
         bool                            write_measures_to_file;
+        bool                            reference_mode;
+        Vec<bool>                       reference_sample;
         static bool                     timeout;
         
         enum { 
@@ -93,6 +96,7 @@ namespace QuaSARQ {
         void        parse               ();
         void        reserve             ();
         void        simulate            ();
+        void        rsample             ();
         size_t      parse               (Statistics& stats, const char* path);
         size_t      schedule            (Statistics& stats, Circuit& circuit, WindowInfo& target_winfo);
         void        simulate            (const size_t& p, const bool& reversed);

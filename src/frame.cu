@@ -19,6 +19,9 @@ void Framing::sample() {
     Power power;
     timer.start();
     num_partitions = tableau.alloc(num_qubits, num_shots, winfo.max_window_bytes, false, false, false);
+    const size_t frame_num_partitions = num_partitions;
+    rsample();
+    num_partitions = frame_num_partitions;
     if (options.check_measurement) {
         mchecker.record.resize(stats.circuit.measure_stats.count);
         mchecker.samples.resize(stats.circuit.measure_stats.count * tableau.num_words_minor(), word_std_t(0));
@@ -33,8 +36,8 @@ void Framing::sample() {
     stats.time.initial += timer.elapsed();
     // Start step-wise simulation.
     timer.start();
-    LOGHEADER(1, 4, "Simulation");
-    if (options.progress_en) print_progress_header();
+    LOGHEADER(1, 4, "Sampling");
+    if (options.progress_en && ref_tableau.empty()) print_progress_header();
     samples_record.alloc(stats.circuit.measure_stats.count, tableau.num_words_minor(), gpu_allocator);
     gpu_circuit.reset_circuit_offset(0);
     measurement_offset = 0;

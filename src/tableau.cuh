@@ -61,14 +61,25 @@ namespace QuaSARQ {
         // Number of partitions spliting tableau generators' words.
         size_t _num_partitions;
 
+        // Swap base pointers and metadata.
         void swap_tables(Tableau &lhs, Tableau &rhs) {
             using std::swap;
-            swap(lhs._xs,      rhs._xs);
-            swap(lhs._zs,      rhs._zs);
-            swap(lhs._h_xs,    rhs._h_xs);
-            swap(lhs._h_zs,    rhs._h_zs);
-            swap(lhs._xs_data, rhs._xs_data);
-            swap(lhs._zs_data, rhs._zs_data);
+            swap(lhs._xs,                   rhs._xs);
+            swap(lhs._zs,                   rhs._zs);
+            swap(lhs._ss,                   rhs._ss);
+            swap(lhs._h_xs,                 rhs._h_xs);
+            swap(lhs._h_zs,                 rhs._h_zs);
+            swap(lhs._h_ss,                 rhs._h_ss);
+            swap(lhs._xs_data,              rhs._xs_data);
+            swap(lhs._zs_data,              rhs._zs_data);
+            swap(lhs._ss_data,              rhs._ss_data);
+            swap(lhs._num_qubits,           rhs._num_qubits);
+            swap(lhs._num_qubits_padded,    rhs._num_qubits_padded);
+            swap(lhs._num_words,            rhs._num_words);
+            swap(lhs._num_words_major,      rhs._num_words_major);
+            swap(lhs._num_words_minor,      rhs._num_words_minor);
+            swap(lhs._num_sign_words,       rhs._num_sign_words);
+            swap(lhs._num_partitions,       rhs._num_partitions);
         }
 
         // Helper to compute  num_qubits_padded, 
@@ -305,6 +316,8 @@ namespace QuaSARQ {
         }
 
         inline size_t size() const { return 2 * _num_words + _num_sign_words; }
+
+        inline bool empty() const { return !size(); }
 
         inline size_t num_qubits() const { return _num_qubits; }
 
