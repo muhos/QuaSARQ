@@ -173,7 +173,8 @@ namespace QuaSARQ {
 
         // Reset per-gate state so check_initial_pivots 
         // on the next window is clean.
-        mchecker.reset_state();
+        if (options.check_measurement) 
+            mchecker.reset_state();
 
         return random_measures;
     }

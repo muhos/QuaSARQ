@@ -141,6 +141,9 @@ void Simulator::create_streams(cudaStream_t*& streams) {
 void Simulator::rsample() {
     if (!measuring || !stats.circuit.measure_stats.count) return;
     reference_mode = true;
+    // Disable checking during reference run.
+    const bool saved_check = options.check_measurement;
+    options.check_measurement = false;
     tableau.swap_tableaus(ref_tableau);
     num_partitions = tableau.alloc(num_qubits, 0, winfo.max_window_bytes, false, measuring, true);
     #if ROW_MAJOR
@@ -163,6 +166,7 @@ void Simulator::rsample() {
     recorder.copy();
     reference_sample.copyFrom(recorder.host_record());
     tableau.swap_tableaus(ref_tableau);
+    options.check_measurement = saved_check;
     reference_mode = false;
 }
 

@@ -243,10 +243,6 @@ void Simulator::generate() {
     LOG2(1, "Generated a total of %s%zd gates%s with a maximum of %s%zd parallel gates%s.", 
     CREPORTVAL, circuit.num_gates(), CNORMAL, 
     CREPORTVAL, stats.circuit.max_parallel_gates, CNORMAL);
-    if (measuring && options.check_tableau) {
-        //options.check_tableau = false;
-        LOG2(1, "%s Disabling tableau checking due to measurements.%s", CARGDEFAULT, CNORMAL);
-    }
     if (options.write_rc)
         circuit_io.write(circuit, num_qubits, options.write_rc, stats);
     if (options.verbose > 2)
@@ -466,12 +462,16 @@ void Simulator::parse() {
         depth = schedule(stats, circuit, winfo);
     }
     write_measures_to_file = stats.circuit.measure_stats.count > options.min_measures_write;
+    if (measuring && options.check_tableau) {
+        options.check_tableau = false;
+        LOG2(1, "%s disabling tableau checking due to measurements.%s", CARGDEFAULT, CNORMAL);
+    }
     if (options.print_detector && circuit_io.detectors.empty()) {
-        LOG2(1, "%sDisabled printing detectors as circuit does not contain any.%s", CARGDEFAULT, CNORMAL);
+        LOG2(1, "%s disabled printing detectors as circuit does not contain any.%s", CARGDEFAULT, CNORMAL);
         options.print_detector = false;
     }
     if (options.print_observable && circuit_io.observables.empty()) {
-        LOG2(1, "%sDisabled printing observables as circuit does not contain any.%s", CARGDEFAULT, CNORMAL);
+        LOG2(1, "%s disabled printing observables as circuit does not contain any.%s", CARGDEFAULT, CNORMAL);
         options.print_observable = false;
     }
     fflush(stdout), fflush(stderr);
