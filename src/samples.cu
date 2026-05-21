@@ -88,6 +88,27 @@ namespace QuaSARQ {
     }
 
     __global__
+    void apply_reference_sample_k(
+              Table*               samples,
+        const bool* __restrict__   record,
+        const size_t               num_measurements,
+        const size_t               num_words_minor)
+    {
+        for_parallel_y(m, num_measurements) {
+            // We need the mask since samples is measurement-major.
+            // We keep it that way to avoid transposing the whole 
+            // sample table just to apply the reference sample.
+            if (!global_tx) printf("record[%lld] = %d\n", m, int(record[m]));
+            const word_std_t mask = record[m] ? ~word_std_t(0) : word_std_t(0);
+            if (mask) {
+                for_parallel_x(w, num_words_minor) {
+                    (*samples)[m * num_words_minor + w] ^= mask;
+                }
+            }
+        }
+    }
+
+    __global__
     void eval_frame_refs_k(
               char*                bitstring,
         const uint32* __restrict__ refs,
@@ -113,7 +134,7 @@ namespace QuaSARQ {
         }
     }
 
-    inline 
+    inline
     void launch_eval_frame_refs(
               char*         d_bitstring,
               char*         h_bitstring,
@@ -283,6 +304,22 @@ namespace QuaSARQ {
         const bool any_print = samples_record.needs_host() || options.print_detector || options.print_observable;
         if (!any_print) return;
         if (!options.sync) SYNCALL;
+        // XOR reference sample into all shots.
+        if (recorder.step_history() > 0) {
+            const cudaStream_t stream = kernel_streams[0];
+            const size_t num_measurements = stats.circuit.measure_stats.count;
+            const size_t num_words_minor  = tableau.num_words_minor();
+            dim3 block(32, 8), grid(1, 1);
+            OPTIMIZEBLOCKS2D(grid.x, (uint32)num_words_minor, block.x);
+            OPTIMIZEBLOCKS2D(grid.y, (uint32)num_measurements, block.y);
+            apply_reference_sample_k<<<grid, block, 0, stream>>>(
+                samples_record.device,
+                recorder.device_record(),
+                num_measurements,
+                num_words_minor);
+            LASTERR("apply_reference_sample failed");
+            SYNC(stream);
+        }
         if (write_measures_to_file) LOGHEADER(1, 4, "File output");
         if (samples_record.needs_host()) {
             samples_record.copy();

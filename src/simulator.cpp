@@ -163,8 +163,6 @@ void Simulator::rsample() {
         simulate(p, false);
     }
     SYNCALL;
-    recorder.copy();
-    reference_sample.copyFrom(recorder.host_record());
     tableau.swap_tableaus(ref_tableau);
     options.check_measurement = saved_check;
     reference_mode = false;

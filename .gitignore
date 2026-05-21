@@ -10,6 +10,9 @@ src/*.stim
 src/.vscode
 src/*.sh
 src/.DS_Store
+*.txt
+*.qstate
+*.stim
 circuits
 build
 .DS_Store

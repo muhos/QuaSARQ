@@ -34,7 +34,6 @@ void Framing::sample() {
     SYNCALL;
     timer.stop();
     stats.time.initial += timer.elapsed();
-    // Start step-wise simulation.
     timer.start();
     LOGHEADER(1, 4, "Sampling");
     if (options.progress_en && ref_tableau.empty()) print_progress_header();

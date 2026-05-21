@@ -53,7 +53,6 @@ namespace QuaSARQ {
         bool                            measuring;
         bool                            write_measures_to_file;
         bool                            reference_mode;
-        Vec<bool>                       reference_sample;
         static bool                     timeout;
         
         enum { 
