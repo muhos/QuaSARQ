@@ -143,17 +143,18 @@ namespace QuaSARQ {
         for (uint32 i = 0; i < n; i++)
             if (bs[i] == '1') fired++;
         LOGHEADER(1, 4, label);
+        if (options.quiet_en) PRINT("%s%s:%s\n", CHEADER, label, CNORMAL);
         if (out == stdout) {
             if (options.color_bitstring) {
                 string colored;
                 colored.reserve(n * 2);
                 for (uint32 i = 0; i < n; i++)
                     colored += string(bs[i] == '1' ? CRED : CGREEN) + bs[i];
-                LOGN1(" %s%s", colored.c_str(), CNORMAL);
+                LOGN2(0, "%s%s", colored.c_str(), CNORMAL);
             } else {
-                LOGN1(" %s%s%s", CLBLUE, bs, CNORMAL);
+                LOGN2(0, "%s", bs);
             }
-            LOG1(" (%s%u / %u%s)", fired ? CRED : CGREEN, fired, n, CNORMAL);
+            LOG2(0, " (%s%u / %u%s)", fired ? CRED : CGREEN, fired, n, CNORMAL);
         } else {
             PRINTFILE("%s\n", out, bs);
         }

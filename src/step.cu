@@ -69,7 +69,10 @@ namespace QuaSARQ {
                 sign_update_Y(signs_word, x_words_q1, z_words_q1);
                 break;
             }
-            case DEPOLARIZE1: {
+            case DEPOLARIZE1:
+            case X_ERROR:
+            case Y_ERROR:
+            case Z_ERROR: {
                 LOAD_Q1_WORDS;
                 const uint32 pauli = (noise_paulis != nullptr) ? noise_paulis[i] : 0;
                 do_depolarize1(signs_word, x_words_q1, z_words_q1, pauli);

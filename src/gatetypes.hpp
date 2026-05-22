@@ -17,6 +17,9 @@ namespace QuaSARQ {
         GATE(M) \
         GATE(MR) \
         GATE(DEPOLARIZE1) \
+        GATE(X_ERROR) \
+        GATE(Y_ERROR) \
+        GATE(Z_ERROR) \
         GATE(CX) \
         GATE(CY) \
         GATE(CZ) \
@@ -32,7 +35,7 @@ namespace QuaSARQ {
         FOREACH_GATE(GATE2ENUM)
     };
 
-    constexpr uint32 NR_GATETYPES_1 = DEPOLARIZE1 + 1;
+    constexpr uint32 NR_GATETYPES_1 = Z_ERROR + 1;
     constexpr uint32 NR_GATETYPES = DEPOLARIZE2 + 1;
 
 }

@@ -98,7 +98,6 @@ namespace QuaSARQ {
             // We need the mask since samples is measurement-major.
             // We keep it that way to avoid transposing the whole 
             // sample table just to apply the reference sample.
-            if (!global_tx) printf("record[%lld] = %d\n", m, int(record[m]));
             const word_std_t mask = record[m] ? ~word_std_t(0) : word_std_t(0);
             if (mask) {
                 for_parallel_x(w, num_words_minor) {
@@ -239,7 +238,7 @@ namespace QuaSARQ {
             n, num_shots, stream,
             "eval_frame_refs (detectors) failed");
         SYNC(stream);
-        if (out == stdout) LOGHEADER(0, 4, "Detectors");
+        if (out == stdout) LOG2(0, "%sDetectors:%s", CHEADER, CNORMAL);
         bool all_passed = true;
         for (size_t s = 0; s < num_shots; s++) {
             const char* row = h_bitstring + s * n;
@@ -276,7 +275,7 @@ namespace QuaSARQ {
             n, num_shots, stream,
             "eval_frame_refs (observables) failed");
         SYNC(stream);
-        if (out == stdout) LOGHEADER(0, 4, "Observables");
+        if (out == stdout) LOG2(0, "%sObservables:%s", CHEADER, CNORMAL);
         uint32 total_errors = 0;
         bool all_passed = true;
         for (size_t s = 0; s < num_shots; s++) {
@@ -325,13 +324,13 @@ namespace QuaSARQ {
             samples_record.copy();
             if (options.print_sample) {
                 FILE* out = write_measures_to_file ? open_output_file("_samples.01") : stdout;
-                if (!write_measures_to_file) LOGHEADER(0, 4, "Sampling (shot per line)");
+                if (!write_measures_to_file) LOG2(0, "%sSampling (shot per line):%s", CHEADER, CNORMAL);
                 print_samples(samples_record.host, stats.circuit.measure_stats.count, num_shots, out);
                 if (write_measures_to_file) fclose(out);
             }
             if (options.print_sample_qubits) {
                 FILE* out = write_measures_to_file ? open_output_file("_samples_qubits.01") : stdout;
-                if (!write_measures_to_file) LOGHEADER(0, 4, "Sampling (measurement per line)");
+                if (!write_measures_to_file) LOG2(0, "%sSampling (measurement per line):%s", CHEADER, CNORMAL);
                 print_samples_measures(samples_record.host, stats.circuit.measure_stats.count, num_shots, out);
                 if (write_measures_to_file) fclose(out);
             }

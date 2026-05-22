@@ -344,7 +344,7 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit, WindowInfo& targ
                 if (is_c_unlocked) {
                     circuit_io.circuit_queue.pop_front();
                     Gate* g = circuit.addGate(max_depth, gate.type, 1, c);
-                    if (isDepolarize(int(gate.type))) g->set_prob(gate.p);
+                    if (isNoise(int(gate.type))) g->set_prob(gate.p);
                     locked_qubits.push(c);
                     locked[c] = 1;
                     if (gate.type != I) {
@@ -359,7 +359,7 @@ size_t Simulator::schedule(Statistics& stats, Circuit& circuit, WindowInfo& targ
                     circuit_io.circuit_queue.pop_front();
                     assert(gate.type != M && gate.type != MR);
                     Gate* g = circuit.addGate(max_depth, gate.type, 2, c, t);
-                    if (isDepolarize(int(gate.type))) g->set_prob(gate.p);
+                    if (isNoise(int(gate.type))) g->set_prob(gate.p);
                     locked_qubits.push(c);
                     locked_qubits.push(t);
                     locked[c] = 1;

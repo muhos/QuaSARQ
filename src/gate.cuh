@@ -25,27 +25,30 @@ namespace QuaSARQ {
         FOREACH_GATE(GATE2STR)
     };
 
-    // Returns true for 2-qubit gates (including DEPOLARIZE2).
     INLINE_ALL 
+    // Returns true for 2-qubit gates (including DEPOLARIZE2).
     bool isGate2(const int& type) {
         return type >= int(NR_GATETYPES_1) && type < int(NR_GATETYPES);
     }
 
-    // Returns true for measurement gates.
     INLINE_ALL 
+    // Returns true for measurement gates.
     bool isMeasurement(const int& type) {
         return type == int(R) || type == int(M) || type == int(MR);
     }
 
     INLINE_ALL
+    // Returns true for reset gates.
     bool isReset(const int& type) {
         return type == int(R);
     }
 
-    // Returns true for depolarizing noise gates.
-    INLINE_ALL 
-    bool isDepolarize(const int& type) {
-        return type == int(DEPOLARIZE1) || type == int(DEPOLARIZE2);
+    INLINE_ALL
+    // Returns true for noise gates.
+    bool isNoise(const int& type) {
+        return type == int(DEPOLARIZE1) || type == int(X_ERROR) ||
+               type == int(Y_ERROR)     || type == int(Z_ERROR) ||
+               type == int(DEPOLARIZE2);
     }
 
     /**
@@ -75,12 +78,12 @@ namespace QuaSARQ {
 		INLINE_ALL
         size_t capacity() const {
             assert(size);
-            const size_t extra = isDepolarize(int(type)) ? 1 : 0;
+            const size_t extra = isNoise(int(type)) ? 1 : 0;
             return (size_t(size) + extra) * sizeof(qubit_t) + sizeof(*this);
         }
 
         // Store depolarizing probability in the last wire.
-        // Only valid when isDepolarize(type) and sizeof(float) <= sizeof(qubit_t).
+        // Only valid when isNoise(type) and sizeof(float) <= sizeof(qubit_t).
         INLINE_ALL
         void set_prob(const float& p) {
             memcpy(&wires[size], &p, sizeof(float));
@@ -114,7 +117,7 @@ namespace QuaSARQ {
             else {
                 PRINT("  Unknown");
             }
-            if (isDepolarize(int(type))) {
+            if (isNoise(int(type))) {
                 PRINT("(p=%.3f)", get_prob());
             }
             PRINT("(");
@@ -134,7 +137,7 @@ namespace QuaSARQ {
             else {
                 LOGGPU("  Unknown");
             }
-            if (isDepolarize(int(type))) {
+            if (isNoise(int(type))) {
                 LOGGPU("(p=%.3f)", get_prob());
             }
             LOGGPU("(");

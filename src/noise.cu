@@ -29,7 +29,10 @@ namespace QuaSARQ {
             const float prob = curand_uniform(&local);
             if (prob < gate.get_prob()) {
                 pauli = gate.type == DEPOLARIZE1 ? 1u + (curand(&local) % 3u) :
-                        gate.type == DEPOLARIZE2 ? 1u + (curand(&local) % 15u) : 0;
+                        gate.type == DEPOLARIZE2 ? 1u + (curand(&local) % 15u) :
+                        gate.type == X_ERROR     ? 1u :
+                        gate.type == Z_ERROR     ? 2u :
+                        gate.type == Y_ERROR     ? 3u : 0u;
             }
             noise_states[i] = local; // advance sequence
             noise_paulis[i] = pauli;

@@ -231,7 +231,7 @@ namespace QuaSARQ {
         Gate*       addGate     (const depth_t& depth_level, const byte_t& type, const Vec<qubit_t, input_size_t>& inputs) {
 			assert(depth_level < MAX_DEPTH);
 			const input_size_t size = inputs.size();
-			const size_t extra = isDepolarize(int(type)) ? 1 : 0;
+			const size_t extra = isNoise(int(type)) ? 1 : 0;
 			const size_t buckets = NBUCKETS(size + extra);
 			const gate_ref_t r = (gate_ref_t) buckets_container::alloc(buckets);
 			Gate* gate = new (GATE_PTR(r)) Gate(size);
@@ -254,7 +254,7 @@ namespace QuaSARQ {
         inline
         Gate*       addGate     (const depth_t& depth_level, const byte_t& type, const input_size_t size, const qubit_t& c, const qubit_t& t = INVALID_QUBIT) {
             assert(depth_level < MAX_DEPTH);
-            const size_t extra = isDepolarize(int(type)) ? 1 : 0;
+            const size_t extra = isNoise(int(type)) ? 1 : 0;
             const size_t buckets = NBUCKETS(size + extra);
             gate_ref_t r = (gate_ref_t)buckets_container::alloc(buckets);
             Gate* gate = new GATE_PTR(r) Gate(size);
