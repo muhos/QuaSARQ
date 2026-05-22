@@ -72,13 +72,15 @@ namespace QuaSARQ {
             case DEPOLARIZE1:
             case X_ERROR:
             case Y_ERROR:
-            case Z_ERROR: {
+            case Z_ERROR:
+            case PAULI_CHANNEL_1: {
                 LOAD_Q1_WORDS;
                 const uint32 pauli = (noise_paulis != nullptr) ? noise_paulis[i] : 0;
                 do_depolarize1(signs_word, x_words_q1, z_words_q1, pauli);
                 break;
             }
-            case DEPOLARIZE2: {
+            case DEPOLARIZE2:
+            case PAULI_CHANNEL_2: {
                 LOAD_Q2_WORDS(num_words_major);
                 const uint32 pauli = (noise_paulis != nullptr) ? noise_paulis[i] : 0;
                 do_depolarize2(signs_word, x_words_q1, z_words_q1, x_words_q2, z_words_q2, pauli);

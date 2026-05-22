@@ -22,11 +22,11 @@ namespace QuaSARQ {
 
     struct ParsedGate {
         qubit_t c, t;
-        float   p;      // depolarizing probability (0 for non-noise gates)
-        byte_t  type;
+        float probs[15];
+        byte_t type;
 
-        ParsedGate(const qubit_t& c, const qubit_t& t, const byte_t& type, const float& p = 0.0f) :
-            c(c), t(t), type(type), p(p) {}
+        ParsedGate(const qubit_t& c, const qubit_t& t, const byte_t& type) :
+            c(c), t(t), type(type) { probs[0] = 0.0f; }
     };
 
     class CircuitQueue : public Vec<ParsedGate, size_t> {

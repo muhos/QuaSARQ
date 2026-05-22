@@ -20,6 +20,7 @@ namespace QuaSARQ {
         GATE(X_ERROR) \
         GATE(Y_ERROR) \
         GATE(Z_ERROR) \
+        GATE(PAULI_CHANNEL_1) \
         GATE(CX) \
         GATE(CY) \
         GATE(CZ) \
@@ -27,6 +28,7 @@ namespace QuaSARQ {
         GATE(ISWAP) \
         GATE(ISWAP_DAG) \
         GATE(DEPOLARIZE2) \
+        GATE(PAULI_CHANNEL_2) \
 
     #define GATE2ENUM(VAL) VAL,
     #define GATE2STR(STR) #STR,
@@ -35,7 +37,7 @@ namespace QuaSARQ {
         FOREACH_GATE(GATE2ENUM)
     };
 
-    constexpr uint32 NR_GATETYPES_1 = Z_ERROR + 1;
-    constexpr uint32 NR_GATETYPES = DEPOLARIZE2 + 1;
+    constexpr uint32 NR_GATETYPES_1 = PAULI_CHANNEL_1 + 1;
+    constexpr uint32 NR_GATETYPES = PAULI_CHANNEL_2 + 1;
 
 }

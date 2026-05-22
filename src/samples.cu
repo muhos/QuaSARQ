@@ -319,7 +319,7 @@ namespace QuaSARQ {
             LASTERR("apply_reference_sample failed");
             SYNC(stream);
         }
-        if (write_measures_to_file) LOGHEADER(1, 4, "File output");
+        LOGHEADER(1, 4, "Results");
         if (samples_record.needs_host()) {
             samples_record.copy();
             if (options.print_sample) {

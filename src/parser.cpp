@@ -136,11 +136,16 @@ namespace QuaSARQ {
             return;
         }
 
-        // Propability in Depolarizing gates.
-        float gate_prob = 0.0f;
-        if (*str == '(') {
+        float gate_probs[15] = {};
+        uint8 gate_nprobs = 0;
+        if (str < eof && *str == '(') {
             str++;
-            gate_prob = toFloat(str);
+            while (gate_nprobs < 15 && str < eof && *str != ')' && *str != DELIM) {
+                eatWS(str);
+                gate_probs[gate_nprobs++] = toFloat(str);
+                eatWS(str);
+                if (str < eof && *str == ',') str++;
+            }
             eatWS(str);
             if (str < eof && *str == ')') str++;
         }
@@ -170,7 +175,9 @@ namespace QuaSARQ {
                 t = toInteger(str);
                 max_qubits = MAX(max_qubits, (size_t)(t) + 1);
             }
-            target.push(ParsedGate(c, t, type, gate_prob));
+            ParsedGate pg(c, t, type);
+            memcpy(pg.probs, gate_probs, gate_nprobs * sizeof(float));
+            target.push(pg);
             gstats.types[type]++;
             if (type == M || type == MR) {
                 if (&target == &circuit_queue)

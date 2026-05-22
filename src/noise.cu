@@ -2,6 +2,9 @@
 
 namespace QuaSARQ {
 
+    __constant__ 
+    constexpr uint32 PC2_PAULI[15] = {4, 12, 8, 1, 5, 13, 9, 3, 7, 15, 11, 2, 6, 14, 10};
+
     __global__
     void setup_noise_k(
         curand_algorithm_t*         noise_states,
@@ -27,7 +30,18 @@ namespace QuaSARQ {
             uint32 pauli = 0;
             curand_algorithm_t local = noise_states[i];
             const float prob = curand_uniform(&local);
-            if (prob < gate.get_prob()) {
+            if (gate.type == PAULI_CHANNEL_1) {
+                const float px = gate.get_prob(0), py = gate.get_prob(1), pz = gate.get_prob(2);
+                pauli = prob < px ? 1u : prob < px + py ? 3u : prob < px + py + pz ? 2u : 0u;
+            } 
+            else if (gate.type == PAULI_CHANNEL_2) {
+                float acc = 0.0f;
+                for (uint32 k = 0; k < 15u; k++) {
+                    acc += gate.get_prob(k);
+                    if (prob < acc) { pauli = PC2_PAULI[k]; break; }
+                }
+            } 
+            else if (prob < gate.get_prob(0)) {
                 pauli = gate.type == DEPOLARIZE1 ? 1u + (curand(&local) % 3u) :
                         gate.type == DEPOLARIZE2 ? 1u + (curand(&local) % 15u) :
                         gate.type == X_ERROR     ? 1u :

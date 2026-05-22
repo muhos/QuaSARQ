@@ -46,9 +46,18 @@ namespace QuaSARQ {
     INLINE_ALL
     // Returns true for noise gates.
     bool isNoise(const int& type) {
-        return type == int(DEPOLARIZE1) || type == int(X_ERROR) ||
-               type == int(Y_ERROR)     || type == int(Z_ERROR) ||
-               type == int(DEPOLARIZE2);
+        return type == int(DEPOLARIZE1)     || type == int(X_ERROR)         ||
+               type == int(Y_ERROR)         || type == int(Z_ERROR)         ||
+               type == int(PAULI_CHANNEL_1) || type == int(DEPOLARIZE2)     ||
+               type == int(PAULI_CHANNEL_2);
+    }
+
+    INLINE_ALL
+    // Returns the number of noise probabilities stored for a given noise gate type.
+    uint32 noiseProbs(const int& type) {
+        if (type == int(PAULI_CHANNEL_1)) return 3u;
+        if (type == int(PAULI_CHANNEL_2)) return 15u;
+        return isNoise(type) ? 1u : 0u;
     }
 
     /**
@@ -78,21 +87,19 @@ namespace QuaSARQ {
 		INLINE_ALL
         size_t capacity() const {
             assert(size);
-            const size_t extra = isNoise(int(type)) ? 1 : 0;
+            const size_t extra = noiseProbs(int(type));
             return (size_t(size) + extra) * sizeof(qubit_t) + sizeof(*this);
         }
 
-        // Store depolarizing probability in the last wire.
-        // Only valid when isNoise(type) and sizeof(float) <= sizeof(qubit_t).
         INLINE_ALL
-        void set_prob(const float& p) {
-            memcpy(&wires[size], &p, sizeof(float));
+        void set_prob(const uint32& idx, const float& p) {
+            memcpy(&wires[size + idx], &p, sizeof(float));
         }
 
         INLINE_ALL
-        float get_prob() const {
+        float get_prob(const uint32& idx) const {
             float p;
-            memcpy(&p, &wires[size], sizeof(float));
+            memcpy(&p, &wires[size + idx], sizeof(float));
             return p;
         }
 
@@ -118,7 +125,12 @@ namespace QuaSARQ {
                 PRINT("  Unknown");
             }
             if (isNoise(int(type))) {
-                PRINT("(p=%.3f)", get_prob());
+                PRINT("(p=");
+                for (uint32 k = 0; k < noiseProbs(int(type)); k++) {
+                    PRINT("%.3f", get_prob(k));
+                    if (k < noiseProbs(int(type)) - 1) PRINT(", ");
+                }
+                PRINT(")");
             }
             PRINT("(");
             for (input_size_t i = 0; i < size; i++) { 
@@ -138,7 +150,12 @@ namespace QuaSARQ {
                 LOGGPU("  Unknown");
             }
             if (isNoise(int(type))) {
-                LOGGPU("(p=%.3f)", get_prob());
+                LOGGPU("(p=");
+                for (uint32 k = 0; k < noiseProbs(int(type)); k++) {
+                    LOGGPU("%.3f", get_prob(k));
+                    if (k < noiseProbs(int(type)) - 1) LOGGPU(", ");
+                }
+                LOGGPU(")");
             }
             LOGGPU("(");
             for (input_size_t i = 0; i < size; i++) { 

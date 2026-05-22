@@ -14,6 +14,7 @@ src/.DS_Store
 *.qstate
 *.stim
 circuits
+scripts
 build
 .DS_Store
 .vscode
