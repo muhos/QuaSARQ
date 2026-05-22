@@ -95,13 +95,16 @@ void Simulator::reserve() {
                                 (pool_est > MIN_DYNAMIC) ? pool_est - MIN_DYNAMIC : 0;
     gpu_allocator.create_gpu_pool(0, cuArena::GPUMemoryType::Device, 0, stable_bytes);
     // Creating CPU pool (pinned memory)
-    const size_t pinned_bytes = 
-        sizeof(Table) * 3 + 
-        winfo.max_window_bytes + 
-        (num_qubits + 2) * sizeof(pivot_t) + 
-        KB * gpu_allocator.alignment() + 
+    const size_t bitstring_bytes = circuit_mode == RANDOM_CIRCUIT ? 0 :
+        (circuit_io.detectors.starts.size() + circuit_io.observables.ids.size()) * options.num_shots * sizeof(char);
+    const size_t pinned_bytes =
+        sizeof(Table) * 3 +
+        winfo.max_window_bytes +
+        (num_qubits + 2) * sizeof(pivot_t) +
+        KB * gpu_allocator.alignment() +
         circuit_obs_dets_bytes +
-        circuit_io.observables.pinned.num_observables;
+        circuit_io.observables.pinned.num_observables +
+        bitstring_bytes;
     gpu_allocator.create_cpu_pool(pinned_bytes);
     if (circuit_mode == PARSED_CIRCUIT) {
         alloc_observables();
@@ -141,7 +144,7 @@ void Simulator::create_streams(cudaStream_t*& streams) {
 void Simulator::rsample() {
     if (!measuring || !stats.circuit.measure_stats.count) return;
     reference_mode = true;
-    // Disable checking during reference run.
+    // Disable checking during reference run — mchecker is not allocated here.
     const bool saved_check = options.check_measurement;
     options.check_measurement = false;
     tableau.swap_tableaus(ref_tableau);
@@ -275,9 +278,6 @@ void Simulator::simulate() {
     stats.tableau.seconds = (stats.time.simulation / 1000.0) / (num_partitions * depth);
     stats.tableau.calc_speed();
     if (!reference_mode) {
-        if (options.print_detector ||
-            options.print_observable)
-            LOGHEADER(1, 4, "Results");
         print_observables();
         print_detectors();
         report();
