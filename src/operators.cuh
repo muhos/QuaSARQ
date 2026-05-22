@@ -22,6 +22,14 @@ namespace QuaSARQ {
 
     #define sign_update_Sdg(SIGNS, X, Z) sign_update_global(SIGNS, word_std_t(X) & ~word_std_t(Z))
 
+    #define sign_update_SQRT_X(SIGNS, X, Z)     sign_update_global(SIGNS, ~word_std_t(X) & word_std_t(Z))
+
+    #define sign_update_SQRT_X_DAG(SIGNS, X, Z) sign_update_global(SIGNS, word_std_t(X) & word_std_t(Z))
+
+    #define sign_update_SQRT_Y(SIGNS, X, Z)     sign_update_global(SIGNS, word_std_t(X) & ~word_std_t(Z))
+
+    #define sign_update_SQRT_Y_DAG(SIGNS, X, Z) sign_update_global(SIGNS, ~word_std_t(X) & word_std_t(Z))
+
     #define sign_update_CX(SIGNS, Xc, Xt, Zc, Zt) \
     { \
         const word_std_t xc = Xc, xt = Xt, zc = Zc, zt = Zt; \
@@ -64,6 +72,11 @@ namespace QuaSARQ {
     #define update_S(EXT) \
     { \
         z_ ## EXT ^= (x_## EXT); \
+    }
+
+    #define update_SQRT_X(EXT) \
+    { \
+        x_ ## EXT ^= (z_ ## EXT); \
     }
 
     #define update_CX(C, T) \
@@ -113,6 +126,30 @@ namespace QuaSARQ {
     { \
         sign_update_Sdg(SIGNS, x_## EXT, z_ ## EXT); \
         update_S(EXT); \
+    }
+
+    #define do_SQRT_X(SIGNS, EXT) \
+    { \
+        sign_update_SQRT_X(SIGNS, x_## EXT, z_ ## EXT); \
+        update_SQRT_X(EXT); \
+    }
+
+    #define do_SQRT_X_DAG(SIGNS, EXT) \
+    { \
+        sign_update_SQRT_X_DAG(SIGNS, x_## EXT, z_ ## EXT); \
+        update_SQRT_X(EXT); \
+    }
+
+    #define do_SQRT_Y(SIGNS, EXT) \
+    { \
+        sign_update_SQRT_Y(SIGNS, x_## EXT, z_ ## EXT); \
+        update_H(EXT); \
+    }
+
+    #define do_SQRT_Y_DAG(SIGNS, EXT) \
+    { \
+        sign_update_SQRT_Y_DAG(SIGNS, x_## EXT, z_ ## EXT); \
+        update_H(EXT); \
     }
 
     #define do_CX(SIGNS, C, T) \

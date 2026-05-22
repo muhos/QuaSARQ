@@ -54,6 +54,26 @@ namespace QuaSARQ {
                 do_Sdg(signs_word, words_q1);
                 break;
             }
+            case SQRT_X: {
+                LOAD_Q1_WORDS;
+                do_SQRT_X(signs_word, words_q1);
+                break;
+            }
+            case SQRT_X_DAG: {
+                LOAD_Q1_WORDS;
+                do_SQRT_X_DAG(signs_word, words_q1);
+                break;
+            }
+            case SQRT_Y: {
+                LOAD_Q1_WORDS;
+                do_SQRT_Y(signs_word, words_q1);
+                break;
+            }
+            case SQRT_Y_DAG: {
+                LOAD_Q1_WORDS;
+                do_SQRT_Y_DAG(signs_word, words_q1);
+                break;
+            }
             case Z: {
                 LOAD_X_WORDS(q1);
                 sign_update_X_or_Z(signs_word, x_words_q1);

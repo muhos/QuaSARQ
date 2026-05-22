@@ -13,6 +13,7 @@ src/.DS_Store
 *.txt
 *.qstate
 *.stim
+*.01
 circuits
 scripts
 build

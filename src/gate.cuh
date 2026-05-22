@@ -25,26 +25,24 @@ namespace QuaSARQ {
         FOREACH_GATE(GATE2STR)
     };
 
-    INLINE_ALL 
     // Returns true for 2-qubit gates (including DEPOLARIZE2).
+    INLINE_ALL 
     bool isGate2(const int& type) {
         return type >= int(NR_GATETYPES_1) && type < int(NR_GATETYPES);
     }
 
-    INLINE_ALL 
     // Returns true for measurement gates.
+    INLINE_ALL 
     bool isMeasurement(const int& type) {
         return type == int(R) || type == int(M) || type == int(MR);
     }
 
     INLINE_ALL
-    // Returns true for reset gates.
     bool isReset(const int& type) {
         return type == int(R);
     }
 
     INLINE_ALL
-    // Returns true for noise gates.
     bool isNoise(const int& type) {
         return type == int(DEPOLARIZE1)     || type == int(X_ERROR)         ||
                type == int(Y_ERROR)         || type == int(Z_ERROR)         ||
@@ -53,7 +51,6 @@ namespace QuaSARQ {
     }
 
     INLINE_ALL
-    // Returns the number of noise probabilities stored for a given noise gate type.
     uint32 noiseProbs(const int& type) {
         if (type == int(PAULI_CHANNEL_1)) return 3u;
         if (type == int(PAULI_CHANNEL_2)) return 15u;
@@ -106,10 +103,14 @@ namespace QuaSARQ {
         INLINE_ALL
         void dagger() {
             if (type < NR_GATETYPES) {
-                if (type == S_DAG) type = S;
-                else if (type == S) type = S_DAG;
-                else if (type == ISWAP) type = ISWAP_DAG;
-                else if (type == ISWAP_DAG) type = ISWAP;
+                if      (type == S_DAG)       type = S;
+                else if (type == S)           type = S_DAG;
+                else if (type == ISWAP)       type = ISWAP_DAG;
+                else if (type == ISWAP_DAG)   type = ISWAP;
+                else if (type == SQRT_X)      type = SQRT_X_DAG;
+                else if (type == SQRT_X_DAG)  type = SQRT_X;
+                else if (type == SQRT_Y)      type = SQRT_Y_DAG;
+                else if (type == SQRT_Y_DAG)  type = SQRT_Y;
             }
             else {
                 LOGGPU("Unknown gate type %d cannot be adjoined.\n", type);
@@ -125,12 +126,7 @@ namespace QuaSARQ {
                 PRINT("  Unknown");
             }
             if (isNoise(int(type))) {
-                PRINT("(p=");
-                for (uint32 k = 0; k < noiseProbs(int(type)); k++) {
-                    PRINT("%.3f", get_prob(k));
-                    if (k < noiseProbs(int(type)) - 1) PRINT(", ");
-                }
-                PRINT(")");
+                PRINT("(p=%.3f)", get_prob(0));
             }
             PRINT("(");
             for (input_size_t i = 0; i < size; i++) { 
@@ -150,12 +146,7 @@ namespace QuaSARQ {
                 LOGGPU("  Unknown");
             }
             if (isNoise(int(type))) {
-                LOGGPU("(p=");
-                for (uint32 k = 0; k < noiseProbs(int(type)); k++) {
-                    LOGGPU("%.3f", get_prob(k));
-                    if (k < noiseProbs(int(type)) - 1) LOGGPU(", ");
-                }
-                LOGGPU(")");
+                LOGGPU("(p=%.3f)", get_prob(0));
             }
             LOGGPU("(");
             for (input_size_t i = 0; i < size; i++) { 

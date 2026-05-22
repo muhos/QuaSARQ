@@ -74,7 +74,7 @@ namespace QuaSARQ {
             state = '+';
         else if (istate == Imag)
             state = 'i';
-        LOGN2(1, "Creating \'%c\' initial state  for size %zd and offset %zd using grid(%d) and block(%d).. ", 
+        LOGN2(1, "Creating \'%c\' initial state for size %zd and offset %zd using grid(%d) and block(%d).. ", 
             state, num_qubits_per_partition, offset_per_partition, bestgrididentity.x, bestblockidentity.x);
         if (options.sync) cutimer.start();
         if (offset_per_partition) tab.reset();

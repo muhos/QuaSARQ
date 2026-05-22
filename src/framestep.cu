@@ -48,10 +48,22 @@ namespace QuaSARQ {
                 break; 
             }
             case S_DAG:
-            case S: { 
+            case S: {
                 LOAD_Q1_WORDS;
-                update_S(words_q1); 
-                break; 
+                update_S(words_q1);
+                break;
+            }
+            case SQRT_X_DAG:
+            case SQRT_X: {
+                LOAD_Q1_WORDS;
+                update_SQRT_X(words_q1);
+                break;
+            }
+            case SQRT_Y_DAG:
+            case SQRT_Y: {
+                LOAD_Q1_WORDS;
+                update_H(words_q1);
+                break;
             }
             case CX: { 
                 LOAD_Q2_WORDS(num_words_minor);
@@ -71,10 +83,11 @@ namespace QuaSARQ {
                 update_SWAP(z_words_q1, z_words_q2); 
                 break; 
             }
-            case ISWAP: { 
+            case ISWAP_DAG:
+            case ISWAP: {
                 LOAD_Q2_WORDS(num_words_minor);
-                update_iSWAP(q1, q2); 
-                break; 
+                update_iSWAP(q1, q2);
+                break;
             }
             default: break;
             }
