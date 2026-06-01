@@ -17,11 +17,14 @@ Framing::Framing(const string& path, const size_t& num_shots) :
 
 void Framing::sample() {
     Power power;
-    timer.start();
     num_partitions = tableau.alloc(num_qubits, num_shots, winfo.max_window_bytes, false, false, false);
     const size_t frame_num_partitions = num_partitions;
+    timer.start();
     rsample();
+    timer.stop();
+    const double reference_sim_time = timer.elapsed();
     num_partitions = frame_num_partitions;
+    timer.start();
     if (options.check_measurement) {
         mchecker.record.resize(stats.circuit.measure_stats.count);
         mchecker.samples.resize(stats.circuit.measure_stats.count * tableau.num_words_minor(), word_std_t(0));
@@ -47,7 +50,7 @@ void Framing::sample() {
 	SYNCALL;
 	timer.stop();
     if (options.print_finaltableau) print_tableau(tableau, depth);
-	stats.time.simulation = timer.elapsed();
+	stats.time.simulation = reference_sim_time + timer.elapsed();
     stats.power.wattage = power.measure();
     stats.power.joules = stats.power.wattage * (stats.time.simulation / 1000.0);
     stats.tableau.count = stats.tableau.istates = 1;
