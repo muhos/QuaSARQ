@@ -154,9 +154,19 @@ namespace QuaSARQ {
 
         int translate_gate(char* in, const int& gatelen);
 
-        void parse_rec_refs(char*& str, RecordRefs& dest, const uint32& mc, const bool& deferred, const char* label);
-
         void read_gate_into(char*& str, CircuitQueue& target, Gate_stats& gstats, ParsedBlock* pb = nullptr);
+
+        void parse_rec_refs(char*& str, RecordRefs& dest, const uint32& mc, const bool& deferred, const char* label);
+        
+        void parse_repeat(char*& str, CircuitQueue& target, Gate_stats& gstats);
+
+        void parse_detector(char*& str, ParsedBlock* pb);
+
+        void parse_observable(char*& str, ParsedBlock* pb);
+
+        bool try_expand_m_variants(char*& str, const char* gatestr, const int& gatelen, CircuitQueue& target, Gate_stats& gstats, ParsedBlock* pb);
+
+        bool try_expand_clifford(char*& str, const char* gatestr, const int& gatelen, CircuitQueue& target, Gate_stats& gstats);
 
         void read_gate(char*& str) {
             read_gate_into(str, circuit_queue, gate_stats);

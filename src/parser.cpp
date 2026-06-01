@@ -21,177 +21,128 @@ namespace QuaSARQ {
                     LOGERROR("%s: rec[-%u] out of range (measures so far: %u).", label, n, mc);
                 dest.refs.push(deferred ? n : mc - n);
                 ref_count++;
-            } else { eatLine(str); break; }
+            } 
+            else { eatLine(str); break; }
         }
         dest.counts.push(ref_count);
+    }
+
+    void CircuitIO::parse_detector(char*& str, ParsedBlock* pb) {
+        // Skip optional coordinate arguments.
+        if (str < eof && *str == '(') {
+            while (str < eof && *str != ')' && *str != DELIM) str++;
+            if (str < eof && *str == ')') str++;
+        }
+        const uint32 mc = measures_count + (pb ? pb->measures : 0);
+        RecordRefs& dest = pb ? pb->det : detectors;
+        if (pb) pb->det_mc.push(pb->measures);
+        parse_rec_refs(str, dest, mc, pb != nullptr, "DETECTOR");
+    }
+
+    void CircuitIO::parse_observable(char*& str, ParsedBlock* pb) {
+        uint32 obs_id = 0;
+        if (str < eof && *str == '(') {
+            str++;
+            obs_id = toInteger(str);
+            eatWS(str);
+            if (str < eof && *str == ')') str++;
+        }
+        const uint32 mc = measures_count + (pb ? pb->measures : 0);
+        ObservableData& dest_obs = pb ? pb->obs : observables;
+        RecordRefs& dest_rec     = pb ? pb->obs.records : observables.records;
+        dest_obs.ids.push(obs_id);
+        if (pb) pb->obs_mc.push(pb->measures);
+        parse_rec_refs(str, dest_rec, mc, pb != nullptr, "OBSERVABLE_INCLUDE");
+    }
+
+    void CircuitIO::parse_repeat(char*& str, CircuitQueue& target, Gate_stats& gstats) {
+        eatWS(str);
+        uint32 count = toInteger(str);
+        eatWS(str);
+        if (str >= eof || *str != '{')
+            LOGERROR("expected '{' after REPEAT %u.", count);
+        str++; // consume '{'
+
+        ParsedBlock block;
+        while (str < eof) {
+            eatWS(str);
+            if (*str == '}') { str++; break; }
+            if (*str == '\0') break;
+            if (*str == '#') { eatLine(str); continue; }
+            read_gate_into(str, block.gates, block.gstats, &block);
+        }
+
+        // Unroll count times.
+        const uint32 measures_before = measures_count;
+        for (uint32 i = 0; i < count; i++) {
+            // Gates.
+            for (size_t j = 0; j < block.gates.size(); j++) {
+                const ParsedGate& g = block.gates[j];
+                target.push(g);
+                if (g.expanded_from == 0) {
+                    gstats.types[g.type]++;
+                } 
+                else if (g.type == M || g.type == MR) {
+                    gstats.types[g.expanded_from]++;
+                }
+                if ((g.type == M || g.type == MR) && &target == &circuit_queue)
+                    measures_count++;
+            }
+            // Detectors.
+            for (uint32 j = 0; j < block.det.starts.size(); j++) {
+                const uint32 mc = measures_before + i * block.measures + block.det_mc[j];
+                detectors.starts.push(detectors.refs.size());
+                const uint32 s = block.det.starts[j];
+                const uint32 c = block.det.counts[j];
+                for (uint32 k = s; k < s + c; k++)
+                    detectors.refs.push(mc - block.det.refs[k]);
+                detectors.counts.push(c);
+            }
+            // Observables.
+            for (uint32 j = 0; j < block.obs.ids.size(); j++) {
+                const uint32 mc = measures_before + i * block.measures + block.obs_mc[j];
+                observables.ids.push(block.obs.ids[j]);
+                observables.records.starts.push(observables.records.refs.size());
+                const uint32 s = block.obs.records.starts[j];
+                const uint32 c = block.obs.records.counts[j];
+                for (uint32 k = s; k < s + c; k++)
+                    observables.records.refs.push(mc - block.obs.records.refs[k]);
+                observables.records.counts.push(c);
+            }
+        }
     }
 
     void CircuitIO::read_gate_into(char*& str, CircuitQueue& target, Gate_stats& gstats, ParsedBlock* pb) {
         eatWS(str);
         if (str >= eof || *str == '\0') return;
+
         // Parse gate / directive name: alpha, underscore, or digit.
         char gatestr[MAX_GATENAME_LEN];
-        int gatename_len = 0;
-        while (gatename_len < MAX_GATENAME_LEN &&
-                (isalpha(str[gatename_len]) || str[gatename_len] == '_' || isDigit(str[gatename_len]))) {
-            gatestr[gatename_len] = str[gatename_len];
-            gatename_len++;
+        int gatelen = 0;
+        while (gatelen < MAX_GATENAME_LEN &&
+               (isalpha(str[gatelen]) || str[gatelen] == '_' || isDigit(str[gatelen]))) {
+            gatestr[gatelen] = str[gatelen];
+            gatelen++;
         }
-        if (gatename_len == MAX_GATENAME_LEN)
-            LOGERROR("gate name is too long.");
-        if (gatename_len == 0) { eatLine(str); return; }
-        gatestr[gatename_len] = '\0';
-        str += gatename_len;
+        if (gatelen == MAX_GATENAME_LEN) LOGERROR("gate name is too long.");
+        if (gatelen == 0) { eatLine(str); return; }
+        gatestr[gatelen] = '\0';
+        str += gatelen;
 
-        // Drop: TICK, QUBIT_COORDS, SHIFT_COORDS (not needed for QuaSARQ).
+        // Drop directives.
         if (strcmp(gatestr, "TICK")         == 0 ||
             strcmp(gatestr, "QUBIT_COORDS") == 0 ||
             strcmp(gatestr, "SHIFT_COORDS") == 0) {
-            eatLine(str);
-            return;
+            eatLine(str); return;
         }
 
-        // REPEAT block.
-        if (strcmp(gatestr, "REPEAT") == 0) {
-            if (pb != nullptr)
-                LOGERROR("nested REPEAT blocks are not supported.");
-            eatWS(str);
-            uint32 count = toInteger(str);
-            eatWS(str);
-            if (str >= eof || *str != '{')
-                LOGERROR("expected '{' after REPEAT %u.", count);
-            str++; // consume '{'
+        if (strcmp(gatestr, "REPEAT")             == 0) { parse_repeat(str, target, gstats); return; }
+        if (strcmp(gatestr, "DETECTOR")           == 0) { parse_detector(str, pb);           return; }
+        if (strcmp(gatestr, "OBSERVABLE_INCLUDE") == 0) { parse_observable(str, pb);         return; }
+        if (try_expand_m_variants(str, gatestr, gatelen, target, gstats, pb))                return;
+        if (try_expand_clifford  (str, gatestr, gatelen, target, gstats))                    return;
 
-            ParsedBlock block;
-            while (str < eof) {
-                eatWS(str);
-                if (*str == '}') { str++; break; }
-                if (*str == '\0') break;
-                if (*str == '#') { eatLine(str); continue; }
-                read_gate_into(str, block.gates, block.gstats, &block);
-            }
-
-            // Unroll count times.
-            const uint32 measures_before = measures_count;
-            for (uint32 i = 0; i < count; i++) {
-                for (size_t j = 0; j < block.gates.size(); j++) {
-                    const ParsedGate& g = block.gates[j];
-                    target.push(g);
-                    if (g.expanded_from == 0) {
-                        gstats.types[g.type]++;
-                    } else if (g.type == M || g.type == MR) {
-                        gstats.types[g.expanded_from]++;
-                    }
-                    if ((g.type == M || g.type == MR) && &target == &circuit_queue)
-                        measures_count++;
-                }
-                for (uint32 j = 0; j < block.det.starts.size(); j++) {
-                    const uint32 mc = measures_before + i * block.measures + block.det_mc[j];
-                    detectors.starts.push(detectors.refs.size());
-                    const uint32 s = block.det.starts[j];
-                    const uint32 c = block.det.counts[j];
-                    for (uint32 k = s; k < s + c; k++)
-                        detectors.refs.push(mc - block.det.refs[k]);
-                    detectors.counts.push(c);
-                }
-                for (uint32 j = 0; j < block.obs.ids.size(); j++) {
-                    const uint32 mc = measures_before + i * block.measures + block.obs_mc[j];
-                    observables.ids.push(block.obs.ids[j]);
-                    observables.records.starts.push(observables.records.refs.size());
-                    const uint32 s = block.obs.records.starts[j];
-                    const uint32 c = block.obs.records.counts[j];
-                    for (uint32 k = s; k < s + c; k++)
-                        observables.records.refs.push(mc - block.obs.records.refs[k]);
-                    observables.records.counts.push(c);
-                }
-            }
-            return;
-        }
-
-        // DETECTOR(x, y, t, ...) rec[-1] rec[-2] ...
-        if (strcmp(gatestr, "DETECTOR") == 0) {
-            // Skip optional coordinates.
-            if (str < eof && *str == '(') {
-                while (str < eof && *str != ')' && *str != DELIM) str++;
-                if (str < eof && *str == ')') str++;
-            }
-            const uint32 mc = measures_count + (pb ? pb->measures : 0);
-            RecordRefs& dest = pb ? pb->det : detectors;
-            if (pb) pb->det_mc.push(pb->measures);
-            parse_rec_refs(str, dest, mc, pb != nullptr, "DETECTOR");
-            return;
-        }
-
-        // OBSERVABLE_INCLUDE(k) rec[-1] rec[-2] ...
-        if (strcmp(gatestr, "OBSERVABLE_INCLUDE") == 0) {
-            uint32 obs_id = 0;
-            if (str < eof && *str == '(') {
-                str++;
-                obs_id = toInteger(str);
-                eatWS(str);
-                if (str < eof && *str == ')') str++;
-            }      
-            const uint32 mc = measures_count + (pb ? pb->measures : 0);
-            ObservableData& dest_obs = pb ? pb->obs : observables;
-            RecordRefs& dest_rec     = pb ? pb->obs.records : observables.records;
-            dest_obs.ids.push(obs_id);
-            if (pb) pb->obs_mc.push(pb->measures);
-            parse_rec_refs(str, dest_rec, mc, pb != nullptr, "OBSERVABLE_INCLUDE");
-            return;
-        }
-
-        // Expand MX/MY/MRX/MRY into basis-change + M/MR + inverse basis-change.
-        {
-            const bool is_MX  = (strcmp(gatestr, "MX")  == 0);
-            const bool is_MY  = (strcmp(gatestr, "MY")  == 0);
-            const bool is_MRX = (strcmp(gatestr, "MRX") == 0);
-            const bool is_MRY = (strcmp(gatestr, "MRY") == 0);
-
-            if (is_MX || is_MY || is_MRX || is_MRY) {
-                const Gatetypes mtype = (is_MX || is_MY) ? M : MR;
-                const Gatetypes orig  = is_MX ? MX : (is_MY ? MY : (is_MRX ? MRX : MRY));
-                const bool is_y = (is_MY || is_MRY);
-                measuring = true;
-                // Phase 0: collect all qubits on this line for batch expansion.
-                Vec<qubit_t, size_t> qubits;
-                while (str < eof && *str != DELIM) {
-                    if (*str == UNIX_DELIM) { str++; continue; }
-                    char* peek = str;
-                    eatWS(peek);
-                    if (!isDigit(*peek)) { eatLine(str); return; }
-                    const qubit_t c = toInteger(str);
-                    max_qubits = MAX(max_qubits, (size_t)(c) + 1);
-                    qubits.push(c);
-                }
-                auto push_basis = [&](const qubit_t& c, const Gatetypes& t) {
-                    ParsedGate pg(c, c, byte_t(t));
-                    pg.expanded_from = byte_t(orig);
-                    target.push(pg);
-                };
-                auto batch_push_basis = [&](const Gatetypes& t) {
-                    for (size_t k = 0; k < qubits.size(); k++) 
-                        push_basis(qubits[k], t);
-                };
-                // Phase 1: pre-measurement.
-                if (is_y)
-                    batch_push_basis(S_DAG);
-                batch_push_basis(H);
-                // Phase 2: measurement.
-                for (size_t k = 0; k < qubits.size(); k++) {
-                    push_basis(qubits[k], mtype);
-                    if (pb == nullptr) gstats.types[orig]++;
-                    if (&target == &circuit_queue) measures_count++;
-                    else if (pb != nullptr) pb->measures++;
-                }
-                // Phase 3: post-measurement.
-                batch_push_basis(H);
-                if (is_y) 
-                    batch_push_basis(S);
-                qubits.clear(true);
-                return;
-            }
-        }
-
+        // Parse optional probability argument(s).
         float gate_probs[15] = {};
         uint8 gate_nprobs = 0;
         if (str < eof && *str == '(') {
@@ -206,18 +157,12 @@ namespace QuaSARQ {
             if (str < eof && *str == ')') str++;
         }
 
-        // Translate gate name to type.
-        int gateindex = translate_gate(gatestr, gatename_len);
-        if (gateindex < 0) {
-            eatLine(str);
-            return;
-        }
+        const int gateindex = translate_gate(gatestr, gatelen);
+        if (gateindex < 0) { eatLine(str); return; }
 
         const Gatetypes type = Gatetypes(gateindex);
-
         if (type == M || type == MR) measuring = true;
 
-        // Store gate with its qubits.
         const bool is_2qubit = isGate2(int(type));
         while (str < eof && *str != DELIM) {
             if (*str == UNIX_DELIM) { str++; continue; }
@@ -236,12 +181,40 @@ namespace QuaSARQ {
             target.push(pg);
             gstats.types[type]++;
             if (type == M || type == MR) {
-                if (&target == &circuit_queue)
-                    measures_count++;
-                else if (pb != nullptr)
-                    pb->measures++;
+                if (&target == &circuit_queue) measures_count++;
+                else if (pb != nullptr)        pb->measures++;
             }
         }
+    }
+
+    int CircuitIO::translate_gate(char* in, const int& gatelen) {
+        // Stim gate aliases.
+        struct Alias { const char* name; Gatetypes type; };
+        static constexpr Alias aliases[] = {
+            { "CNOT",       CX    },
+            { "ZCX",        CX    },
+            { "ZCY",        CY    },
+            { "ZCZ",        CZ    },
+            { "H_XZ",       H     },
+            { "SQRT_Z",     S     },
+            { "SQRT_Z_DAG", S_DAG },
+            { "MZ",         M     },
+            { "MRZ",        MR    },
+            { "RZ",         R     },
+        };
+        for (const auto& a : aliases) {
+            int c = 0;
+            while (a.name[c] && a.name[c] == in[c]) c++;
+            if (c == gatelen && !a.name[c]) return int(a.type);
+        }
+        // Canonical names.
+        for (int i = 0; i < NR_GATETYPES; i++) {
+            const char* ref = G2S_STIM[i];
+            int c = 0;
+            while (ref[c] && ref[c] == in[c]) c++;
+            if (gatelen == c) return i;
+        }
+        return -1;
     }
 
     void CircuitIO::write_circuit(string& stream, const int& format, const size_t& num_qubits_in_circuit, const Circuit& circuit) {
@@ -257,22 +230,21 @@ namespace QuaSARQ {
                 if (gate->type == byte_t(I)) continue;
                 string gatestr = string(G2S_STIM[gate->type]);
                 if (format == 2) {
-                    if (gatestr == "CX") 
-                        gatestr = "C";
-                    else if (gatestr == "S")
-                        gatestr = "P";
+                    if (gatestr == "CX") gatestr = "C";
+                    else if (gatestr == "S") gatestr = "P";
                 }
                 stream += gatestr + " " + to_string(gate->wires[0]);
                 if (gate->size > 1)
                     stream += " " + to_string(gate->wires[1]);
-                stream += "\n";        
+                stream += "\n";
             }
         }
     }
 
-    void CircuitIO::write(const Circuit& circuit, const size_t& num_qubits_in_circuit, const int& format, const Statistics& stats) {
+    void CircuitIO::write(const Circuit& circuit, const size_t& num_qubits_in_circuit,
+                          const int& format, const Statistics& stats) {
         size_t max_qubits = num_qubits_in_circuit;
-        size_t max_depth = circuit.depth();
+        size_t max_depth  = circuit.depth();
         string path = "q" + to_string(max_qubits) + "_d" + to_string(max_depth);
         if (format == 1) path += ".stim";
         else if (format == 2) path += ".chp";
@@ -302,17 +274,6 @@ namespace QuaSARQ {
         }
     }
 
-    int CircuitIO::translate_gate(char* in, const int& gatelen) {
-        for (int i = 0; i < NR_GATETYPES; i++) {
-            const char* ref = G2S_STIM[i];
-            int c = 0;
-            while (ref[c] && ref[c] == in[c]) c++;
-            if (gatelen == c)
-                return i;
-        }
-        return -1;
-    }
-
     char* CircuitIO::read(const char* circuit_path) {
         if (circuit_path == nullptr)
             LOGERROR("circuit path is empty.");
@@ -320,7 +281,8 @@ namespace QuaSARQ {
         if (!canAccess(circuit_path, st))
             LOGERROR("circuit file is inaccessible.");
         size = st.st_size;
-        LOG2(1, "Parsing circuit file \"%s%s%s\" (size: %s%zd%s MB)..", CREPORTVAL, circuit_path, CNORMAL, CREPORTVAL, ratio(size, MB), CNORMAL);
+        LOG2(1, "Parsing circuit file \"%s%s%s\" (size: %s%zd%s MB)..",
+             CREPORTVAL, circuit_path, CNORMAL, CREPORTVAL, ratio(size, MB), CNORMAL);
         char* stream = NULL;
 #if defined(__linux__) || defined(__CYGWIN__)
         file = open(circuit_path, O_RDONLY, 0);
