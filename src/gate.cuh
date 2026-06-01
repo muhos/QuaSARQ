@@ -25,24 +25,26 @@ namespace QuaSARQ {
         FOREACH_GATE(GATE2STR)
     };
 
-    // Returns true for 2-qubit gates (including DEPOLARIZE2).
     INLINE_ALL 
+    // Returns true for 2-qubit gates (including DEPOLARIZE2).
     bool isGate2(const int& type) {
         return type >= int(NR_GATETYPES_1) && type < int(NR_GATETYPES);
     }
 
-    // Returns true for measurement gates.
-    INLINE_ALL 
-    bool isMeasurement(const int& type) {
-        return type == int(R) || type == int(M) || type == int(MR);
-    }
-
     INLINE_ALL
+    // Returns true for reset gates.
     bool isReset(const int& type) {
-        return type == int(R);
+        return type == int(R) || type == int(RX) || type == int(RY);
     }
 
     INLINE_ALL
+    // Returns true for measurement gates.
+    bool isMeasurement(const int& type) {
+        return type == int(M) || type == int(MR) || isReset(type);
+    }
+
+    INLINE_ALL
+    // Returns true for noise gates.
     bool isNoise(const int& type) {
         return type == int(DEPOLARIZE1)     || type == int(X_ERROR)         ||
                type == int(Y_ERROR)         || type == int(Z_ERROR)         ||
@@ -51,6 +53,7 @@ namespace QuaSARQ {
     }
 
     INLINE_ALL
+    // Returns the number of noise probabilities stored for a given gate type.
     uint32 noiseProbs(const int& type) {
         if (type == int(PAULI_CHANNEL_1)) return 3u;
         if (type == int(PAULI_CHANNEL_2)) return 15u;

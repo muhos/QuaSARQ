@@ -67,17 +67,24 @@ namespace QuaSARQ {
         } \
 	}
 
-    __global__ 
+    INLINE_DEVICE
+    word_std_t select_anticommuting_word(const word_std_t& xw, const word_std_t& zw, const byte_t& gate_type)
+    {
+        return (gate_type == byte_t(RX)) ? zw : (gate_type == byte_t(RY)) ? xw ^ zw : xw;
+    }
+
+    __global__
     void all_random_measures(
-                pivot_t*            pivots, 
-                const_buckets_t     measurements, 
-                const_refs_t        refs, 
-                const_table_t       inv_xs, 
-        const   size_t              num_gates, 
-        const   size_t              num_qubits, 
-        const   size_t              num_words_major, 
+                pivot_t*            pivots,
+                const_buckets_t     measurements,
+                const_refs_t        refs,
+                const_table_t       inv_xs,
+                const_table_t       inv_zs,
+        const   size_t              num_gates,
+        const   size_t              num_qubits,
+        const   size_t              num_words_major,
         const   size_t              num_words_minor,
-        const   size_t              num_qubits_padded) 
+        const   size_t              num_qubits_padded)
     {
         pivot_t* shared_mins = SharedMemory<pivot_t>();
         grid_t shared_tid = threadIdx.y * blockDim.x + threadIdx.x;
@@ -95,7 +102,7 @@ namespace QuaSARQ {
 
             for_parallel_x(g, num_qubits) {
                 const size_t word_idx = TABLEAU_INDEX(q_w, g) + TABLEAU_STAB_OFFSET;
-                const word_std_t qubit_word = (*inv_xs)[word_idx];
+                const word_std_t qubit_word = select_anticommuting_word((*inv_xs)[word_idx], (*inv_zs)[word_idx], m.type);
                 if (qubit_word & q_mask) {
                     local_min = MIN(pivot_t(g), local_min);
                 }
@@ -110,32 +117,36 @@ namespace QuaSARQ {
         }
     }
 
-    __global__ 
-    void anti_commuting_pivots (
+    __global__
+    void anti_commuting_pivots(
                 pivot_t*            scatter,
-                const_table_t       inv_xs, 
-        const   qubit_t             qubit, 
-        const   size_t              num_qubits, 
-        const   size_t              num_words_major, 
+                const_table_t       inv_xs,
+                const_table_t       inv_zs,
+        const   byte_t              gate_type,
+        const   qubit_t             qubit,
+        const   size_t              num_qubits,
+        const   size_t              num_words_major,
         const   size_t              num_words_minor,
         const   size_t              num_qubits_padded) {
         const size_t q_w = WORD_OFFSET(qubit);
         const word_std_t q_mask = BITMASK_GLOBAL(qubit);
         for_parallel_x(g, num_qubits) {
             const size_t word_idx = TABLEAU_INDEX(q_w, g) + TABLEAU_STAB_OFFSET;
-            const word_std_t qubit_word = (*inv_xs)[word_idx];
+            const word_std_t qubit_word = select_anticommuting_word((*inv_xs)[word_idx], (*inv_zs)[word_idx], gate_type);
             scatter[g] = (qubit_word & q_mask) ? pivot_t(g) : INVALID_PIVOT;
         }
     }
 
-    __global__ 
+    __global__
     void compact_pivots_seq(
                 pivot_t*              pivots,
                 uint32*               num_compacted,
-                const_table_t         inv_xs, 
-        const   qubit_t               qubit, 
-        const   size_t                num_qubits, 
-        const   size_t                num_words_major, 
+                const_table_t         inv_xs,
+                const_table_t         inv_zs,
+        const   byte_t                gate_type,
+        const   qubit_t               qubit,
+        const   size_t                num_qubits,
+        const   size_t                num_words_major,
         const   size_t                num_words_minor,
         const   size_t                num_qubits_padded) {
         const size_t q_w = WORD_OFFSET(qubit);
@@ -143,8 +154,8 @@ namespace QuaSARQ {
         *num_compacted = 0;
         for (size_t g = 0; g < num_qubits; g++) {
             const size_t word_idx = TABLEAU_INDEX(q_w, g) + TABLEAU_STAB_OFFSET;
-            const word_std_t qubit_word = (*inv_xs)[word_idx];
-            if (qubit_word & q_mask) 
+            const word_std_t qubit_word = select_anticommuting_word((*inv_xs)[word_idx], (*inv_zs)[word_idx], gate_type);
+            if (qubit_word & q_mask)
                 pivots[(*num_compacted)++] = pivot_t(g);
         }
     }
@@ -200,18 +211,19 @@ namespace QuaSARQ {
         dim3 currentblock, currentgrid;
         if (options.tune_allpivots) {
             SYNCALL;
-            tune_finding_random_measures(all_random_measures, 
-                            bestblockallpivots, bestgridallpivots, 
+            tune_finding_random_measures(all_random_measures,
+                            bestblockallpivots, bestgridallpivots,
                             sizeof(pivot_t), true,   // shared size, extend?
-                            num_qubits,             // x-dim
-                            num_pivots,              // y-dim 
-                            pivoting.pivots, 
-                            gpu_circuit.gates(), 
-                            gpu_circuit.references(), 
-                            tableau.xtable(), 
-                            num_pivots, 
-                            num_qubits, 
-                            num_words_major, 
+                            num_qubits,              // x-dim
+                            num_pivots,              // y-dim
+                            pivoting.pivots,
+                            gpu_circuit.gates(),
+                            gpu_circuit.references(),
+                            tableau.xtable(),
+                            tableau.ztable(),
+                            num_pivots,
+                            num_qubits,
+                            num_words_major,
                             num_words_minor,
                             num_qubits_padded);
             reset_all_pivots <<<bestgridreset, bestblockreset>>> (pivoting.pivots, num_pivots);
@@ -224,13 +236,14 @@ namespace QuaSARQ {
         LOGN2(2, "Finding all pivots with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
         if (options.sync) cutimer.start(stream);
         all_random_measures <<< currentgrid, currentblock, smem_size, stream >>> (
-            pivoting.pivots, 
-            gpu_circuit.gates(), 
-            gpu_circuit.references(), 
-            tableau.xtable(), 
-            num_pivots, 
-            num_qubits, 
-            num_words_major, 
+            pivoting.pivots,
+            gpu_circuit.gates(),
+            gpu_circuit.references(),
+            tableau.xtable(),
+            tableau.ztable(),
+            num_pivots,
+            num_qubits,
+            num_words_major,
             num_words_minor,
             num_qubits_padded);
         if (options.sync) {
@@ -242,7 +255,7 @@ namespace QuaSARQ {
         } else LOGDONE(2, 4);
     }
 
-    void Simulator::compact_targets(const qubit_t& qubit, const cudaStream_t& stream) {
+    void Simulator::compact_targets(const qubit_t& qubit, const byte_t& gate_type, const cudaStream_t& stream) {
         const size_t num_words_major = tableau.num_words_major();
         const size_t num_words_minor = tableau.num_words_minor();
         const size_t num_qubits_padded = tableau.num_qubits_padded();
@@ -259,22 +272,26 @@ namespace QuaSARQ {
         compact_pivots_seq <<<1, 1, 0, stream>>> (
             pivoting.pivots,
             pivoting.d_active_pivots,
-            tableau.xtable(), 
-            qubit, 
-            num_qubits, 
-            num_words_major, 
+            tableau.xtable(),
+            tableau.ztable(),
+            gate_type,
+            qubit,
+            num_qubits,
+            num_words_major,
             num_words_minor,
             num_qubits_padded);
         CHECK(cudaMemcpyAsync(pivoting.h_active_pivots, pivoting.d_active_pivots, sizeof(uint32), cudaMemcpyDeviceToHost, stream));
-        #else 
-        LOGN2(2, "Finding new pivots for qubit %d using block(x:%u, y:%u) and grid(x:%u, y:%u).. ", 
+        #else
+        LOGN2(2, "Finding new pivots for qubit %d using block(x:%u, y:%u) and grid(x:%u, y:%u).. ",
             qubit, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
         anti_commuting_pivots <<< currentgrid, currentblock, 0, stream >>> (
             pivoting.pivots,
-            tableau.xtable(), 
-            qubit, 
-            num_qubits, 
-            num_words_major, 
+            tableau.xtable(),
+            tableau.ztable(),
+            gate_type,
+            qubit,
+            num_qubits,
+            num_words_major,
             num_words_minor,
             num_qubits_padded);
         pivoting.compact_pivots(stream);

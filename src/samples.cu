@@ -69,20 +69,32 @@ namespace QuaSARQ {
                 switch (gate.type) {
                 case R: {
                     (*xs)[q_word_idx] = 0;
+                    (*zs)[q_word_idx] = curand_word(&rand_states[q_word_idx]);
+                    break;
+                }
+                case RX: {
+                    (*zs)[q_word_idx] = 0;
+                    (*xs)[q_word_idx] = curand_word(&rand_states[q_word_idx]);
+                    break;
+                }
+                case RY: {
+                    (*xs)[q_word_idx] = 0;
+                    (*zs)[q_word_idx] = 0;
                     break;
                 }
                 case M: {
                     (*samples)[m_word_idx] ^= (*xs)[q_word_idx];
+                    (*zs)[q_word_idx] = curand_word(&rand_states[q_word_idx]);
                     break;
                 }
                 case MR: {
                     (*samples)[m_word_idx] ^= (*xs)[q_word_idx];
                     (*xs)[q_word_idx] = 0;
+                    (*zs)[q_word_idx] = curand_word(&rand_states[q_word_idx]);
                     break;
                 }
                 default: break;
                 }
-                (*zs)[q_word_idx] = curand_word(&rand_states[q_word_idx]);
             }
         }
     }

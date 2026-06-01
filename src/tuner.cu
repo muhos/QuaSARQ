@@ -571,6 +571,7 @@ namespace QuaSARQ {
 				const_buckets_t,
 				const_refs_t,
 				const_table_t,
+				const_table_t,
 		const 	size_t,
 		const 	size_t,
 		const 	size_t,
@@ -586,6 +587,7 @@ namespace QuaSARQ {
 				const_buckets_t 	measurements,
 				const_refs_t 		refs,
 				const_table_t 		inv_xs,
+				const_table_t 		inv_zs,
 		const 	size_t 				num_gates,
 		const 	size_t 				num_qubits,
 		const 	size_t 				num_words_major,
@@ -594,13 +596,15 @@ namespace QuaSARQ {
 	)
 	{
 		const char* opname = "finding all pivots";
-		TUNE_2D(pivots, measurements, refs, inv_xs, num_gates, num_qubits, num_words_major, num_words_minor, num_qubits_padded);
+		TUNE_2D(pivots, measurements, refs, inv_xs, inv_zs, num_gates, num_qubits, num_words_major, num_words_minor, num_qubits_padded);
 	}
-	
+
 	void tune_finding_new_pivots(
 		void (*kernel)(
 				pivot_t*,
 				const_table_t,
+				const_table_t,
+		const   byte_t,
 		const 	qubit_t,
 		const 	size_t,
 		const 	size_t,
@@ -610,6 +614,8 @@ namespace QuaSARQ {
 				dim3& 				bestGrid,
 				pivot_t* 			pivots,
 				const_table_t 		inv_xs,
+				const_table_t 		inv_zs,
+		const   byte_t              gate_type,
 		const 	qubit_t& 			qubit,
 		const 	size_t& 			size,
 		const 	size_t 				num_words_major,
@@ -618,7 +624,7 @@ namespace QuaSARQ {
 	{
 		const char* opname = "finding new pivots";
 		const size_t shared_element_bytes = 0;
-		TUNE_1D(pivots, inv_xs, qubit, size, num_words_major, num_words_minor, num_qubits_padded);
+		TUNE_1D(pivots, inv_xs, inv_zs, gate_type, qubit, size, num_words_major, num_words_minor, num_qubits_padded);
 	}
 
 	void tune_inject_swap(

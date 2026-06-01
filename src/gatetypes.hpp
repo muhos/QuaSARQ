@@ -14,6 +14,8 @@ namespace QuaSARQ {
         GATE(S) \
         GATE(S_DAG) \
         GATE(R) \
+        GATE(RX) \
+        GATE(RY) \
         GATE(M) \
         GATE(MR) \
         GATE(MX) \

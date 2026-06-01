@@ -66,13 +66,15 @@ namespace QuaSARQ {
 	__global__ 
     void reset_all_pivots(pivot_t* pivots, const size_t num_gates);
 
-	__global__ 
+	__global__
     void anti_commuting_pivots(
                 pivot_t*            scatter,
-                const_table_t       inv_xs, 
-        const   qubit_t             qubit, 
-        const   size_t              num_qubits, 
-        const   size_t              num_words_major, 
+                const_table_t       inv_xs,
+                const_table_t       inv_zs,
+        const   byte_t              gate_type,
+        const   qubit_t             qubit,
+        const   size_t              num_qubits,
+        const   size_t              num_words_major,
         const   size_t              num_words_minor,
         const   size_t              num_qubits_padded);
 
@@ -89,6 +91,8 @@ namespace QuaSARQ {
 		void (*kernel)(
 				pivot_t*,
 				const_table_t,
+				const_table_t,
+		const   byte_t,
 		const 	qubit_t,
 		const 	size_t,
 		const 	size_t,
@@ -98,6 +102,8 @@ namespace QuaSARQ {
 				dim3& 				bestGrid,
 				pivot_t* 			pivots,
 				const_table_t 	    inv_xs,
+				const_table_t 	    inv_zs,
+		const   byte_t              gate_type,
 		const 	qubit_t& 			qubit,
 		const 	size_t& 			size,
 		const 	size_t 				num_words_major,
@@ -109,6 +115,7 @@ namespace QuaSARQ {
 				pivot_t*,
 				const_buckets_t,
 				const_refs_t,
+				const_table_t,
 				const_table_t,
 		const 	size_t,
 		const 	size_t,
@@ -125,6 +132,7 @@ namespace QuaSARQ {
 				const_buckets_t     measurements,
 				const_refs_t 	    refs,
 				const_table_t 	    inv_xs,
+				const_table_t 	    inv_zs,
 		const 	size_t 				num_gates,
 		const 	size_t 				num_qubits,
 		const 	size_t 				num_words_major,

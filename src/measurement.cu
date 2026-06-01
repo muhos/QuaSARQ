@@ -62,10 +62,12 @@ namespace QuaSARQ {
 
         if (options.tune_newpivots) {
             SYNCALL;
-            tune_finding_new_pivots(anti_commuting_pivots, 
+            tune_finding_new_pivots(anti_commuting_pivots,
                 bestblocknewpivots, bestgridnewpivots,
                 pivoting.pivots,
                 tableau.xtable(),
+                tableau.ztable(),
+                byte_t(R),   // Z-basis default for tuning
                 qubit,
                 num_qubits,
                 num_words_major,
@@ -140,7 +142,7 @@ namespace QuaSARQ {
             const pivot_t curr_pivot = host_pivots[i];
             const qubit_t qubit = curr_gate.wires[0];
             if (curr_pivot != INVALID_PIVOT) {
-                compact_targets(qubit, stream);
+                compact_targets(qubit, curr_gate.type, stream);
                 SYNC(stream);
                 const uint32 active_pivots = pivoting.h_active_pivots[0];
                 if (options.check_measurement)
@@ -152,9 +154,9 @@ namespace QuaSARQ {
                     const sign_t rbit = reference_mode ? sign_t(0) : mrand.brand();
                     inject_swap(qubit, rbit, stream);
                     inject_x(qubit, rbit, stream);
-                    if (curr_gate.type == R)
+                    if (isReset(int(curr_gate.type)))
                         may_reset_signs = true;
-                    if (curr_gate.type == MR) {
+                    if (curr_gate.type == MR) { // MRX/MRY are expanded in parser, so only check for MR.
                         may_reset_signs = true;
                         has_mr_gates    = true;
                     }
