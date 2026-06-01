@@ -77,7 +77,11 @@ namespace QuaSARQ {
                 for (size_t j = 0; j < block.gates.size(); j++) {
                     const ParsedGate& g = block.gates[j];
                     target.push(g);
-                    gstats.types[g.type]++;
+                    if (g.expanded_from == 0) {
+                        gstats.types[g.type]++;
+                    } else if (g.type == M || g.type == MR) {
+                        gstats.types[g.expanded_from]++;
+                    }
                     if ((g.type == M || g.type == MR) && &target == &circuit_queue)
                         measures_count++;
                 }
@@ -134,6 +138,58 @@ namespace QuaSARQ {
             if (pb) pb->obs_mc.push(pb->measures);
             parse_rec_refs(str, dest_rec, mc, pb != nullptr, "OBSERVABLE_INCLUDE");
             return;
+        }
+
+        // Expand MX/MY/MRX/MRY into basis-change + M/MR + inverse basis-change.
+        {
+            const bool is_MX  = (strcmp(gatestr, "MX")  == 0);
+            const bool is_MY  = (strcmp(gatestr, "MY")  == 0);
+            const bool is_MRX = (strcmp(gatestr, "MRX") == 0);
+            const bool is_MRY = (strcmp(gatestr, "MRY") == 0);
+
+            if (is_MX || is_MY || is_MRX || is_MRY) {
+                const Gatetypes mtype = (is_MX || is_MY) ? M : MR;
+                const Gatetypes orig  = is_MX ? MX : (is_MY ? MY : (is_MRX ? MRX : MRY));
+                const bool is_y = (is_MY || is_MRY);
+                measuring = true;
+                // Phase 0: collect all qubits on this line for batch expansion.
+                Vec<qubit_t, size_t> qubits;
+                while (str < eof && *str != DELIM) {
+                    if (*str == UNIX_DELIM) { str++; continue; }
+                    char* peek = str;
+                    eatWS(peek);
+                    if (!isDigit(*peek)) { eatLine(str); return; }
+                    const qubit_t c = toInteger(str);
+                    max_qubits = MAX(max_qubits, (size_t)(c) + 1);
+                    qubits.push(c);
+                }
+                auto push_basis = [&](const qubit_t& c, const Gatetypes& t) {
+                    ParsedGate pg(c, c, byte_t(t));
+                    pg.expanded_from = byte_t(orig);
+                    target.push(pg);
+                };
+                auto batch_push_basis = [&](const Gatetypes& t) {
+                    for (size_t k = 0; k < qubits.size(); k++) 
+                        push_basis(qubits[k], t);
+                };
+                // Phase 1: pre-measurement.
+                if (is_y)
+                    batch_push_basis(S_DAG);
+                batch_push_basis(H);
+                // Phase 2: measurement.
+                for (size_t k = 0; k < qubits.size(); k++) {
+                    push_basis(qubits[k], mtype);
+                    if (pb == nullptr) gstats.types[orig]++;
+                    if (&target == &circuit_queue) measures_count++;
+                    else if (pb != nullptr) pb->measures++;
+                }
+                // Phase 3: post-measurement.
+                batch_push_basis(H);
+                if (is_y) 
+                    batch_push_basis(S);
+                qubits.clear(true);
+                return;
+            }
         }
 
         float gate_probs[15] = {};

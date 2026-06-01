@@ -16,6 +16,10 @@ namespace QuaSARQ {
         GATE(R) \
         GATE(M) \
         GATE(MR) \
+        GATE(MX) \
+        GATE(MY) \
+        GATE(MRX) \
+        GATE(MRY) \
         GATE(DEPOLARIZE1) \
         GATE(X_ERROR) \
         GATE(Y_ERROR) \

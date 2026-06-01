@@ -280,7 +280,8 @@ size_t Simulator::parse(Statistics& stats, const char* path) {
     }
     if (!max_qubits)
         max_qubits = circuit_io.max_qubits;
-    assert(circuit_io.circuit_queue.size() == circuit_io.gate_stats.all());
+    // >= must be used due to gate expansion for measurements.
+    assert(circuit_io.circuit_queue.size() >= circuit_io.gate_stats.all());
     stats.circuit.num_gates = circuit_io.circuit_queue.size();
     stats.circuit.gate_stats = circuit_io.gate_stats;
     stats.circuit.measure_stats.count = circuit_io.measures_count;

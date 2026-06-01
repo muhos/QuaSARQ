@@ -24,9 +24,10 @@ namespace QuaSARQ {
         qubit_t c, t;
         float probs[15];
         byte_t type;
+        byte_t expanded_from;
 
         ParsedGate(const qubit_t& c, const qubit_t& t, const byte_t& type) :
-            c(c), t(t), type(type) { probs[0] = 0.0f; }
+            c(c), t(t), type(type), expanded_from(0) { probs[0] = 0.0f; }
     };
 
     class CircuitQueue : public Vec<ParsedGate, size_t> {
