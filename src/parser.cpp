@@ -188,7 +188,7 @@ namespace QuaSARQ {
     }
 
     int CircuitIO::translate_gate(char* in, const int& gatelen) {
-        // Stim gate aliases.
+        if (gatelen == 0) return -1;
         struct Alias { const char* name; Gatetypes type; };
         static constexpr Alias aliases[] = {
             { "CNOT",       CX    },

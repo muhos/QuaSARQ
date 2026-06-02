@@ -193,6 +193,9 @@ $(PTX_DIR)/%.$(PTXEXT): $(SRC_DIR)/%.cu | $(PTX_DIR)
 	@$(PROGRESS) $<
 	@$(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) --ptx -o $@ $<
 
+test:
+	@$(MAKE) -C tests run
+
 clean:
 	rm -f $(SRC_DIR)/*.$(CPPOBJEXT) $(SRC_DIR)/*.$(CUOBJEXT)
 	rm -rf $(BUILD_DIR) $(PTX_DIR)
