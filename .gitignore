@@ -10,13 +10,13 @@ src/*.stim
 src/.vscode
 src/*.sh
 src/.DS_Store
-circuits
+circuits/*.stim
+circuits/*.qasm
 scripts
 build
 tests/test_parser
 *.txt
 *.qstate
-*.stim
 *.01
 .DS_Store
 .vscode
