@@ -73,6 +73,16 @@ struct SchedulerHarness {
         delete[] buf;
     }
 
+    void feed_file(const char* path) {
+        char* str = circuit_io.read(path);
+        while (str < circuit_io.eof) {
+            eatWS(str);
+            if (str >= circuit_io.eof || *str == '\0') break;
+            if (*str == '#') { eatLine(str); continue; }
+            circuit_io.read_gate_into(str, circuit_io.circuit_queue, circuit_io.gate_stats);
+        }
+    }
+
     void schedule(const size_t& num_qubits) {
         schedule_circuit(circuit_io, circuit, winfo, num_qubits);
     }
@@ -435,13 +445,21 @@ void test_repeat_unroll() {
         TCHECK(h.all_gates_have_type(3, CX));
     });
 
-    run_test("REPEAT with measurements batches in own window", [] {
+    run_test("REPEAT measurements separate by intervening gates", [] {
         SchedulerHarness h;
         h.feed("REPEAT 2 {\n  H 0\n  M 0\n}\n");
         h.schedule(1);
         depth_t m_window = h.find_first_window_with_type(M);
         TCHECK(m_window != h.depth());
-        TCHECK(h.count_type_in_window(m_window, M) == 2);
+        TCHECK(h.count_type_in_window(m_window, M) == 1);
+        depth_t second_m = h.find_first_window_with_type(M);
+        for (depth_t d = m_window + 1; d < h.depth(); d++) {
+            if (h.count_type_in_window(d, M) > 0) {
+                second_m = d;
+                break;
+            }
+        }
+        TCHECK(second_m > m_window);
     });
 }
 
@@ -554,12 +572,49 @@ void test_integration() {
         TCHECK(h.all_gates_have_type(3, H));
     });
 
-    run_test("REPEAT measurements batch to same M window", [] {
+    run_test("REPEAT creates separate M windows per iteration", [] {
         SchedulerHarness h;
         h.feed("REPEAT 3 {\n  H 0\n  M 0\n}\n");
         h.schedule(1);
-        depth_t m_window = h.find_first_window_with_type(M);
-        TCHECK(h.count_type_in_window(m_window, M) == 3);
+        size_t m_count = 0;
+        for (depth_t d = 0; d < h.depth(); d++) {
+            m_count += h.count_type_in_window(d, M);
+        }
+        TCHECK(m_count == 3);
+        size_t windows_with_m = 0;
+        for (depth_t d = 0; d < h.depth(); d++) {
+            if (h.count_type_in_window(d, M) > 0) {
+                windows_with_m++;
+            }
+        }
+        TCHECK(windows_with_m == 3);
+    });
+
+    run_test("surface code: no qubit conflicts in any window", [] {
+        SchedulerHarness h;
+        h.feed_file("circuits/surface_code_d10_r3.stim");
+        h.schedule(h.circuit_io.max_qubits);
+        for (depth_t d = 0; d < h.depth(); d++) {
+            TCHECK(h.no_qubit_overlap_in_window(d));
+        }
+    });
+
+    run_test("surface code: measurements isolated from gates", [] {
+        SchedulerHarness h;
+        h.feed_file("circuits/surface_code_d10_r3.stim");
+        h.schedule(h.circuit_io.max_qubits);
+        for (depth_t d = 0; d < h.depth(); d++) {
+            bool has_m = h.count_type_in_window(d, M) > 0 || h.count_type_in_window(d, MR) > 0;
+            bool has_gates = false;
+            for (uint32 g = 0; g < h.gates_in_window(d); g++) {
+                Gatetypes type = h.gate_type_at(d, g);
+                if (type != M && type != MR) {
+                    has_gates = true;
+                    break;
+                }
+            }
+            TCHECK(!(has_m && has_gates));
+        }
     });
 }
 
