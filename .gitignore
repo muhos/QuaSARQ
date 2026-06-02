@@ -15,6 +15,7 @@ circuits/*.qasm
 scripts
 build
 tests/test_parser
+tests/test_scheduler
 *.txt
 *.qstate
 *.01

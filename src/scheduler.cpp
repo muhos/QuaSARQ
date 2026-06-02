@@ -1,489 +1,519 @@
 
 #include "simulator.hpp"
+#include "scheduler.hpp"
 
-using namespace QuaSARQ;
+namespace QuaSARQ {
 
-// Gate probabilities.
-double probabilities[NR_GATETYPES];
+    // Gate probabilities.
+    double probabilities[NR_GATETYPES];
 
-#define INIT_PROB(GATETYPE) probabilities[GATETYPE] = options.GATETYPE ## _p;
-#define RESET_PROB(GATETYPE) probabilities[GATETYPE] = 0;
-#define UNIFORM_PROB(GATETYPE) probabilities[GATETYPE] = 1.0 / double(NR_GATETYPES);
+    #define INIT_PROB(GATETYPE) probabilities[GATETYPE] = options.GATETYPE ## _p;
+    #define RESET_PROB(GATETYPE) probabilities[GATETYPE] = 0;
+    #define UNIFORM_PROB(GATETYPE) probabilities[GATETYPE] = 1.0 / double(NR_GATETYPES);
 
-inline void NORMALIZE_PROBS() {
-    double sum_probs = 0;
-    #define SUM_PROBS(GATETYPE) \
-        sum_probs += probabilities[uint32(GATETYPE)];
-    FOREACH_GATE(SUM_PROBS);
-    #define NORM_PROBS(GATETYPE) \
-        probabilities[uint32(GATETYPE)] /= sum_probs;
-    FOREACH_GATE(NORM_PROBS);
-}
-
-struct WindowSorter 
-{
-    const Circuit& circuit;
-
-    WindowSorter(const Circuit& c) : circuit(c) { }
-
-    inline
-    bool operator() (const gate_ref_t& a, const gate_ref_t& b) {
-        const Gate& ga = circuit.gate(a);
-        const Gate& gb = circuit.gate(b);
-        return (ga.wires[0] != gb.wires[0]) ? (ga.wires[0] < gb.wires[0]) :
-               // Compare second wire if both have size 2
-               (ga.size == 2 && gb.size == 2 && ga.wires[1] != gb.wires[1]) ? (ga.wires[1] < gb.wires[1]) :
-               // Prioritize type over size
-               (ga.type != gb.type) ? (ga.type < gb.type) :
-               // Compare size if types are equal
-               (ga.size < gb.size);
+    inline void NORMALIZE_PROBS() {
+        double sum_probs = 0;
+        #define SUM_PROBS(GATETYPE) \
+            sum_probs += probabilities[uint32(GATETYPE)];
+        FOREACH_GATE(SUM_PROBS);
+        #define NORM_PROBS(GATETYPE) \
+            probabilities[uint32(GATETYPE)] /= sum_probs;
+        FOREACH_GATE(NORM_PROBS);
     }
-};
 
-// Inside-out variant of Fisher-Yates algorithm.
-void Simulator::shuffle_qubits() {
-    shuffled.resize(num_qubits);
-    for (qubit_t i = 0; i < num_qubits; i++) {
-        qubit_t j = crand.irand() % (i + 1);
-        if (j != i)
-            shuffled[i] = shuffled[j]; 
-        shuffled[j] = i;
-    }
-}
+    struct WindowSorter 
+    {
+        const Circuit& circuit;
 
-void Simulator::get_rand_qubit(const qubit_t& control, qubit_t& random_qubit) {
-    assert(num_qubits);
-    assert(shuffled.size() == num_qubits);
-    qubit_t* q = shuffled, * e = shuffled.end();
-    while (q != e && (control == (random_qubit = *q) || locked[random_qubit])) q++;
-}
+        WindowSorter(const Circuit& c) : circuit(c) { }
 
-Gatetypes Simulator::get_rand_gate(const bool& multi_input, const bool& force_multi_input) {
-    double p = crand.drand();
-    double sum_probs = 0;
-    Gatetypes type = I;
-    uint32 offset = 0;
-    uint32 limit = NR_GATETYPES_1;
-    if (force_multi_input) {
-        offset = NR_GATETYPES_1;
-        limit = NR_GATETYPES;
-    }
-    else if (multi_input) 
-        limit = NR_GATETYPES;
-    for (uint32 i = offset; i < limit; i++) {
-        sum_probs += probabilities[i];
-        if (p <= sum_probs) {
-            type = Gatetypes(i);
-            break;
+        inline
+        bool operator() (const gate_ref_t& a, const gate_ref_t& b) {
+            const Gate& ga = circuit.gate(a);
+            const Gate& gb = circuit.gate(b);
+            return (ga.wires[0] != gb.wires[0]) ? (ga.wires[0] < gb.wires[0]) :
+                // Compare second wire if both have size 2
+                (ga.size == 2 && gb.size == 2 && ga.wires[1] != gb.wires[1]) ? (ga.wires[1] < gb.wires[1]) :
+                // Prioritize type over size
+                (ga.type != gb.type) ? (ga.type < gb.type) :
+                // Compare size if types are equal
+                (ga.size < gb.size);
+        }
+    };
+
+    // Inside-out variant of Fisher-Yates algorithm.
+    void Simulator::shuffle_qubits() {
+        shuffled.resize(num_qubits);
+        for (qubit_t i = 0; i < num_qubits; i++) {
+            qubit_t j = crand.irand() % (i + 1);
+            if (j != i)
+                shuffled[i] = shuffled[j]; 
+            shuffled[j] = i;
         }
     }
-    return type;
-}
 
-// Add measurements to circuit.
-void add_measurements(Circuit& circuit, Vec<M_OP, size_t>& measurements, WindowInfo& winfo, const depth_t& depth_level) {
-    const size_t num_gate_buckets_per_window = circuit.num_buckets();
-    bool is_recording = true;
-    for (size_t i = 0; i < measurements.size(); i++) {
-        const M_OP& m = measurements[i];
-        if (isReset(m.type)) is_recording = false;
-        circuit.addGate(depth_level, m.type, 1, m.qubit);
+    void Simulator::get_rand_qubit(const qubit_t& control, qubit_t& random_qubit) {
+        assert(num_qubits);
+        assert(shuffled.size() == num_qubits);
+        qubit_t* q = shuffled, * e = shuffled.end();
+        while (q != e && (control == (random_qubit = *q) || locked[random_qubit])) q++;
     }
-    measurements.clear();
-    circuit.markMeasure(depth_level);
-    if (is_recording)
-        circuit.markRecord(depth_level);
-    assert(circuit.num_buckets() >= num_gate_buckets_per_window);
-    assert(depth_level <= circuit.depth());
-    winfo.max(circuit[depth_level].size(), (circuit.num_buckets() - num_gate_buckets_per_window));
-}
 
-void check_parallel_gates(const Circuit& circuit, const size_t& num_qubits) {
-    LOGN2(1, " Checking scheduled circuit for %d depth levels and %lld qubits.. ", circuit.depth(), int64(num_qubits));
-    Vec<byte_t, size_t> locked(num_qubits, 0);
-    if (circuit.empty()) {
-        LOG0("");
-        LOGERROR(" found circuit is empty");
-    }
-    for (depth_t d = 0; d < circuit.depth(); d++) {
-        const Window& w = circuit[d];
-        for (uint32 g = 0; g < w.size(); g++) {
-            gate_ref_t r = w[g];
-            if (r == NO_REF) {
-                LOG0("");
-                LOGERROR(" gate reference is invalid");
-            }
-            const Gate& gate = circuit.gate(r);
-            for (input_size_t i = 0; i < gate.size; i++) {
-                if (locked[gate.wires[i]]) {
-                    LOG0("");
-                    LOGERROR(" found input %d of gate %d at depth %d is a duplicate", gate.wires[i], g, d);
-                }
-                locked[gate.wires[i]] = 1;
+    Gatetypes Simulator::get_rand_gate(const bool& multi_input, const bool& force_multi_input) {
+        double p = crand.drand();
+        double sum_probs = 0;
+        Gatetypes type = I;
+        uint32 offset = 0;
+        uint32 limit = NR_GATETYPES_1;
+        if (force_multi_input) {
+            offset = NR_GATETYPES_1;
+            limit = NR_GATETYPES;
+        }
+        else if (multi_input) 
+            limit = NR_GATETYPES;
+        for (uint32 i = offset; i < limit; i++) {
+            sum_probs += probabilities[i];
+            if (p <= sum_probs) {
+                type = Gatetypes(i);
+                break;
             }
         }
-        locked.reset();
+        return type;
     }
-    LOGPASSED(1);
-}
 
-void Simulator::generate() {
-    assert(circuit_mode == RANDOM_CIRCUIT);
-    if (!num_qubits) {
-        LOGERROR("Number of qubits for random circuit cannot be zero.");
-    }
-    if (!depth) {
-        LOGERROR("Depth for random circuit cannot be zero.");
-    }
-    LOGN2(1, "Generating random circuit for %s%zd qubits%s and %s%d-level%s depth.. ", 
-            CREPORTVAL, num_qubits, CNORMAL, CREPORTVAL, depth, CNORMAL);
-    LOG2(2, "");
-    timer.start();
-    circuit.init_depth(depth);
-    locked.resize(num_qubits, 0);
-    // Initialize gate probabilities.
-    if (options.write_rc == 2) { // CHP format
-        FOREACH_GATE(RESET_PROB);
-        INIT_PROB(H);
-        INIT_PROB(S);
-        INIT_PROB(CX);
-        INIT_PROB(M);
-    }
-    else {
-        FOREACH_GATE(INIT_PROB);
-    }
-    NORMALIZE_PROBS();
-    size_t* types = stats.circuit.gate_stats.types;
-    size_t parallel_gates_per_window = 0;
-    int64 measuring_depth = 0;
-    for (depth_t d = 0; d < depth; d++) {
-        size_t num_gate_buckets_per_window = circuit.num_buckets();
-        // Add measurements to circuit if exist.
-        if (measurements.size()) {
-            add_measurements(circuit, measurements, winfo, d);
-            measuring_depth++;
-            continue;
+    // Add measurements to circuit.
+    void add_measurements(Circuit& circuit, Vec<M_OP, size_t>& measurements, WindowInfo& winfo, const depth_t& depth_level) {
+        const size_t num_gate_buckets_per_window = circuit.num_buckets();
+        bool is_recording = true;
+        for (size_t i = 0; i < measurements.size(); i++) {
+            const M_OP& m = measurements[i];
+            if (isReset(m.type)) is_recording = false;
+            circuit.addGate(depth_level, m.type, 1, m.qubit);
         }
-        // Shuffle qubits used for multi-input gates.
-        shuffle_qubits();
-        // Loop over all qubits with these assumptions:
-        //  1-input gate acts on q or
-        //  control qubit in 2-input gate = q.
-        for (qubit_t q = 0; q < num_qubits; q++) {
-            if (!locked[q]) {
-                Gatetypes type = get_rand_gate();
-                assert(type < NR_GATETYPES);
-                assert(type < 256);    
-                // 0: q (control), 1: target.
-                Vec<qubit_t, input_size_t> gate_inputs;
-                gate_inputs.push(q);
-                if (isGate2(type)) {
-                    // Get (independent) random target qubit and lock it.
-                    gate_inputs.push(q);
-                    get_rand_qubit(q, gate_inputs[1]);
-                    // If we could not find a free qubit, then we're done.
-                    if (locked[gate_inputs[1]]) 
-                        break;
-                    else if (gate_inputs[0] == gate_inputs[1]) {
-                        // Last (unlocked) qubit must be a 1-input gate.
-                        type = get_rand_gate(false);
-                        gate_inputs.pop();
-                    }
-                    else {                        
-                        // Lock target to avoid being control later.
-                        locked[gate_inputs[1]] = 1;
-                    }                 
-                }
-                if (type == M) {
-                    if (d < depth - 1) {
-                        measurements.push(M_OP(q, type));
-                        measuring = true;
-                    }
-                    else
-                        continue;
-                }
-                else  
-                    circuit.addGate(d, type, gate_inputs);
-                // This lock is necessary to avoid generating
-                // same control qubit as target.
-                locked[q] = 1;
-                // Collect statistics.
-                types[type]++;
-                if (type != I) {
-                    stats.circuit.num_parallel_gates++;
-                    parallel_gates_per_window++;
-                }
-            }
-        }
-        stats.circuit.max_parallel_gates = MAX(stats.circuit.max_parallel_gates, parallel_gates_per_window);
-        locked.reset();
-        parallel_gates_per_window = 0;
+        measurements.clear();
+        circuit.markMeasure(depth_level);
+        if (is_recording)
+            circuit.markRecord(depth_level);
         assert(circuit.num_buckets() >= num_gate_buckets_per_window);
-        assert(circuit.depth() > d);
-        winfo.max(circuit[d].size(), (circuit.num_buckets() - num_gate_buckets_per_window));
+        assert(depth_level <= circuit.depth());
+        winfo.max(circuit[depth_level].size(), (circuit.num_buckets() - num_gate_buckets_per_window));
     }
-    assert(circuit.depth() <= depth + 1);
-    stats.circuit.measure_stats.depth = measuring_depth;
-    stats.circuit.num_gates = MAX(stats.circuit.num_gates, circuit.num_gates());
-    stats.circuit.bytes = stats.circuit.num_gates * sizeof(gate_ref_t) + circuit.num_buckets() * BUCKETSIZE;
-    shuffled.clear(true);
-    locked.clear(true);
-    measurements.clear(true);
-    // Sort gates in each depth level.
-    // Must be disabled during checking 
-    // to avoid messing up the references.
-    if (!options.check_tableau) {
-        for (depth_t d = 0; d < circuit.depth(); d++) {
-            std::sort(circuit[d].data(), circuit[d].end(), WindowSorter(circuit));
+
+    void check_parallel_gates(const Circuit& circuit, const size_t& num_qubits) {
+        LOGN2(1, " Checking scheduled circuit for %d depth levels and %lld qubits.. ", circuit.depth(), int64(num_qubits));
+        Vec<byte_t, size_t> locked(num_qubits, 0);
+        if (circuit.empty()) {
+            LOG0("");
+            LOGERROR(" found circuit is empty");
         }
-    }
-    timer.stop();
-    stats.time.schedule = timer.elapsed();
-    LOGDONE(1, 2);
-    LOG2(1, "Generated a total of %s%zd gates%s with a maximum of %s%zd parallel gates%s.", 
-    CREPORTVAL, circuit.num_gates(), CNORMAL, 
-    CREPORTVAL, stats.circuit.max_parallel_gates, CNORMAL);
-    if (options.write_rc)
-        circuit_io.write(circuit, num_qubits, options.write_rc, stats);
-    if (options.verbose > 2)
-        circuit.print();
-}
-
-size_t Simulator::parse(Statistics& stats, const char* path) {
-    timer.start();
-    assert(!circuit_io.size);
-    circuit_io.init();
-    char* str = circuit_io.read(path);
-    size_t max_qubits = 0;
-    while (str < circuit_io.eof) {
-        eatWS(str);
-        if (*str == '\0') break;
-        if (*str == '#') {
-            // Only treat as a qubit-count header if the token after '#' and
-            // optional whitespace is a digit: e.g. "# 26".  STIM files use
-            // '#' for human-readable comments, so we must not blindly
-            // call toInteger on lines like "# Generated ..."
-            char* start = str + 1;
-            eatWS(start);
-            if (!max_qubits && isDigit(*start)) {
-                str = start;
-                uint32 sign = 0;
-                max_qubits = toInteger(str, sign);
-                if (sign) LOGERROR("number of qubits in header is negative.");
-                LOG2(1, "Found header %s%zd%s.", CREPORTVAL, max_qubits, CNORMAL);
-            } else {
-                eatLine(str);
+        for (depth_t d = 0; d < circuit.depth(); d++) {
+            const Window& w = circuit[d];
+            for (uint32 g = 0; g < w.size(); g++) {
+                gate_ref_t r = w[g];
+                if (r == NO_REF) {
+                    LOG0("");
+                    LOGERROR(" gate reference is invalid");
+                }
+                const Gate& gate = circuit.gate(r);
+                for (input_size_t i = 0; i < gate.size; i++) {
+                    if (locked[gate.wires[i]]) {
+                        LOG0("");
+                        LOGERROR(" found input %d of gate %d at depth %d is a duplicate", gate.wires[i], g, d);
+                    }
+                    locked[gate.wires[i]] = 1;
+                }
             }
-            continue;
-        }       
-        circuit_io.read_gate(str);  
+            locked.reset();
+        }
+        LOGPASSED(1);
     }
-    if (!max_qubits)
-        max_qubits = circuit_io.max_qubits;
-    // >= must be used due to gate expansion for measurements.
-    assert(circuit_io.circuit_queue.size() >= circuit_io.gate_stats.all());
-    stats.circuit.num_gates = circuit_io.circuit_queue.size();
-    stats.circuit.gate_stats = circuit_io.gate_stats;
-    stats.circuit.measure_stats.count = circuit_io.measures_count;
-    measuring = circuit_io.measuring;
-    timer.stop();
-    stats.time.initial += timer.elapsed();
-    return max_qubits;
-}
 
-size_t Simulator::schedule(Statistics& stats, Circuit& circuit, WindowInfo& target_winfo) {
-    LOGN2(1, "Scheduling %s%zd%s gates for parallel simulation.. ", CREPORTVAL, stats.circuit.num_gates, CNORMAL);
-    LOG2(2, "");
-    timer.start();
-    // For locking qubits
-    assert(num_qubits);
-    locked.resize(num_qubits, 0);
-    Vec<qubit_t, qubit_t> locked_qubits;
-    locked_qubits.reserve(num_qubits);
-    // To prevent stagnation if empty wires exist per depth level.
-    // In that scenario, locked qubits will never reach a fixpoint.
-    qubit_t last_num_locked_qubits = 0;
-    qubit_t max_locked_qubits = 0;
-    size_t parallel_gates_per_window = 0;
-    size_t max_depth = 0;
-    size_t measuring_depth = 0;
-    while (max_depth < MAX_DEPTH && !circuit_io.circuit_queue.empty()) {
+    void Simulator::generate() {
+        assert(circuit_mode == RANDOM_CIRCUIT);
+        if (!num_qubits) {
+            LOGERROR("Number of qubits for random circuit cannot be zero.");
+        }
+        if (!depth) {
+            LOGERROR("Depth for random circuit cannot be zero.");
+        }
+        LOGN2(1, "Generating random circuit for %s%zd qubits%s and %s%d-level%s depth.. ", 
+                CREPORTVAL, num_qubits, CNORMAL, CREPORTVAL, depth, CNORMAL);
+        LOG2(2, "");
+        timer.start();
+        circuit.init_depth(depth);
+        locked.resize(num_qubits, 0);
+        // Initialize gate probabilities.
+        if (options.write_rc == 2) { // CHP format
+            FOREACH_GATE(RESET_PROB);
+            INIT_PROB(H);
+            INIT_PROB(S);
+            INIT_PROB(CX);
+            INIT_PROB(M);
+        }
+        else {
+            FOREACH_GATE(INIT_PROB);
+        }
+        NORMALIZE_PROBS();
+        size_t* types = stats.circuit.gate_stats.types;
+        size_t parallel_gates_per_window = 0;
+        int64 measuring_depth = 0;
+        for (depth_t d = 0; d < depth; d++) {
+            size_t num_gate_buckets_per_window = circuit.num_buckets();
+            // Add measurements to circuit if exist.
+            if (measurements.size()) {
+                add_measurements(circuit, measurements, winfo, d);
+                measuring_depth++;
+                continue;
+            }
+            // Shuffle qubits used for multi-input gates.
+            shuffle_qubits();
+            // Loop over all qubits with these assumptions:
+            //  1-input gate acts on q or
+            //  control qubit in 2-input gate = q.
+            for (qubit_t q = 0; q < num_qubits; q++) {
+                if (!locked[q]) {
+                    Gatetypes type = get_rand_gate();
+                    assert(type < NR_GATETYPES);
+                    assert(type < 256);    
+                    // 0: q (control), 1: target.
+                    Vec<qubit_t, input_size_t> gate_inputs;
+                    gate_inputs.push(q);
+                    if (isGate2(type)) {
+                        // Get (independent) random target qubit and lock it.
+                        gate_inputs.push(q);
+                        get_rand_qubit(q, gate_inputs[1]);
+                        // If we could not find a free qubit, then we're done.
+                        if (locked[gate_inputs[1]]) 
+                            break;
+                        else if (gate_inputs[0] == gate_inputs[1]) {
+                            // Last (unlocked) qubit must be a 1-input gate.
+                            type = get_rand_gate(false);
+                            gate_inputs.pop();
+                        }
+                        else {                        
+                            // Lock target to avoid being control later.
+                            locked[gate_inputs[1]] = 1;
+                        }                 
+                    }
+                    if (type == M) {
+                        if (d < depth - 1) {
+                            measurements.push(M_OP(q, type));
+                            measuring = true;
+                        }
+                        else
+                            continue;
+                    }
+                    else  
+                        circuit.addGate(d, type, gate_inputs);
+                    // This lock is necessary to avoid generating
+                    // same control qubit as target.
+                    locked[q] = 1;
+                    // Collect statistics.
+                    types[type]++;
+                    if (type != I) {
+                        stats.circuit.num_parallel_gates++;
+                        parallel_gates_per_window++;
+                    }
+                }
+            }
+            stats.circuit.max_parallel_gates = MAX(stats.circuit.max_parallel_gates, parallel_gates_per_window);
+            locked.reset();
+            parallel_gates_per_window = 0;
+            assert(circuit.num_buckets() >= num_gate_buckets_per_window);
+            assert(circuit.depth() > d);
+            winfo.max(circuit[d].size(), (circuit.num_buckets() - num_gate_buckets_per_window));
+        }
+        assert(circuit.depth() <= depth + 1);
+        stats.circuit.measure_stats.depth = measuring_depth;
+        stats.circuit.num_gates = MAX(stats.circuit.num_gates, circuit.num_gates());
+        stats.circuit.bytes = stats.circuit.num_gates * sizeof(gate_ref_t) + circuit.num_buckets() * BUCKETSIZE;
+        shuffled.clear(true);
+        locked.clear(true);
+        measurements.clear(true);
+        // Sort gates in each depth level.
+        // Must be disabled during checking 
+        // to avoid messing up the references.
+        if (!options.check_tableau) {
+            for (depth_t d = 0; d < circuit.depth(); d++) {
+                std::sort(circuit[d].data(), circuit[d].end(), WindowSorter(circuit));
+            }
+        }
+        timer.stop();
+        stats.time.schedule = timer.elapsed();
+        LOGDONE(1, 2);
+        LOG2(1, "Generated a total of %s%zd gates%s with a maximum of %s%zd parallel gates%s.", 
+        CREPORTVAL, circuit.num_gates(), CNORMAL, 
+        CREPORTVAL, stats.circuit.max_parallel_gates, CNORMAL);
+        if (options.write_rc)
+            circuit_io.write(circuit, num_qubits, options.write_rc, stats);
+        if (options.verbose > 2)
+            circuit.print();
+    }
 
-        // Add measurements to circuit if exist.
+    size_t Simulator::parse(Statistics& stats, const char* path) {
+        timer.start();
+        assert(!circuit_io.size);
+        circuit_io.init();
+        char* str = circuit_io.read(path);
+        size_t max_qubits = 0;
+        while (str < circuit_io.eof) {
+            eatWS(str);
+            if (*str == '\0') break;
+            if (*str == '#') {
+                // Only treat as a qubit-count header if the token after '#' and
+                // optional whitespace is a digit: e.g. "# 26".  STIM files use
+                // '#' for human-readable comments, so we must not blindly
+                // call toInteger on lines like "# Generated ..."
+                char* start = str + 1;
+                eatWS(start);
+                if (!max_qubits && isDigit(*start)) {
+                    str = start;
+                    uint32 sign = 0;
+                    max_qubits = toInteger(str, sign);
+                    if (sign) LOGERROR("number of qubits in header is negative.");
+                    LOG2(1, "Found header %s%zd%s.", CREPORTVAL, max_qubits, CNORMAL);
+                } else {
+                    eatLine(str);
+                }
+                continue;
+            }       
+            circuit_io.read_gate(str);  
+        }
+        if (!max_qubits)
+            max_qubits = circuit_io.max_qubits;
+        // >= must be used due to gate expansion for measurements.
+        assert(circuit_io.circuit_queue.size() >= circuit_io.gate_stats.all());
+        stats.circuit.num_gates = circuit_io.circuit_queue.size();
+        stats.circuit.gate_stats = circuit_io.gate_stats;
+        stats.circuit.measure_stats.count = circuit_io.measures_count;
+        measuring = circuit_io.measuring;
+        timer.stop();
+        stats.time.initial += timer.elapsed();
+        return max_qubits;
+    }
+
+    ScheduleResult schedule_circuit(CircuitIO& circuit_io, Circuit& circuit, WindowInfo& winfo, const size_t& num_qubits) {
+        assert(num_qubits);
+
+        Vec<byte_t, size_t>    locked(num_qubits, 0);
+        Vec<qubit_t, qubit_t>  locked_qubits;
+        Vec<M_OP, size_t>      measurements;
+        locked_qubits.reserve(num_qubits);
+        // To prevent stagnation if empty wires exist per depth level.
+        // In that scenario, locked qubits will never reach a fixpoint.
+        qubit_t last_num_locked_qubits = 0;
+        qubit_t max_locked_qubits = 0;
+        size_t parallel_gates_per_window = 0;
+        size_t max_depth = 0;
+        size_t measuring_depth = 0;
+        bool measuring = false;
+
+        while (max_depth < MAX_DEPTH && !circuit_io.circuit_queue.empty()) {
+
+            // Add measurements to circuit if exist.
+            if (measurements.size()) {
+                add_measurements(circuit, measurements, winfo, max_depth);
+                max_depth++;
+                measuring_depth++;
+                assert(max_depth == circuit.depth());
+                continue;
+            }
+
+            const size_t num_gate_buckets_per_window = circuit.num_buckets();
+
+            // Forall gates in order find an independent gate.
+            while (!circuit_io.circuit_queue.empty()) {
+                const ParsedGate gate = circuit_io.circuit_queue.front();
+                const qubit_t c = gate.c;
+                const qubit_t t = gate.t;
+                const bool is_c_unlocked = !locked[c];
+                if (isMeasurement(gate.type)) {
+                    // R, M, MR must never mix in the same window.
+                    if (measurements.size() && measurements[0].type != gate.type)
+                        break;
+                    circuit_io.circuit_queue.pop_front();
+                    measurements.push(M_OP(c, gate.type));
+                    measuring = true;
+                    if (is_c_unlocked) {
+                        locked_qubits.push(c);
+                        locked[c] = 1;
+                    }
+                    parallel_gates_per_window++;
+                    continue;
+                }
+                if (c == t) {
+                    if (is_c_unlocked) {
+                        circuit_io.circuit_queue.pop_front();
+                        Gate* g = circuit.addGate(max_depth, gate.type, 1, c);
+                        if (isNoise(int(gate.type))) {
+                            const uint32 n = noiseProbs(int(gate.type));
+                            for (uint32 k = 0; k < n; k++) g->set_prob(k, gate.probs[k]);
+                        }
+                        locked_qubits.push(c);
+                        locked[c] = 1;
+                        if (gate.type != I) {
+                            parallel_gates_per_window++;
+                        }
+                    }
+                }
+                else {
+                    const bool is_t_unlocked = !locked[t];
+                    if (is_c_unlocked && is_t_unlocked) {
+                        circuit_io.circuit_queue.pop_front();
+                        assert(gate.type != M && gate.type != MR);
+                        Gate* g = circuit.addGate(max_depth, gate.type, 2, c, t);
+                        if (isNoise(int(gate.type))) {
+                            const uint32 n = noiseProbs(int(gate.type));
+                            for (uint32 k = 0; k < n; k++) g->set_prob(k, gate.probs[k]);
+                        }
+                        locked_qubits.push(c);
+                        locked_qubits.push(t);
+                        locked[c] = 1;
+                        locked[t] = 1;
+                        if (gate.type != I) {
+                            parallel_gates_per_window++;
+                        }
+                    }
+                    // Either one of them may not be locked.
+                    // Thus, make sure the other is locked.
+                    // This prevent bypassing a locked 2-gate
+                    // and not preserving the order.
+                    else if (is_c_unlocked) {
+                        locked_qubits.push(c);
+                        locked[c] = 1;
+                    }
+                    else if (is_t_unlocked) {
+                        locked_qubits.push(t);
+                        locked[t] = 1;
+                    }
+                }
+                // If this is true, we know that no more gates
+                // can be scheduled at the same depth. Thus, 
+                // we have to start a new depth level.
+                // In other words, all gates in between 0 and n - 1
+                // have been already scheduled if they are not locked.
+                max_locked_qubits = locked_qubits.size();
+                if (last_num_locked_qubits == max_locked_qubits || max_locked_qubits == num_qubits)
+                    break;
+                last_num_locked_qubits = max_locked_qubits;
+            }
+
+            parallel_gates_per_window  = 0;
+            last_num_locked_qubits     = 0;
+            if (max_locked_qubits) {
+                forall_vector(locked_qubits, lq) { locked[*lq] = 0; }
+                locked_qubits.clear();
+            }
+
+            assert(circuit.num_buckets() >= num_gate_buckets_per_window);
+            if (max_depth < circuit.depth()) {
+                winfo.max(circuit[max_depth].size(), (circuit.num_buckets() - num_gate_buckets_per_window));
+                max_depth++;
+            }
+        }
+
+        assert(max_depth <= circuit.depth());
+
+        // Add last measurements if exist.
         if (measurements.size()) {
-            add_measurements(circuit, measurements, target_winfo, max_depth);
+            add_measurements(circuit, measurements, winfo, max_depth);
             max_depth++;
             measuring_depth++;
             assert(max_depth == circuit.depth());
-            continue;
         }
 
-        const size_t num_gate_buckets_per_window = circuit.num_buckets();
-
-        // Forall gates in order find an independent gate.
-        while (!circuit_io.circuit_queue.empty()) {
-            const ParsedGate gate = circuit_io.circuit_queue.front();
-            const qubit_t c = gate.c;
-            const qubit_t t = gate.t;
-            const bool is_c_unlocked = !locked[c];
-            if (isMeasurement(gate.type)) {
-                // R, M, MR must never mix in the same window.
-                if (measurements.size() && measurements[0].type != gate.type)
-                    break;
-                circuit_io.circuit_queue.pop_front();
-                measurements.push(M_OP(c, gate.type));
-                measuring = true;
-                if (is_c_unlocked) {
-                    locked_qubits.push(c);
-                    locked[c] = 1;
-                }
-                stats.circuit.num_parallel_gates++;
-                parallel_gates_per_window++;
-                continue;
-            }
-            if (c == t) {
-                if (is_c_unlocked) {
-                    circuit_io.circuit_queue.pop_front();
-                    Gate* g = circuit.addGate(max_depth, gate.type, 1, c);
-                    if (isNoise(int(gate.type))) { 
-                        const uint32 n = noiseProbs(int(gate.type)); 
-                        for (uint32 k = 0; k < n; k++) 
-                            g->set_prob(k, gate.probs[k]); 
-                    }
-                    locked_qubits.push(c);
-                    locked[c] = 1;
-                    if (gate.type != I) {
-                        stats.circuit.num_parallel_gates++;
-                        parallel_gates_per_window++;
-                    }
-                }
-            }
-            else {
-                const bool is_t_unlocked = !locked[t];
-                if (is_c_unlocked && is_t_unlocked) {
-                    circuit_io.circuit_queue.pop_front();
-                    assert(gate.type != M && gate.type != MR);
-                    Gate* g = circuit.addGate(max_depth, gate.type, 2, c, t);
-                    if (isNoise(int(gate.type))) { 
-                        const uint32 n = noiseProbs(int(gate.type)); 
-                        for (uint32 k = 0; k < n; k++) 
-                            g->set_prob(k, gate.probs[k]); 
-                    }
-                    locked_qubits.push(c);
-                    locked_qubits.push(t);
-                    locked[c] = 1;
-                    locked[t] = 1;
-                    if (gate.type != I) {
-                        stats.circuit.num_parallel_gates++;
-                        parallel_gates_per_window++;
-                    }
-                }
-                // Either one of them may not be locked.
-                // Thus, make sure the other is locked.
-                // This prevent bypassing a locked 2-gate
-                // and not preserving the order.
-                else if (is_c_unlocked) {
-                    locked_qubits.push(c);
-                    locked[c] = 1;                         
-                }
-                else if (is_t_unlocked) {
-                    locked_qubits.push(t);
-                    locked[t] = 1;
-                }
-            }
-            // If this is true, we know that no more gates
-            // can be scheduled at the same depth. Thus, 
-            // we have to start a new depth level.
-            // In other words, all gates in between 0 and n - 1
-            // have been already scheduled if they are not locked.
-            max_locked_qubits = locked_qubits.size();
-            if (last_num_locked_qubits == max_locked_qubits || max_locked_qubits == num_qubits)
-                break;
-            last_num_locked_qubits = max_locked_qubits;
-        }
-
-        stats.circuit.max_parallel_gates = MAX(stats.circuit.max_parallel_gates, parallel_gates_per_window);
-
-        parallel_gates_per_window = 0;
-        last_num_locked_qubits = 0;
-        if (max_locked_qubits) {
-            forall_vector(locked_qubits, lq) {
-                locked[*lq] = 0;
-            }
-            locked_qubits.clear();
-        }
-    
-        assert(circuit.num_buckets() >= num_gate_buckets_per_window);
-        if (max_depth < circuit.depth()) {
-            target_winfo.max(circuit[max_depth].size(), (circuit.num_buckets() - num_gate_buckets_per_window));
-            max_depth++;
-        }
-    }
-
-    assert(max_depth <= circuit.depth());
-
-    // Add last measurements if exist.
-    if (measurements.size()) {
-        add_measurements(circuit, measurements, target_winfo, max_depth);
-        max_depth++;
-        measuring_depth++;
         assert(max_depth == circuit.depth());
+
+        circuit_io.destroy();
+        locked.clear(true);
+        locked_qubits.clear(true);
+
+        return { max_depth, measuring_depth, measuring };
     }
-    
-    assert(max_depth == circuit.depth());
-    assert(circuit.num_gates() == stats.circuit.num_gates);
-    stats.circuit.measure_stats.depth = measuring_depth;
-    stats.circuit.num_gates = MAX(stats.circuit.num_gates, circuit.num_gates());
-    stats.circuit.bytes = stats.circuit.num_gates * sizeof(gate_ref_t) + circuit.num_buckets() * BUCKETSIZE;
-    locked.clear(true);
-    locked_qubits.clear(true);
-    circuit_io.destroy();
-    // Sort gates in each depth level.
-    // Must be disabled during checking 
-    // to avoid messing up the references.
-    if (!options.check_tableau) {
+
+    ScheduleResult schedule_gates(
+        CircuitIO&      circuit_io,
+        Circuit&        circuit,
+        WindowInfo&     winfo,
+        const size_t&   num_qubits,
+        Statistics&     stats,
+        const bool&     sort)
+    {
+        const auto result = schedule_circuit(circuit_io, circuit, winfo, num_qubits);
+
+        size_t num_parallel_gates = 0;
+        size_t max_parallel_gates = 0;
         for (depth_t d = 0; d < circuit.depth(); d++) {
-            std::sort(circuit[d].data(), circuit[d].end(), WindowSorter(circuit));
+            size_t gates_in_window = 0;
+            for (uint32 g = 0; g < circuit[d].size(); g++) {
+                const Gate& gate = circuit.gate(circuit[d][g]);
+                if (gate.type != I) {
+                    gates_in_window++;
+                    num_parallel_gates++;
+                }
+            }
+            max_parallel_gates = MAX(max_parallel_gates, gates_in_window);
         }
-    }
-    timer.stop();
-    stats.time.schedule = timer.elapsed();
-    LOGDONE(1, 2);
-    LOG2(1, "Scheduled %s%zd%s gates with a maximum of %s%zd%s parallel gates and %s%zd%s depth levels in %s%.3f%s ms.",
-        CREPORTVAL, stats.circuit.num_gates, CNORMAL,
-        CREPORTVAL, stats.circuit.max_parallel_gates, CNORMAL, 
-        CREPORTVAL, size_t(circuit.depth()), CNORMAL, 
-        CREPORTVAL, stats.time.schedule, CNORMAL);
-    if (options.verbose > 2)
-        circuit.print();
 
-    return max_depth;
-}
+        stats.circuit.measure_stats.depth = result.measuring_depth;
+        stats.circuit.num_parallel_gates = num_parallel_gates;
+        stats.circuit.max_parallel_gates = max_parallel_gates;
+        stats.circuit.num_gates = MAX(stats.circuit.num_gates, circuit.num_gates());
+        stats.circuit.bytes = stats.circuit.num_gates * sizeof(gate_ref_t) + circuit.num_buckets() * BUCKETSIZE;
 
-void Simulator::parse() {
-    if (!circuit.empty()) return;
-    if (circuit_mode == RANDOM_CIRCUIT) {
-        generate();
+        if (sort) {
+            for (depth_t d = 0; d < circuit.depth(); d++)
+                std::sort(circuit[d].data(), circuit[d].end(), WindowSorter(circuit));
+        }
+
+        return result;
     }
-    else {
-        assert(circuit_mode == PARSED_CIRCUIT);
-        num_qubits = parse(stats, circuit_path.c_str());
-        depth = schedule(stats, circuit, winfo);
+
+    size_t Simulator::schedule(Statistics& stats, Circuit& circuit, WindowInfo& target_winfo) {
+        LOGN2(1, "Scheduling %s%zd%s gates for parallel simulation.. ", CREPORTVAL, stats.circuit.num_gates, CNORMAL);
+        LOG2(2, "");
+        timer.start();
+        const auto result = schedule_gates(circuit_io, circuit, target_winfo, num_qubits, stats, !options.check_tableau);
+        measuring = result.measuring;
+        timer.stop();
+        stats.time.schedule = timer.elapsed();
+        LOGDONE(1, 2);
+        LOG2(1, "Scheduled %s%zd%s gates with a maximum of %s%zd%s parallel gates and %s%zd%s depth levels in %s%.3f%s ms.",
+            CREPORTVAL, stats.circuit.num_gates, CNORMAL,
+            CREPORTVAL, stats.circuit.max_parallel_gates, CNORMAL,
+            CREPORTVAL, size_t(circuit.depth()), CNORMAL,
+            CREPORTVAL, stats.time.schedule, CNORMAL);
+        if (options.verbose > 2)
+            circuit.print();
+        return result.depth;
     }
-    write_measures_to_file = stats.circuit.measure_stats.count > options.min_measures_write;
-    if (measuring && options.check_tableau) {
-        options.check_tableau = false;
-        LOG2(1, "%s disabling tableau checking due to measurements.%s", CARGDEFAULT, CNORMAL);
+
+    void Simulator::parse() {
+        if (!circuit.empty()) return;
+        if (circuit_mode == RANDOM_CIRCUIT) {
+            generate();
+        }
+        else {
+            assert(circuit_mode == PARSED_CIRCUIT);
+            num_qubits = parse(stats, circuit_path.c_str());
+            depth = schedule(stats, circuit, winfo);
+        }
+        write_measures_to_file = stats.circuit.measure_stats.count > options.min_measures_write;
+        if (measuring && options.check_tableau) {
+            options.check_tableau = false;
+            LOG2(1, "%s disabling tableau checking due to measurements.%s", CARGDEFAULT, CNORMAL);
+        }
+        if (options.print_detector && circuit_io.detectors.empty()) {
+            LOG2(1, "%s disabled printing detectors as circuit does not contain any.%s", CARGDEFAULT, CNORMAL);
+            options.print_detector = false;
+        }
+        if (options.print_observable && circuit_io.observables.empty()) {
+            LOG2(1, "%s disabled printing observables as circuit does not contain any.%s", CARGDEFAULT, CNORMAL);
+            options.print_observable = false;
+        }
+        fflush(stdout), fflush(stderr);
+        if (options.check_scheduler)
+            check_parallel_gates(circuit, num_qubits);
     }
-    if (options.print_detector && circuit_io.detectors.empty()) {
-        LOG2(1, "%s disabled printing detectors as circuit does not contain any.%s", CARGDEFAULT, CNORMAL);
-        options.print_detector = false;
-    }
-    if (options.print_observable && circuit_io.observables.empty()) {
-        LOG2(1, "%s disabled printing observables as circuit does not contain any.%s", CARGDEFAULT, CNORMAL);
-        options.print_observable = false;
-    }
-    fflush(stdout), fflush(stderr);
-    if (options.check_scheduler)
-        check_parallel_gates(circuit, num_qubits);
+
 }

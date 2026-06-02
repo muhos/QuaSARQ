@@ -10,20 +10,29 @@ CCFLAGS   := -std=c++20 -fdiagnostics-show-option
 NVCCFLAGS := -m64 -std=c++20 -arch=native
 ALL_FLAGS := $(NVCCFLAGS) $(addprefix -Xcompiler ,$(CCFLAGS))
 
-SRCS := test_parser.cpp $(QUASARQ_DIR)/src/parser.cpp $(QUASARQ_DIR)/src/expansion.cpp
-BIN  := test_parser
+PARSER_SRCS := test_parser.cpp $(QUASARQ_DIR)/src/parser.cpp $(QUASARQ_DIR)/src/expansion.cpp
+PARSER_BIN  := test_parser
 
-all: $(BIN)
+SCHEDULER_SRCS := test_scheduler.cpp test_stubs.cpp $(QUASARQ_DIR)/src/parser.cpp $(QUASARQ_DIR)/src/expansion.cpp $(QUASARQ_DIR)/src/scheduler.cpp
+SCHEDULER_BIN  := test_scheduler
 
-$(BIN): $(SRCS)
+all: $(PARSER_BIN) $(SCHEDULER_BIN)
+
+$(PARSER_BIN): $(PARSER_SRCS)
 	@echo -n "Building $@..."
-	@$(NVCC) $(ALL_FLAGS) $(INCLUDES) -o $@ $(SRCS)
+	@$(NVCC) $(ALL_FLAGS) $(INCLUDES) -o $@ $(PARSER_SRCS)
 	@echo "done."
 
-run: $(BIN)
-	@./$(BIN)
+$(SCHEDULER_BIN): $(SCHEDULER_SRCS)
+	@echo -n "Building $@..."
+	@$(NVCC) $(ALL_FLAGS) $(INCLUDES) -o $@ $(SCHEDULER_SRCS)
+	@echo "done."
+
+run: all
+	@./$(PARSER_BIN)
+	@./$(SCHEDULER_BIN)
 
 clean:
-	rm -f $(BIN)
+	rm -f $(PARSER_BIN) $(SCHEDULER_BIN)
 
 .PHONY: all run clean
