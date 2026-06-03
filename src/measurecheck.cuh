@@ -127,7 +127,7 @@ namespace QuaSARQ {
 			CHECK(cudaMemcpy(d_compact_pivots.data(), other_pivots, sizeof(pivot_t) * num_pivots, cudaMemcpyDeviceToHost));
 		}
 
-		void copy_input(const Tableau& other, const bool& to_device = false) {
+		void copy_input(const Tableau& other, const bool& to_device = false, const bool& include_signs = true) {
 			SYNCALL;
 			if (input_copied && !to_device)
 				return;
@@ -135,8 +135,8 @@ namespace QuaSARQ {
 			Table& dest_zs = to_device ? d_zs : h_zs;
 			Signs& dest_ss = to_device ? d_ss : h_ss;
 			dest_xs.flag_rowmajor(), dest_zs.flag_rowmajor();
-			other.copy_to_host(&dest_xs, &dest_zs, &dest_ss);
-			if (!to_device) 
+			other.copy_to_host(&dest_xs, &dest_zs, include_signs ? &dest_ss : nullptr);
+			if (!to_device)
 				input_copied = true;
 		}
 

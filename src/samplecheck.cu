@@ -26,7 +26,7 @@ namespace QuaSARQ {
             LOGERROR("measurement offset mismatch at depth %d: expected %lld, got %lld",
                 depth_level, measures_count, measurement_offset_before);
 
-        copy_input(other_input, true);
+        copy_input(other_input, true, false);
 
         size_t measures_per_window = 0;
         for (size_t i = 0; i < num_gates; i++) {
