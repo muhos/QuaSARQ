@@ -97,8 +97,8 @@ namespace QuaSARQ {
         for (uint32 i = 0; i < n; i++)
             if (bs[i] == '1') fired++;
         LOGHEADER(1, 4, label);
-        if (options.quiet_en) PRINT("%s%s:%s\n", CHEADER, label, CNORMAL);
         if (out == stdout) {
+            LOG2(0, "%s%s:%s\n", CHEADER, label, CNORMAL);
             if (options.color_bitstring) {
                 string colored;
                 colored.reserve(n * 2);

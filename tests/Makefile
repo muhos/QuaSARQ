@@ -57,7 +57,9 @@ $(SCHEDULER_BIN): $(SCHEDULER_SRCS)
 	@$(NVCC) $(ALL_FLAGS) $(INCLUDES) -o $@ $(SCHEDULER_SRCS)
 	@echo "done."
 
-$(QUASARQ_LIB):
+FORCE:
+
+$(QUASARQ_LIB): FORCE
 	@$(MAKE) -C $(QUASARQ_DIR) build/libquasarq.a
 
 $(CUARENA_LIB):
@@ -76,4 +78,4 @@ run: all
 clean:
 	rm -f $(PARSER_BIN) $(SCHEDULER_BIN) $(SIMULATOR_BIN)
 
-.PHONY: all run clean
+.PHONY: all run clean FORCE

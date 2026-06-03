@@ -12,10 +12,14 @@ src/*.sh
 src/.DS_Store
 circuits/*.stim
 circuits/*.qasm
+circuits/*.qstate
+circuits/*.txt
+circuits/*.01
 scripts
 build
 tests/test_parser
 tests/test_scheduler
+tests/test_simulator
 *.txt
 *.qstate
 *.01

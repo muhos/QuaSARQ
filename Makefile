@@ -121,6 +121,7 @@ PTXEXT    := ptx
 mainsrc  := main
 cusrc    := $(sort $(wildcard $(SRC_DIR)/*.cu))
 allcppsrc:= $(sort $(wildcard $(SRC_DIR)/*.cpp))
+headers  := $(sort $(wildcard $(SRC_DIR)/*.cuh) $(wildcard $(SRC_DIR)/*.hpp))
 cppmain  := $(SRC_DIR)/$(mainsrc).cpp
 cppsrc   := $(filter-out $(cppmain),$(allcppsrc))
 mainobj  := $(SRC_DIR)/$(mainsrc).$(CPPOBJEXT)
@@ -174,15 +175,15 @@ $(BUILD_DIR)/$(BIN): $(mainobj) $(BUILD_DIR)/$(LIB) $(CUARENA_LIB)
 	    -L$(BUILD_DIR) -l$(BIN) $(EXTRALIB)
 	@$(DONE)
 
-$(mainobj): $(cppmain)
+$(mainobj): $(cppmain) $(headers)
 	@$(PROGRESS) $<
 	@$(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $<
 
-$(SRC_DIR)/%.$(CUOBJEXT): $(SRC_DIR)/%.cu
+$(SRC_DIR)/%.$(CUOBJEXT): $(SRC_DIR)/%.cu $(headers)
 	@$(PROGRESS) $<
 	@$(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) $(RELOC) -o $@ -c $<
 
-$(SRC_DIR)/%.$(CPPOBJEXT): $(SRC_DIR)/%.cpp
+$(SRC_DIR)/%.$(CPPOBJEXT): $(SRC_DIR)/%.cpp $(headers)
 	@$(PROGRESS) $<
 	@$(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $<
 
@@ -203,4 +204,4 @@ clean:
 	@cmake --build $(CUARENA_DIR)/build --target clean -- --no-print-directory
 	@echo "done"
 
-.PHONY: all clean
+.PHONY: all test clean
