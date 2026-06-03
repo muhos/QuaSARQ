@@ -12,9 +12,9 @@ namespace QuaSARQ {
 
     void DetectorData::alloc_device(DeviceAllocator& allocator) {
         if (device.is_allocated()) return;
-        device.refs = allocator.allocate<uint32>(refs.size());
-        device.starts = allocator.allocate<uint32>(starts.size());
-        device.counts = allocator.allocate<uint32>(counts.size());
+        device.refs = allocator.allocate<uint32>(refs.size(), Region::Stable);
+        device.starts = allocator.allocate<uint32>(starts.size(), Region::Stable);
+        device.counts = allocator.allocate<uint32>(counts.size(), Region::Stable);
     }
 
     void DetectorData::move_to_pinned() {
@@ -56,7 +56,7 @@ namespace QuaSARQ {
     void ObservableData::alloc_device(DeviceAllocator& allocator) {
         if (records.device.is_allocated()) return;
         records.alloc_device(allocator);
-        device.ids = allocator.allocate<uint32>(ids.size());
+        device.ids = allocator.allocate<uint32>(ids.size(), Region::Stable);
     }
 
     void ObservableData::move_to_pinned() {

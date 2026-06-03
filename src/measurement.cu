@@ -154,11 +154,8 @@ namespace QuaSARQ {
                     const sign_t rbit = reference_mode ? sign_t(0) : mrand.brand();
                     inject_swap(qubit, rbit, stream);
                     inject_x(qubit, rbit, stream);
-                    if (isReset(int(curr_gate.type)))
+                    if (isReset(int(curr_gate.type)) || curr_gate.type == byte_t(MR)) {
                         may_reset_signs = true;
-                    if (curr_gate.type == MR) { // MRX/MRY are expanded in parser, so only check for MR.
-                        may_reset_signs = true;
-                        has_mr_gates    = true;
                     }
                     random_measures++;
                 }
@@ -166,7 +163,7 @@ namespace QuaSARQ {
             }
         }
 
-        if (has_mr_gates || !may_reset_signs) {
+        if (circuit.is_recording(depth_level) && !may_reset_signs) {
             record_measurements(num_gates_per_window, depth_level, stream);
         }
         if (may_reset_signs) {

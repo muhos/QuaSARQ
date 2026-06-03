@@ -5,7 +5,6 @@
 
 namespace QuaSARQ {
 
-
     __global__
     void reset_signs_k(
         Signs*                      inv_ss, 
@@ -15,26 +14,13 @@ namespace QuaSARQ {
         const   size_t              num_words_minor) 
     {
         sign_t* ss = inv_ss->data();
-        uint64* smasks = SharedMemory<uint64>();
-        smasks[threadIdx.x] = 0;
-        __syncthreads();
-        const Gate& base_gate = (Gate&) gates[refs[blockIdx.x * blockDim.x]];
-        const size_t base_qword = WORD_OFFSET(base_gate.wires[0]);
         for_parallel_x(i, num_gates) {
             const Gate& gate = (Gate&) gates[refs[i]];
             const size_t q = gate.wires[0];
-            const size_t local_qword = WORD_OFFSET(q) - base_qword;
-            atomicOr(&smasks[local_qword], BITMASK_GLOBAL(q));
-        }
-        __syncthreads();
-        // In case num_gates is not divisible by blockDim.x.
-        const Gate& last_gate = (Gate&) gates[refs[MIN((blockIdx.x + 1) * blockDim.x, num_gates) - 1]];
-        if (threadIdx.x < last_gate.wires[0] - base_qword) {
-            word_std_t mask = static_cast<word_std_t>(smasks[threadIdx.x]);
-            const size_t w = base_qword + threadIdx.x;
-            mask = ~mask;
-            ss[w] &= mask;
-            ss[w + num_words_minor] &= mask;
+            const size_t w = WORD_OFFSET(q);
+            const word_std_t mask = ~BITMASK_GLOBAL(q);
+            atomicAND(ss + w, mask);
+            atomicAND(ss + w + num_words_minor, mask);
         }
     }
 

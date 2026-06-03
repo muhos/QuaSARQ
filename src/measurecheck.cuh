@@ -67,15 +67,26 @@ namespace QuaSARQ {
 
 		bool input_copied;
 
-		MeasurementChecker() : 
-			num_qubits(0) 
+		MeasurementChecker() :
+			num_qubits(0)
 			, num_qubits_padded(0)
 			, num_words_major(0)
 			, num_words_minor(0)
+			, measures_count(0)
 			, pivot(INVALID_PIVOT)
 			, qubit(INVALID_QUBIT)
 			, input_copied(false)
 			{}
+
+		void destroy() {
+			num_qubits = 0;
+			num_qubits_padded = 0;
+			num_words_major = 0;
+			num_words_minor = 0;
+			measures_count = 0;
+			pivot = INVALID_PIVOT;
+			qubit = INVALID_QUBIT;
+		}
 
 		~MeasurementChecker() { destroy();}
 
@@ -85,16 +96,8 @@ namespace QuaSARQ {
 			input_copied = false;
 		}
 
-		void destroy() {
-			num_qubits = 0; 
-			num_qubits_padded = 0;
-			num_words_major = 0;
-			num_words_minor = 0;
-			pivot = INVALID_PIVOT;
-			qubit = INVALID_QUBIT;
-		}
-
 		void alloc(const size_t& num_qubits) {
+			measures_count = 0;
 			this->num_qubits = num_qubits;
 			num_qubits_padded = get_num_padded_bits(num_qubits);
 			num_words_minor = get_num_words(num_qubits);

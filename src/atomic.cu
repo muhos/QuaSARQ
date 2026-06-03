@@ -45,6 +45,19 @@ namespace QuaSARQ {
     }
 #endif
 
+#if defined(WORD_SIZE_8)
+    NOINLINE_DEVICE void atomicAND(word_std_t* addr, const uint32& value) {
+        assert(value <= WORDS_MAX);
+        EXTRACT_BYTE_FROM_ADDR(addr, value);
+        const uint32 byte_mask = ~(uint32(0xFF) << al_offset) | byte;
+        atomicAnd(byte_addr, byte_mask);
+    }
+#else
+    NOINLINE_DEVICE word_std_t atomicAND(word_std_t* addr, const word_std_t& value) {
+        return atomicAnd(addr, value);
+    }
+#endif
+
     NOINLINE_DEVICE void atomicByteXOR(byte_t* addr, const uint32& value) {
     	EXTRACT_BYTE_FROM_ADDR(addr, value);
         atomicXor(byte_addr, byte);

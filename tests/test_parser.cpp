@@ -2,6 +2,7 @@
 #include "helper.hpp"
 
 using namespace QuaSARQ;
+
 struct ParserHarness {
     CircuitIO io;
 
@@ -35,9 +36,9 @@ struct ParserHarness {
 
     size_t queue_size() const { return io.circuit_queue.size(); }
 
-    const ParsedGate& gate(size_t i) { return io.circuit_queue[i]; }
+    const ParsedGate& gate(const size_t& i) { return io.circuit_queue[i]; }
 
-    size_t count(Gatetypes t) const { return io.gate_stats.types[t]; }
+    size_t count(const Gatetypes& t) const { return io.gate_stats.types[t]; }
 };
 
 static int translate(const char* name) {

@@ -20,6 +20,12 @@ namespace QuaSARQ {
     word_std_t atomicXOR(word_std_t* addr, const word_std_t& value);
 #endif
 
+#if defined(WORD_SIZE_8)
+    NOINLINE_DEVICE void atomicAND(word_std_t* addr, const uint32& value);
+#else
+    NOINLINE_DEVICE word_std_t atomicAND(word_std_t* addr, const word_std_t& value);
+#endif
+
     NOINLINE_DEVICE 
     void atomicByteXOR(byte_t* addr, const uint32& value);
 
