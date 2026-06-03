@@ -80,11 +80,6 @@ namespace QuaSARQ {
                     assert((blockIdx.x * num_words_minor + w) < gridDim.x * num_words_minor);
                     const size_t bid = PREFIX_INTERMEDIATE_INDEX(w, bx);
                     WRITE_INTERMEDIATE_PREFIX(bid, blocksum_z, blocksum_x);
-                    const size_t c_destab = TABLEAU_INDEX(w, pivot);
-                    if (blocksum_z)
-                        atomicXOR(zs + c_destab, blocksum_z);
-                    if (blocksum_x)
-                        atomicXOR(xs + c_destab, blocksum_x);
                 }
             }
         }
@@ -126,6 +121,7 @@ namespace QuaSARQ {
             sign_t local_stab_sign = 0;
             for_parallel_x(tid_x, active_targets) {
                 const size_t c_stab = TABLEAU_INDEX(w, pivots[0]) + TABLEAU_STAB_OFFSET;
+                const size_t c_destab = TABLEAU_INDEX(w, pivots[0]);
                 const size_t t_destab = TABLEAU_INDEX(w, pivots[tid_x + 1]);
                 const size_t t_stab = t_destab + TABLEAU_STAB_OFFSET;
 
@@ -139,6 +135,10 @@ namespace QuaSARQ {
 
                 compute_local_sign_per_block(local_destab_sign, zs[t_stab], zc_xor_prefix, zs[c_stab], zs[t_destab]);
                 compute_local_sign_per_block(local_stab_sign, xs[t_stab], xc_xor_prefix, xs[c_stab], xs[t_destab]);
+                if (zs[t_destab])
+                    atomicXOR(zs + c_destab, word_std_t(zs[t_destab]));
+                if (xs[t_destab])
+                    atomicXOR(xs + c_destab, word_std_t(xs[t_destab]));
             }
             if (local_destab_sign)
                 atomicXOR(ss + w, local_destab_sign);
@@ -196,6 +196,7 @@ namespace QuaSARQ {
 
                 if (active) {
                     const size_t c_stab = TABLEAU_INDEX(w, sh_pivot0) + TABLEAU_STAB_OFFSET;
+                    const size_t c_destab = TABLEAU_INDEX(w, sh_pivot0);
                     const size_t t_destab = TABLEAU_INDEX(w, pivots[tid_x + 1]);
                     const size_t t_stab = t_destab + TABLEAU_STAB_OFFSET;
 
@@ -209,6 +210,10 @@ namespace QuaSARQ {
 
                     compute_local_sign_per_block(local_destab_sign, zs[t_stab], zc_xor_prefix, zs[c_stab], zs[t_destab]);
                     compute_local_sign_per_block(local_stab_sign, xs[t_stab], xc_xor_prefix, xs[c_stab], xs[t_destab]);
+                    if (zs[t_destab])
+                        atomicXOR(zs + c_destab, word_std_t(zs[t_destab]));
+                    if (xs[t_destab])
+                        atomicXOR(xs + c_destab, word_std_t(xs[t_destab]));
                 }
             }
 

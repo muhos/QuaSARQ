@@ -5,8 +5,10 @@ namespace QuaSARQ {
 
     bool is_anti_commuting_cpu(
 		const 	Table&          h_xs, 
+		const 	Table&          h_zs,
 		const   qubit_t         qubit,
 		const   pivot_t         index,
+        const   byte_t          gate_type,
 		const   size_t          num_words_major, 
         const   size_t          num_words_minor,
         const   size_t          num_qubits_padded) 
@@ -20,11 +22,11 @@ namespace QuaSARQ {
         const size_t q_w = WORD_OFFSET(qubit);
         const word_std_t q_mask = BITMASK_GLOBAL(qubit);
         const size_t word_idx = TABLEAU_INDEX(q_w, index) + TABLEAU_STAB_OFFSET;
-        const word_std_t qubit_word = h_xs[word_idx];
+        const word_std_t qubit_word = select_anticommuting_word(h_xs[word_idx], h_zs[word_idx], gate_type);
         return bool(qubit_word & q_mask);
 	}
 
-    void MeasurementChecker::find_min_pivot(const qubit_t& qubit, const bool& store_pivots) {
+    void MeasurementChecker::find_min_pivot(const qubit_t& qubit, const byte_t& gate_type, const bool& store_pivots) {
         SYNCALL;
         if (qubit == INVALID_QUBIT) {
             LOGERROR("qubit not set");
@@ -34,8 +36,10 @@ namespace QuaSARQ {
             const 
             bool anti_commuting = is_anti_commuting_cpu(
                 h_xs,
+                h_zs,
                 qubit,
                 i,
+                gate_type,
                 num_words_major,
                 num_words_minor,
                 num_qubits_padded
@@ -65,7 +69,7 @@ namespace QuaSARQ {
         for (auto i = 0; i < num_gates; i++) {
             const Gate& m = circuit.gate(depth_level, i);
             assert(m.size == 1);
-            find_min_pivot(m.wires[0]);
+            find_min_pivot(m.wires[0], m.type);
             if (pivot != other_pivots[i])
                 LOGERROR("minimum pivot %d (calculated by CPU) and %d and do not match at gate index %lld", 
                     pivot, other_pivots[i], size_t(i));
@@ -73,7 +77,7 @@ namespace QuaSARQ {
         LOGPASSED(2);
     }
 
-    void MeasurementChecker::check_compact_pivots(const qubit_t& qubit, const pivot_t* other_pivots, const size_t& other_num_pivots) {
+    void MeasurementChecker::check_compact_pivots(const qubit_t& qubit, const byte_t& gate_type, const pivot_t* other_pivots, const size_t& other_num_pivots) {
         SYNCALL;
         if (!input_copied) {
             LOGERROR("device input not copied to the checker");
@@ -81,7 +85,8 @@ namespace QuaSARQ {
         LOGN2(2, " Checking compact pivots for qubit %d.. ", qubit);
         h_compact_pivots.clear();
         this->qubit = qubit;
-        find_min_pivot(qubit, true);
+        this->gate_type = gate_type;
+        find_min_pivot(qubit, gate_type, true);
         if (h_compact_pivots.size() != other_num_pivots)
             LOGERROR("number of compact pivots %u does not match cpu-based number %u", 
                 other_num_pivots, h_compact_pivots.size());

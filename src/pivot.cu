@@ -67,12 +67,6 @@ namespace QuaSARQ {
         } \
 	}
 
-    INLINE_DEVICE
-    word_std_t select_anticommuting_word(const word_std_t& xw, const word_std_t& zw, const byte_t& gate_type)
-    {
-        return (gate_type == byte_t(RX)) ? zw : (gate_type == byte_t(RY)) ? xw ^ zw : xw;
-    }
-
     __global__
     void all_random_measures(
                 pivot_t*            pivots,
@@ -305,4 +299,3 @@ namespace QuaSARQ {
         } else LOGDONE(2, 4);
     }
 }
-

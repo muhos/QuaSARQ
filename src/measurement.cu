@@ -141,12 +141,18 @@ namespace QuaSARQ {
             const Gate& curr_gate = circuit.gate(depth_level, i);
             const pivot_t curr_pivot = host_pivots[i];
             const qubit_t qubit = curr_gate.wires[0];
+            if (isReset(int(curr_gate.type)))
+                may_reset_signs = true;
+            if (curr_gate.type == MR) {
+                may_reset_signs = true;
+                has_mr_gates    = true;
+            }
             if (curr_pivot != INVALID_PIVOT) {
                 compact_targets(qubit, curr_gate.type, stream);
                 SYNC(stream);
                 const uint32 active_pivots = pivoting.h_active_pivots[0];
                 if (options.check_measurement)
-                    mchecker.check_compact_pivots(qubit, pivoting.pivots, active_pivots);
+                    mchecker.check_compact_pivots(qubit, curr_gate.type, pivoting.pivots, active_pivots);
                 if (active_pivots) {
                     if (active_pivots > 1) {
                         inject_cx(active_pivots - 1, stream);
@@ -154,16 +160,14 @@ namespace QuaSARQ {
                     const sign_t rbit = reference_mode ? sign_t(0) : mrand.brand();
                     inject_swap(qubit, rbit, stream);
                     inject_x(qubit, rbit, stream);
-                    if (isReset(int(curr_gate.type)) || curr_gate.type == byte_t(MR)) {
-                        may_reset_signs = true;
-                    }
                     random_measures++;
                 }
                 max_random_measures++;
             }
         }
 
-        if (circuit.is_recording(depth_level) && !may_reset_signs) {
+        assert(!has_mr_gates || circuit.is_recording(depth_level));
+        if (has_mr_gates || !may_reset_signs) {
             record_measurements(num_gates_per_window, depth_level, stream);
         }
         if (may_reset_signs) {
@@ -178,4 +182,3 @@ namespace QuaSARQ {
         return random_measures;
     }
 }
-

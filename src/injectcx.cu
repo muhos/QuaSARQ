@@ -30,7 +30,7 @@ namespace QuaSARQ {
 
         copy_input(other_input, true);
 
-        find_min_pivot(qubit);
+        find_min_pivot(qubit, gate_type);
 
         if (pivot == INVALID_PIVOT) 
             return;
@@ -41,8 +41,10 @@ namespace QuaSARQ {
         for (size_t t = pivot + 1; t < num_qubits; t++) {
             anticommuting[t] = is_anti_commuting_cpu(
                 h_xs,
+                h_zs,
                 qubit,
                 t,
+                gate_type,
                 num_words_major,
                 num_words_minor,
                 num_qubits_padded
@@ -93,4 +95,3 @@ namespace QuaSARQ {
         LOGPASSED(2);
     }
 }
-
