@@ -10,7 +10,7 @@ namespace QuaSARQ {
         double elapsed = 0;
         if (active_targets <= 32)
             elapsed = prefix.scan_warp(tableau, pivoting.pivots, active_targets, stream);   
-        else if (active_targets > 32 && active_targets <= 1024)
+        else if (active_targets > 32 && active_targets <= 512)
             elapsed = prefix.scan_block(tableau, pivoting.pivots, active_targets, stream);
         else
             elapsed = prefix.scan_large(tableau, pivoting.pivots, active_targets, stream);

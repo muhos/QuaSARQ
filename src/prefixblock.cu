@@ -105,11 +105,15 @@ namespace QuaSARQ {
     double Prefix::scan_block(Tableau& input, const pivot_t* pivots, const size_t& active_targets, const cudaStream_t& stream) {
         const size_t num_qubits_padded = input.num_qubits_padded();
         const size_t pow2_active_targets = nextPow2(active_targets);
-        if (pow2_active_targets > 1024) {
-            LOGERROR("power-of-2 active targets %d exceeds maximum block size of 1024", pow2_active_targets);
+        if (pow2_active_targets > 512) {
+            LOGERROR("power-of-2 active targets %d exceeds maximum inject-cx block size of 512", pow2_active_targets);
         }
         dim3 currentblock(1, 1), currentgrid(1, 1);
         tune_grid_size(currentblock, currentgrid, pow2_active_targets);
+        if (currentblock.x >= 512 && currentblock.y > 1) {
+            currentblock.y = 1;
+            currentgrid.y = MIN(ROUNDUP(num_words_minor, currentblock.y), maxGPUBlocks);
+        }
         LOGN2(2, "Injecting CX for %d targets with block(x:%u, y:%u) and grid(x:%u, y:%u).. ",
             active_targets, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
         double elapsed = 0;
@@ -128,4 +132,3 @@ namespace QuaSARQ {
     }
 
 }
-
