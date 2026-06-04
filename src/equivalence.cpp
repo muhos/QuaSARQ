@@ -16,6 +16,8 @@ Equivalence::Equivalence() :
     , other_tableau(gpu_allocator)
     , other_gpu_circuit(gpu_allocator)
     , other_custreams(nullptr)
+    , failed_state('?')
+    , last_equivalent(false)
     , Simulator()
     {
         assert(!circuit.empty());
@@ -34,7 +36,9 @@ Equivalence::Equivalence(const string& path_to_circuit, const string& path_to_ot
     , other_tableau(gpu_allocator)
     , other_gpu_circuit(gpu_allocator)
     , other_custreams(nullptr)
-    , Simulator(path_to_circuit) 
+    , failed_state('?')
+    , last_equivalent(false)
+    , Simulator(path_to_circuit)
     {
         create_streams(other_custreams);
         if (path_to_other.empty()) {
@@ -43,7 +47,7 @@ Equivalence::Equivalence(const string& path_to_circuit, const string& path_to_ot
         else {
             assert(!circuit_io.size);
             other_num_qubits = parse(other_stats, path_to_other.c_str());
-            other_depth = schedule(other_stats, other_circuit, other_winfo);
+            other_depth = schedule(other_stats, other_circuit, other_winfo, other_num_qubits);
             stats.time.initial += other_stats.time.initial;
             stats.time.schedule += other_stats.time.schedule;
         }
@@ -124,6 +128,7 @@ void Equivalence::check() {
     LOGHEADER(1, 4, "Equivalence checking");
     if (num_qubits != other_num_qubits) {
         LOG2(1, "%s NOT EQUIVALENT%s due to misaligned qubits.", CRED, CNORMAL);
+        last_equivalent = false;
         report(false);
         return;
     }
@@ -142,7 +147,9 @@ void Equivalence::check() {
     stats.time.initial += timer.elapsed();
     // Start step-wise equivalence.
     timer.start();
-    const bool equivalent = check(Zero, num_qubits_per_partition, other_num_qubits_per_partition) && check(Plus, num_qubits_per_partition, other_num_qubits_per_partition);
+    const bool equivalent = check(Zero, num_qubits_per_partition, other_num_qubits_per_partition) && 
+                            check(Plus, num_qubits_per_partition, other_num_qubits_per_partition);
+    last_equivalent = equivalent;
 	SYNCALL;
 	timer.stop();
 	stats.time.simulation = timer.elapsed();

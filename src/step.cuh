@@ -1,6 +1,5 @@
 #pragma once
 
-#include <curand_kernel.h>
 #include "datatypes.cuh"
 
 namespace QuaSARQ {

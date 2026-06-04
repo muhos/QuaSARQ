@@ -190,7 +190,7 @@ namespace QuaSARQ {
 
     void Framing::shot(const depth_t& depth_level, const cudaStream_t& stream) {
         if (options.check_measurement) {
-            mchecker.copy_input(tableau);
+            mchecker.copy_input(tableau, false, false);
         }
         const size_t num_gates_per_window = circuit[depth_level].size();
         dim3 currentblock(1, 1), currentgrid(1, 1);

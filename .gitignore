@@ -20,6 +20,8 @@ build
 tests/test_parser
 tests/test_scheduler
 tests/test_simulator
+tests/test_sampling
+tests/test_equivalence
 *.txt
 *.qstate
 *.01

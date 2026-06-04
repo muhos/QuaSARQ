@@ -1,5 +1,6 @@
 #pragma once
 
+#include "definitions.cuh"
 #include <curand_kernel.h>
 
 #include "table.cuh"

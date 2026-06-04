@@ -97,7 +97,7 @@ namespace QuaSARQ {
         void        simulate            ();
         void        rsample             ();
         size_t      parse               (Statistics& stats, const char* path);
-        size_t      schedule            (Statistics& stats, Circuit& circuit, WindowInfo& target_winfo);
+        size_t      schedule            (Statistics& stats, Circuit& circuit, WindowInfo& target_winfo, const size_t& scheduled_num_qubits = 0);
         void        simulate            (const size_t& p, const bool& reversed);
 
         // Handling observables and detectors on device.

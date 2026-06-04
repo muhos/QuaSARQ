@@ -19,6 +19,7 @@ namespace QuaSARQ {
 		WindowInfo                      other_winfo;
 		string 							ogate, rgate;
 		char							failed_state;
+		bool                            last_equivalent;
 
 	public:
 
@@ -27,6 +28,7 @@ namespace QuaSARQ {
 		~Equivalence() { }
 
 		void report(const bool& equivalent);
+		bool is_equivalent() const { return last_equivalent; }
 
 		void inject_faulty();
 

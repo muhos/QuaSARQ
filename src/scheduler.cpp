@@ -469,11 +469,12 @@ namespace QuaSARQ {
         return result;
     }
 
-    size_t Simulator::schedule(Statistics& stats, Circuit& circuit, WindowInfo& target_winfo) {
+    size_t Simulator::schedule(Statistics& stats, Circuit& circuit, WindowInfo& target_winfo, const size_t& scheduled_num_qubits) {
         LOGN2(1, "Scheduling %s%zd%s gates for parallel simulation.. ", CREPORTVAL, stats.circuit.num_gates, CNORMAL);
         LOG2(2, "");
         timer.start();
-        const auto result = schedule_gates(circuit_io, circuit, target_winfo, num_qubits, stats, !options.check_tableau);
+        const size_t scheduling_qubits = scheduled_num_qubits ? scheduled_num_qubits : num_qubits;
+        const auto result = schedule_gates(circuit_io, circuit, target_winfo, scheduling_qubits, stats, !options.check_tableau);
         measuring = result.measuring;
         timer.stop();
         stats.time.schedule = timer.elapsed();

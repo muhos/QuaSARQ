@@ -1,7 +1,7 @@
 #pragma once
 
-#include <curand_kernel.h>
 #include "definitions.cuh"
+#include <curand_kernel.h>
 #include "word.cuh"
 
 namespace QuaSARQ {

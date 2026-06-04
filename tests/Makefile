@@ -8,7 +8,7 @@ CUARENA_LIB := $(CUARENA_DIR)/build/libcuarena.a
 QUASARQ_LIB := $(QUASARQ_DIR)/build/libquasarq.a
 
 INCLUDES  := -I$(QUASARQ_DIR)/src -I$(CUARENA_DIR)/include
-LIBS      := -L$(QUASARQ_DIR)/build -lquasarq -L$(CUARENA_DIR)/build -lcuarena -L$(CUDA_PATH)/lib64 -lcudart -lnvidia-ml
+LIBS      := -L$(QUASARQ_DIR)/build -lquasarq -L$(CUARENA_DIR)/build -lcuarena -L$(CUDA_PATH)/lib64 -lcudart -lcurand -lnvidia-ml
 CCFLAGS   := -std=c++20 -fdiagnostics-show-option
 NVCCFLAGS := -m64 -std=c++20 -arch=native
 
@@ -45,7 +45,13 @@ SCHEDULER_BIN  := test_scheduler
 SIMULATOR_SRCS := test_simulator.cpp
 SIMULATOR_BIN  := test_simulator
 
-all: $(PARSER_BIN) $(SCHEDULER_BIN) $(SIMULATOR_BIN)
+SAMPLING_SRCS := test_sampling.cpp
+SAMPLING_BIN  := test_sampling
+
+EQUIVALENCE_SRCS := test_equivalence.cpp
+EQUIVALENCE_BIN  := test_equivalence
+
+all: $(PARSER_BIN) $(SCHEDULER_BIN) $(SIMULATOR_BIN) $(SAMPLING_BIN) $(EQUIVALENCE_BIN)
 
 $(PARSER_BIN): $(PARSER_SRCS)
 	@echo -n "Building $@..."
@@ -70,12 +76,24 @@ $(SIMULATOR_BIN): $(SIMULATOR_SRCS) $(QUASARQ_LIB) $(CUARENA_LIB)
 	@$(NVCC) $(ALL_FLAGS) $(INCLUDES) -o $@ $(SIMULATOR_SRCS) $(LIBS)
 	@echo "done."
 
+$(SAMPLING_BIN): $(SAMPLING_SRCS) $(QUASARQ_LIB) $(CUARENA_LIB)
+	@echo -n "Building $@..."
+	@$(NVCC) $(ALL_FLAGS) $(INCLUDES) -o $@ $(SAMPLING_SRCS) $(LIBS)
+	@echo "done."
+
+$(EQUIVALENCE_BIN): $(EQUIVALENCE_SRCS) $(QUASARQ_LIB) $(CUARENA_LIB)
+	@echo -n "Building $@..."
+	@$(NVCC) $(ALL_FLAGS) $(INCLUDES) -o $@ $(EQUIVALENCE_SRCS) $(LIBS)
+	@echo "done."
+
 run: all
 	@./$(PARSER_BIN)
 	@./$(SCHEDULER_BIN)
 	@./$(SIMULATOR_BIN)
+	@./$(SAMPLING_BIN)
+	@./$(EQUIVALENCE_BIN)
 
 clean:
-	rm -f $(PARSER_BIN) $(SCHEDULER_BIN) $(SIMULATOR_BIN)
+	rm -f $(PARSER_BIN) $(SCHEDULER_BIN) $(SIMULATOR_BIN) $(SAMPLING_BIN) $(EQUIVALENCE_BIN)
 
 .PHONY: all run clean FORCE

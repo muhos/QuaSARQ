@@ -1,6 +1,5 @@
 #pragma once
 
-#include <curand_kernel.h>
 #include "simulator.hpp"
 #include "samples.cuh"
 
