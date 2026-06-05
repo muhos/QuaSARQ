@@ -1,5 +1,11 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Build Status](https://github.com/muhos/QuaSARQ/actions/workflows/test-build.yml/badge.svg)](https://github.com/muhos/QuaSARQ/actions/workflows/test-build.yml)
+![CUDA](https://img.shields.io/badge/CUDA-12%2B-76B900?logo=nvidia&logoColor=white)
+![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?logo=cplusplus&logoColor=white)
+![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20WSL2-lightgrey)
+![Stim](https://img.shields.io/badge/input-Stim%20%7C%20OpenQASM-blue)
+[![arXiv](https://img.shields.io/badge/arXiv-2603.14641-b31b1b.svg)](https://arxiv.org/abs/2603.14641)
+[![DOI](https://img.shields.io/badge/DOI-10.1007%2F978--3--031--90660--2__6-blue)](https://doi.org/10.1007/978-3-031-90660-2_6)
 
 # QuaSARQ
 
