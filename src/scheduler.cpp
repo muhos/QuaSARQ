@@ -153,6 +153,10 @@ namespace QuaSARQ {
         else {
             FOREACH_GATE(INIT_PROB);
         }
+        probabilities[MX]  = 0.0;
+        probabilities[MY]  = 0.0;
+        probabilities[MRX] = 0.0;
+        probabilities[MRY] = 0.0;
         NORMALIZE_PROBS();
         size_t* types = stats.circuit.gate_stats.types;
         size_t parallel_gates_per_window = 0;

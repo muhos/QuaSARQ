@@ -7,6 +7,7 @@
 namespace QuaSARQ {
 
     __managed__ uint64 checksum;
+    __managed__ sign_t sign_checksum;
 
     #define COLUMN_MAJOR_IDX(WORD_IDX, QUBIT_IDX) (QUBIT_IDX) * num_words_major + (WORD_IDX)
     #define XBLOCKSIZE 32
@@ -184,17 +185,32 @@ namespace QuaSARQ {
         }
     }
 
+    __global__
+    void check_signs_zero(const Signs* ss, const size_t num_words) {
+        for_parallel_x(w, num_words) {
+            if ((*ss)[w]) atomicOr(&sign_checksum, (*ss)[w]);
+        }
+    }
+
     bool check_identity(
-        const Tableau&  tableau, 
-        const size_t&   offset_per_partition, 
+        const Tableau&  tableau,
+        const size_t&   offset_per_partition,
         const size_t&   num_qubits_per_partition,
         const bool&     measuring) {
         assert(num_qubits_per_partition <= tableau.num_qubits_padded());
         SYNCALL;
-        dim3 currentblock(XBLOCKSIZE, 16); 
+        dim3 currentblock(XBLOCKSIZE, 16);
         dim3 currentgrid(50, 50);
         OPTIMIZESHARED(reduce_smem_size, currentblock.y * currentblock.x, sizeof(word_std_t));
-        checksum = 0;
+        checksum      = 0;
+        sign_checksum = 0;
+        {
+            const size_t num_sign_words = tableau.num_words_major();
+            dim3 sblock(256), sgrid;
+            OPTIMIZEBLOCKS(sgrid.x, num_sign_words, sblock.x);
+            check_signs_zero <<< sgrid, sblock >>> (tableau.signs(), num_sign_words);
+            LASTERR("failed to launch check-signs-zero kernel");
+        }
         void (*kernel)(const size_t, const size_t, const size_t, Table*, Table*);
         if (measuring) { 
             if (options.initialstate == Zero) {
@@ -225,12 +241,12 @@ namespace QuaSARQ {
         LASTERR("failed to launch check-identity kernel");
         SYNCALL;
         const bool is_identity = tableau.is_table_identity();
+        const bool signs_zero  = (sign_checksum == 0);
         bool passed = false;
         if (options.initialstate == Imag)
-            passed = (is_identity && (checksum == 0));
-        else {
-            passed = (is_identity && (checksum == measuring ? 2 * num_qubits_per_partition : num_qubits_per_partition));
-        }
+            passed = (is_identity && signs_zero && (checksum == 0));
+        else
+            passed = (is_identity && signs_zero && (checksum == (measuring ? 2 * num_qubits_per_partition : num_qubits_per_partition)));
         return passed;
     }
 

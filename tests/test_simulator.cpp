@@ -87,12 +87,22 @@ void reset_random_options(const size_t& qubits, const size_t& depth) {
 }
 
 void reset_measurement_and_noise_gates() {
-    options.M_p = 0.0;
-    options.MR_p = 0.0;
-    options.R_p = 0.0;
-    options.X_ERROR_p = 0.0;
-    options.Y_ERROR_p = 0.0;
-    options.Z_ERROR_p = 0.0;
+    options.R_p           = 0.0;
+    options.RX_p          = 0.0;
+    options.RY_p          = 0.0;
+    options.M_p           = 0.0;
+    options.MR_p          = 0.0;
+    options.MX_p          = 0.0;
+    options.MY_p          = 0.0;
+    options.MRX_p         = 0.0;
+    options.MRY_p         = 0.0;
+    options.X_ERROR_p     = 0.0;
+    options.Y_ERROR_p     = 0.0;
+    options.Z_ERROR_p     = 0.0;
+    options.DEPOLARIZE1_p = 0.0;
+    options.DEPOLARIZE2_p = 0.0;
+    options.PAULI_CHANNEL_1_p = 0.0;
+    options.PAULI_CHANNEL_2_p = 0.0;
 }
 
 void check_loaded_surface_code(SimulatorHarness& sim) {
@@ -178,12 +188,15 @@ void test_surface_code_simulation() {
     }
 }
 
-void test_random_simulation() {
-    section("Simulator random circuit simulation");
-    for (size_t qubits = 1000; qubits <= 20000; qubits += 2000) {
+void test_random_simulation(const bool& with_checking = false) {
+    section(("Simulator random circuit simulation" + std::string(with_checking ? " with built-in checker" : "")).c_str());
+    for (size_t qubits = 1000; qubits <= 5000; qubits += 1000) {
         const size_t depth = 100;
-        run_test(("simulates q" + std::to_string(qubits) + "d" + std::to_string(depth) + " circuit").c_str(), [&] {
+        run_test(("simulates q" + std::to_string(qubits) + "-d" + std::to_string(depth) + " circuit").c_str(), [&] {
             reset_random_options(qubits, depth);
+            if (with_checking) {
+                options.check_measurement = true;
+            }
             SimulatorHarness sim;
             TCHECK(sim.has_measurements());
             TCHECK(sim.statistics().circuit.measure_stats.count > 0);
@@ -193,13 +206,34 @@ void test_random_simulation() {
         });
     }
 
-    section("Simulator random circuit simulation without measurements");
-    for (size_t qubits = 10000; qubits <= 100000; qubits += 10000) {
-        const size_t depth = 100;
-        run_test(("simulates q" + std::to_string(qubits) + "d" + std::to_string(depth) + " circuit").c_str(), [&] {
+    section(("Simulator random circuit simulation " + 
+        std::string(with_checking ? "with built-in checker" : "") + " - no measurements").c_str());
+    for (size_t qubits = 10000; qubits <= 50000; qubits += 10000) {
+        const size_t depth = 500;
+        run_test(("simulates q" + std::to_string(qubits) + "-d" + std::to_string(depth) + " circuit").c_str(), [&] {
             reset_random_options(qubits, depth);
+            reset_measurement_and_noise_gates();
+            if (with_checking) {
+                options.check_all = true;
+            }
             SimulatorHarness sim;
+            TCHECK(!sim.has_measurements());
+            TCHECK(sim.statistics().circuit.measure_stats.count == 0);
+            TCHECK(sim.statistics().circuit.measure_stats.depth == 0);
+            TCHECK(sim.qubits() == qubits);
+            TCHECK(sim.scheduled_depth() > 0);
+            TCHECK(sim.statistics().circuit.num_gates > 0);
+            const Circuit& circuit = sim.get_circuit();
+            for (depth_t d = 0; d < circuit.depth(); d++)
+                TCHECK(!circuit.is_measuring(d));
             sim.simulate();
+            TCHECK(!sim.has_measurements());
+            TCHECK(sim.statistics().circuit.measure_stats.count == 0);
+            TCHECK(sim.statistics().circuit.measure_stats.depth == 0);
+            TCHECK(sim.statistics().tableau.count == 1);
+            TCHECK(sim.statistics().tableau.gigabytes > 0.0);
+            TCHECK(sim.statistics().time.simulation >= 0.0);
+            TCHECK(!sim.is_reference_run());
         });
     }
 }
@@ -208,6 +242,7 @@ int main() {
     test_surface_code_lifecycle();
     test_surface_code_simulation();
     test_random_simulation();
+    test_random_simulation(true);
 
     std::cout << std::format("\n{}{}/{} tests passed{}\n\n",
         passed == total ? CPASS : CFAIL, passed, total, CNORMAL);
