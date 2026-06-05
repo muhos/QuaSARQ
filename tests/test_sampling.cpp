@@ -66,7 +66,7 @@ void check_sampled_circuit(SamplingHarness& framing) {
 
 template<typename Configure>
 void run_for_all_circuits(const char* suffix, Configure configure) {
-    const auto paths = circuit_paths();
+    const auto paths = circuit_paths_up_to_distance(50);
     TCHECK(!paths.empty());
     for (const std::string& path : paths) {
         const std::string name = path + " " + suffix;

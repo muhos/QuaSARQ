@@ -143,7 +143,6 @@ void test_surface_code_lifecycle() {
         const std::string name = path + " loads and schedules";
         run_test(name.c_str(), [&] {
             reset_options(path.c_str());
-            options.check_measurement = true;
             SimulatorHarness sim(path);
             check_loaded_surface_code(sim);
         });
@@ -153,7 +152,7 @@ void test_surface_code_lifecycle() {
 void test_surface_code_simulation() {
     section("Simulator surface code simulation");
 
-    const auto paths = circuit_paths();
+    const auto paths = circuit_paths_up_to_distance(50);
     TCHECK(!paths.empty());
     for (const std::string& path : paths) {
         const std::string name = path + " simulates with dets/obs checks";

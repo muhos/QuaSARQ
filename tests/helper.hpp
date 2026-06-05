@@ -10,6 +10,7 @@
 #include <vector>
 #include <algorithm>
 #include <system_error>
+#include <cctype>
 
 #include "color.hpp"
 
@@ -51,6 +52,34 @@ inline std::vector<std::string> circuit_paths() {
             paths.push_back(entry.path().string());
     }
     std::sort(paths.begin(), paths.end());
+    return paths;
+}
+
+inline size_t circuit_distance(const std::filesystem::path& path) {
+    const std::string name = path.filename().string();
+    size_t pos = name.find("_d");
+    while (pos != std::string::npos) {
+        pos += 2;
+        if (pos < name.size() && std::isdigit(static_cast<unsigned char>(name[pos]))) {
+            size_t distance = 0;
+            while (pos < name.size() && std::isdigit(static_cast<unsigned char>(name[pos]))) {
+                distance = distance * 10 + size_t(name[pos] - '0');
+                pos++;
+            }
+            return distance;
+        }
+        pos = name.find("_d", pos);
+    }
+    return 0;
+}
+
+inline std::vector<std::string> circuit_paths_up_to_distance(const size_t& max_distance) {
+    std::vector<std::string> paths;
+    for (const auto& path : circuit_paths()) {
+        const size_t distance = circuit_distance(path);
+        if (distance > 0 && distance <= max_distance)
+            paths.push_back(path);
+    }
     return paths;
 }
 
