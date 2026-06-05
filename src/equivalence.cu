@@ -23,7 +23,7 @@ namespace QuaSARQ {
         }
     }
 
-    bool Equivalence::check(const size_t& p, const cudaStream_t* streams, const cudaStream_t* other_streams) {
+    bool Equivalence::check(const size_t& p, const cudaStream_t* streams, const cudaStream_t* other_streams, const char& state) {
 
         double stime = 0;
         cudaStream_t copy_stream1 = streams[COPY_STREAM1];
@@ -35,6 +35,7 @@ namespace QuaSARQ {
         const size_t num_words_major = tableau.num_words_major();
         const size_t other_num_words_major = other_tableau.num_words_major();
         const size_t max_depth = MAX(depth, other_depth);
+        const bool saved_sync = options.sync;
 
         if (options.disable_concurrency) {
             other_copy_stream1 = copy_stream1;
@@ -100,9 +101,12 @@ namespace QuaSARQ {
 
 #else
 
-            LOGN2(1, "Partition %zd: Checking equivalence the %d-time step %s using grid(%d, %d) and block(%d, %d).. ", 
-                p, d, !options.sync ? "asynchronously" : "",
-                bestgridstep.x, bestgridstep.y, bestblockstep.x, bestblockstep.y);
+            if (options.progress_en)
+                progress_timer.start();
+            else
+                LOGN2(1, "Partition %zd: Checking equivalence the %d-time step %s using grid(%d, %d) and block(%d, %d).. ",
+                    p, d, !options.sync ? "asynchronously" : "",
+                    bestgridstep.x, bestgridstep.y, bestblockstep.x, bestblockstep.y);
 
             if (options.sync) cutimer.start();
 
@@ -147,10 +151,26 @@ namespace QuaSARQ {
                 cutimer.stop();
                 stime = cutimer.elapsed();
             }
-            if (options.sync) {
-                LOG2(1, "done in %f ms", stime);
+            if (options.sync)
+                LOG2(options.progress_en ? 2 : 1, "done in %f ms", stime);
+            else
+                LOGDONE(options.progress_en ? 2 : 1, 4);
+
+            if (options.progress_en) {
+                SYNC(kernel_stream);
+                SYNC(other_kernel_stream);
+                progress_timer.stop();
+                SETCOLOR(CORANGE1, stdout);
+                LOG2(1, "%c  %-10c    %-10lld    %-10lld    %-10lld    %-10lld    %-7.3f",
+                    'e',
+                    state,
+                    int64(p + 1),
+                    int64(d + 1),
+                    int64(num_gates_per_window),
+                    int64(other_num_gates_per_window),
+                    progress_timer.elapsed() / 1000.0);
+                SETCOLOR(CNORMAL, stdout);
             }
-            else LOGDONE(1, 4);
 
 #endif // End of debug/release mode.
 
@@ -173,14 +193,11 @@ namespace QuaSARQ {
         );
         LASTERR("failed to launch equivalence kernel");
         SYNC(0);
-        if (equivalent)
-            return 1;
-        else
-            return 0;
-
+        const bool result = equivalent;
         if (options.disable_concurrency) {
-            options.sync = false;
+            options.sync = saved_sync;
         }
+        return result;
 
     } // End of function.
 

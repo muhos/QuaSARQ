@@ -57,7 +57,8 @@ namespace QuaSARQ {
         const   size_t&         offset_per_partition, 
         const   size_t&         num_qubits_per_partition, 
         const   cudaStream_t*   streams, 
-        const   InitialState&   istate) 
+        const   InitialState&   istate,
+        const   bool&           quiet)
     {
         const cudaStream_t& stream = streams[KERNEL_STREAM];
         if (options.tune_identity) {
@@ -74,8 +75,9 @@ namespace QuaSARQ {
             state = '+';
         else if (istate == Imag)
             state = 'i';
-        LOGN2(1, "Creating \'%c\' initial state for size %zd and offset %zd using grid(%d) and block(%d).. ", 
-            state, num_qubits_per_partition, offset_per_partition, bestgrididentity.x, bestblockidentity.x);
+        if (!quiet)
+            LOGN2(1, "Creating \'%c\' initial state for size %zd and offset %zd using grid(%d) and block(%d).. ",
+                state, num_qubits_per_partition, offset_per_partition, bestgrididentity.x, bestblockidentity.x);
         if (options.sync) cutimer.start();
         if (offset_per_partition) tab.reset();
         if (measuring) { 
@@ -105,10 +107,11 @@ namespace QuaSARQ {
             CHECK(cudaDeviceSynchronize());
             cutimer.stop();
             double itime = cutimer.elapsed();
-            LOG2(1, "done in %f ms.", itime);
+            if (!quiet)
+                LOG2(1, "done in %f ms.", itime);
         }
-        else LOGDONE(1, 4);
-        if (options.check_identity) {
+        else if (!quiet) LOGDONE(1, 4);
+        if (options.check_identity && !quiet) {
             LOGN2(1, " Checking identity.. ");
             if (!check_identity(tableau, offset_per_partition, num_qubits_per_partition, measuring)) {
                 LOGERROR("creating identity failed.");

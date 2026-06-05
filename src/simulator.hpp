@@ -107,7 +107,7 @@ namespace QuaSARQ {
         void        copy_detectors      (const cudaStream_t& stream);
 
         // Launch a kernel to make identity tableau.
-        void        identity            (Tableau& tab, const size_t& offset_per_partition, const size_t& num_qubits_per_partition, const cudaStream_t* streams, const InitialState& istate = Zero);
+        void        identity            (Tableau& tab, const size_t& offset_per_partition, const size_t& num_qubits_per_partition, const cudaStream_t* streams, const InitialState& istate = Zero, const bool& quiet = false);
 
         // Advances the simulation by 1-time step.
         void        step                (const size_t& p, const depth_t& depth_level, const bool& reversed = false);

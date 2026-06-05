@@ -94,18 +94,20 @@ bool Equivalence::check(const InitialState& istate, const size_t& num_qubits_per
         if (p < num_partitions) {
             const size_t prev_num_qubits = num_qubits_per_partition * p;
             assert(prev_num_qubits < num_qubits);
-            LOGN2(1, "Partition %zd: ", p);
-            identity(tableau, prev_num_qubits, (p == num_partitions - 1) ? (num_qubits - prev_num_qubits) : num_qubits_per_partition, custreams, istate);
+            if (!options.progress_en)
+                LOGN2(1, "Partition %zd: ", p);
+            identity(tableau, prev_num_qubits, (p == num_partitions - 1) ? (num_qubits - prev_num_qubits) : num_qubits_per_partition, custreams, istate, options.progress_en);
             gpu_circuit.reset_circuit_offset(0);
         }
         if (p < other_num_partitions) {
             const size_t other_prev_num_qubits = other_num_qubits_per_partition * p;
             assert(other_prev_num_qubits < other_num_qubits);
-            LOGN2(1, "Partition %zd: ", p);
-            identity(other_tableau, other_prev_num_qubits, (p == other_num_partitions - 1) ? (other_num_qubits - other_prev_num_qubits) : other_num_qubits_per_partition, other_custreams, istate);
+            if (!options.progress_en)
+                LOGN2(1, "Partition %zd: ", p);
+            identity(other_tableau, other_prev_num_qubits, (p == other_num_partitions - 1) ? (other_num_qubits - other_prev_num_qubits) : other_num_qubits_per_partition, other_custreams, istate, options.progress_en);
             other_gpu_circuit.reset_circuit_offset(0);
         }
-        if (check(p, custreams, other_custreams)) {
+        if (check(p, custreams, other_custreams, state)) {
             all_equivalent++;
         }
         else {
@@ -113,6 +115,8 @@ bool Equivalence::check(const InitialState& istate, const size_t& num_qubits_per
             break;
         }
     }
+    if (options.progress_en)
+        return all_equivalent == num_partitions;
     LOGN2(1, "Tableau");
     if (all_equivalent == num_partitions) {
         LOG2(1, "%s EQUIVALENT%s for \'%c\' initial state.", CGREEN, CNORMAL, state);
@@ -125,8 +129,8 @@ bool Equivalence::check(const InitialState& istate, const size_t& num_qubits_per
 }
 
 void Equivalence::check() {
-    LOGHEADER(1, 4, "Equivalence checking");
     if (num_qubits != other_num_qubits) {
+        LOGHEADER(1, 4, "Equivalence checking");
         LOG2(1, "%s NOT EQUIVALENT%s due to misaligned qubits.", CRED, CNORMAL);
         last_equivalent = false;
         report(false);
@@ -147,6 +151,12 @@ void Equivalence::check() {
     stats.time.initial += timer.elapsed();
     // Start step-wise equivalence.
     timer.start();
+    LOGHEADER(1, 4, "Equivalence checking");
+    if (options.progress_en) {
+        LOG2(1, "   %-10s    %-10s    %-10s    %-10s    %-10s    %-9s",
+                "State", "Partition", "Step", "Gates", "Other", "Time (s)");
+        LOGRULER(1, '-', RULERLEN);
+    }
     const bool equivalent = check(Zero, num_qubits_per_partition, other_num_qubits_per_partition) && check(Plus, num_qubits_per_partition, other_num_qubits_per_partition);
     last_equivalent = equivalent;
 	SYNCALL;

@@ -148,7 +148,7 @@ namespace QuaSARQ {
     {
         sign_t* signs = ss->data();
         for_parallel_y(w, num_words_major) {
-            sign_t signs_word = signs[w];
+            sign_t signs_word = 0;
             do_forall_gate(
                 signs_word,
                 xs->data() + w,
@@ -182,7 +182,7 @@ namespace QuaSARQ {
         sign_t* shared_signs = smem + threadIdx.y * B;
         sign_t* signs = ss->data();
         for_parallel_y(w, num_words_major) {
-            sign_t signs_word = signs[w];
+            sign_t signs_word = 0;
             do_forall_gate(
                 signs_word,
                 xs->data() + w,
@@ -218,7 +218,7 @@ namespace QuaSARQ {
         uint32 tx = threadIdx.x;
         sign_t* signs = ss->data();
         for_parallel_y(w, num_words_major) {
-            sign_t signs_word = signs[w];
+            sign_t signs_word = 0;
             word_t* x_gens_word = (!tx) ? xs->data() + w : nullptr;
             x_gens_word = (word_t*)__shfl_sync(0xFFFFFFFF, uint64(x_gens_word), 0, B);
             word_t* z_gens_word = (!tx) ? zs->data() + w : nullptr;

@@ -38,7 +38,7 @@ namespace QuaSARQ {
 
 		// Check if two circuits are equivalent.
 		void check();
-		bool check(const size_t& p, const cudaStream_t* streams, const cudaStream_t* other_streams);
+		bool check(const size_t& p, const cudaStream_t* streams, const cudaStream_t* other_streams, const char& state);
 		bool check(const InitialState& initstate, const size_t& num_qubits_per_partition, const size_t& other_num_qubits_per_partition);
 
 	};
