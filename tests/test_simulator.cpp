@@ -69,9 +69,10 @@ void reset_options(const char* circuit_path) {
     options.min_measures_write = 0;
     options.streams = 6;
     options.tuner_en = false;
+    options.ignore_ticks = false;
     SET_LOGGER_VERBOSITY(options.verbose);
-    std::strcpy(options.configpath, "../src/kernel.config");
-    std::strcpy(options.statepath, "../build/test_simulator.qstate");
+    copy_test_path(options.configpath, kernel_config_path());
+    copy_test_path(options.statepath, test_build_path() / "test_simulator.qstate");
     options.check(circuit_path);
 }
 
@@ -81,7 +82,17 @@ void reset_random_options(const size_t& qubits, const size_t& depth) {
     options.depth = depth;
     FOREACH_GATE(RESET_GATE_PROB);
     options.H_p = 1.0;
-    options.M_p = 1.0;
+    options.M_p = 0.4;
+    options.MR_p = 0.6;
+}
+
+void reset_measurement_and_noise_gates() {
+    options.M_p = 0.0;
+    options.MR_p = 0.0;
+    options.R_p = 0.0;
+    options.X_ERROR_p = 0.0;
+    options.Y_ERROR_p = 0.0;
+    options.Z_ERROR_p = 0.0;
 }
 
 void check_loaded_surface_code(SimulatorHarness& sim) {
@@ -150,7 +161,7 @@ void test_surface_code_lifecycle() {
 }
 
 void test_surface_code_simulation() {
-    section("Simulator surface code simulation");
+    section("Simulator surface code simulation with active built-in checker");
 
     const auto paths = circuit_paths_up_to_distance(50);
     TCHECK(!paths.empty());
@@ -169,16 +180,28 @@ void test_surface_code_simulation() {
 
 void test_random_simulation() {
     section("Simulator random circuit simulation");
+    for (size_t qubits = 1000; qubits <= 20000; qubits += 2000) {
+        const size_t depth = 100;
+        run_test(("simulates q" + std::to_string(qubits) + "d" + std::to_string(depth) + " circuit").c_str(), [&] {
+            reset_random_options(qubits, depth);
+            SimulatorHarness sim;
+            TCHECK(sim.has_measurements());
+            TCHECK(sim.statistics().circuit.measure_stats.count > 0);
+            sim.simulate();
+            TCHECK(sim.statistics().circuit.measure_stats.count > 0);
+            TCHECK(sim.statistics().tableau.count == 1);
+        });
+    }
 
-    run_test("simulates generated random circuit with measurements", [] {
-        reset_random_options(10000, 8);
-        SimulatorHarness sim;
-        TCHECK(sim.has_measurements());
-        TCHECK(sim.statistics().circuit.measure_stats.count > 0);
-        sim.simulate();
-        TCHECK(sim.statistics().circuit.measure_stats.count > 0);
-        TCHECK(sim.statistics().tableau.count == 1);
-    });
+    section("Simulator random circuit simulation without measurements");
+    for (size_t qubits = 10000; qubits <= 100000; qubits += 10000) {
+        const size_t depth = 100;
+        run_test(("simulates q" + std::to_string(qubits) + "d" + std::to_string(depth) + " circuit").c_str(), [&] {
+            reset_random_options(qubits, depth);
+            SimulatorHarness sim;
+            sim.simulate();
+        });
+    }
 }
 
 int main() {

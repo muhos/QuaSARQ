@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <system_error>
 #include <cctype>
+#include <cstdio>
 
 #include "color.hpp"
 
@@ -45,9 +46,40 @@ void run_test(const char* name, Func func) {
     }
 }
 
+inline std::filesystem::path repo_root_path() {
+    std::filesystem::path path = std::filesystem::current_path();
+    while (!path.empty()) {
+        if (std::filesystem::exists(path / "src" / "kernel.config") &&
+            std::filesystem::exists(path / "tests" / "circuits")) {
+            return path;
+        }
+        const std::filesystem::path parent = path.parent_path();
+        if (parent == path)
+            break;
+        path = parent;
+    }
+    throw std::runtime_error("failed to locate QuaSARQ repository root");
+}
+
+inline std::filesystem::path test_circuits_path() {
+    return repo_root_path() / "tests" / "circuits";
+}
+
+inline std::filesystem::path test_build_path() {
+    return repo_root_path() / "build";
+}
+
+inline std::filesystem::path kernel_config_path() {
+    return repo_root_path() / "src" / "kernel.config";
+}
+
+inline void copy_test_path(char* dest, const std::filesystem::path& path) {
+    std::snprintf(dest, 256, "%s", path.string().c_str());
+}
+
 inline std::vector<std::string> circuit_paths() {
     std::vector<std::string> paths;
-    for (const auto& entry : std::filesystem::directory_iterator("circuits")) {
+    for (const auto& entry : std::filesystem::directory_iterator(test_circuits_path())) {
         if (entry.is_regular_file() && entry.path().extension() == ".stim")
             paths.push_back(entry.path().string());
     }
@@ -84,7 +116,7 @@ inline std::vector<std::string> circuit_paths_up_to_distance(const size_t& max_d
 }
 
 inline void cleanup_generated_measure_files() {
-    for (const auto& entry : std::filesystem::directory_iterator("circuits")) {
+    for (const auto& entry : std::filesystem::directory_iterator(test_circuits_path())) {
         if (entry.is_regular_file() && entry.path().extension() == ".01") {
             std::error_code ec;
             std::filesystem::remove(entry.path(), ec);

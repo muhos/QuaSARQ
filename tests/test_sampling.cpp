@@ -46,9 +46,10 @@ void reset_sampling_options(const char* circuit_path) {
     options.min_measures_write = 0;
     options.streams = 6;
     options.tuner_en = false;
+    options.ignore_ticks = false;
     SET_LOGGER_VERBOSITY(options.verbose);
-    std::strcpy(options.configpath, "../src/kernel.config");
-    std::strcpy(options.statepath, "../build/test_sampling.qstate");
+    copy_test_path(options.configpath, kernel_config_path());
+    copy_test_path(options.statepath, test_build_path() / "test_sampling.qstate");
     options.check(circuit_path);
 }
 

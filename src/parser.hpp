@@ -12,6 +12,8 @@ using std::to_string;
 
 namespace QuaSARQ {
 
+    constexpr byte_t PARSED_TICK_BARRIER = byte_t(NR_GATETYPES);
+
     #define WRITE_STATS(GATE) \
         stream += comment + "\t\t" + string(#GATE) + ": " + to_string(stats.circuit.gate_stats.types[GATE]) + " \t"; \
         stream += "(%" + to_string((uint64)percent((double)stats.circuit.gate_stats.types[GATE], stats.circuit.num_gates)) + ")\n"; \

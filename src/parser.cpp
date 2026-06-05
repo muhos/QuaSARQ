@@ -1,5 +1,6 @@
 
 #include "parser.hpp"
+#include "options.hpp"
 
 namespace QuaSARQ {
 
@@ -79,7 +80,10 @@ namespace QuaSARQ {
             for (size_t j = 0; j < block.gates.size(); j++) {
                 const ParsedGate& g = block.gates[j];
                 target.push(g);
-                if (g.expanded_from == 0) {
+                if (g.type == PARSED_TICK_BARRIER) {
+                    continue;
+                }
+                else if (g.expanded_from == 0) {
                     gstats.types[g.type]++;
                 } 
                 else if (g.type == M || g.type == MR) {
@@ -129,9 +133,14 @@ namespace QuaSARQ {
         gatestr[gatelen] = '\0';
         str += gatelen;
 
+        if (strcmp(gatestr, "TICK") == 0) {
+            if (!options.ignore_ticks)
+                target.push(ParsedGate(0, 0, PARSED_TICK_BARRIER));
+            eatLine(str); return;
+        }
+
         // Drop directives.
-        if (strcmp(gatestr, "TICK")         == 0 ||
-            strcmp(gatestr, "QUBIT_COORDS") == 0 ||
+        if (strcmp(gatestr, "QUBIT_COORDS") == 0 ||
             strcmp(gatestr, "SHIFT_COORDS") == 0) {
             eatLine(str); return;
         }

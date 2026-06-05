@@ -1,4 +1,5 @@
 #include "../src/parser.hpp"
+#include "../src/options.hpp"
 #include "helper.hpp"
 
 using namespace QuaSARQ;
@@ -324,9 +325,19 @@ void test_standard_gate() {
         TCHECK(h.io.measures_count == 2);
     });
 
-    run_test("TICK/QUBIT_COORDS/SHIFT_COORDS silently dropped", [] {
+    run_test("TICK parsed as scheduling barrier", [] {
         ParserHarness h;
         h.feed("TICK\nQUBIT_COORDS(1,1) 0\nSHIFT_COORDS(0,1,0)\nH 0\n");
+        TCHECK(h.queue_size() == 2);
+        TCHECK(h.gate(0).type == PARSED_TICK_BARRIER);
+        TCHECK(h.gate(1).type == byte_t(H));
+    });
+
+    run_test("ignore-ticks drops TICK directives", [] {
+        ParserHarness h;
+        options.ignore_ticks = true;
+        h.feed("TICK\nH 0\n");
+        options.ignore_ticks = false;
         TCHECK(h.queue_size() == 1);
         TCHECK(h.gate(0).type == byte_t(H));
     });

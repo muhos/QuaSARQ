@@ -69,6 +69,7 @@ namespace QuaSARQ {
         bool sampling_en;
         bool equivalence_en;
         bool disable_concurrency;
+        bool ignore_ticks;
         bool sync;
         bool profile;
 

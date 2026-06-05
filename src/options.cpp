@@ -49,6 +49,7 @@ namespace QuaSARQ {
     BOOL_OPT opt_sync("sync", "synchronize all kernels and data transfers", false);
     BOOL_OPT opt_profile("profile", "profile simulator components and give percentage", false);
     BOOL_OPT opt_disable_concurrency("disable-concurrency", "disable concurrency in equivalence checking", false);
+    BOOL_OPT opt_ignore_ticks("ignore-ticks", "ignore TICK directives instead of using them as scheduling barriers", false);
     BOOL_OPT opt_tune_all("tune-all", "enable tuning for all kernels", false);
     BOOL_OPT opt_check_all("check-all", "enable checking for all supported procedures", false);
     BOOL_OPT opt_color_bitstring("color-bitstring", "color bitstrings of observables and detectors ('1': red, '0': green)", false);
@@ -105,6 +106,7 @@ namespace QuaSARQ {
 
         equivalence_en = opt_equivalence_en;
         disable_concurrency = opt_disable_concurrency;
+        ignore_ticks = opt_ignore_ticks;
 
         tuner_initial_qubits = opt_tuneinitial_qubits;
         tuner_step_qubits = opt_tunestep_qubits;

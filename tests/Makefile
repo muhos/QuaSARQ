@@ -36,7 +36,7 @@ endif
 NVCCFLAGS += -DWORD_SIZE_$(WORDSIZE)
 ALL_FLAGS := $(NVCCFLAGS) $(addprefix -Xcompiler ,$(CCFLAGS))
 
-PARSER_SRCS := test_parser.cpp $(QUASARQ_DIR)/src/parser.cpp $(QUASARQ_DIR)/src/expansion.cpp
+PARSER_SRCS := test_parser.cpp test_stubs.cpp $(QUASARQ_DIR)/src/parser.cpp $(QUASARQ_DIR)/src/expansion.cpp
 PARSER_BIN  := test_parser
 
 SCHEDULER_SRCS := test_scheduler.cpp test_stubs.cpp $(QUASARQ_DIR)/src/parser.cpp $(QUASARQ_DIR)/src/expansion.cpp $(QUASARQ_DIR)/src/scheduler.cpp

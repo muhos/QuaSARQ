@@ -329,6 +329,12 @@ namespace QuaSARQ {
             // Forall gates in order find an independent gate.
             while (!circuit_io.circuit_queue.empty()) {
                 const ParsedGate gate = circuit_io.circuit_queue.front();
+                if (gate.type == PARSED_TICK_BARRIER) {
+                    circuit_io.circuit_queue.pop_front();
+                    if (max_depth < circuit.depth())
+                        break;
+                    continue;
+                }
                 const qubit_t c = gate.c;
                 const qubit_t t = gate.t;
                 const bool is_c_unlocked = !locked[c];

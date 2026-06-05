@@ -1,5 +1,6 @@
 #include "../src/parser.hpp"
 #include "../src/scheduler.hpp"
+#include "../src/options.hpp"
 #include "helper.hpp"
 
 using namespace QuaSARQ;
@@ -154,6 +155,25 @@ void test_window_separation() {
         TCHECK(h.all_gates_have_type(0, H));
         TCHECK(h.all_gates_have_type(1, M));
         TCHECK(h.all_gates_have_type(2, H));
+    });
+
+    run_test("TICK separates otherwise independent gates", [] {
+        SchedulerHarness h;
+        h.feed("H 0\nTICK\nH 1\n");
+        h.schedule(2);
+        TCHECK(h.depth() == 2);
+        TCHECK(h.gates_in_window(0) == 1);
+        TCHECK(h.gates_in_window(1) == 1);
+    });
+
+    run_test("ignore-ticks allows independent gates to compact", [] {
+        SchedulerHarness h;
+        options.ignore_ticks = true;
+        h.feed("H 0\nTICK\nH 1\n");
+        options.ignore_ticks = false;
+        h.schedule(2);
+        TCHECK(h.depth() == 1);
+        TCHECK(h.gates_in_window(0) == 2);
     });
 
     run_test("MX expansion: phase-batched H-M-H windows", [] {
