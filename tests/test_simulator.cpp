@@ -8,6 +8,8 @@ using namespace QuaSARQ;
 constexpr const char* SURFACE_CODE_D10_R3 = "circuits/surface_code_d10_r3.stim";
 constexpr const char* SURFACE_CODE_D50_R10 = "circuits/surface_code_d50_r10.stim";
 
+#define RESET_GATE_PROB(GATE) options.GATE ## _p = 0.0;
+
 class SimulatorHarness : public Simulator {
 
 public:
@@ -74,6 +76,15 @@ void reset_options(const char* circuit_path) {
     std::strcpy(options.configpath, "../src/kernel.config");
     std::strcpy(options.statepath, "../build/test_simulator.qstate");
     options.check(circuit_path);
+}
+
+void reset_random_options(const size_t& qubits, const size_t& depth) {
+    reset_options(nullptr);
+    options.num_qubits = qubits;
+    options.depth = depth;
+    FOREACH_GATE(RESET_GATE_PROB);
+    options.H_p = 1.0;
+    options.M_p = 1.0;
 }
 
 void check_loaded_surface_code(SimulatorHarness& sim) {
@@ -166,12 +177,29 @@ void test_surface_code_simulation() {
     });
 }
 
+void test_random_simulation() {
+    section("Simulator random circuit simulation");
+
+    run_test("simulates generated random circuit with measurements", [] {
+        reset_random_options(10000, 8);
+        SimulatorHarness sim;
+        TCHECK(sim.has_measurements());
+        TCHECK(sim.statistics().circuit.measure_stats.count > 0);
+        sim.simulate();
+        TCHECK(sim.statistics().circuit.measure_stats.count > 0);
+        TCHECK(sim.statistics().tableau.count == 1);
+    });
+}
+
 int main() {
     test_surface_code_lifecycle();
     test_surface_code_simulation();
+    test_random_simulation();
 
     std::cout << std::format("\n{}{}/{} tests passed{}\n\n",
         passed == total ? CPASS : CFAIL, passed, total, CNORMAL);
 
     return (passed == total) ? 0 : 1;
 }
+
+#undef RESET_GATE_PROB

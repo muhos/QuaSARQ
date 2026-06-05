@@ -147,8 +147,7 @@ void Equivalence::check() {
     stats.time.initial += timer.elapsed();
     // Start step-wise equivalence.
     timer.start();
-    const bool equivalent = check(Zero, num_qubits_per_partition, other_num_qubits_per_partition) && 
-                            check(Plus, num_qubits_per_partition, other_num_qubits_per_partition);
+    const bool equivalent = check(Zero, num_qubits_per_partition, other_num_qubits_per_partition) && check(Plus, num_qubits_per_partition, other_num_qubits_per_partition);
     last_equivalent = equivalent;
 	SYNCALL;
 	timer.stop();
@@ -173,10 +172,14 @@ void Equivalence::report(const bool& equivalent) {
     FOREACH_GATE(OTHER_GATE2STATISTIC)
     if (!ogate.empty())
         LOG1(" %sInjected gates                 : %s%s -> %s%s", CREPORT, CREPORTVAL, ogate.c_str(), rgate.c_str(), CNORMAL);
+    print_result(equivalent, failed_state);
+}
+
+void Equivalence::print_result(const bool& equivalent, const char& failed_state) const {
     if (equivalent)
-        LOG1(" %sCircuits check                 : %sEQUIVALENT%s", CREPORT, CGREEN, CNORMAL);
+        LOG2(0, " %sCircuits check                 : %sEQUIVALENT%s", CREPORT, CGREEN, CNORMAL);
     else {
-        LOG1(" %sCircuits check                 : %sNOT EQUIVALENT%s", CREPORT, CRED, CNORMAL);
-        LOG1(" %sFailed state                   : %s%c%s", CREPORT, CREPORTVAL, failed_state, CNORMAL);
+        LOG2(0, " %sCircuits check                 : %sNOT EQUIVALENT%s", CREPORT, CRED, CNORMAL);
+        LOG2(0, " %sFailed state                   : %s%c%s", CREPORT, CREPORTVAL, failed_state, CNORMAL);
     }
 }

@@ -6,6 +6,7 @@
 #include <string>
 #include <cstring>
 #include <set>
+#include <filesystem>
 
 #include "color.hpp"
 
@@ -38,4 +39,14 @@ void run_test(const char* name, Func func) {
     catch (const std::exception& e) {
         std::cerr << std::format("  {}FAIL  {}  (unexpected: {}){}\n", CFAIL, name, e.what(), CNORMAL);
     }
+}
+
+inline std::vector<std::string> circuit_paths() {
+    std::vector<std::string> paths;
+    for (const auto& entry : std::filesystem::directory_iterator("circuits")) {
+        if (entry.is_regular_file() && entry.path().extension() == ".stim")
+            paths.push_back(entry.path().string());
+    }
+    std::sort(paths.begin(), paths.end());
+    return paths;
 }

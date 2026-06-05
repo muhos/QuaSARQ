@@ -157,10 +157,12 @@ namespace QuaSARQ {
         size_t* types = stats.circuit.gate_stats.types;
         size_t parallel_gates_per_window = 0;
         int64 measuring_depth = 0;
+        size_t measuring_count = 0;
         for (depth_t d = 0; d < depth; d++) {
             size_t num_gate_buckets_per_window = circuit.num_buckets();
             // Add measurements to circuit if exist.
             if (measurements.size()) {
+                measuring_count += measurements.size();
                 add_measurements(circuit, measurements, winfo, d);
                 measuring_depth++;
                 continue;
@@ -225,6 +227,7 @@ namespace QuaSARQ {
         }
         assert(circuit.depth() <= depth + 1);
         stats.circuit.measure_stats.depth = measuring_depth;
+        stats.circuit.measure_stats.count = measuring_count;
         stats.circuit.num_gates = MAX(stats.circuit.num_gates, circuit.num_gates());
         stats.circuit.bytes = stats.circuit.num_gates * sizeof(gate_ref_t) + circuit.num_buckets() * BUCKETSIZE;
         shuffled.clear(true);
@@ -306,12 +309,14 @@ namespace QuaSARQ {
         size_t parallel_gates_per_window = 0;
         size_t max_depth = 0;
         size_t measuring_depth = 0;
+        size_t measuring_count = 0;
         bool measuring = false;
 
         while (max_depth < MAX_DEPTH && !circuit_io.circuit_queue.empty()) {
 
             // Add measurements to circuit if exist.
             if (measurements.size()) {
+                measuring_count += measurements.size();
                 add_measurements(circuit, measurements, winfo, max_depth);
                 max_depth++;
                 measuring_depth++;
@@ -416,6 +421,7 @@ namespace QuaSARQ {
 
         // Add last measurements if exist.
         if (measurements.size()) {
+            measuring_count += measurements.size();
             add_measurements(circuit, measurements, winfo, max_depth);
             max_depth++;
             measuring_depth++;
@@ -428,7 +434,7 @@ namespace QuaSARQ {
         locked.clear(true);
         locked_qubits.clear(true);
 
-        return { max_depth, measuring_depth, measuring };
+        return { max_depth, measuring_depth, measuring_count, measuring };
     }
 
     ScheduleResult schedule_gates(
@@ -456,6 +462,7 @@ namespace QuaSARQ {
         }
 
         stats.circuit.measure_stats.depth = result.measuring_depth;
+        stats.circuit.measure_stats.count = result.measuring_count;
         stats.circuit.num_parallel_gates = num_parallel_gates;
         stats.circuit.max_parallel_gates = max_parallel_gates;
         stats.circuit.num_gates = MAX(stats.circuit.num_gates, circuit.num_gates());

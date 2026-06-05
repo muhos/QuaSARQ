@@ -1,16 +1,13 @@
 #include "../src/equivalence.hpp"
 #include "helper.hpp"
 
-#include <algorithm>
-#include <cstring>
-#include <filesystem>
-#include <fstream>
-#include <string>
-#include <vector>
-
 using namespace QuaSARQ;
 
 class EquivalenceHarness : public Equivalence {
+
+protected:
+
+    void print_result(const bool&, const char&) const override {}
 
 public:
 
@@ -21,16 +18,6 @@ public:
     }
 
 };
-
-std::vector<std::string> circuit_paths() {
-    std::vector<std::string> paths;
-    for (const auto& entry : std::filesystem::directory_iterator("circuits")) {
-        if (entry.is_regular_file() && entry.path().extension() == ".stim")
-            paths.push_back(entry.path().string());
-    }
-    std::sort(paths.begin(), paths.end());
-    return paths;
-}
 
 std::string write_temp_circuit(const char* name, const char* body) {
     const std::filesystem::path path = std::filesystem::temp_directory_path() / name;

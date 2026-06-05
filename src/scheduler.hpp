@@ -9,6 +9,7 @@ namespace QuaSARQ {
     struct ScheduleResult {
         size_t depth;
         size_t measuring_depth;
+        size_t measuring_count;
         bool   measuring;
     };
 

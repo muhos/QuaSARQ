@@ -21,6 +21,10 @@ namespace QuaSARQ {
 		char							failed_state;
 		bool                            last_equivalent;
 
+	protected:
+
+		virtual void print_result(const bool& equivalent, const char& failed_state) const;
+
 	public:
 
 		Equivalence();

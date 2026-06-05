@@ -1,15 +1,9 @@
 #include "../src/frame.cuh"
 #include "helper.hpp"
 
-#include <algorithm>
-#include <cstring>
-#include <filesystem>
-#include <string>
-#include <vector>
-
 using namespace QuaSARQ;
 
-constexpr size_t SAMPLE_SHOTS = 4;
+constexpr size_t SAMPLE_SHOTS = 1024;
 
 class SamplingHarness : public Framing {
 
@@ -30,16 +24,6 @@ public:
     }
 
 };
-
-std::vector<std::string> circuit_paths() {
-    std::vector<std::string> paths;
-    for (const auto& entry : std::filesystem::directory_iterator("circuits")) {
-        if (entry.is_regular_file() && entry.path().extension() == ".stim")
-            paths.push_back(entry.path().string());
-    }
-    std::sort(paths.begin(), paths.end());
-    return paths;
-}
 
 void reset_sampling_options(const char* circuit_path) {
     options.initialize();
