@@ -497,20 +497,25 @@ void test_integration() {
         TCHECK(h.io.detectors.starts.size() == 2);
     });
 
-    run_test("surface-code circuit parses without error", [] {
-        CircuitIO io; io.init();
-        char* stream = io.read("circuits/surface_code_d10_r3.stim");
-        char* str = stream;
-        while (str < io.eof) {
-            eatWS(str);
-            if (str >= io.eof || *str == '\0') break;
-            if (*str == '#') { eatLine(str); continue; }
-            io.read_gate_into(str, io.circuit_queue, io.gate_stats);
-        }
-        TCHECK(io.circuit_queue.size() > 0);
-        TCHECK(io.max_qubits > 0);
-        TCHECK(io.measures_count > 0);
-    });
+    const auto paths = circuit_paths();
+    TCHECK(!paths.empty());
+    for (const std::string& path : paths) {
+        const std::string name = path + " parses without error";
+        run_test(name.c_str(), [&] {
+            CircuitIO io; io.init();
+            char* stream = io.read(path.c_str());
+            char* str = stream;
+            while (str < io.eof) {
+                eatWS(str);
+                if (str >= io.eof || *str == '\0') break;
+                if (*str == '#') { eatLine(str); continue; }
+                io.read_gate_into(str, io.circuit_queue, io.gate_stats);
+            }
+            TCHECK(io.circuit_queue.size() > 0);
+            TCHECK(io.max_qubits > 0);
+            TCHECK(io.measures_count > 0);
+        });
+    }
 }
 
 int main() {
@@ -525,5 +530,6 @@ int main() {
     std::cout << std::format("\n{}{}/{} tests passed{}\n\n",
         passed == total ? CPASS : CFAIL, passed, total, CNORMAL);
 
+    cleanup_generated_measure_files();
     return (passed == total) ? 0 : 1;
 }

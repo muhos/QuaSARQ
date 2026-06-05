@@ -544,32 +544,38 @@ void test_integration() {
         TCHECK(windows_with_m == 3);
     });
 
-    run_test("surface code: no qubit conflicts in any window", [] {
-        SchedulerHarness h;
-        h.feed_file("circuits/surface_code_d10_r3.stim");
-        h.schedule(h.circuit_io.max_qubits);
-        for (depth_t d = 0; d < h.depth(); d++) {
-            TCHECK(h.no_qubit_overlap_in_window(d));
-        }
-    });
-
-    run_test("surface code: measurements isolated from gates", [] {
-        SchedulerHarness h;
-        h.feed_file("circuits/surface_code_d10_r3.stim");
-        h.schedule(h.circuit_io.max_qubits);
-        for (depth_t d = 0; d < h.depth(); d++) {
-            bool has_m = h.count_type_in_window(d, M) > 0 || h.count_type_in_window(d, MR) > 0;
-            bool has_gates = false;
-            for (uint32 g = 0; g < h.gates_in_window(d); g++) {
-                Gatetypes type = h.gate_type_at(d, g);
-                if (type != M && type != MR) {
-                    has_gates = true;
-                    break;
-                }
+    const auto paths = circuit_paths();
+    TCHECK(!paths.empty());
+    for (const std::string& path : paths) {
+        const std::string no_conflicts_name = path + " no qubit conflicts in any window";
+        run_test(no_conflicts_name.c_str(), [&] {
+            SchedulerHarness h;
+            h.feed_file(path.c_str());
+            h.schedule(h.circuit_io.max_qubits);
+            for (depth_t d = 0; d < h.depth(); d++) {
+                TCHECK(h.no_qubit_overlap_in_window(d));
             }
-            TCHECK(!(has_m && has_gates));
-        }
-    });
+        });
+
+        const std::string measurements_name = path + " measurements isolated from gates";
+        run_test(measurements_name.c_str(), [&] {
+            SchedulerHarness h;
+            h.feed_file(path.c_str());
+            h.schedule(h.circuit_io.max_qubits);
+            for (depth_t d = 0; d < h.depth(); d++) {
+                bool has_m = h.count_type_in_window(d, M) > 0 || h.count_type_in_window(d, MR) > 0;
+                bool has_gates = false;
+                for (uint32 g = 0; g < h.gates_in_window(d); g++) {
+                    Gatetypes type = h.gate_type_at(d, g);
+                    if (type != M && type != MR) {
+                        has_gates = true;
+                        break;
+                    }
+                }
+                TCHECK(!(has_m && has_gates));
+            }
+        });
+    }
 }
 
 int main() {
@@ -584,5 +590,6 @@ int main() {
     std::cout << std::format("\n{}{}/{} tests passed{}\n\n",
         passed == total ? CPASS : CFAIL, passed, total, CNORMAL);
 
+    cleanup_generated_measure_files();
     return (passed == total) ? 0 : 1;
 }

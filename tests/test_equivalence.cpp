@@ -120,5 +120,6 @@ int main() {
     std::cout << std::format("\n{}{}/{} tests passed{}\n\n",
         passed == total ? CPASS : CFAIL, passed, total, CNORMAL);
 
+    cleanup_generated_measure_files();
     return (passed == total) ? 0 : 1;
 }

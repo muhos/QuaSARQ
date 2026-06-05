@@ -7,6 +7,9 @@
 #include <cstring>
 #include <set>
 #include <filesystem>
+#include <vector>
+#include <algorithm>
+#include <system_error>
 
 #include "color.hpp"
 
@@ -49,4 +52,13 @@ inline std::vector<std::string> circuit_paths() {
     }
     std::sort(paths.begin(), paths.end());
     return paths;
+}
+
+inline void cleanup_generated_measure_files() {
+    for (const auto& entry : std::filesystem::directory_iterator("circuits")) {
+        if (entry.is_regular_file() && entry.path().extension() == ".01") {
+            std::error_code ec;
+            std::filesystem::remove(entry.path(), ec);
+        }
+    }
 }

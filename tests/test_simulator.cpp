@@ -5,9 +5,6 @@
 
 using namespace QuaSARQ;
 
-constexpr const char* SURFACE_CODE_D10_R3 = "circuits/surface_code_d10_r3.stim";
-constexpr const char* SURFACE_CODE_D50_R10 = "circuits/surface_code_d50_r10.stim";
-
 #define RESET_GATE_PROB(GATE) options.GATE ## _p = 0.0;
 
 class SimulatorHarness : public Simulator {
@@ -140,41 +137,35 @@ void check_simulated_surface_code(SimulatorHarness& sim) {
 void test_surface_code_lifecycle() {
     section("Simulator surface code lifecycle");
 
-    run_test("loads and schedules d10 r3 surface code", [] {
-        reset_options(SURFACE_CODE_D10_R3);
-        options.check_measurement = true;
-        SimulatorHarness sim(SURFACE_CODE_D10_R3);
-        check_loaded_surface_code(sim);
-    });
-
-    run_test("loads and schedules d50 r10 surface code", [] {
-        reset_options(SURFACE_CODE_D50_R10);
-        options.check_measurement = true;
-        SimulatorHarness sim(SURFACE_CODE_D50_R10);
-        check_loaded_surface_code(sim);
-    });
+    const auto paths = circuit_paths();
+    TCHECK(!paths.empty());
+    for (const std::string& path : paths) {
+        const std::string name = path + " loads and schedules";
+        run_test(name.c_str(), [&] {
+            reset_options(path.c_str());
+            options.check_measurement = true;
+            SimulatorHarness sim(path);
+            check_loaded_surface_code(sim);
+        });
+    }
 }
 
 void test_surface_code_simulation() {
     section("Simulator surface code simulation");
 
-    run_test("simulates d10 r3 surface code with dets/obs checks", [] {
-        reset_options(SURFACE_CODE_D10_R3);
-        options.check_measurement = true;
-        options.print_observable = true;
-        options.print_detector = true;
-        SimulatorHarness sim(SURFACE_CODE_D10_R3);
-        check_simulated_surface_code(sim);
-    });
-
-    run_test("simulates d50 r10 surface code with dets/obs checks", [] {
-        reset_options(SURFACE_CODE_D50_R10);
-        options.check_measurement = true;
-        options.print_observable = true;
-        options.print_detector = true;
-        SimulatorHarness sim(SURFACE_CODE_D50_R10);
-        check_simulated_surface_code(sim);
-    });
+    const auto paths = circuit_paths();
+    TCHECK(!paths.empty());
+    for (const std::string& path : paths) {
+        const std::string name = path + " simulates with dets/obs checks";
+        run_test(name.c_str(), [&] {
+            reset_options(path.c_str());
+            options.check_measurement = true;
+            options.print_observable = true;
+            options.print_detector = true;
+            SimulatorHarness sim(path);
+            check_simulated_surface_code(sim);
+        });
+    }
 }
 
 void test_random_simulation() {
@@ -199,6 +190,7 @@ int main() {
     std::cout << std::format("\n{}{}/{} tests passed{}\n\n",
         passed == total ? CPASS : CFAIL, passed, total, CNORMAL);
 
+    cleanup_generated_measure_files();
     return (passed == total) ? 0 : 1;
 }
 
