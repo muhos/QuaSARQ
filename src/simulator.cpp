@@ -278,7 +278,8 @@ void Simulator::simulate() {
     stats.tableau.seconds = (stats.time.simulation / 1000.0) / (num_partitions * depth);
     stats.tableau.calc_speed();
     if (!reference_mode) {
-        if (!circuit_io.observables.empty() || !circuit_io.detectors.empty())
+        if ((options.print_observable && !circuit_io.observables.empty()) ||
+            (options.print_detector  && !circuit_io.detectors.empty()))
             LOGHEADER(1, 4, "Results");
         print_observables();
         print_detectors();
