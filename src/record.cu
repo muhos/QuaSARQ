@@ -95,7 +95,7 @@ namespace QuaSARQ {
     }
 
     void Simulator::alloc_observables() {
-        if (!options.print_observable) return;
+        if (circuit_io.observables.empty()) return;
         circuit_io.observables.alloc_pinned(gpu_allocator);
         circuit_io.observables.alloc_device(gpu_allocator);
         circuit_io.observables.move_to_pinned();
@@ -107,7 +107,7 @@ namespace QuaSARQ {
     }
 
     void Simulator::copy_observables(const cudaStream_t& stream) {
-        if (!options.print_observable) return;
+        if (circuit_io.observables.empty()) return;
         circuit_io.observables.copy_to_device(stream);
     }
         

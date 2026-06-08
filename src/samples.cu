@@ -270,7 +270,6 @@ namespace QuaSARQ {
     }
 
     void Framing::print_observables_sampled(FILE* out) {
-        if (!options.print_observable) return;
         const ObservableData& obs = circuit_io.observables;
         if (obs.empty()) return;
         const uint32 n            = (uint32)obs.pinned.num_observables;
@@ -287,14 +286,18 @@ namespace QuaSARQ {
             n, num_shots, stream,
             "eval_frame_refs (observables) failed");
         SYNC(stream);
-        if (out == stdout) LOG2(0, "%sObservables:%s", CHEADER, CNORMAL);
         uint32 total_errors = 0;
         size_t shots_with_error = 0;
         bool all_passed = true;
+        if (options.print_observable && out == stdout)
+            LOG2(0, "%sObservables:%s", CHEADER, CNORMAL);
         for (size_t s = 0; s < num_shots; s++) {
             const char* row = h_bitstring + s * n;
             uint32 fired = 0;
-            print_frame_shot(row, n, fired, out);
+            if (options.print_observable)
+                print_frame_shot(row, n, fired, out);
+            else
+                for (uint32 i = 0; i < n; i++) if (row[i] == '1') fired++;
             total_errors += fired;
             if (fired) shots_with_error++;
             if (options.check_measurement) {
@@ -302,9 +305,9 @@ namespace QuaSARQ {
                 all_passed &= mchecker.check_observables(circuit_io.observables, row, n, true);
             }
         }
-        stats.logical.shots_with_error = shots_with_error;
-        stats.logical.total_shots = num_shots;
-        stats.logical.num_observables = obs.pinned.num_observables;
+        stats.logical.shots_with_error        = shots_with_error;
+        stats.logical.total_shots             = num_shots;
+        stats.logical.num_observables         = obs.pinned.num_observables;
         stats.logical.total_observable_errors = total_errors;
         LOG1(" %sLogical errors across all shots: %s%s%u / %zu%s",
             CREPORT, CNORMAL, total_errors ? CRED : CGREEN,
@@ -318,7 +321,8 @@ namespace QuaSARQ {
     }
 
     void Framing::print() {
-        const bool any_print = samples_record.needs_host() || options.print_detector || options.print_observable;
+        const bool any_print = samples_record.needs_host() || options.print_detector
+                             || options.print_observable || !circuit_io.observables.empty();
         if (!any_print) return;
         if (!options.sync) SYNCALL;
         // XOR reference sample into all shots.
@@ -358,10 +362,10 @@ namespace QuaSARQ {
             print_detectors_sampled(out);
             if (write_measures_to_file) fclose(out);
         }
-        if (options.print_observable) {
-            FILE* out = write_measures_to_file ? open_output_file("_obs.01") : stdout;
+        if (!circuit_io.observables.empty()) {
+            FILE* out = (options.print_observable && write_measures_to_file) ? open_output_file("_obs.01") : stdout;
             print_observables_sampled(out);
-            if (write_measures_to_file) fclose(out);
+            if (options.print_observable && write_measures_to_file) fclose(out);
         }
         fflush(stdout);
     }
