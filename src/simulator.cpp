@@ -95,8 +95,15 @@ void Simulator::reserve() {
                                 (pool_est > MIN_DYNAMIC) ? pool_est - MIN_DYNAMIC : 0;
     gpu_allocator.create_gpu_pool(0, cuArena::GPUMemoryType::Device, 0, stable_bytes);
     // Creating CPU pool (pinned memory)
+    const size_t sample_host_bytes = options.print_sample || options.print_sample_qubits || options.check_measurement ?
+        get_num_words(stats.circuit.measure_stats.count) * WORD_BITS * get_num_words(options.num_shots) * sizeof(word_t) : 0;
+    const size_t detector_bitstring_bytes = options.print_detector ?
+        circuit_io.detectors.starts.size() * options.num_shots * sizeof(char) : 0;
+    const bool eval_observables = options.print_observable || !circuit_io.observables.empty();
+    const size_t observable_bitstring_bytes = eval_observables ?
+        circuit_io.observables.ids.size() * options.num_shots * sizeof(char) : 0;
     const size_t bitstring_bytes = circuit_mode == RANDOM_CIRCUIT ? 0 :
-        (circuit_io.detectors.starts.size() + circuit_io.observables.ids.size()) * options.num_shots * sizeof(char);
+        sample_host_bytes + detector_bitstring_bytes + observable_bitstring_bytes;
     const size_t pinned_bytes =
         sizeof(Table) * 3 +
         winfo.max_window_bytes +

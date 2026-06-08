@@ -17,6 +17,7 @@ circuits/*.txt
 circuits/*.01
 scripts
 build
+benchmark
 tests/test_parser
 tests/test_scheduler
 tests/test_simulator
