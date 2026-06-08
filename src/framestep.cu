@@ -7,6 +7,85 @@
 namespace QuaSARQ {
 
     INLINE_DEVICE
+    word_std_t sample_frame_error_mask(curand_algorithm_t& state, const float& probability) {
+        word_std_t mask = 0;
+        #pragma unroll
+        for (uint32 b = 0; b < WORD_BITS; b++) {
+            if (curand_uniform(&state) < probability)
+                mask |= (word_std_t(1) << b);
+        }
+        return mask;
+    }
+
+    INLINE_DEVICE
+    void apply_frame_pauli(
+                word_t&       x_q1,
+                word_t&       z_q1,
+                word_t*       x_q2,
+                word_t*       z_q2,
+        const   word_std_t&   mask,
+        const   uint32&       pauli)
+    {
+        if (pauli & 1u) x_q1 ^= mask;
+        if (pauli & 2u) z_q1 ^= mask;
+        if (x_q2 != nullptr && z_q2 != nullptr) {
+            if (pauli & 4u) *x_q2 ^= mask;
+            if (pauli & 8u) *z_q2 ^= mask;
+        }
+    }
+
+    INLINE_DEVICE
+    void apply_frame_noise(
+                word_t&                 x_q1,
+                word_t&                 z_q1,
+                word_t*                 x_q2,
+                word_t*                 z_q2,
+        const   Gate&                   gate,
+                curand_algorithm_t&     state)
+    {
+        if (gate.type == X_ERROR) {
+            const word_std_t mask = sample_frame_error_mask(state, gate.get_prob(0));
+            x_q1 ^= mask;
+            return;
+        }
+        if (gate.type == Z_ERROR) {
+            const word_std_t mask = sample_frame_error_mask(state, gate.get_prob(0));
+            z_q1 ^= mask;
+            return;
+        }
+        if (gate.type == Y_ERROR) {
+            const word_std_t mask = sample_frame_error_mask(state, gate.get_prob(0));
+            x_q1 ^= mask;
+            z_q1 ^= mask;
+            return;
+        }
+
+        #pragma unroll
+        for (uint32 b = 0; b < WORD_BITS; b++) {
+            uint32 pauli = 0;
+            const float prob = curand_uniform(&state);
+            if (gate.type == PAULI_CHANNEL_1) {
+                const float px = gate.get_prob(0), py = gate.get_prob(1), pz = gate.get_prob(2);
+                pauli = prob < px ? 1u : prob < px + py ? 3u : prob < px + py + pz ? 2u : 0u;
+            }
+            else if (gate.type == PAULI_CHANNEL_2) {
+                constexpr uint32 pc2_pauli[15] = {4, 12, 8, 1, 5, 13, 9, 3, 7, 15, 11, 2, 6, 14, 10};
+                float acc = 0.0f;
+                for (uint32 k = 0; k < 15u; k++) {
+                    acc += gate.get_prob(k);
+                    if (prob < acc) { pauli = pc2_pauli[k]; break; }
+                }
+            }
+            else if (prob < gate.get_prob(0)) {
+                pauli = gate.type == DEPOLARIZE1 ? 1u + (curand(&state) % 3u) :
+                        gate.type == DEPOLARIZE2 ? 1u + (curand(&state) % 15u) : 0u;
+            }
+            if (pauli)
+                apply_frame_pauli(x_q1, z_q1, x_q2, z_q2, word_std_t(1) << b, pauli);
+        }
+    }
+
+    INLINE_DEVICE
     void update_forall_gate(
                 word_t*             x_gens_word,
                 word_t*             z_gens_word,
@@ -42,6 +121,25 @@ namespace QuaSARQ {
             case X:
             case Y:
             case I: { break; }
+            case DEPOLARIZE1:
+            case X_ERROR:
+            case Y_ERROR:
+            case Z_ERROR:
+            case PAULI_CHANNEL_1: {
+                LOAD_Q1_WORDS;
+                curand_algorithm_t local = rand_states[q1_word_idx + w_offset];
+                apply_frame_noise(x_words_q1, z_words_q1, nullptr, nullptr, gate, local);
+                rand_states[q1_word_idx + w_offset] = local;
+                break;
+            }
+            case DEPOLARIZE2:
+            case PAULI_CHANNEL_2: {
+                LOAD_Q2_WORDS(num_words_minor);
+                curand_algorithm_t local = rand_states[q1_word_idx + w_offset];
+                apply_frame_noise(x_words_q1, z_words_q1, &x_words_q2, &z_words_q2, gate, local);
+                rand_states[q1_word_idx + w_offset] = local;
+                break;
+            }
             case H: { 
                 LOAD_Q1_WORDS;
                 update_H(words_q1); 

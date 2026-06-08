@@ -25,6 +25,6 @@ tests/test_equivalence
 *.txt
 *.qstate
 *.01
-*.stim
+./*.stim
 .DS_Store
 .vscode

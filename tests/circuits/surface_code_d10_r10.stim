@@ -1,6 +1,6 @@
 # Generated surface_code circuit.
 # task: rotated_memory_z
-# rounds: 3
+# rounds: 10
 # distance: 10
 # before_round_data_depolarization: 0
 # before_measure_flip_probability: 0.005
@@ -307,7 +307,7 @@ DETECTOR(20, 4, 0) rec[-75]
 DETECTOR(20, 8, 0) rec[-55]
 DETECTOR(20, 12, 0) rec[-35]
 DETECTOR(20, 16, 0) rec[-15]
-REPEAT 2 {
+REPEAT 9 {
     TICK
     H 2 6 10 14 18 25 29 33 37 44 48 52 56 60 67 71 75 79 86 90 94 98 102 109 113 117 121 128 132 136 140 144 151 155 159 163 170 174 178 182 186 193 197 201 205 212 216 220 224 228
     DEPOLARIZE1(0.005) 2 6 10 14 18 25 29 33 37 44 48 52 56 60 67 71 75 79 86 90 94 98 102 109 113 117 121 128 132 136 140 144 151 155 159 163 170 174 178 182 186 193 197 201 205 212 216 220 224 228
