@@ -109,6 +109,17 @@ namespace QuaSARQ {
             double joules;
         } power;
 
+        struct {
+            size_t shots_with_error;
+            size_t total_shots;
+            size_t num_observables;
+            size_t total_observable_errors;
+
+            double rate() const {
+                return total_shots ? double(shots_with_error) / double(total_shots) : 0.0;
+            }
+        } logical;
+
         Statistics() {
             RESETSTRUCT(this);
             circuit.gate_stats.alloc();

@@ -171,7 +171,7 @@ namespace QuaSARQ {
 
     inline
     void print_frame_shot(const char* row, const uint32& n, uint32& fired, FILE* out) {
-        if (options.color_bitstring && out == stdout) {
+        if (options.color_results && out == stdout) {
             string colored;
             colored.reserve(n * 2);
             for (uint32 i = 0; i < n; i++) {
@@ -289,17 +289,23 @@ namespace QuaSARQ {
         SYNC(stream);
         if (out == stdout) LOG2(0, "%sObservables:%s", CHEADER, CNORMAL);
         uint32 total_errors = 0;
+        size_t shots_with_error = 0;
         bool all_passed = true;
         for (size_t s = 0; s < num_shots; s++) {
             const char* row = h_bitstring + s * n;
             uint32 fired = 0;
             print_frame_shot(row, n, fired, out);
             total_errors += fired;
+            if (fired) shots_with_error++;
             if (options.check_measurement) {
                 mchecker.load_record_shot(samples_record, stats.circuit.measure_stats.count, tableau.num_words_minor(), s);
                 all_passed &= mchecker.check_observables(circuit_io.observables, row, n, true);
             }
         }
+        stats.logical.shots_with_error = shots_with_error;
+        stats.logical.total_shots = num_shots;
+        stats.logical.num_observables = obs.pinned.num_observables;
+        stats.logical.total_observable_errors = total_errors;
         LOG1(" %sLogical errors across all shots: %s%s%u / %zu%s",
             CREPORT, CNORMAL, total_errors ? CRED : CGREEN,
             total_errors, num_shots * obs.pinned.num_observables, CNORMAL);

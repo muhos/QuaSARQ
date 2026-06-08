@@ -65,7 +65,7 @@ namespace QuaSARQ {
         FOREACH_CHECK(CONFIG2CHECKOPTION);
         FOREACH_PRINT(CONFIG2PRINTOPTION);
 
-        bool color_bitstring;
+        bool color_results;
         bool sampling_en;
         bool equivalence_en;
         bool disable_concurrency;

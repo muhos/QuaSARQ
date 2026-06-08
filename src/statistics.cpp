@@ -78,8 +78,21 @@ void Simulator::report()
 		LOG1(" %sTotal measurements             : %s%-12zd%s", CREPORT, CREPORTVAL, stats.circuit.measure_stats.count, CNORMAL);
 		LOG1(" %s  Random                       : %s%-12zd%s", CREPORT, CREPORTVAL, stats.circuit.measure_stats.random, CNORMAL);
 		LOG1(" %s  Definite                     : %s%-12zd%s", CREPORT, CREPORTVAL, stats.circuit.measure_stats.definite, CNORMAL);
-		if (!circuit_io.observables.empty())
+		if (!circuit_io.observables.empty()) {
 			LOG1(" %sObservables                    : %s%-12u%s", CREPORT, CREPORTVAL, circuit_io.observables.pinned.num_observables, CNORMAL);
+			if (stats.logical.total_shots > 0) {
+				const double pct = stats.logical.rate() * 100.0;
+				const char*  col = options.color_results ? (pct > 0.0 ? CRED : CGREEN) : "";
+				LOG1(" %sLogical error rate             : %s%s%-12.6f (%zu / %zu shots, %.3f%%)%s",
+					CREPORT, CNORMAL, col,
+					stats.logical.rate(),
+					stats.logical.shots_with_error,
+					stats.logical.total_shots,
+					pct, CNORMAL);
+				LOG1(" %s  Total observable errors      : %s%-12zd%s",
+					CREPORT, CREPORTVAL, stats.logical.total_observable_errors, CNORMAL);
+			}
+		}
 		if (!circuit_io.detectors.empty())
 			LOG1(" %sDetectors                      : %s%-12u%s", CREPORT, CREPORTVAL, circuit_io.detectors.pinned.num_instructions, CNORMAL);
 		LOG1(" %sClifford gates                 : %s%-12zd%s", CREPORT, CREPORTVAL, stats.circuit.num_gates, CNORMAL);
@@ -103,6 +116,9 @@ void Simulator::report()
 		}
 		PRINT("%-30s : %-12.3f  GB\n", "Memory", ratio((double)gpu_allocator.gpu_used(), double(GB)));
 		PRINT("%-30s : %-12.3f  joules\n", "Energy", stats.power.joules);
+		if (stats.logical.total_shots > 0)
+			PRINT("%-30s : %-12.6f  (%zu / %zu)\n", "Logical error rate",
+				stats.logical.rate(), stats.logical.shots_with_error, stats.logical.total_shots);
 		LOGRULER(0, '-', RULERLEN);
 	}
 }
