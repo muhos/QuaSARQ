@@ -141,27 +141,27 @@ Common options:
 | `--timeout=<s>` | Abort after this many seconds; `0` disables timeout | `0` |
 | `--streams=<n>` | Number of GPU streams | `6` |
 | `--write-circuit=<0|1|2>` | Write generated circuits: `1` = Stim, `2` = CHP | `0` |
-| `--ignore-ticks` | Ignore Stim `TICK` scheduling barriers | off |
+| `-ignore-ticks` | Ignore Stim `TICK` scheduling barriers | off |
 | `--config-path=<path>` | Kernel configuration file | `src/kernel.config` |
 | `--state-path=<path>` | Final-state output file | `build/<circuit>_paulis.qstate` |
-| `--report` / `--no-report` | Print final statistics | on |
-| `--progress` / `--no-progress` | Print progress tables | on |
-| `--q` | Quiet mode | off |
-| `--force-report` | Print statistics even in quiet mode | off |
+| `-report` / `-no-report` | Print final statistics | on |
+| `-progress` / `-no-progress` | Print progress tables | on |
+| `-q` | Quiet mode | off |
+| `-force-report` | Print statistics even in quiet mode | off |
 
 Diagnostics:
 
 | Option | Description |
 | --- | --- |
-| `--check-all` | Enable all available internal checkers |
-| `--check-scheduler` | Check scheduled windows for duplicate gate inputs |
-| `--check-tableau` | Check tableau operations |
-| `--check-measurement` | Check measurement records, detectors, and observables where applicable |
-| `--print-observable` | Print or write observable bitstrings |
-| `--print-detector` | Print or write detector bitstrings |
-| `--print-sample` | Print or write sampling bitstrings |
-| `--print-finalstate` | Write the final stabilizer state |
-| `--color-bitstring` | Color printed detector/observable bitstrings |
+| `-check-all` | Enable all available internal checkers |
+| `-check-scheduler` | Check scheduled windows for duplicate gate inputs |
+| `-check-tableau` | Check tableau operations |
+| `-check-measurement` | Check measurement records, detectors, and observables where applicable |
+| `-print-observable` | Print or write observable bitstrings |
+| `-print-detector` | Print or write detector bitstrings |
+| `-print-sample` | Print or write sampling bitstrings |
+| `-print-finalstate` | Write the final stabilizer state |
+| `-color-results` | Color printed detector/observable bitstrings |
 
 For the complete option list:
 
@@ -179,7 +179,7 @@ H 0 1 2 3
 CX 0 1 2 3
 ```
 
-`TICK` is treated as a scheduling barrier by default. This is useful when the input circuit already contains meaningful layers and you want QuaSARQ's scheduler to preserve those boundaries. Use `--ignore-ticks` to parse the same circuit while allowing the scheduler to compact independent gates across `TICK` directives achieving optimal scheduling.
+`TICK` is treated as a scheduling barrier by default. This is useful when the input circuit already contains meaningful layers and you want QuaSARQ's scheduler to preserve those boundaries. Use `-ignore-ticks` to parse the same circuit while allowing the scheduler to compact independent gates across `TICK` directives achieving optimal scheduling.
 
 `QUBIT_COORDS` and `SHIFT_COORDS` are accepted and ignored. Detector and observable declarations are used for measurement-record checks and output.
 
@@ -190,13 +190,13 @@ QuaSARQ simulates stabilizer circuits by applying Clifford gates directly to a G
 For detector/observable checks on a surface-code circuit:
 
 ```bash
-./build/quasarq tests/circuits/surface_code_d10_r3.stim --print-observable --print-detector --verbose=1
+./build/quasarq tests/circuits/surface_code_d10_r3.stim -print-observable -print-detector --verbose=1
 ```
 
 For quiet regression-style runs that still write detector and observable data when triggered:
 
 ```bash
-./build/quasarq tests/circuits/surface_code_d10_r3.stim --print-observable --print-detector -q
+./build/quasarq tests/circuits/surface_code_d10_r3.stim -print-observable -print-detector -q
 ```
 
 ## Sampling
@@ -207,7 +207,7 @@ Sampling mode uses GPU Pauli frames to amortize tableau collapse costs across ma
 ./build/quasarq tests/circuits/surface_code_d50_r10.stim --shots=4096 --seed=47
 ```
 
-This path is intended for circuits with measurements. Use `--print-sample`, `--print-detector`, or `--print-observable` to inspect generated bitstrings, and `--check-measurement` to validate measurement records in supported sampling paths.
+This path is intended for circuits with measurements. When observables are present, QuaSARQ reports the raw logical-observable error rate across shots. Use `-print-sample`, `-print-detector`, or `-print-observable` to inspect generated bitstrings, and `-check-measurement` to validate measurement records in supported sampling paths.
 
 ## Equivalence Checking
 
