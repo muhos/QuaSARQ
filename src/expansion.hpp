@@ -16,6 +16,8 @@ namespace QuaSARQ {
     static constexpr CliffordDecomp TABLE[] = {
         { "H_YZ",        {{H,QC},{S,QC},{H,QC},{S,QC},{S,QC}},                             5,  false },
         { "H_XY",        {{H,QC},{S,QC},{S,QC},{H,QC},{S,QC}},                             5,  false },
+        { "C_XYZ",       {{S_DAG,QC},{H,QC}},                                             2,  false },
+        { "C_ZYX",       {{H,QC},{S,QC}},                                                 2,  false },
         { "XCX",         {{H,QC},{CX,QCT},{H,QC}},                                         3,  true  },
         { "XCY",         {{H,QC},{S_DAG,QT},{CX,QCT},{H,QC},{S,QT}},                       5,  true  },
         { "XCZ",         {{CX,QTC}},                                                       1,  true  },
