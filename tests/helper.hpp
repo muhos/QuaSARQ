@@ -115,6 +115,19 @@ inline std::vector<std::string> circuit_paths_up_to_distance(const size_t& max_d
     return paths;
 }
 
+inline bool is_patch_circuit(const std::filesystem::path& path) {
+    return path.filename().string().find("_patch") != std::string::npos;
+}
+
+inline std::vector<std::string> non_patch_circuit_paths() {
+    std::vector<std::string> paths;
+    for (const auto& path : circuit_paths()) {
+        if (!is_patch_circuit(path))
+            paths.push_back(path);
+    }
+    return paths;
+}
+
 inline void cleanup_generated_measure_files() {
     for (const auto& entry : std::filesystem::directory_iterator(test_circuits_path())) {
         if (entry.is_regular_file() && entry.path().extension() == ".01") {

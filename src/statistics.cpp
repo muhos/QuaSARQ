@@ -81,14 +81,14 @@ void Simulator::report()
 		if (!circuit_io.observables.empty()) {
 			LOG1(" %sObservables                    : %s%-12u%s", CREPORT, CREPORTVAL, circuit_io.observables.pinned.num_observables, CNORMAL);
 			if (stats.logical.total_shots > 0) {
-				const double pct = stats.logical.rate() * 100.0;
-				const char*  col = options.color_results ? (pct > 0.0 ? CRED : CGREEN) : "";
+				const double per = stats.logical.rate() * 100.0;
+				const char*  col = options.color_results ? (per > 0.0 ? CRED : CGREEN) : "";
 				LOG1(" %sLogical error rate             : %s%s%-12.6f (%zu / %zu shots, %.3f%%)%s",
 					CREPORT, CNORMAL, col,
 					stats.logical.rate(),
 					stats.logical.shots_with_error,
 					stats.logical.total_shots,
-					pct, CNORMAL);
+					per, CNORMAL);
 				LOG1(" %s  Total observable errors      : %s%-12zd%s",
 					CREPORT, CREPORTVAL, stats.logical.total_observable_errors, CNORMAL);
 			}

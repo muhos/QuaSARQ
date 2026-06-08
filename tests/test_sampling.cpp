@@ -1,9 +1,40 @@
 #include "../src/frame.cuh"
 #include "helper.hpp"
 
+#include <cmath>
+
 using namespace QuaSARQ;
 
 constexpr size_t SAMPLE_SHOTS = 1024;
+constexpr double LOGICAL_RATE_TOLERANCE = 0.12;
+
+struct LogicalRateBaseline {
+    const char* circuit;
+    double rate;
+};
+
+constexpr LogicalRateBaseline LOGICAL_RATE_BASELINES[] = {
+    {"surface_code_d10_r10.stim", 0.40823700},
+    {"surface_code_d10_r3.stim",  0.23896900},
+    {"surface_code_d20_r10.stim", 0.48462500},
+    {"surface_code_d20_r3.stim",  0.36828200},
+    {"surface_code_d30_r10.stim", 0.49802300},
+    {"surface_code_d30_r3.stim",  0.43301200},
+    {"surface_code_d40_r10.stim", 0.49985500},
+    {"surface_code_d40_r3.stim",  0.46659600},
+    {"surface_code_d50_r10.stim", 0.50056400},
+    {"surface_code_d50_r3.stim",  0.48294200},
+    {"surface_code_d60_r10.stim", 0.49990200},
+    {"surface_code_d60_r3.stim",  0.49188400},
+};
+
+const LogicalRateBaseline* find_logical_rate_baseline(const std::string& filename) {
+    for (const LogicalRateBaseline& baseline : LOGICAL_RATE_BASELINES) {
+        if (filename == baseline.circuit)
+            return &baseline;
+    }
+    return nullptr;
+}
 
 class SamplingHarness : public Framing {
 
@@ -42,6 +73,7 @@ void reset_sampling_options(const char* circuit_path) {
     options.print_finalstate = false;
     options.print_finaltableau = false;
     options.num_shots = SAMPLE_SHOTS;
+    options.seed = 123;
     options.min_shots_write = 0;
     options.min_measures_write = 0;
     options.streams = 6;
@@ -123,8 +155,32 @@ void test_sampling_paths() {
     });
 }
 
+void test_logical_error_rates() {
+    section("Sampling logical error rates");
+
+    const auto paths = non_patch_circuit_paths();
+    TCHECK(!paths.empty());
+    for (const std::string& circuit_path : paths) {
+        const std::filesystem::path path(circuit_path);
+        const LogicalRateBaseline* baseline = find_logical_rate_baseline(path.filename().string());
+        const std::string name = path.string() + " logical error rate near Stim baseline";
+        run_test(name.c_str(), [&] {
+            TCHECK(baseline != nullptr);
+            reset_sampling_options(path.string().c_str());
+            SamplingHarness framing(path.string(), SAMPLE_SHOTS);
+            check_sampled_circuit(framing);
+
+            const Statistics& stats = framing.statistics();
+            TCHECK(stats.logical.total_shots == SAMPLE_SHOTS);
+            TCHECK(stats.logical.num_observables > 0);
+            TCHECK(std::fabs(stats.logical.rate() - baseline->rate) <= LOGICAL_RATE_TOLERANCE);
+        });
+    }
+}
+
 int main() {
     test_sampling_paths();
+    test_logical_error_rates();
 
     std::cout << std::format("\n{}{}/{} tests passed{}\n\n",
         passed == total ? CPASS : CFAIL, passed, total, CNORMAL);

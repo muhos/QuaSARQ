@@ -156,8 +156,6 @@ namespace QuaSARQ {
         if (equivalence_en) {
             tuner_en = false;
         }
-        if (num_shots && !print_sample)
-            print_sample = true;
         if (verbose > 1) {
             LOG2(1, "%s  Enabled synchronization with verbosity level %s%zd%s.%s", CARGDEFAULT, CARGVALUE, verbose, CARGDEFAULT, CNORMAL);
             sync = true;
