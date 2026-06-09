@@ -161,20 +161,21 @@ namespace QuaSARQ {
             assert(num_qubits);
             assert(num_words_minor);
             const size_t max_array_size = num_qubits * num_words_minor;
-            LOGN2(2, "allocating %lld MB for global prefix.. ", 
+            LOGN2(1, "Allocating global-prefix table of %lld MB.. ", 
                 ratio(int64(max_array_size * sizeof(PrefixCell)), MB));
             global_prefix = allocator.allocate<PrefixCell>(max_array_size, Region::Stable);
-            LOGDONE(2, 4);
+            LOGDONE(1, 4);
         }
         #else
-        targets.alloc(num_qubits, 0, 0, true, false, false);
+        targets.alloc(num_qubits, 0, 0, true, false, false, 0, "prefix target ");
         #endif
         if (!max_intermediate_blocks) {
             const size_t at_least_blocks = 
                 options.tune_prefixsingle ? AT_LEAST_TUNED_SINGLE_PASS : 1;
             max_intermediate_blocks = MAX(at_least_blocks, nextPow2(ROUNDUP(num_qubits, MIN_BLOCK_INTERMEDIATE_SIZE)));
             size_t max_array_size = max_intermediate_blocks * num_words_minor;
-            LOGN2(2, "allocating memory for %lld intermediate blocks.. ", int64(max_intermediate_blocks));
+            LOGN2(1, " Allocating %lld MB for %lld intermediate blocks.. ", 
+                ratio(int64(max_array_size * sizeof(PrefixCell)), MB), int64(max_intermediate_blocks));
             #if PREFIX_INTERLEAVE
             if (intermediate_prefix == nullptr)
                 intermediate_prefix = allocator.allocate<PrefixCell>(max_array_size, Region::Stable);
@@ -184,13 +185,14 @@ namespace QuaSARQ {
             if (intermediate_prefix_x == nullptr)
                 intermediate_prefix_x = allocator.allocate<word_std_t>(max_array_size, Region::Stable);
             #endif
-            LOGDONE(2, 4);
+            LOGDONE(1, 4);
             const size_t at_least_sub_blocks = 
                 options.tune_prefixprepare || options.tune_prefixfinal ? 
                 AT_LEAST_TUNED_MULTIPASS : 1;
             max_sub_blocks = MAX(at_least_sub_blocks, (max_intermediate_blocks >> 1));
             max_array_size = max_sub_blocks * num_words_minor;
-            LOGN2(2, "allocating memory for %lld sub-blocks.. ", int64(max_sub_blocks));
+            LOGN2(1, " Allocating %lld MB for %lld sub-blocks.. ", 
+                ratio(int64(max_array_size * sizeof(PrefixCell)), MB), int64(max_sub_blocks));
             #if PREFIX_INTERLEAVE
             if (subblock_prefix == nullptr)
                 subblock_prefix = allocator.allocate<PrefixCell>(max_array_size, Region::Stable);
@@ -200,7 +202,7 @@ namespace QuaSARQ {
             if (subblocks_prefix_x == nullptr)
                 subblocks_prefix_x = allocator.allocate<word_std_t>(max_array_size, Region::Stable);
             #endif
-            LOGDONE(2, 4);
+            LOGDONE(1, 4);
         }
     }
 
@@ -222,7 +224,7 @@ namespace QuaSARQ {
             max_sub_blocks = max_intermediate_blocks >> 1;
         }
         #if !PREFIX_INTERLEAVE
-        targets.resize(num_qubits, max_window_bytes, true, false, false);
+        targets.resize(num_qubits, max_window_bytes, true, false, false, 0, "prefix target ");
         #endif
     }
 

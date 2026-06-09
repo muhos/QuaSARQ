@@ -183,8 +183,58 @@ namespace QuaSARQ {
         ,   _num_partitions(1)
         { }
 
+        ~Tableau() {
+            destroy();
+        }
+
         void swap_tableaus(Tableau &other) {
             swap_tables(*this, other);
+        }
+
+        void destroy() noexcept {
+            try {
+                const bool cpu_pool_alive = allocator.cpu_capacity() > 0;
+                const bool gpu_pool_alive = allocator.gpu_capacity() > 0;
+                if (cpu_pool_alive && _h_xs != nullptr) {
+                    _h_xs->~Table();
+                    allocator.deallocate_pinned<Table>(_h_xs);
+                }
+                if (cpu_pool_alive && _h_zs != nullptr) {
+                    _h_zs->~Table();
+                    allocator.deallocate_pinned<Table>(_h_zs);
+                }
+                if (cpu_pool_alive && _h_ss != nullptr) {
+                    _h_ss->~Signs();
+                    allocator.deallocate_pinned<Signs>(_h_ss);
+                }
+                if (gpu_pool_alive) {
+                    allocator.deallocate<Table>(_xs);
+                    allocator.deallocate<word_t>(_xs_data);
+                    allocator.deallocate<Table>(_zs);
+                    allocator.deallocate<word_t>(_zs_data);
+                    allocator.deallocate<Signs>(_ss);
+                    allocator.deallocate<sign_t>(_ss_data);
+                }
+            }
+            catch (...) {
+                LOGWARNING("failed to destroy tableau memory.");
+            }
+            _xs = nullptr;
+            _zs = nullptr;
+            _ss = nullptr;
+            _h_xs = nullptr;
+            _h_zs = nullptr;
+            _h_ss = nullptr;
+            _xs_data = nullptr;
+            _zs_data = nullptr;
+            _ss_data = nullptr;
+            _num_qubits = 0;
+            _num_qubits_padded = 0;
+            _num_words = 0;
+            _num_words_major = 0;
+            _num_words_minor = 0;
+            _num_sign_words = 0;
+            _num_partitions = 1;
         }
 
         size_t alloc(
@@ -194,14 +244,15 @@ namespace QuaSARQ {
                   bool     prefix,
             const bool&    measuring,
             const bool&    alloc_signs,
-            const size_t&  forced_num_partitions = 0)
+            const size_t&  forced_num_partitions = 0,
+            const char*    name = "")
         {
             if (!num_qubits) LOGERROR("cannot allocate tableau for 0 qubits.");
             if (_num_qubits_padded == get_num_padded_bits(num_qubits)) return _num_partitions;
             if (_num_qubits_padded) LOGERROR("Not yet implemented to reallocate a tableau.");
 
-            LOGN2(1, "Allocating tableau for %s%lld qubits%s.. ",
-                CREPORTVAL, int64(num_qubits), CNORMAL);
+            LOGN2(1, "Allocating %stableau for %s%lld qubits%s.. ",
+                name, CREPORTVAL, int64(num_qubits), CNORMAL);
 
             const size_t cap_before = gpu_stable_avail(allocator);
             prefix                 |= num_shots > 0;
@@ -254,15 +305,16 @@ namespace QuaSARQ {
             const bool     prefix,
             const bool&    measuring,
             const bool&    alloc_signs,
-            const size_t&  forced_num_partitions = 0)
+            const size_t&  forced_num_partitions = 0,
+            const char*    name = "")
         {
             if (!num_qubits)
             LOGERROR("cannot resize tableau for 0 qubits.");
             if (_num_qubits < num_qubits)
             LOGERROR("not enough memory for tableau resizing.");
 
-            LOGN2(1, "Resizing tableau for %s%lld qubits%s.. ",
-                CREPORTVAL, int64(num_qubits), CNORMAL);
+            LOGN2(1, "Resizing %stableau for %s%lld qubits%s.. ",
+                name, CREPORTVAL, int64(num_qubits), CNORMAL);
 
             reset();
 

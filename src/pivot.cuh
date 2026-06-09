@@ -53,10 +53,12 @@ namespace QuaSARQ {
         inline
         void alloc(const size_t &num_qubits) {
             this->num_qubits = num_qubits;
+			LOGN2(1, "Allocating %lld KB for %lld pivots.. ", int64(num_qubits * sizeof(pivot_t) / KB), int64(num_qubits + 1));
             pivots = allocator.allocate<pivot_t>(num_qubits + 1, Region::Stable); // extra pivot for marking commutations.
 			allocator.resize_pinned<pivot_t>(host_pivots, num_qubits + 1);
             d_active_pivots = allocator.allocate<uint32>(1, Region::Stable);
             allocator.resize_pinned<pivot_t>(h_active_pivots, 1);
+			LOGDONE(1, 4);
         }
 
         inline

@@ -17,14 +17,13 @@ Framing::Framing(const string& path, const size_t& num_shots) :
 
 void Framing::sample() {
     Power power;
-    num_partitions = tableau.alloc(num_qubits, num_shots, winfo.max_window_bytes, false, false, false);
-    const size_t frame_num_partitions = num_partitions;
     timer.start();
     rsample();
     timer.stop();
     const double reference_sim_time = timer.elapsed();
-    num_partitions = frame_num_partitions;
+    LOGRULER(1, '-', RULERLEN);
     timer.start();
+    num_partitions = tableau.alloc(num_qubits, num_shots, winfo.max_window_bytes, false, false, false, 0, "frame ");
     if (options.check_measurement) {
         mchecker.record.resize(stats.circuit.measure_stats.count);
         mchecker.samples.resize(stats.circuit.measure_stats.count * tableau.num_words_minor(), word_std_t(0));

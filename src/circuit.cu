@@ -9,22 +9,26 @@ namespace QuaSARQ {
         if (!max_references || max_references > MAX_QUBITS)
             LOGERROR("maximum number of references %lld per window is invalid.", int64(max_references));
         if (!max_buckets || max_buckets > NO_REF)
-            LOGERROR("maximum number of buckets %lld per window is invalid.", int64(max_buckets));		
+            LOGERROR("maximum number of buckets %lld per window is invalid.", int64(max_buckets));
+        if (this->max_references < max_references || this->max_buckets < max_buckets) {
+            const size_t required_bytes = max_references * sizeof(gate_ref_t) + max_buckets * sizeof(bucket_t);
+            LOGN2(2, "Initiating %lld MB for device window of maximum %lld references and %lld buckets.. ", 
+                ratio(int64(required_bytes), MB), int64(max_references), int64(max_buckets));
+        }
         if (this->max_references < max_references) {
-            LOGN2(2, "Resizing a (pinned) window for %lld references.. ", int64(max_references));
             this->max_references = max_references;
             _references = allocator.allocate<gate_ref_t>(max_references, Region::Stable);
             allocator.resize_pinned<gate_ref_t>(_pinned_references, max_references);
-            LOGDONE(2, 4);
         }
         if (this->max_buckets < max_buckets) {
-            LOGN2(2, "Resizing a (pinned) window for %lld buckets.. ", int64(max_buckets));
             this->max_buckets = max_buckets;
             _buckets = allocator.allocate<bucket_t>(max_buckets, Region::Stable);
             allocator.resize_pinned<bucket_t>(_pinned_buckets, max_buckets);
-            LOGDONE(2, 4);
         }
         this->max_qubits = max_qubits;
+        if (this->max_references < max_references || this->max_buckets < max_buckets) {
+            LOGDONE(1, 4);
+        }
     }
 
     void DeviceCircuit::init_noise_states(const uint64& seed, const size_t& max_gates, const cudaStream_t& stream) {

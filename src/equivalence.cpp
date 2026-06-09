@@ -140,8 +140,8 @@ void Equivalence::check() {
     Power power;
     timer.start();
     size_t estimated_num_partitions = get_num_partitions(2, num_qubits, winfo.max_window_bytes + other_winfo.max_window_bytes, gpu_stable_avail(gpu_allocator));
-    num_partitions = tableau.alloc(num_qubits, 0, winfo.max_window_bytes, false, false, true, estimated_num_partitions);
-    other_num_partitions = other_tableau.alloc(other_num_qubits, 0, other_winfo.max_window_bytes, false, false, true, estimated_num_partitions);
+    num_partitions = tableau.alloc(num_qubits, 0, winfo.max_window_bytes, false, false, true, estimated_num_partitions, "left equivalence ");
+    other_num_partitions = other_tableau.alloc(other_num_qubits, 0, other_winfo.max_window_bytes, false, false, true, estimated_num_partitions, "right equivalence ");
     assert(num_partitions == other_num_partitions);
     const size_t num_qubits_per_partition = num_partitions > 1 ? tableau.num_words_major() * WORD_BITS : num_qubits;
     const size_t other_num_qubits_per_partition = other_num_partitions > 1 ? other_tableau.num_words_major() * WORD_BITS : other_num_qubits;

@@ -37,10 +37,13 @@ namespace QuaSARQ {
         inline size_t total_history()  const { return host.size(); }
 
         inline void alloc(const size_t& measures_count) {
+            LOGN2(1, "Allocating %lld MB for %lld measurements recording .. ", 
+                ratio(int64(measures_count * sizeof(bool)), KB), int64(measures_count));
             device = allocator.allocate<bool>(measures_count, Region::Stable);
             assert(device != nullptr);
             host.resize(measures_count);
             step_gates = 0;
+            LOGDONE(1, 4);
         }
 
         inline void advance(const size_t& num_gates) { step_gates += num_gates; }

@@ -13,6 +13,9 @@ Simulator::~Simulator() noexcept {
 }
 
 void Simulator::cleanup() noexcept {
+    tableau.destroy();
+    inv_tableau.destroy();
+    ref_tableau.destroy();
     if (!gpu_allocator.destroy_cpu_pool()) {
 		LOGWARNING("failed to destroy CPU memory pool.");
 	}
@@ -167,13 +170,13 @@ void Simulator::create_streams(cudaStream_t*& streams) {
 void Simulator::rsample() {
     if (!measuring || !stats.circuit.measure_stats.count) return;
     reference_mode = true;
-    // Disable checking during reference run — mchecker is not allocated here.
+    // Disable checking during reference run as mchecker is not allocated here.
     const bool saved_check = options.check_measurement;
     options.check_measurement = false;
     tableau.swap_tableaus(ref_tableau);
-    num_partitions = tableau.alloc(num_qubits, 0, winfo.max_window_bytes, false, measuring, true);
+    num_partitions = tableau.alloc(num_qubits, 0, winfo.max_window_bytes, false, measuring, true, 0, "reference ");
     #if ROW_MAJOR
-    inv_tableau.alloc(num_qubits, 0, 0, false, measuring, false);
+    inv_tableau.alloc(num_qubits, 0, 0, false, measuring, false, 0, "inverse reference ");
     #endif
     prefix.alloc(tableau, config_qubits);
     pivoting.alloc(num_qubits);
@@ -190,6 +193,8 @@ void Simulator::rsample() {
     }
     SYNCALL;
     tableau.swap_tableaus(ref_tableau);
+    ref_tableau.destroy();
+    inv_tableau.destroy();
     options.check_measurement = saved_check;
     reference_mode = false;
 }
@@ -257,10 +262,10 @@ void check_simulate(Simulator& sim, const size_t& p, const size_t& prev_num_qubi
 void Simulator::simulate() {
     Power power;
     timer.start();
-    num_partitions = tableau.alloc(num_qubits, 0, winfo.max_window_bytes, false, measuring, true);
+    num_partitions = tableau.alloc(num_qubits, 0, winfo.max_window_bytes, false, measuring, true, 0, "simulation ");
     if (measuring) {
         #if ROW_MAJOR
-        inv_tableau.alloc(num_qubits, 0, 0, false, measuring, false);
+        inv_tableau.alloc(num_qubits, 0, 0, false, measuring, false, 0, "inverse simulation ");
         #endif
         prefix.alloc(tableau, config_qubits);
         pivoting.alloc(num_qubits);
