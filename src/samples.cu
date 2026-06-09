@@ -1,6 +1,7 @@
 #include "frame.cuh"
 #include "locker.cuh"
 #include "random.cuh"
+#include "sum.cuh"
 
 namespace QuaSARQ {
 
@@ -145,6 +146,49 @@ namespace QuaSARQ {
         }
     }
 
+    __global__
+    void eval_observable_errors_k(
+              uint64*              counters,
+              uint32*              shot_flags,
+        const uint32* __restrict__ refs,
+        const uint32* __restrict__ starts,
+        const uint32* __restrict__ counts,
+        const Table*               samples,
+        const size_t               num_words_minor,
+        const uint32               n,
+        const size_t               num_shots)
+    {
+        extern __shared__ uint64 shared[];
+        const size_t tx = threadIdx.x;
+        const size_t ty = threadIdx.y;
+        const size_t tile_idx = ty * blockDim.x + tx;
+        for_parallel_y(s, num_shots) {
+            uint64 fired = 0;
+            for_parallel_x(i, n) {
+                bool result = false;
+                const uint32 start = starts[i];
+                const uint32 count = counts[i];
+                for (uint32 j = start; j < start + count; j++) {
+                    const size_t m_idx = refs[j];
+                    const word_std_t word = (*samples)[m_idx * num_words_minor + WORD_OFFSET(s)];
+                    result ^= bool((word >> (s & WORD_MASK)) & 1);
+                }
+                fired += result;
+            }
+            load_shared_single(shared, fired, tile_idx, n - blockIdx.x * blockDim.x);
+            sum_shared_single(shared, fired, tile_idx);
+            sum_warp_single(shared, fired, tile_idx);
+            if (tx == 0) {
+                const uint64 fired_in_tile = fired;
+                if (fired_in_tile) {
+                    atomicAdd(counters, fired_in_tile);
+                    if (atomicOr(shot_flags + s, uint32(1)) == 0)
+                        atomicAdd(counters + 1, uint64(1));
+                }
+            }
+        }
+    }
+
     inline
     void launch_eval_frame_refs(
               char*         d_bitstring,
@@ -167,6 +211,40 @@ namespace QuaSARQ {
             d_samples, num_words_minor, n, num_shots);
         LASTERR(label);
         CHECK(cudaMemcpyAsync(h_bitstring, d_bitstring, n * num_shots * sizeof(char), cudaMemcpyDeviceToHost, stream));
+    }
+
+    inline
+    void launch_eval_observable_errors(
+              uint64*        d_counters,
+              uint32*        d_shot_flags,
+              uint64*        h_counters,
+        const uint32*        d_refs,
+        const uint32*        d_starts,
+        const uint32*        d_counts,
+        const Table*         d_samples,
+        const size_t&        num_words_minor,
+        const uint32&        n,
+        const size_t&        num_shots,
+        const cudaStream_t&  stream)
+    {
+        dim3 block(16, 64), grid(1, 1);
+        OPTIMIZEBLOCKS2D(grid.x, n, block.x);
+        OPTIMIZEBLOCKS2D(grid.y, (uint32)num_shots, block.y);
+        TRIM_BLOCK_IN_DEBUG_MODE(block, grid, n, num_shots);
+        CHECK(cudaMemsetAsync(d_counters, 0, 2 * sizeof(uint64), stream));
+        CHECK(cudaMemsetAsync(d_shot_flags, 0, num_shots * sizeof(uint32), stream));
+        eval_observable_errors_k<<<grid, block, block.x * block.y * sizeof(uint64), stream>>>(
+            d_counters,
+            d_shot_flags,
+            d_refs,
+            d_starts,
+            d_counts,
+            d_samples,
+            num_words_minor,
+            n,
+            num_shots);
+        LASTERR("eval_observable_errors failed");
+        CHECK(cudaMemcpyAsync(h_counters, d_counters, 2 * sizeof(uint64), cudaMemcpyDeviceToHost, stream));
     }
 
     inline
@@ -274,6 +352,28 @@ namespace QuaSARQ {
         if (obs.empty()) return;
         const uint32 n            = (uint32)obs.pinned.num_observables;
         const cudaStream_t stream = kernel_streams[0];
+        if (!options.print_observable && !options.check_measurement) {
+            uint64* d_counters = gpu_allocator.allocate<uint64>(2, Region::Dynamic);
+            uint32* d_shot_flags = gpu_allocator.allocate<uint32>(num_shots, Region::Dynamic);
+            uint64* h_counters = gpu_allocator.allocate_pinned<uint64>(2);
+            launch_eval_observable_errors(
+                d_counters, d_shot_flags, h_counters,
+                obs.records.device.refs,
+                obs.records.device.starts,
+                obs.records.device.counts,
+                samples_record.device,
+                tableau.num_words_minor(),
+                n, num_shots, stream);
+            SYNC(stream);
+            stats.logical.total_observable_errors = (size_t)h_counters[0];
+            stats.logical.shots_with_error        = (size_t)h_counters[1];
+            stats.logical.total_shots             = num_shots;
+            stats.logical.num_observables         = obs.pinned.num_observables;
+            gpu_allocator.deallocate_pinned<uint64>(h_counters);
+            gpu_allocator.deallocate<uint32>(d_shot_flags);
+            gpu_allocator.deallocate<uint64>(d_counters);
+            return;
+        }
         char* d_bitstring = gpu_allocator.allocate<char>((size_t)n * num_shots, Region::Dynamic);
         char* h_bitstring = gpu_allocator.allocate_pinned<char>((size_t)n * num_shots);
         launch_eval_frame_refs(

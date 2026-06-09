@@ -16,6 +16,14 @@ namespace QuaSARQ {
 		__syncthreads(); \
 	}
 
+	#define load_shared_single(smem, val, tid, size) \
+	{ \
+		if (blockDim.x >= 64) { \
+			smem[tid] = (threadIdx.x < size) ? val : 0; \
+		} \
+		__syncthreads(); \
+	}
+
 	#define sum_shared(smem1, val1, smem2, val2, tid) \
 	{ \
 		if (blockDim.x >= 512) { \
@@ -47,6 +55,33 @@ namespace QuaSARQ {
 		} \
 	}
 
+	#define sum_shared_single(smem, val, tid) \
+	{ \
+		if (blockDim.x >= 512) { \
+			if (threadIdx.x < 256) { \
+				smem[tid] = val = val + smem[tid + 256]; \
+			} \
+			__syncthreads(); \
+		} \
+		if (blockDim.x >= 256) { \
+			if (threadIdx.x < 128) { \
+				smem[tid] = val = val + smem[tid + 128]; \
+			} \
+			__syncthreads(); \
+		} \
+		if (blockDim.x >= 128) { \
+			if (threadIdx.x < 64) { \
+				smem[tid] = val = val + smem[tid + 64]; \
+			} \
+			__syncthreads(); \
+		} \
+		if (blockDim.x >= 64) { \
+			if (threadIdx.x < 32) { \
+				smem[tid] = val = val + smem[tid + 32]; \
+			} \
+		} \
+	}
+
 	#define sum_warp(smem1, val1, smem2, val2, tid) \
 	{ \
 		if (threadIdx.x < 32) { \
@@ -70,6 +105,28 @@ namespace QuaSARQ {
 			if (blockDim.x >= 2) { \
 				val1 += __shfl_down_sync(mask, val1, 1); \
 				val2 += __shfl_down_sync(mask, val2, 1); \
+			} \
+		} \
+	}
+
+	#define sum_warp_single(smem, val, tid) \
+	{ \
+		if (threadIdx.x < 32) { \
+			const grid_t mask = __activemask(); \
+			if (blockDim.x >= 32) { \
+				val += __shfl_down_sync(mask, val, 16); \
+			} \
+			if (blockDim.x >= 16) { \
+				val += __shfl_down_sync(mask, val, 8); \
+			} \
+			if (blockDim.x >= 8) { \
+				val += __shfl_down_sync(mask, val, 4); \
+			} \
+			if (blockDim.x >= 4) { \
+				val += __shfl_down_sync(mask, val, 2); \
+			} \
+			if (blockDim.x >= 2) { \
+				val += __shfl_down_sync(mask, val, 1); \
 			} \
 		} \
 	}

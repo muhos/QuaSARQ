@@ -96,6 +96,8 @@ void Simulator::report()
 					stats.logical.shots_with_error,
 					stats.logical.total_shots,
 					per, CNORMAL);
+				LOG1(" %s  Total observable errors      : %s%-12zd%s",
+					CREPORT, per > 0.0 ? CRED : CREPORTVAL, stats.logical.total_observable_errors, CNORMAL);
 			}
 		}
 		if (!circuit_io.detectors.empty())
