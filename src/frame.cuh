@@ -25,8 +25,9 @@ namespace QuaSARQ {
         void step(const depth_t& depth_level);
         void print_observables_sampled(FILE* out = stdout);
         void print_detectors_sampled(FILE* out = stdout);
+        size_t sample_device_bytes() const override;
+        size_t sample_host_bytes() const override;
         void print();
-        void report();
         void sample();
 
 	};

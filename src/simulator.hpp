@@ -77,12 +77,16 @@ namespace QuaSARQ {
         FILE*   open_output_file(const string& suffix);
 
         // Getters.
-        Tableau&                get_tableau     () { return tableau; }
-        Circuit&                get_circuit     () { return circuit; }
-        DeviceCircuit&          get_gpu_circuit () { return gpu_circuit; }
-        bool                    is_measuring    () const { return measuring; }
-        ObservableData&         get_observables () { return circuit_io.observables; }
-        const ObservableData&   get_observables () const { return circuit_io.observables; }
+        Tableau&                get_tableau         () { return tableau; }
+        Circuit&                get_circuit         () { return circuit; }
+        DeviceCircuit&          get_gpu_circuit     () { return gpu_circuit; }
+        bool                    is_measuring        () const { return measuring; }
+        ObservableData&         get_observables     () { return circuit_io.observables; }
+        const ObservableData&   get_observables     () const { return circuit_io.observables; }
+        virtual
+        size_t                  sample_device_bytes () const { return 0; }
+        virtual 
+        size_t                  sample_host_bytes   () const { return 0; }
 
         // Random circuit generation.
         Gatetypes   get_rand_gate       (const bool& multi_input = true, const bool& force_multi_input = false);

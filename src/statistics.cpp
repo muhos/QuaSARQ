@@ -45,7 +45,6 @@ void Simulator::report()
 		#endif
 		LOG1(" %sTableau word size              : %s%-12s%s", CREPORT, CREPORTVAL, WORD_SIZE_STR.c_str(), CNORMAL);
 		LOG1(" %sTableau partitions             : %s%-12zd%s", CREPORT, CREPORTVAL, num_partitions, CNORMAL);
-		LOG1(" %sTableau memory                 : %s%-12.3f  GB%s", CREPORT, CREPORTVAL, stats.tableau.count * stats.tableau.gigabytes, CNORMAL);
 		LOG1(" %sTableau step speed             : %s%-12.3f  GB/sec%s", CREPORT, CREPORTVAL, stats.tableau.speed, CNORMAL);
 		LOG1(" %sTableau initial states         : %s%-12zd%s", CREPORT, CREPORTVAL, stats.tableau.istates, CNORMAL);
 		const double tableau_gb   = stats.tableau.count * stats.tableau.gigabytes;
@@ -53,6 +52,9 @@ void Simulator::report()
 		const size_t win_gpu_bytes = winfo.max_window_bytes;
 		const size_t win_cpu_bytes = winfo.max_window_bytes;
 		const size_t rec_bytes    = stats.circuit.measure_stats.count * sizeof(bool);
+		const size_t sample_gpu_bytes = sample_device_bytes();
+		const size_t sample_cpu_bytes = sample_host_bytes();
+		const size_t prefix_bytes = prefix.bytes();
 		const size_t pool_used    = gpu_allocator.gpu_used();
 		const size_t pool_cap     = gpu_allocator.gpu_capacity();
 		const size_t cpu_used_b   = gpu_allocator.cpu_used();
@@ -62,17 +64,23 @@ void Simulator::report()
 		LOG1(" %sGPU pool used                  : %s%-12.3f  GB  (%.0f%%)%s",
 			CREPORT, CREPORTVAL, ratio((double)pool_used, double(GB)), pct_gpu, CNORMAL);
 		LOG1(" %s  Tableau                      : %s%-12.3f  GB%s", CREPORT, CREPORTVAL, tableau_gb, CNORMAL);
-		LOG1(" %s  Noise (states + Paulis)      : %s%-12.3f  MB%s", CREPORT, CREPORTVAL, ratio((double)noise_bytes,   double(MB)), CNORMAL);
-		LOG1(" %s  Circuit window (GPU)         : %s%-12.3f  MB%s", CREPORT, CREPORTVAL, ratio((double)win_gpu_bytes, double(MB)), CNORMAL);
+		if (sample_gpu_bytes)
+			LOG1(" %s  Samples                      : %s%-12.3f  GB%s", CREPORT, CREPORTVAL, ratio((double)sample_gpu_bytes, double(GB)), CNORMAL);
+		if (prefix_bytes)
+			LOG1(" %s  Prefix                       : %s%-12.3f  MB%s", CREPORT, CREPORTVAL, ratio((double)prefix_bytes, double(MB)), CNORMAL);
 		if (rec_bytes)
 			LOG1(" %s  Recorder                     : %s%-12.3f  MB%s", CREPORT, CREPORTVAL, ratio((double)rec_bytes, double(MB)), CNORMAL);
+		LOG1(" %s  Noise (states + Paulis)      : %s%-12.3f  MB%s", CREPORT, CREPORTVAL, ratio((double)noise_bytes,   double(MB)), CNORMAL);
+		LOG1(" %s  Circuit window               : %s%-12.3f  MB%s", CREPORT, CREPORTVAL, ratio((double)win_gpu_bytes, double(MB)), CNORMAL);
 		LOG1(" %sCPU pinned capacity            : %s%-12.3f  MB%s", CREPORT, CREPORTVAL, ratio((double)cpu_cap_b,    double(MB)), CNORMAL);
 		LOG1(" %sCPU pinned used                : %s%-12.3f  MB%s", CREPORT, CREPORTVAL, ratio((double)cpu_used_b,   double(MB)), CNORMAL);
-		LOG1(" %s  Circuit window (CPU)         : %s%-12.3f  MB%s", CREPORT, CREPORTVAL, ratio((double)win_cpu_bytes, double(MB)), CNORMAL);
+		if (sample_cpu_bytes)
+			LOG1(" %s  Samples                      : %s%-12.3f  MB%s", CREPORT, CREPORTVAL, ratio((double)sample_cpu_bytes, double(MB)), CNORMAL);
+		LOG1(" %s  Circuit window               : %s%-12.3f  MB%s", CREPORT, CREPORTVAL, ratio((double)win_cpu_bytes, double(MB)), CNORMAL);
+		double circuit_mb = ratio((double)stats.circuit.bytes, double(MB));
+		LOG1(" %sCircuit memory (CPU)           : %s%-12.3f  MB%s", CREPORT, CREPORTVAL, circuit_mb, CNORMAL);
 		LOG1(" %sCircuit depth                  : %s%-12u%s", CREPORT, CREPORTVAL, depth, CNORMAL);
 		LOG1(" %sCircuit qubits                 : %s%-12zd%s", CREPORT, CREPORTVAL, num_qubits, CNORMAL);
-		double circuit_mb = ratio((double)stats.circuit.bytes, double(MB));
-		LOG1(" %sCircuit memory                 : %s%-12.3f  MB%s", CREPORT, CREPORTVAL, circuit_mb, CNORMAL);
 		LOG1(" %sMaximum parallel gates         : %s%-12zd%s", CREPORT, CREPORTVAL, stats.circuit.max_parallel_gates, CNORMAL);
 		LOG1(" %sMeasurement depth              : %s%-12zd%s", CREPORT, CREPORTVAL, stats.circuit.measure_stats.depth, CNORMAL);
 		LOG1(" %sTotal measurements             : %s%-12zd%s", CREPORT, CREPORTVAL, stats.circuit.measure_stats.count, CNORMAL);
@@ -82,15 +90,12 @@ void Simulator::report()
 			LOG1(" %sObservables                    : %s%-12u%s", CREPORT, CREPORTVAL, circuit_io.observables.pinned.num_observables, CNORMAL);
 			if (stats.logical.total_shots > 0) {
 				const double per = stats.logical.rate() * 100.0;
-				const char*  col = options.color_results ? (per > 0.0 ? CRED : CGREEN) : "";
 				LOG1(" %sLogical error rate             : %s%s%-12.6f (%zu / %zu shots, %.3f%%)%s",
-					CREPORT, CNORMAL, col,
+					CREPORT, CNORMAL, per > 0.0 ? CRED : CREPORTVAL,
 					stats.logical.rate(),
 					stats.logical.shots_with_error,
 					stats.logical.total_shots,
 					per, CNORMAL);
-				LOG1(" %s  Total observable errors      : %s%-12zd%s",
-					CREPORT, CREPORTVAL, stats.logical.total_observable_errors, CNORMAL);
 			}
 		}
 		if (!circuit_io.detectors.empty())
@@ -99,7 +104,9 @@ void Simulator::report()
 		FOREACH_GATE(GATE2STATISTIC);
 	}
 	if (options.quiet_en && options.force_report_en) {
-		if (!options.num_shots) LOGHEADER(0, 4, "Statistics");
+		LOGHEADER(0, 4, "Statistics");
+		if (options.num_shots)
+			PRINT("%-30s : %-12zd\n", "Shots", options.num_shots);
 		PRINT("%-30s : %-12zd\n", "Qubits",   num_qubits);
 		PRINT("%-30s : %-12u\n",  "Depth",    depth);
 		PRINT("%-30s : %-12zd\n", "Gates",    stats.circuit.num_gates);

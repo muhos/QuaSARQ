@@ -110,6 +110,28 @@ namespace QuaSARQ {
 		word_std_t* zblocks			() { assert(intermediate_prefix_z != nullptr); return intermediate_prefix_z; }
 		word_std_t* xblocks			() { assert(intermediate_prefix_x != nullptr); return intermediate_prefix_x; }
 		#endif
+		size_t      bytes           () const {
+			#if PREFIX_INTERLEAVE
+			const size_t global_bytes = global_prefix != nullptr ?
+				num_qubits * num_words_minor * sizeof(PrefixCell) : 0;
+			const size_t intermediate_bytes = intermediate_prefix != nullptr ?
+				max_intermediate_blocks * num_words_minor * sizeof(PrefixCell) : 0;
+			const size_t subblock_bytes = subblock_prefix != nullptr ?
+				max_sub_blocks * num_words_minor * sizeof(PrefixCell) : 0;
+			return global_bytes + intermediate_bytes + subblock_bytes;
+			#else
+			const size_t target_bytes = targets.size() * sizeof(word_std_t);
+			const size_t intermediate_arrays =
+				(intermediate_prefix_z != nullptr ? 1 : 0) +
+				(intermediate_prefix_x != nullptr ? 1 : 0);
+			const size_t subblock_arrays =
+				(subblocks_prefix_z != nullptr ? 1 : 0) +
+				(subblocks_prefix_x != nullptr ? 1 : 0);
+			const size_t intermediate_bytes = intermediate_arrays * max_intermediate_blocks * num_words_minor * sizeof(word_std_t);
+			const size_t subblock_bytes = subblock_arrays * max_sub_blocks * num_words_minor * sizeof(word_std_t);
+			return target_bytes + intermediate_bytes + subblock_bytes;
+			#endif
+		}
 		void 		alloc			(const Tableau& input, const size_t& config_qubits);
 		void 		resize			(const Tableau& input);
 		double 		scan_blocks		(const size_t& num_blocks, const cudaStream_t& stream);

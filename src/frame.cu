@@ -15,6 +15,14 @@ Framing::Framing(const string& path, const size_t& num_shots) :
     write_measures_to_file |= (num_shots > options.min_shots_write);
 }
 
+size_t Framing::sample_device_bytes() const {
+    return samples_record.device_bytes();
+}
+
+size_t Framing::sample_host_bytes() const {
+    return samples_record.host_bytes();
+}
+
 void Framing::sample() {
     Power power;
     timer.start();
@@ -58,12 +66,4 @@ void Framing::sample() {
     stats.tableau.calc_speed();
     print();
     report();
-}
-
-void Framing::report() {
-    if (options.quiet_en && options.force_report_en) {
-        LOGHEADER(0, 4, "Statistics");
-        PRINT("%-30s : %-12zd\n", "Shots", num_shots);
-    }
-    Simulator::report();
 }

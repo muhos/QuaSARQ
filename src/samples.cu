@@ -309,9 +309,6 @@ namespace QuaSARQ {
         stats.logical.total_shots             = num_shots;
         stats.logical.num_observables         = obs.pinned.num_observables;
         stats.logical.total_observable_errors = total_errors;
-        LOG1(" %sLogical errors across all shots: %s%s%u / %zu%s",
-            CREPORT, CNORMAL, total_errors ? CRED : CGREEN,
-            total_errors, num_shots * obs.pinned.num_observables, CNORMAL);
         if (all_passed && options.check_measurement) {
             LOGN2(1, " Checking observable bitstrings ");
             LOGPASSED(1);
@@ -341,7 +338,7 @@ namespace QuaSARQ {
             LASTERR("apply_reference_sample failed");
             SYNC(stream);
         }
-        LOGHEADER(1, 4, "Results");
+        if (options.print_detector || options.print_observable) LOGHEADER(1, 4, "Results");
         if (samples_record.needs_host()) {
             samples_record.copy();
             if (options.print_sample) {
