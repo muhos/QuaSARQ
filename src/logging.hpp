@@ -6,9 +6,11 @@
 #include <cstdio>
 #include <cstdarg>
 #include <cstddef>
+#include <utility>
 #include <cuda_runtime.h>
 #include "color.hpp"
 #include "constants.hpp"
+#include "error.hpp"
 
 #if __cplusplus >= 202002L
   using charu8_t = char8_t;
@@ -112,16 +114,18 @@ public:
     template<typename... Args>
     static void error(const char* fmt, Args&&... args) {
         cudaDeviceSynchronize();
+        char message[2048];
+        if constexpr (sizeof...(Args) > 0)
+            std::snprintf(message, sizeof(message), fmt, std::forward<Args>(args)...);
+        else
+            std::snprintf(message, sizeof(message), "%s", fmt);
         std::lock_guard<std::mutex> lock(get().mutex);
         std::fflush(stdout);
         std::fprintf(stderr, "%sERROR: ", CERROR);
-        if constexpr (sizeof...(Args) > 0)
-            std::fprintf(stderr, fmt, std::forward<Args>(args)...);
-        else 
-            std::fputs(fmt, stderr);
+        std::fputs(message, stderr);
         std::fprintf(stderr, "\n%s", CNORMAL);
         std::fflush(stderr);
-        std::exit(1);
+        throw QuaSARQ::fatal_error();
     }
 
     template<typename... Args>

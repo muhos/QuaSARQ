@@ -61,14 +61,15 @@ namespace QuaSARQ {
             KERNEL_STREAM = 2 
         };
 
-        void register_config();
-        void create_streams(cudaStream_t*& streams);
+        void register_config    ();
+        void create_streams     (cudaStream_t*& streams);
+        void cleanup            () noexcept;
 
     public:
 
-       ~Simulator   ();
-        Simulator   ();
-        Simulator   (const string& path);
+        virtual ~Simulator      () noexcept;
+                Simulator       ();
+                Simulator       (const string& path);
 
         // File IO.
         bool    open_file      (FILE*& file, arg_t file_path, arg_t file_mode);

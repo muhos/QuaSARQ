@@ -163,20 +163,37 @@ namespace QuaSARQ {
             } \
             break;
 
-    #define GENERATE_SWITCH_FOR_CALL(CALL) \
-        switch (currentblock.y) { \
-            POW2_Y_DIM_1(CALL); \
-            POW2_Y_DIM_2(CALL); \
-            POW2_Y_DIM_4(CALL); \
-            POW2_Y_DIM_8(CALL); \
-            POW2_Y_DIM_16(CALL); \
-            POW2_Y_DIM_32(CALL); \
-            POW2_Y_DIM_64(CALL); \
-            POW2_Y_DIM_128(CALL); \
-            POW2_Y_DIM_256(CALL); \
-            POW2_Y_DIM_512(CALL); \
-            default: \
-                LOGERROR("unknown y-block size (%lld) of prefix kernel", currentblock.y); \
-                break; \
-        }
+    #if defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
+        #define GENERATE_SWITCH_FOR_CALL(CALL) \
+            switch (currentblock.y) { \
+                POW2_Y_DIM_1(CALL); \
+                POW2_Y_DIM_2(CALL); \
+                POW2_Y_DIM_4(CALL); \
+                POW2_Y_DIM_8(CALL); \
+                POW2_Y_DIM_16(CALL); \
+                POW2_Y_DIM_32(CALL); \
+                POW2_Y_DIM_64(CALL); \
+                POW2_Y_DIM_128(CALL); \
+                default: \
+                    LOGERROR("unknown y-block size (%lld) of prefix kernel", currentblock.y); \
+                    break; \
+            }
+    #else
+        #define GENERATE_SWITCH_FOR_CALL(CALL) \
+            switch (currentblock.y) { \
+                POW2_Y_DIM_1(CALL); \
+                POW2_Y_DIM_2(CALL); \
+                POW2_Y_DIM_4(CALL); \
+                POW2_Y_DIM_8(CALL); \
+                POW2_Y_DIM_16(CALL); \
+                POW2_Y_DIM_32(CALL); \
+                POW2_Y_DIM_64(CALL); \
+                POW2_Y_DIM_128(CALL); \
+                POW2_Y_DIM_256(CALL); \
+                POW2_Y_DIM_512(CALL); \
+                default: \
+                    LOGERROR("unknown y-block size (%lld) of prefix kernel", currentblock.y); \
+                    break; \
+            }
+    #endif
 }

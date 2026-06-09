@@ -8,12 +8,16 @@ using namespace QuaSARQ;
 
 bool Simulator::timeout = false;
 
-Simulator::~Simulator() { 
+Simulator::~Simulator() noexcept {
+    cleanup();
+}
+
+void Simulator::cleanup() noexcept {
     if (!gpu_allocator.destroy_cpu_pool()) {
-		LOGERROR("Failed.");
+		LOGWARNING("failed to destroy CPU memory pool.");
 	}
 	if (!gpu_allocator.destroy_gpu_pool()) {
-		LOGERRORN("Failed.");
+		LOGWARNING("failed to destroy GPU memory pool.");
 	}
     if (custreams != nullptr) {
         for (int i = 0; i < options.streams; i++) 
@@ -49,7 +53,13 @@ Simulator::Simulator() :
     , write_measures_to_file(false)
     , reference_mode(false)
 {
-    initialize();
+    try {
+        initialize();
+    }
+    catch (...) {
+        cleanup();
+        throw;
+    }
 }
 
 Simulator::Simulator(const string& path) :
@@ -79,7 +89,13 @@ Simulator::Simulator(const string& path) :
     , write_measures_to_file(false)
     , reference_mode(false)
 {
-    initialize();
+    try {
+        initialize();
+    }
+    catch (...) {
+        cleanup();
+        throw;
+    }
 }
 
 void Simulator::reserve() {

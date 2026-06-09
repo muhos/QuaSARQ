@@ -26,7 +26,7 @@ namespace QuaSARQ {
         currentblock = bestblockreset, currentgrid = bestgridreset;
         TRIM_BLOCK_IN_DEBUG_MODE(currentblock, currentgrid, num_gates, 0);
         TRIM_GRID_IN_1D(num_gates, x);
-        LOGN2(2, "recording measurements with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", 
+        LOGN2(2, "Recording measurements with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", 
             currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
         if (options.sync) cutimer.start(stream);
         record_signs_k <<<currentgrid, currentblock, 0, stream>>> (

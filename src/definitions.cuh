@@ -7,6 +7,7 @@
 #include <device_launch_parameters.h>
 
 #include "datatypes.hpp"
+#include "error.hpp"
 
 namespace QuaSARQ {
 
@@ -40,33 +41,31 @@ namespace QuaSARQ {
 	#define NOINLINE_ALL __host__ DEVICE
 	#endif
 
-	#if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
 	#define LASTERR(MESSAGE)	\
 		do { \
 				cudaError_t ERR = cudaGetLastError(); \
 				if (cudaSuccess != ERR) { \
-					fprintf(stderr, "\n%s(%i): %s due to (%d) %s\n", __FILE__, __LINE__, MESSAGE, static_cast<int>(ERR), cudaGetErrorString(ERR)); \
-					cudaDeviceReset(); \
-					exit(1); \
+					char quasarq_cuda_error_message[2048]; \
+					std::snprintf(quasarq_cuda_error_message, sizeof(quasarq_cuda_error_message), \
+						"%s(%i): %s due to (%d) %s", __FILE__, __LINE__, \
+						MESSAGE, static_cast<int>(ERR), cudaGetErrorString(ERR)); \
+					fprintf(stderr, "\n%s\n", quasarq_cuda_error_message); \
+					throw QuaSARQ::fatal_error(quasarq_cuda_error_message); \
 				} \
 		} while(0)
-	#else
-	#define LASTERR(MESSAGE)	do { } while(0)
-	#endif
 
-	#if	defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
-		#define CHECK(FUNCCALL) \
-			do { \
-				const cudaError_t returncode = FUNCCALL; \
-				if (returncode != cudaSuccess) { \
-					fprintf(stderr, "CUDA runtime failure due to %s", cudaGetErrorString(returncode)); \
-					cudaDeviceReset(); \
-					exit(1); \
-				} \
-			} while (0)
-	#else
-		#define CHECK(FUNCCALL) FUNCCALL
-	#endif
+	#define CHECK(FUNCCALL) \
+		do { \
+			const cudaError_t returncode = FUNCCALL; \
+			if (returncode != cudaSuccess) { \
+				char quasarq_cuda_error_message[2048]; \
+				std::snprintf(quasarq_cuda_error_message, sizeof(quasarq_cuda_error_message), \
+					"%s(%i): CUDA runtime failure due to (%d) %s", __FILE__, __LINE__, \
+					static_cast<int>(returncode), cudaGetErrorString(returncode)); \
+				fprintf(stderr, "%s\n", quasarq_cuda_error_message); \
+				throw QuaSARQ::fatal_error(quasarq_cuda_error_message); \
+			} \
+		} while (0)
 
 	#define SYNC(STREAM) CHECK(cudaStreamSynchronize(STREAM))
 
