@@ -302,6 +302,7 @@ namespace QuaSARQ {
                 OPTIMIZEBLOCKS2D(bestgridprefixprepare.y, num_words_minor, bestblockprefixprepare.y);
             }
             TRIM_BLOCK_IN_DEBUG_MODE(bestblockprefixprepare, bestgridprefixprepare, num_blocks, num_words_minor);
+            trim_multipass(bestblockprefixprepare, bestgridprefixprepare, num_blocks, num_words_minor);
             currentblock = bestblockprefixprepare, currentgrid = bestgridprefixprepare;
             FORCE_TRIM_GRID_IN_XY(num_blocks, num_words_minor);
             const size_t pass_1_blocksize = currentblock.x;

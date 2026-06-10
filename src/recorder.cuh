@@ -38,7 +38,7 @@ namespace QuaSARQ {
 
         inline void alloc(const size_t& measures_count) {
             LOGN2(1, "Allocating %lld MB for %lld measurements recording .. ", 
-                ratio(int64(measures_count * sizeof(bool)), KB), int64(measures_count));
+                ratio(int64(measures_count * sizeof(bool)), MB), int64(measures_count));
             device = allocator.allocate<bool>(measures_count, Region::Stable);
             assert(device != nullptr);
             host.resize(measures_count);

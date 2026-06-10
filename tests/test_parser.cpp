@@ -135,6 +135,16 @@ void test_m_variants() {
         TCHECK(h.io.measures_count == 1);
     });
 
+    run_test("MX probability argument still records measurements", [] {
+        ParserHarness h;
+        h.feed("MX(0.002) 0 1\nDETECTOR rec[-2] rec[-1]\n");
+        TCHECK(h.io.measures_count == 2);
+        TCHECK(h.io.detectors.starts.size() == 1);
+        TCHECK(h.io.detectors.counts[0] == 2);
+        TCHECK(h.io.detectors.refs[0] == 0);
+        TCHECK(h.io.detectors.refs[1] == 1);
+    });
+
     run_test("MX 0 1 2: phase-batched H H H M M M H H H", [] {
         ParserHarness h;
         h.feed("MX 0 1 2\n");

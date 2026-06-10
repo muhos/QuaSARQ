@@ -140,6 +140,14 @@ namespace QuaSARQ {
 		double 		scan_large		(Tableau& input, const pivot_t* pivots, const size_t& active_targets, const cudaStream_t& stream);
 		void		tune_inject_cx	(Tableau& input, const pivot_t* pivots, const size_t& max_active_targets);
 		void 		tune_scan_blocks();
+		void        trim_multipass	(dim3& block, dim3& grid, const size_t& data_size_in_x, const size_t& data_size_in_y) {
+			while (size_t(block.x) * size_t(block.y) > 512) {
+				if (block.y > 1) block.y >>= 1;
+				else             block.x >>= 1;
+			}
+			OPTIMIZEBLOCKS2D(grid.x, data_size_in_x, block.x);
+			OPTIMIZEBLOCKS2D(grid.y, data_size_in_y, block.y);
+		}
 		void 		tune_grid_size	(dim3& currentblock, dim3& currentgrid, const size_t& pow2_active_targets) {
 			assert(num_words_minor);
 			assert(maxGPUThreads);

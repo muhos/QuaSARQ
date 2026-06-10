@@ -306,6 +306,7 @@ namespace QuaSARQ {
         if (bestblockinjectprepare.x == 1)
             LOGERROR("x-block size in inject-cx is 1");
         TRIM_Y_BLOCK_IN_DEBUG_MODE(bestblockinjectprepare, bestgridinjectprepare, num_words_minor);
+        trim_multipass(bestblockinjectprepare, bestgridinjectprepare, active_targets, num_words_minor);
         currentblock = bestblockinjectprepare, currentgrid = bestgridinjectprepare;
         FORCE_TRIM_GRID_IN_XY(active_targets, num_words_minor);
         const size_t pass_1_blocksize = currentblock.x;

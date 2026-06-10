@@ -18,6 +18,12 @@ namespace QuaSARQ {
         const bool is_y = (is_MY || is_MRY);
         measuring = true;
 
+        if (str < eof && *str == '(') {
+            str++;
+            while (str < eof && *str != ')' && *str != DELIM) str++;
+            if (str < eof && *str == ')') str++;
+        }
+
         // Collect all qubits on this line.
         Vec<qubit_t, size_t> qubits;
         while (str < eof && *str != DELIM) {
