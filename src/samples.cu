@@ -420,7 +420,10 @@ namespace QuaSARQ {
     void Framing::print() {
         const bool any_print = samples_record.needs_host() || options.print_detector
                              || options.print_observable || !circuit_io.observables.empty();
-        if (!any_print) return;
+        if (!any_print) {
+            recorder.destroy();
+            return;
+        }
         if (!options.sync) SYNCALL;
         // XOR reference sample into all shots.
         if (recorder.step_history() > 0) {
@@ -437,6 +440,7 @@ namespace QuaSARQ {
                 num_words_minor);
             LASTERR("apply_reference_sample failed");
             SYNC(stream);
+            recorder.destroy();
         }
         if (options.print_detector || options.print_observable) LOGHEADER(1, 4, "Results");
         if (samples_record.needs_host()) {

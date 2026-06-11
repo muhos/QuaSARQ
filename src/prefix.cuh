@@ -103,6 +103,50 @@ namespace QuaSARQ {
 		,	min_yblock_size(2)
 		{}
 
+		~Prefix() {
+			destroy();
+		}
+
+		void destroy() noexcept {
+			try {
+				if (allocator.gpu_capacity() > 0) {
+					#if PREFIX_INTERLEAVE
+					allocator.deallocate<PrefixCell>(global_prefix);
+					allocator.deallocate<PrefixCell>(intermediate_prefix);
+					allocator.deallocate<PrefixCell>(subblock_prefix);
+					#else
+					targets.destroy();
+					allocator.deallocate<word_std_t>(intermediate_prefix_z);
+					allocator.deallocate<word_std_t>(intermediate_prefix_x);
+					allocator.deallocate<word_std_t>(subblocks_prefix_z);
+					allocator.deallocate<word_std_t>(subblocks_prefix_x);
+					#endif
+				}
+			}
+			catch (...) {
+				LOGWARNING("failed to destroy prefix memory.");
+			}
+			#if PREFIX_INTERLEAVE
+			global_prefix = nullptr;
+			intermediate_prefix = nullptr;
+			subblock_prefix = nullptr;
+			#else
+			intermediate_prefix_z = nullptr;
+			intermediate_prefix_x = nullptr;
+			subblocks_prefix_z = nullptr;
+			subblocks_prefix_x = nullptr;
+			#endif
+			max_intermediate_blocks = 0;
+			max_sub_blocks = 0;
+			num_qubits = 0;
+			config_qubits = 0;
+			num_words_major = 0;
+			num_words_minor = 0;
+			prev_active_targets = 0;
+			prev_yblock_size = 0;
+			prev_ygrid_size = 0;
+		}
+
 		#if PREFIX_INTERLEAVE
 		PrefixCell* global_prefixes	() { assert(global_prefix != nullptr); return global_prefix; }
 		PrefixCell* block_prefixes	() { assert(intermediate_prefix != nullptr); return intermediate_prefix; }

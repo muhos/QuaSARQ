@@ -1,11 +1,5 @@
-src/*.o
-src/*.cuo
-src/*.cuda.o
 src/quasarq
 src/libquasarq.a
-src/*.out
-src/*.txt
-src/*.qstate
 src/*.stim
 src/.vscode
 src/*.sh
@@ -13,8 +7,6 @@ src/.DS_Store
 circuits/*.stim
 circuits/*.qasm
 circuits/*.qstate
-circuits/*.txt
-circuits/*.01
 scripts
 build
 benchmark
@@ -23,9 +15,13 @@ tests/test_scheduler
 tests/test_simulator
 tests/test_sampling
 tests/test_equivalence
+*.o
+*.cuo
+*.cuda.o
 *.txt
 *.qstate
 *.01
-./*.stim
+*.out
+/*.stim
 .DS_Store
 .vscode

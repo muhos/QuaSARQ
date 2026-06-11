@@ -27,8 +27,21 @@ namespace QuaSARQ {
         {}
 
         ~MeasurementRecorder() {
+            destroy();
+        }
+
+        inline void destroy() noexcept {
+            try {
+                if (allocator.gpu_capacity() > 0)
+                    allocator.deallocate<bool>(device);
+            }
+            catch (...) {
+                LOGWARNING("failed to destroy recorder memory.");
+            }
             device = nullptr;
             host.clear(true);
+            step_gates = 0;
+            copied = false;
         }
 
         inline void reset_copied() { copied = false; }
