@@ -42,7 +42,10 @@ size_t Framing::choose_chunk_shots() const {
     const size_t safety = MIN(usable / 5, size_t(512) * MB);
     const size_t reserved = winfo.max_window_bytes + sizeof(Table) * 2;
     const size_t available = usable > safety + reserved ? usable - safety - reserved : 0;
-    const size_t bytes_per_shot_word = (measure_words + 2 * qubit_words) * sizeof(word_std_t) * WORD_BITS;
+    const size_t rand_state_rows = MAX(get_num_padded_bits(num_qubits), winfo.max_parallel_gates);
+    const size_t bytes_per_shot_word =
+        (measure_words + 2 * qubit_words) * sizeof(word_std_t) * WORD_BITS
+        + rand_state_rows * sizeof(curand_algorithm_t);
     if (!bytes_per_shot_word) return total_shots;
     const size_t chunk_words = available / bytes_per_shot_word;
     size_t chunk = chunk_words ? chunk_words * WORD_BITS : 1;

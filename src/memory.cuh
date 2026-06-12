@@ -15,10 +15,11 @@ namespace QuaSARQ {
 	using DeviceAllocator = cuArena::DeviceArena;
 	using Region = cuArena::Region;
 
+
 	inline size_t gpu_stable_avail(const DeviceAllocator& alloc) noexcept {
 		if (alloc.gpu_stable_capacity() == 0)
-			return alloc.gpu_available();
-		return alloc.gpu_stable_capacity() - alloc.gpu_stable_used();
+			return alloc.gpu_largest_free_block();
+		return alloc.gpu_stable_largest_free_block();
 	}
 
 }
