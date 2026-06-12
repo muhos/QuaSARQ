@@ -113,8 +113,7 @@ void Simulator::reserve() {
     static constexpr size_t CUARENA_GPU_PENALTY = 256 * MB;
     static constexpr size_t MIN_DYNAMIC = 128 * MB;
     const size_t pool_est = (gfree > CUARENA_GPU_PENALTY) ? gfree - CUARENA_GPU_PENALTY : 0;
-    const size_t stable_bytes = circuit_obs_dets_bytes +
-                                ((pool_est > MIN_DYNAMIC) ? pool_est - MIN_DYNAMIC : 0);
+    const size_t stable_bytes = (pool_est > MIN_DYNAMIC) ? pool_est - MIN_DYNAMIC : 0;
     gpu_allocator.create_gpu_pool(0, cuArena::GPUMemoryType::Device, 0, stable_bytes);
     // Creating CPU pool (pinned memory)
     const size_t sample_host_bytes = options.print_sample || options.print_sample_qubits || options.check_measurement ?

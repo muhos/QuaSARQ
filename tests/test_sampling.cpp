@@ -2,6 +2,7 @@
 #include "helper.hpp"
 
 #include <cmath>
+#include <fstream>
 
 using namespace QuaSARQ;
 
@@ -155,6 +156,68 @@ void test_sampling_paths() {
     });
 }
 
+std::string read_observable_file(const std::string& circuit_path) {
+    std::filesystem::path path(circuit_path);
+    path.replace_extension();
+    path += "_obs.01";
+    std::ifstream in(path, std::ios::binary);
+    TCHECK(in.good());
+    return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+}
+
+struct SamplingOutcome {
+    size_t total_observable_errors;
+    size_t shots_with_error;
+    std::string observables;
+};
+
+SamplingOutcome run_chunked_sampling(const std::string& path, const int& chunk_shots) {
+    reset_sampling_options(path.c_str());
+    options.print_observable = true;
+    options.chunk_shots = chunk_shots;
+    SamplingHarness framing(path, SAMPLE_SHOTS);
+    check_sampled_circuit(framing);
+    const Statistics& stats = framing.statistics();
+    TCHECK(stats.logical.total_shots == SAMPLE_SHOTS);
+    return SamplingOutcome {
+        stats.logical.total_observable_errors,
+        stats.logical.shots_with_error,
+        read_observable_file(path)
+    };
+}
+
+void test_chunked_sampling() {
+    section("Chunked sampling consistency");
+
+    const auto paths = circuit_paths_up_to_distance(100);
+    TCHECK(!paths.empty());
+    for (const std::string& path : paths) {
+        run_test((path + " chunked sampling matches single chunk").c_str(), [&] {
+            const SamplingOutcome baseline = run_chunked_sampling(path, int(SAMPLE_SHOTS));
+            TCHECK(!baseline.observables.empty());
+            for (const int chunk_shots : {int(SAMPLE_SHOTS) / 4, int(SAMPLE_SHOTS) / 8}) {
+                const SamplingOutcome chunked = run_chunked_sampling(path, chunk_shots);
+                TCHECK(chunked.total_observable_errors == baseline.total_observable_errors);
+                TCHECK(chunked.shots_with_error == baseline.shots_with_error);
+                TCHECK(chunked.observables == baseline.observables);
+            }
+        });
+    }
+
+    const std::string& rounding_path = paths.front();
+    run_test((rounding_path + " rounds chunk shots down to word boundary").c_str(), [&] {
+        reset_sampling_options(rounding_path.c_str());
+        options.chunk_shots = 100;
+        SamplingHarness framing(rounding_path, SAMPLE_SHOTS);
+        check_sampled_circuit(framing);
+        const Statistics& stats = framing.statistics();
+        TCHECK(stats.sampling.requested_shots == SAMPLE_SHOTS);
+        TCHECK(stats.sampling.chunk_shots == 64);
+        TCHECK(stats.sampling.chunks == SAMPLE_SHOTS / 64);
+        TCHECK(stats.logical.total_shots == SAMPLE_SHOTS);
+    });
+}
+
 void test_logical_error_rates() {
     section("Sampling logical error rates");
 
@@ -180,6 +243,7 @@ void test_logical_error_rates() {
 
 int main() {
     test_sampling_paths();
+    test_chunked_sampling();
     test_logical_error_rates();
 
     std::cout << std::format("\n{}{}/{} tests passed{}\n\n",

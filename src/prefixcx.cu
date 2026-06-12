@@ -367,6 +367,7 @@ namespace QuaSARQ {
         if (currentblock.x > active_targets) {
             currentblock.x = MIN(currentblock.x, nextPow2(active_targets));
         }
+        trim_multipass(currentblock, currentgrid, active_targets, num_words_minor);
         FORCE_TRIM_GRID_IN_XY(active_targets, num_words_minor);
         LOGN2(2, " Running pass-2 kernel for %d targets with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", \
             active_targets, currentblock.x, currentblock.y, currentgrid.x, currentgrid.y); \

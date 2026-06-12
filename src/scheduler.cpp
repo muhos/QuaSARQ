@@ -346,13 +346,14 @@ namespace QuaSARQ {
                     // R, M, MR must never mix in the same window.
                     if (measurements.size() && measurements[0].type != gate.type)
                         break;
+                    if (!is_c_unlocked)
+                        break;
                     circuit_io.circuit_queue.pop_front();
                     measurements.push(M_OP(c, gate.type));
                     measuring = true;
-                    if (is_c_unlocked) {
-                        locked_qubits.push(c);
-                        locked[c] = 1;
-                    }
+                    locked_qubits.push(c);
+                    locked[c] = 1;
+                    max_locked_qubits = locked_qubits.size();
                     parallel_gates_per_window++;
                     continue;
                 }

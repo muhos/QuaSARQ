@@ -248,8 +248,8 @@ namespace QuaSARQ {
             const char*    name = "")
         {
             if (!num_qubits) LOGERROR("cannot allocate tableau for 0 qubits.");
-            if (_num_qubits_padded == get_num_padded_bits(num_qubits)) return _num_partitions;
-            if (_num_qubits_padded) LOGERROR("Not yet implemented to reallocate a tableau.");
+            if (_num_qubits_padded)
+                destroy();
 
             LOGN2(1, "Allocating %stableau for %s%lld qubits%s.. ",
                 name, CREPORTVAL, int64(num_qubits), CNORMAL);

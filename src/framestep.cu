@@ -300,7 +300,7 @@ namespace QuaSARQ {
         }
 
         if (options.progress_en && !options.check_tableau) {
-            print_progress(0, depth_level, true);
+            print_progress(chunk_index, depth_level, true);
         }
 
     }

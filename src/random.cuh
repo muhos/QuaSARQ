@@ -22,9 +22,12 @@ namespace QuaSARQ {
 
     __global__
     void setup_rand_k(
-        curand_algorithm_t* states,
-        uint64              seed,
-        size_t              total_states);
+        curand_algorithm_t*       states,
+        const uint64              seed,
+        const size_t              total_states,
+        const size_t              chunk_words_minor,
+        const size_t              total_words_minor,
+        const size_t              chunk_word_offset);
 
 
 }

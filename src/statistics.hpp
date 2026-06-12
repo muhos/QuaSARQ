@@ -120,6 +120,14 @@ namespace QuaSARQ {
             }
         } logical;
 
+        struct {
+            size_t requested_shots;
+            size_t chunk_shots;
+            size_t chunks;
+            size_t sample_device_bytes;
+            size_t sample_host_bytes;
+        } sampling;
+
         Statistics() {
             RESETSTRUCT(this);
             circuit.gate_stats.alloc();

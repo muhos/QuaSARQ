@@ -304,18 +304,17 @@ namespace QuaSARQ {
             LOGENDING(2, 4, "(time %.3f ms)", elapsed);
         } else LOGDONE(2, 4);
         if (options.check_measurement) {
-            samples_record.copy();
+            samples_record.copy(stream);
             mchecker.check_record_samples(tableau, samples_record, circuit, depth_level, prev_measurement_offset, tableau.num_words_minor());
             mchecker.reset_state();
         }
     }
 
-    void Framing::print_detectors_sampled(FILE* out) {
+    void Framing::print_detectors_sampled(FILE* out, const cudaStream_t& stream) {
         if (!options.print_detector) return;
         const DetectorData& dets = circuit_io.detectors;
         if (dets.empty()) return;
         const uint32 n            = (uint32)dets.pinned.num_instructions;
-        const cudaStream_t stream = kernel_streams[0];
         char* d_bitstring = gpu_allocator.allocate<char>((size_t)n * num_shots, Region::Dynamic);
         char* h_bitstring = gpu_allocator.allocate_pinned<char>((size_t)n * num_shots);
         launch_eval_frame_refs(
@@ -347,11 +346,10 @@ namespace QuaSARQ {
         gpu_allocator.deallocate<char>(d_bitstring);
     }
 
-    void Framing::print_observables_sampled(FILE* out) {
+    void Framing::print_observables_sampled(FILE* out, const cudaStream_t& stream) {
         const ObservableData& obs = circuit_io.observables;
         if (obs.empty()) return;
         const uint32 n            = (uint32)obs.pinned.num_observables;
-        const cudaStream_t stream = kernel_streams[0];
         if (!options.print_observable && !options.check_measurement) {
             uint64* d_counters = gpu_allocator.allocate<uint64>(2, Region::Dynamic);
             uint32* d_shot_flags = gpu_allocator.allocate<uint32>(num_shots, Region::Dynamic);
@@ -365,10 +363,10 @@ namespace QuaSARQ {
                 tableau.num_words_minor(),
                 n, num_shots, stream);
             SYNC(stream);
-            stats.logical.total_observable_errors = (size_t)h_counters[0];
-            stats.logical.shots_with_error        = (size_t)h_counters[1];
-            stats.logical.total_shots             = num_shots;
-            stats.logical.num_observables         = obs.pinned.num_observables;
+            stats.logical.total_observable_errors += (size_t)h_counters[0];
+            stats.logical.shots_with_error        += (size_t)h_counters[1];
+            stats.logical.total_shots             += num_shots;
+            stats.logical.num_observables          = obs.pinned.num_observables;
             gpu_allocator.deallocate_pinned<uint64>(h_counters);
             gpu_allocator.deallocate<uint32>(d_shot_flags);
             gpu_allocator.deallocate<uint64>(d_counters);
@@ -386,7 +384,7 @@ namespace QuaSARQ {
             n, num_shots, stream,
             "eval_frame_refs (observables) failed");
         SYNC(stream);
-        uint32 total_errors = 0;
+        size_t total_errors = 0;
         size_t shots_with_error = 0;
         bool all_passed = true;
         if (options.print_observable && out == stdout)
@@ -405,10 +403,10 @@ namespace QuaSARQ {
                 all_passed &= mchecker.check_observables(circuit_io.observables, row, n, true);
             }
         }
-        stats.logical.shots_with_error        = shots_with_error;
-        stats.logical.total_shots             = num_shots;
-        stats.logical.num_observables         = obs.pinned.num_observables;
-        stats.logical.total_observable_errors = total_errors;
+        stats.logical.shots_with_error        += shots_with_error;
+        stats.logical.total_shots             += num_shots;
+        stats.logical.num_observables          = obs.pinned.num_observables;
+        stats.logical.total_observable_errors += total_errors;
         if (all_passed && options.check_measurement) {
             LOGN2(1, " Checking observable bitstrings ");
             LOGPASSED(1);
@@ -417,17 +415,13 @@ namespace QuaSARQ {
         gpu_allocator.deallocate<char>(d_bitstring);
     }
 
-    void Framing::print() {
+    void Framing::print(const cudaStream_t& stream) {
         const bool any_print = samples_record.needs_host() || options.print_detector
                              || options.print_observable || !circuit_io.observables.empty();
-        if (!any_print) {
-            recorder.destroy();
-            return;
-        }
+        if (!any_print) return;
         if (!options.sync) SYNCALL;
         // XOR reference sample into all shots.
         if (recorder.step_history() > 0) {
-            const cudaStream_t stream = kernel_streams[0];
             const size_t num_measurements = stats.circuit.measure_stats.count;
             const size_t num_words_minor  = tableau.num_words_minor();
             dim3 block(32, 8), grid(1, 1);
@@ -440,32 +434,31 @@ namespace QuaSARQ {
                 num_words_minor);
             LASTERR("apply_reference_sample failed");
             SYNC(stream);
-            recorder.destroy();
         }
         if (options.print_detector || options.print_observable) LOGHEADER(1, 4, "Results");
         if (samples_record.needs_host()) {
-            samples_record.copy();
+            samples_record.copy(stream);
             if (options.print_sample) {
-                FILE* out = write_measures_to_file ? open_output_file("_samples.01") : stdout;
+                FILE* out = write_measures_to_file ? open_output_file("_samples.01", chunk_index > 0) : stdout;
                 if (!write_measures_to_file) LOG2(0, "%sSampling (shot per line):%s", CHEADER, CNORMAL);
                 print_samples(samples_record.host, stats.circuit.measure_stats.count, num_shots, out);
                 if (write_measures_to_file) fclose(out);
             }
             if (options.print_sample_qubits) {
-                FILE* out = write_measures_to_file ? open_output_file("_samples_qubits.01") : stdout;
+                FILE* out = write_measures_to_file ? open_output_file("_samples_qubits.01", chunk_index > 0) : stdout;
                 if (!write_measures_to_file) LOG2(0, "%sSampling (measurement per line):%s", CHEADER, CNORMAL);
                 print_samples_measures(samples_record.host, stats.circuit.measure_stats.count, num_shots, out);
                 if (write_measures_to_file) fclose(out);
             }
         }
         if (options.print_detector) {
-            FILE* out = write_measures_to_file ? open_output_file("_dets.01") : stdout;
-            print_detectors_sampled(out);
+            FILE* out = write_measures_to_file ? open_output_file("_dets.01", chunk_index > 0) : stdout;
+            print_detectors_sampled(out, stream);
             if (write_measures_to_file) fclose(out);
         }
         if (!circuit_io.observables.empty()) {
-            FILE* out = (options.print_observable && write_measures_to_file) ? open_output_file("_obs.01") : stdout;
-            print_observables_sampled(out);
+            FILE* out = (options.print_observable && write_measures_to_file) ? open_output_file("_obs.01", chunk_index > 0) : stdout;
+            print_observables_sampled(out, stream);
             if (options.print_observable && write_measures_to_file) fclose(out);
         }
         fflush(stdout);

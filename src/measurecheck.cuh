@@ -92,6 +92,32 @@ namespace QuaSARQ {
 		}
 
 		void destroy() {
+			h_xs.destroy();
+			h_zs.destroy();
+			d_xs.destroy();
+			d_zs.destroy();
+			h_ss.destroy();
+			d_ss.destroy();
+			h_prefix_xs.destroy();
+			h_prefix_zs.destroy();
+			#if !PREFIX_INTERLEAVE
+			d_prefix_xs.destroy();
+			d_prefix_zs.destroy();
+			#endif
+			h_intermediate_prefix_z.clear(true);
+			h_intermediate_prefix_x.clear(true);
+			#if PREFIX_INTERLEAVE
+			d_prefix.clear(true);
+			d_intermediate_prefix.clear(true);
+			#else
+			d_intermediate_prefix_z.clear(true);
+			d_intermediate_prefix_x.clear(true);
+			#endif
+			h_compact_pivots.clear(true);
+			d_compact_pivots.clear(true);
+			anticommuting.clear(true);
+			record.clear(true);
+			samples.clear(true);
 			num_qubits = 0; 
 			num_qubits_padded = 0;
 			num_words_major = 0;
@@ -102,12 +128,14 @@ namespace QuaSARQ {
 			gate_type = byte_t(M);
 		}
 
-		void alloc(const size_t& num_qubits) {
+		void alloc(const size_t& num_qubits, const size_t& minor_words = 0) {
+			destroy();
 			this->num_qubits = num_qubits;
 			measures_count = 0;
 			num_qubits_padded = get_num_padded_bits(num_qubits);
-			num_words_minor = get_num_words(num_qubits);
-			num_words_major = num_words_minor * 2;
+			const size_t qubit_words = get_num_words(num_qubits);
+			num_words_minor = minor_words ? minor_words : qubit_words;
+			num_words_major = minor_words ? qubit_words : qubit_words * 2;
 			h_prefix_xs.alloc_host(num_qubits_padded, num_words_minor, num_words_minor);
 			h_prefix_zs.alloc_host(num_qubits_padded, num_words_minor, num_words_minor);
 			#if !PREFIX_INTERLEAVE

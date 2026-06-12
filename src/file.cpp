@@ -24,13 +24,13 @@ void Simulator::close_file(FILE*& file) {
     }
 }
 
-FILE* Simulator::open_output_file(const string& suffix) {
+FILE* Simulator::open_output_file(const string& suffix, const bool& append) {
     string base = circuit_path;
     const size_t dot = base.rfind('.');
     if (dot != string::npos) base = base.substr(0, dot);
     if (base.empty()) base = "quasarq";
     const string path = base + suffix;
-    FILE* f = fopen(path.c_str(), "w");
+    FILE* f = fopen(path.c_str(), append ? "a" : "w");
     if (f == nullptr)
         LOGERROR("failed to open output file \"%s\"", path.c_str());
     LOG2(1, " %sWriting to \"%s%s%s\".%s", CREPORT, CREPORTVAL, path.c_str(), CREPORT, CNORMAL);

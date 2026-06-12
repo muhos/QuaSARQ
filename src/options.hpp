@@ -49,6 +49,7 @@ namespace QuaSARQ {
         int timeout;
         int print_limit;
         int num_shots;
+        int chunk_shots;
         int min_shots_write;
         int min_measures_write;
 

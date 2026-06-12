@@ -29,22 +29,41 @@ namespace QuaSARQ {
                 host.destroy();
         }
 
-        void alloc(const size_t& num_measurements, const size_t& num_words_minor, DeviceAllocator& gpu_allocator) {
+        void destroy(DeviceAllocator& gpu_allocator) noexcept {
+            try {
+                if (gpu_allocator.gpu_capacity() > 0) {
+                    gpu_allocator.deallocate<Table>(device);
+                    gpu_allocator.deallocate<word_t>(device_data);
+                }
+            }
+            catch (...) {
+                LOGWARNING("failed to destroy samples memory.");
+            }
+            device = nullptr;
+            device_data = nullptr;
+            num_words = 0;
+            host.destroy();
+        }
+
+        void alloc(const size_t& num_measurements, const size_t& num_words_minor, DeviceAllocator& gpu_allocator, const cudaStream_t& stream = 0) {
+            destroy(gpu_allocator);
             const size_t num_words_major = get_num_words(num_measurements);
             const size_t num_measures_padded = num_words_major * WORD_BITS;
             num_words = num_words_major * (num_words_minor * WORD_BITS);
             device = gpu_allocator.allocate<Table>(1, Region::Stable);
             device_data = gpu_allocator.allocate<word_t>(num_words, Region::Stable);
+            CHECK(cudaMemsetAsync(device_data, 0, num_words * sizeof(word_t), stream));
             Table tmp;
             tmp.alloc(device_data, num_measures_padded, num_words_major, num_words_minor);
-            CHECK(cudaMemcpy(device, &tmp, sizeof(Table), cudaMemcpyHostToDevice));
+            CHECK(cudaMemcpyAsync(device, &tmp, sizeof(Table), cudaMemcpyHostToDevice, stream));
             if (needs_host())
                 host.alloc_host(num_measures_padded, num_words_major, num_words_minor);
         }
 
-        void copy() {
+        void copy(const cudaStream_t& stream = 0) {
             if (device_data != nullptr) {
-                CHECK(cudaMemcpy(host.data(), device_data, host.size() * sizeof(word_t), cudaMemcpyDeviceToHost));
+                CHECK(cudaMemcpyAsync(host.data(), device_data, host.size() * sizeof(word_t), cudaMemcpyDeviceToHost, stream));
+                SYNC(stream);
             }
         }
 

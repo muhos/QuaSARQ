@@ -35,6 +35,7 @@ endif
 
 NVCCFLAGS += -DWORD_SIZE_$(WORDSIZE)
 ALL_FLAGS := $(NVCCFLAGS) $(addprefix -Xcompiler ,$(CCFLAGS))
+TEST_HEADERS := $(sort $(wildcard *.hpp) $(wildcard $(QUASARQ_DIR)/src/*.hpp) $(wildcard $(QUASARQ_DIR)/src/*.cuh))
 
 PARSER_SRCS := test_parser.cpp test_stubs.cpp $(QUASARQ_DIR)/src/parser.cpp $(QUASARQ_DIR)/src/expansion.cpp
 PARSER_BIN  := test_parser
@@ -53,15 +54,21 @@ EQUIVALENCE_BIN  := test_equivalence
 
 all: $(PARSER_BIN) $(SCHEDULER_BIN) $(SIMULATOR_BIN) $(SAMPLING_BIN) $(EQUIVALENCE_BIN)
 
-$(PARSER_BIN): $(PARSER_SRCS)
+$(PARSER_BIN): $(PARSER_SRCS) $(TEST_HEADERS)
 	@echo -n "Building $@..."
 	@$(NVCC) $(ALL_FLAGS) $(INCLUDES) -o $@ $(PARSER_SRCS)
 	@echo "done."
 
-$(SCHEDULER_BIN): $(SCHEDULER_SRCS)
+$(SCHEDULER_BIN): $(SCHEDULER_SRCS) $(TEST_HEADERS)
 	@echo -n "Building $@..."
 	@$(NVCC) $(ALL_FLAGS) $(INCLUDES) -o $@ $(SCHEDULER_SRCS)
 	@echo "done."
+
+parser: $(PARSER_BIN)
+	@./$(PARSER_BIN)
+
+scheduler: $(SCHEDULER_BIN)
+	@./$(SCHEDULER_BIN)
 
 FORCE:
 
@@ -96,4 +103,4 @@ run: all
 clean:
 	rm -f $(PARSER_BIN) $(SCHEDULER_BIN) $(SIMULATOR_BIN) $(SAMPLING_BIN) $(EQUIVALENCE_BIN)
 
-.PHONY: all run clean FORCE
+.PHONY: all run clean FORCE parser scheduler

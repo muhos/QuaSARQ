@@ -399,8 +399,9 @@ namespace QuaSARQ {
 	}
 
     void Simulator::print_progress_header() {
+        const char* unit = stats.sampling.requested_shots ? "Chunk" : "Partition";
         LOGN2(1, "   %-10s    %-10s    %-10s    %15s          %-9s", 
-                "Partition", "Step", "Gates", "Measurements", "Time (s)");
+                unit, "Step", "Gates", "Measurements", "Time (s)");
         if (options.check_tableau || options.check_measurement)
             LOG2(1, "  %s", "Integrity");
         else
@@ -444,4 +445,3 @@ namespace QuaSARQ {
     }
 
 }
-

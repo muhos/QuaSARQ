@@ -72,9 +72,9 @@ namespace QuaSARQ {
                 Simulator       (const string& path);
 
         // File IO.
-        bool    open_file      (FILE*& file, arg_t file_path, arg_t file_mode);
-        void    close_file     (FILE*& file);
-        FILE*   open_output_file(const string& suffix);
+        bool    open_file       (FILE*& file, arg_t file_path, arg_t file_mode);
+        void    close_file      (FILE*& file);
+        FILE*   open_output_file(const string& suffix, const bool& append = false);
 
         // Getters.
         Tableau&                get_tableau         () { return tableau; }

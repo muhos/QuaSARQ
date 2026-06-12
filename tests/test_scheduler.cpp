@@ -247,6 +247,26 @@ void test_qubit_locking() {
         TCHECK(h.gates_in_window(0) == 2);
     });
 
+    run_test("repeated measurements on same qubit: different windows", [] {
+        SchedulerHarness h;
+        h.feed("M 0\nM 0\n");
+        h.schedule(1);
+        TCHECK(h.depth() == 2);
+        TCHECK(h.gates_in_window(0) == 1);
+        TCHECK(h.gates_in_window(1) == 1);
+        TCHECK(h.all_gates_have_type(0, M));
+        TCHECK(h.all_gates_have_type(1, M));
+    });
+
+    run_test("measurement and reset-measurement on same qubit: different windows", [] {
+        SchedulerHarness h;
+        h.feed("M 0\nMR 0\n");
+        h.schedule(1);
+        TCHECK(h.depth() == 2);
+        TCHECK(h.gate_type_at(0, 0) == M);
+        TCHECK(h.gate_type_at(1, 0) == MR);
+    });
+
     run_test("qubit 0: two-gate sequence keeps gates separated", [] {
         SchedulerHarness h;
         h.feed("H 0\nS 0\n");

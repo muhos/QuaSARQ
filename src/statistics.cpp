@@ -43,17 +43,18 @@ void Simulator::report()
 		#elif defined(WORD_SIZE_32)
 		WORD_SIZE_STR = "32 bits";
 		#endif
-		LOG1(" %sTableau word size              : %s%-12s%s", CREPORT, CREPORTVAL, WORD_SIZE_STR.c_str(), CNORMAL);
-		LOG1(" %sTableau partitions             : %s%-12zd%s", CREPORT, CREPORTVAL, num_partitions, CNORMAL);
-		LOG1(" %sTableau step speed             : %s%-12.3f  GB/sec%s", CREPORT, CREPORTVAL, stats.tableau.speed, CNORMAL);
-		LOG1(" %sTableau initial states         : %s%-12zd%s", CREPORT, CREPORTVAL, stats.tableau.istates, CNORMAL);
+		if (stats.sampling.requested_shots) {
+			LOG1(" %sRequested shots                : %s%-12zd%s", CREPORT, CREPORTVAL, stats.sampling.requested_shots, CNORMAL);
+			LOG1(" %sSampling chunk shots           : %s%-12zd%s", CREPORT, CREPORTVAL, stats.sampling.chunk_shots, CNORMAL);
+			LOG1(" %sSampling chunks                : %s%-12zd%s", CREPORT, CREPORTVAL, stats.sampling.chunks, CNORMAL);
+		}
 		const double tableau_gb   = stats.tableau.count * stats.tableau.gigabytes;
 		const size_t noise_bytes  = gpu_circuit.max_noise_gates() * (sizeof(curand_algorithm_t) + sizeof(uint32));
 		const size_t win_gpu_bytes = winfo.max_window_bytes;
 		const size_t win_cpu_bytes = winfo.max_window_bytes;
 		const size_t rec_bytes    = stats.circuit.measure_stats.count * sizeof(bool);
-		const size_t sample_gpu_bytes = sample_device_bytes();
-		const size_t sample_cpu_bytes = sample_host_bytes();
+		const size_t sample_gpu_bytes = MAX(sample_device_bytes(), stats.sampling.sample_device_bytes);
+		const size_t sample_cpu_bytes = MAX(sample_host_bytes(), stats.sampling.sample_host_bytes);
 		const size_t prefix_bytes = prefix.bytes();
 		const size_t pool_used    = gpu_allocator.gpu_used();
 		const size_t pool_cap     = gpu_allocator.gpu_capacity();
@@ -63,19 +64,33 @@ void Simulator::report()
 		LOG1(" %sGPU pool capacity              : %s%-12.3f  GB%s", CREPORT, CREPORTVAL, ratio((double)pool_cap,   double(GB)), CNORMAL);
 		LOG1(" %sGPU pool used                  : %s%-12.3f  GB  (%.0f%%)%s",
 			CREPORT, CREPORTVAL, ratio((double)pool_used, double(GB)), pct_gpu, CNORMAL);
-		LOG1(" %s  Tableau                      : %s%-12.3f  GB%s", CREPORT, CREPORTVAL, tableau_gb, CNORMAL);
-		if (sample_gpu_bytes)
-			LOG1(" %s  Samples                      : %s%-12.3f  GB%s", CREPORT, CREPORTVAL, ratio((double)sample_gpu_bytes, double(GB)), CNORMAL);
+		LOG1(" %s  %-29s: %s%-12s%s",
+			CREPORT, "Tableau word size", CREPORTVAL, WORD_SIZE_STR.c_str(), CNORMAL);
+		const char* tableau_label = stats.sampling.requested_shots ? "Reference + frame / chunk" : "Tableau";
+		LOG1(" %s  %-29s: %s%-12.3f  GB%s",
+			CREPORT, tableau_label, CREPORTVAL, tableau_gb, CNORMAL);
+		if (sample_gpu_bytes) {
+			const char* samples_label = stats.sampling.requested_shots ? "Samples / chunk" : "Samples";
+			LOG1(" %s  %-29s: %s%-12.3f  GB%s",
+				CREPORT, samples_label, CREPORTVAL,
+				ratio((double)sample_gpu_bytes, double(GB)), CNORMAL);
+		}
 		if (prefix_bytes)
 			LOG1(" %s  Prefix                       : %s%-12.3f  MB%s", CREPORT, CREPORTVAL, ratio((double)prefix_bytes, double(MB)), CNORMAL);
 		if (rec_bytes)
-			LOG1(" %s  Recorder                     : %s%-12.3f  MB%s", CREPORT, CREPORTVAL, ratio((double)rec_bytes, double(MB)), CNORMAL);
+			LOG1(" %s  %-29s: %s%-12.3f  MB%s",
+				CREPORT, stats.sampling.requested_shots ? "Recorder / reference" : "Recorder",
+				CREPORTVAL, ratio((double)rec_bytes, double(MB)), CNORMAL);
 		LOG1(" %s  Noise (states + Paulis)      : %s%-12.3f  MB%s", CREPORT, CREPORTVAL, ratio((double)noise_bytes,   double(MB)), CNORMAL);
 		LOG1(" %s  Circuit window               : %s%-12.3f  MB%s", CREPORT, CREPORTVAL, ratio((double)win_gpu_bytes, double(MB)), CNORMAL);
 		LOG1(" %sCPU pinned capacity            : %s%-12.3f  MB%s", CREPORT, CREPORTVAL, ratio((double)cpu_cap_b,    double(MB)), CNORMAL);
 		LOG1(" %sCPU pinned used                : %s%-12.3f  MB%s", CREPORT, CREPORTVAL, ratio((double)cpu_used_b,   double(MB)), CNORMAL);
-		if (sample_cpu_bytes)
-			LOG1(" %s  Samples                      : %s%-12.3f  MB%s", CREPORT, CREPORTVAL, ratio((double)sample_cpu_bytes, double(MB)), CNORMAL);
+		if (sample_cpu_bytes) {
+			const char* samples_label = stats.sampling.requested_shots ? "Samples / chunk" : "Samples";
+			LOG1(" %s  %-29s: %s%-12.3f  MB%s",
+				CREPORT, samples_label, CREPORTVAL,
+				ratio((double)sample_cpu_bytes, double(MB)), CNORMAL);
+		}
 		LOG1(" %s  Circuit window               : %s%-12.3f  MB%s", CREPORT, CREPORTVAL, ratio((double)win_cpu_bytes, double(MB)), CNORMAL);
 		double circuit_mb = ratio((double)stats.circuit.bytes, double(MB));
 		LOG1(" %sCircuit memory (CPU)           : %s%-12.3f  MB%s", CREPORT, CREPORTVAL, circuit_mb, CNORMAL);
@@ -96,8 +111,6 @@ void Simulator::report()
 					stats.logical.shots_with_error,
 					stats.logical.total_shots,
 					per, CNORMAL);
-				LOG1(" %s  Total observable errors      : %s%-12zd%s",
-					CREPORT, per > 0.0 ? CRED : CREPORTVAL, stats.logical.total_observable_errors, CNORMAL);
 			}
 		}
 		if (!circuit_io.detectors.empty())

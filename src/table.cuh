@@ -93,6 +93,10 @@ namespace QuaSARQ {
                 }
             }
             _data = nullptr;
+            _num_qubits_padded = 0;
+            _num_words = 0;
+            _num_words_minor = 0;
+            _num_words_major = 0;
             _is_identity = true;
             _context = UNKNOWN;
         }
@@ -120,8 +124,13 @@ namespace QuaSARQ {
                 return;
             }
             if (_data != nullptr) {
-                assert(_num_words == num_words_major * (_num_words_minor * WORD_BITS));
-                return;
+                const size_t target_words = num_words_major * (num_words_minor * WORD_BITS);
+                if (_num_qubits_padded == num_qubits_padded &&
+                    _num_words_major == num_words_major &&
+                    _num_words_minor == num_words_minor &&
+                    _num_words == target_words)
+                    return;
+                destroy();
             }
             assert(num_qubits_padded);
             assert(num_words_major);
