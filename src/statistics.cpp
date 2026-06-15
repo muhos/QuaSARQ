@@ -56,7 +56,7 @@ void Simulator::report()
 		const size_t sample_gpu_bytes = MAX(sample_device_bytes(), stats.sampling.sample_device_bytes);
 		const size_t sample_cpu_bytes = MAX(sample_host_bytes(), stats.sampling.sample_host_bytes);
 		const size_t prefix_bytes = prefix.bytes();
-		const size_t pool_used    = gpu_allocator.gpu_used();
+		const size_t pool_used    = gpu_allocator.gpu_peak_used();
 		const size_t pool_cap     = gpu_allocator.gpu_capacity();
 		const size_t cpu_used_b   = gpu_allocator.cpu_used();
 		const size_t cpu_cap_b    = gpu_allocator.cpu_capacity();
@@ -136,7 +136,7 @@ void Simulator::report()
 			PRINT(" %-30s: %-12.3f  msec (%%%-3.0f)\n", "Inject Swap", stats.profile.time.injectswap, stats.profile.percentage.injectswap);
 			PRINT(" %-30s: %-12.3f  msec (%%%-3.0f)\n", "Inject X", stats.profile.time.injectx, stats.profile.percentage.injectx);
 		}
-		PRINT("%-30s : %-12.3f  GB\n", "Memory", ratio((double)gpu_allocator.gpu_used(), double(GB)));
+		PRINT("%-30s : %-12.3f  GB\n", "Memory", ratio((double)gpu_allocator.gpu_peak_used(), double(GB)));
 		PRINT("%-30s : %-12.3f  joules\n", "Energy", stats.power.joules);
 		if (stats.logical.total_shots > 0)
 			PRINT("%-30s : %-12.6f  (%zu / %zu)\n", "Logical error rate",
