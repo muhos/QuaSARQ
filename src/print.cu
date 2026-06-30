@@ -423,9 +423,11 @@ namespace QuaSARQ {
             stats.circuit.measure_stats.random_per_window = 0;
             size_t prev_num_gates = circuit[depth_level].size();
             size_t definite_measures = is_measuring ? prev_num_gates - random_measures : 0;
-            if (is_measuring) SETCOLOR(CBCYAN, stdout);
-            else SETCOLOR(CORANGE1, stdout);
-            LOGN2(1, "%c  %-10lld    %-10lld    %-10lld    %-10lld  %-10lld   %-7.3f", 
+            if (options.verbose >= 1) {
+                if (is_measuring) SETCOLOR(CBCYAN, stdout);
+                else SETCOLOR(CORANGE1, stdout);
+            }
+            LOGN2(1, "%c  %-10lld    %-10lld    %-10lld    %-10lld  %-10lld   %-7.3f",
                     is_measuring ? 'm' : 'u',
                     p + 1, 
                     depth_level + 1, 
@@ -440,7 +442,7 @@ namespace QuaSARQ {
                 passed ? "PASSED" : "FAILED", CNORMAL);
             else
                 LOG2(1, "");
-            SETCOLOR(CNORMAL, stdout);
+            if (Logger::min_verbosity() >= 1) SETCOLOR(CNORMAL, stdout);
         }
     }
 

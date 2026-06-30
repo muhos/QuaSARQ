@@ -104,6 +104,7 @@ namespace QuaSARQ {
         verbose = opt_verbose;
         if (options.quiet_en) options.verbose = 0;
         else if (!options.verbose) options.quiet_en = true;
+        if (options.quiet_en) options.progress_en = false;
 
         equivalence_en = opt_equivalence_en;
         disable_concurrency = opt_disable_concurrency;

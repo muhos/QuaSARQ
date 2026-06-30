@@ -14,13 +14,12 @@ using namespace std;
 using namespace QuaSARQ;
 
 int main(int argc, char** argv) {
-    SETCOLOR(CNORMAL, stdout);
-
 	try {
         if (argc == 1) LOGERROR("at least one argument is missing.");
 
 		int has_input_file = parseArguments(argc, argv);
         options.initialize();
+		if (!options.quiet_en) SETCOLOR(CNORMAL, stdout);
 		SET_LOGGER_VERBOSITY(options.verbose);
 		if (!options.quiet_en && options.verbose) {
 			LOGHEADER(1, 4, "Banner");

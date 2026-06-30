@@ -119,7 +119,7 @@ void Simulator::report()
 		FOREACH_GATE(GATE2STATISTIC);
 	}
 	if (options.quiet_en && options.force_report_en) {
-		LOGHEADER(0, 4, "Statistics");
+		LOGHEADERNC(0, 4, "Statistics");
 		if (options.num_shots)
 			PRINT("%-30s : %-12zd\n", "Shots", options.num_shots);
 		PRINT("%-30s : %-12zd\n", "Qubits",   num_qubits);

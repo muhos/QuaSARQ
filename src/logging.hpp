@@ -96,7 +96,7 @@ public:
     }
 
     // Header logging
-    static void header(int verbosity, int maxverbosity, const char* head) {
+    static void header(int verbosity, int maxverbosity, const char* head, bool colored = true) {
         if (min_verbosity() >= verbosity && min_verbosity() < maxverbosity) {
             std::lock_guard lock(get().mutex);
             size_t len = std::strlen(head) + 4;  // brackets and spaces
@@ -104,7 +104,11 @@ public:
                 error("ruler length is smaller than header line (%zu)", len);
             }
             repch_nolock('-', STARTLEN);
-            std::fprintf(stdout, "[ %s%s%s ]", CHEADER, head, CNORMAL);
+            if (colored) {
+                std::fprintf(stdout, "[ %s%s%s ]", CHEADER, head, CNORMAL);
+            } else {
+                std::fprintf(stdout, "[ %s ]", head);
+            }
             repch_nolock('-', RULERLEN - len - STARTLEN);
             std::fputc('\n', stdout);
         }
@@ -236,22 +240,23 @@ public:
 
 };
 
-#define SET_LOGGER_VERBOSITY(V)     Logger::set_level(V)
-#define PRINT(FMT, ...)             Logger::print(FMT, ##__VA_ARGS__)
-#define PRINTFILE(FMT, FILE, ...)   Logger::print(FMT, FILE, ##__VA_ARGS__)
-#define PUTCH(CH)                   Logger::putch(CH)
-#define REPCH(CH, TIMES, ...)       Logger::repch(CH, TIMES, ##__VA_ARGS__)
-#define LOGRULER(V, CH, TIMES)      Logger::ruler(V, CH, TIMES)
-#define LOGHEADER(V, MV, HEAD)      Logger::header(V, MV, HEAD)
-#define LOGERROR(FMT, ...)          Logger::error(FMT, ##__VA_ARGS__)
-#define LOGERRORN(FMT, ...)         Logger::errorN(FMT, ##__VA_ARGS__)
-#define LOGWARNING(FMT, ...)        Logger::warning(FMT, ##__VA_ARGS__)
-#define LOG0(MSG)                   Logger::log0(MSG)
-#define LOGN0(MSG)                  Logger::logN0(MSG)
-#define LOG1(FMT, ...)              Logger::log1(FMT, ##__VA_ARGS__)
-#define LOGN1(FMT, ...)             Logger::logN1(FMT, ##__VA_ARGS__)
-#define LOG2(V, FMT, ...)           Logger::log2(V, FMT, ##__VA_ARGS__)
-#define LOGN2(V, FMT, ...)          Logger::logN2(V, FMT, ##__VA_ARGS__)
-#define LOGDONE(V, MV)              Logger::done(V, MV)
-#define LOGENDING(V, MV, FMT, ...)  Logger::ending(V, MV, FMT, ##__VA_ARGS__)
-#define LOGPASSED(V)                Logger::log2(V, "%sPASSED.%s", CGREEN, CNORMAL)
+#define SET_LOGGER_VERBOSITY(V)         Logger::set_level(V)
+#define PRINT(FMT, ...)                 Logger::print(FMT, ##__VA_ARGS__)
+#define PRINTFILE(FMT, FILE, ...)       Logger::print(FMT, FILE, ##__VA_ARGS__)
+#define PUTCH(CH)                       Logger::putch(CH)
+#define REPCH(CH, TIMES, ...)           Logger::repch(CH, TIMES, ##__VA_ARGS__)
+#define LOGRULER(V, CH, TIMES)          Logger::ruler(V, CH, TIMES)
+#define LOGHEADER(V, MV, HEAD)          Logger::header(V, MV, HEAD)
+#define LOGHEADERNC(V, MV, HEAD)        Logger::header(V, MV, HEAD, false)
+#define LOGERROR(FMT, ...)              Logger::error(FMT, ##__VA_ARGS__)
+#define LOGERRORN(FMT, ...)             Logger::errorN(FMT, ##__VA_ARGS__)
+#define LOGWARNING(FMT, ...)            Logger::warning(FMT, ##__VA_ARGS__)
+#define LOG0(MSG)                       Logger::log0(MSG)
+#define LOGN0(MSG)                      Logger::logN0(MSG)
+#define LOG1(FMT, ...)                  Logger::log1(FMT, ##__VA_ARGS__)
+#define LOGN1(FMT, ...)                 Logger::logN1(FMT, ##__VA_ARGS__)
+#define LOG2(V, FMT, ...)               Logger::log2(V, FMT, ##__VA_ARGS__)
+#define LOGN2(V, FMT, ...)              Logger::logN2(V, FMT, ##__VA_ARGS__)
+#define LOGDONE(V, MV)                  Logger::done(V, MV)
+#define LOGENDING(V, MV, FMT, ...)      Logger::ending(V, MV, FMT, ##__VA_ARGS__)
+#define LOGPASSED(V)                    Logger::log2(V, "%sPASSED.%s", CGREEN, CNORMAL)
