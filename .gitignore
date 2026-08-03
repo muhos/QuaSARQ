@@ -10,6 +10,7 @@ circuits/*.qstate
 scripts
 build
 benchmark
+bindings
 tests/test_parser
 tests/test_scheduler
 tests/test_simulator

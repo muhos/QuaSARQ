@@ -6,10 +6,11 @@
 # advance progress
 
 ifndef PROGRESS
-T := $(shell $(MAKE) $(MAKECMDGOALS) --no-print-directory -nrRf $(firstword $(MAKEFILE_LIST)) PROGRESS="COUNTME" | grep -c "COUNTME")
+T := $(shell $(MAKE) $(MAKECMDGOALS) $(MAKEOVERRIDES) --no-print-directory -nrRf $(firstword $(MAKEFILE_LIST)) PROGRESS="COUNTME" | grep -c "COUNTME")
 N := x
 C = $(words $N)$(eval N := x $N)
-PERC = `expr $C '*' 100 / $T`
+# guard the divisor: a zero count must not turn every recipe into a shell error
+PERC = `expr $C '*' 100 / $(if $(filter-out 0,$(T)),$(T),1)`
 PROGRESS = printf " [ %3d%% ] compiling: %-20s\r" $(PERC)
 ARCHIVE  = printf " [ 100%% ] compiling: %-30s\r\n building archive ( %-15s )..."
 ENDING   = printf " building binary  ( %-15s )..."
@@ -50,8 +51,9 @@ EXTRALIB    += -L$(CUARENA_DIR)/build -lcuarena
 
 # generated binaries
 
-BIN := quasarq
-LIB := libquasarq.a
+BIN     := quasarq
+LIBNAME := quasarq
+LIB     := lib$(LIBNAME).a
 
 ifneq ($(MAKECMDGOALS),clean)
 ifeq ($(CCFLAGS),NONE)
@@ -96,6 +98,16 @@ endif
 
 NVCCFLAGS += -DWORD_SIZE_$(WORDSIZE)
 
+# position-independent build, required to link the archive into a shared
+# object such as the Python extension module. Objects and archive get their
+# own names so a pic build and a normal build can coexist without a clean.
+ifeq ($(pic),1)
+      NVCCFLAGS += -Xcompiler -fPIC
+      OBJINFIX  := pic.
+      LIBNAME   := quasarq_pic
+      LIB       := lib$(LIBNAME).a
+endif
+
 # combine all flags
 ALL_CCFLAGS :=
 ALL_CCFLAGS += $(NVCCFLAGS)
@@ -113,8 +125,8 @@ GENCODE_FLAGS := -arch=native
 
 SRC_DIR   := src
 BUILD_DIR := build
-CPPOBJEXT := o
-CUOBJEXT  := cuda.o
+CPPOBJEXT := $(OBJINFIX)o
+CUOBJEXT  := $(OBJINFIX)cuda.o
 PTX_DIR   := ptx
 PTXEXT    := ptx
 
@@ -172,7 +184,7 @@ $(BUILD_DIR)/$(BIN): $(mainobj) $(BUILD_DIR)/$(LIB) $(CUARENA_LIB)
 	@$(ENDING) $@
 	@$(NVCC) $(ALL_LDFLAGS) $(GENCODE_FLAGS) -o $@ $(mainobj) \
 	    -L$(CUDA_PATH)/lib64 -lcudart -lnvidia-ml \
-	    -L$(BUILD_DIR) -l$(BIN) $(EXTRALIB)
+	    -L$(BUILD_DIR) -l$(LIBNAME) $(EXTRALIB)
 	@$(DONE)
 
 $(mainobj): $(cppmain) $(headers)
@@ -198,7 +210,7 @@ test: $(BUILD_DIR)/$(BIN)
 	@$(MAKE) -C tests run
 
 clean:
-	rm -f $(SRC_DIR)/*.$(CPPOBJEXT) $(SRC_DIR)/*.$(CUOBJEXT)
+	rm -f $(SRC_DIR)/*.o
 	rm -rf $(BUILD_DIR) $(PTX_DIR)
 	@echo -n "cleaning up cuarena... "
 	@cmake --build $(CUARENA_DIR)/build --target clean -- --no-print-directory
