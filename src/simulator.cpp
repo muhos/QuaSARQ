@@ -33,14 +33,14 @@ void Simulator::cleanup() noexcept {
     }
 }
 
-Simulator::Simulator() :
+Simulator::Simulator(const byte_t& mode) :
 	num_qubits(options.num_qubits)
     , num_partitions(1)
 	, depth((depth_t)options.depth)
 	, crand(1)
     , mrand(1)
 	, circuit(MB)
-	, circuit_mode(RANDOM_CIRCUIT)
+	, circuit_mode(mode)
 	, gpu_circuit(gpu_allocator)
     , locker(gpu_allocator)
     , tableau(gpu_allocator)
@@ -58,7 +58,9 @@ Simulator::Simulator() :
     , measuring(false)
     , write_measures_to_file(false)
     , reference_mode(false)
-{
+{ }
+
+Simulator::Simulator() : Simulator(RANDOM_CIRCUIT) {
     try {
         initialize();
     }
@@ -68,33 +70,20 @@ Simulator::Simulator() :
     }
 }
 
-Simulator::Simulator(const string& path) :
-    num_qubits(options.num_qubits)
-    , num_partitions(1)
-    , depth((depth_t)options.depth)
-    , crand(1)
-    , mrand(1)
-    , circuit(MB)
-    , circuit_path(path)
-    , circuit_mode(PARSED_CIRCUIT)
-    , gpu_circuit(gpu_allocator)
-    , locker(gpu_allocator)
-    , tableau(gpu_allocator)
-    , inv_tableau(gpu_allocator)
-    , ref_tableau(gpu_allocator)
-    , pivoting(gpu_allocator)
-    , recorder(gpu_allocator)
-    , prefix(gpu_allocator, mchecker)
-    , config_file(nullptr)
-    , state_file(nullptr)
-    , config_qubits(0)
-    , custreams(nullptr)
-    , copy_streams{ 0, 0, 0, 0 }
-    , kernel_streams{ 0, 0 }
-    , measuring(false)
-    , write_measures_to_file(false)
-    , reference_mode(false)
-{
+Simulator::Simulator(const string& path) : Simulator(PARSED_CIRCUIT) {
+    circuit_path = path;
+    try {
+        initialize();
+    }
+    catch (...) {
+        cleanup();
+        throw;
+    }
+}
+
+Simulator::Simulator(char* data, const size_t& length) : Simulator(PARSED_CIRCUIT) {
+    circuit_data = data;
+    circuit_data_size = length;
     try {
         initialize();
     }

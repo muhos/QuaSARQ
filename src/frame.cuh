@@ -9,27 +9,23 @@ namespace QuaSARQ {
 
 		size_t              num_shots;
         size_t              total_shots;
-        size_t              chunk_start;
-        size_t              chunk_index;
+        size_t              chunk_start = 0;
+        size_t              chunk_index = 0;
         size_t              max_chunk_shots;
-        size_t              measurement_offset; // Measurements depth offset in the samples table.
+        size_t              measurement_offset = 0; // Measurements depth offset in the samples table.
         Samples             samples_record;
-        curand_algorithm_t* rand_states;
-        size_t              rand_states_size;
+        curand_algorithm_t* rand_states = nullptr;
+        size_t              rand_states_size = 0;
 
 	public:
 
-		Framing(const size_t& num_shots) : 
+		Framing(const size_t& num_shots) :
             Simulator()
             , num_shots(num_shots)
             , total_shots(num_shots)
-            , chunk_start(0)
-            , chunk_index(0)
-            , max_chunk_shots(num_shots)
-            , measurement_offset(0)
-            , rand_states(nullptr)
-            , rand_states_size(0) {}
+            , max_chunk_shots(num_shots) {}
 		Framing(const string& path, const size_t& num_shots);
+		Framing(char* data, const size_t& length, const size_t& num_shots);
         size_t choose_chunk_shots() const;
         void init_rand_states(const uint64& seed,
                               const size_t& num_words_per_table,

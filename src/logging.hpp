@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstdarg>
 #include <cstddef>
+#include <cstring>
 #include <utility>
 #include <cuda_runtime.h>
 #include "color.hpp"
@@ -24,11 +25,21 @@
 #define LOGGPU(FMT, ...)            printf(FMT, ##__VA_ARGS__)
 #define LOGGPUERROR(FMT, ...)       printf(CERROR "ERROR: " FMT CNORMAL, ##__VA_ARGS__)
 
+enum LogStream {
+    LOG_STREAM_OUT = 0,
+    LOG_STREAM_ERR = 1
+};
+
+using LogSink = void (*)(int stream, const char* text, void* user);
+
 class Logger {
 
 private:
     Logger() = default;
     int         verbose = 0;
+    LogSink     sink = nullptr;
+    void*       sink_user = nullptr;
+    bool        silent = false;
     std::mutex  mutex;
 
     static Logger& get() {
@@ -36,8 +47,70 @@ private:
         return instance;
     }
 
+    static void sink_nolock(FILE* stream, const char* text) {
+        Logger& logger = get();
+        logger.sink(stream == stderr ? LOG_STREAM_ERR : LOG_STREAM_OUT, text, logger.sink_user);
+    }
+
+    static void emit_nolock(FILE* stream, const char* text) {
+        Logger& logger = get();
+        if (logger.silent) return;
+        if (logger.sink != nullptr) sink_nolock(stream, text);
+        else std::fputs(text, stream);
+    }
+
+    static void emitch_nolock(FILE* stream, char ch) {
+        Logger& logger = get();
+        if (logger.silent) return;
+        if (logger.sink != nullptr) {
+            const char text[2] = { ch, '\0' };
+            sink_nolock(stream, text);
+        }
+        else std::fputc(ch, stream);
+    }
+
+    template<typename... Args>
+    static void emitf_nolock(FILE* stream, const char* fmt, Args&&... args) {
+        Logger& logger = get();
+        if (logger.silent) return;
+        if (logger.sink == nullptr) {
+            if constexpr (sizeof...(Args) > 0)
+                std::fprintf(stream, fmt, std::forward<Args>(args)...);
+            else
+                std::fputs(fmt, stream);
+            return;
+        }
+        if constexpr (sizeof...(Args) > 0) {
+            char stackbuf[2048];
+            const int needed = std::snprintf(stackbuf, sizeof(stackbuf), fmt, args...);
+            if (needed < 0) return;
+            if (size_t(needed) < sizeof(stackbuf)) {
+                sink_nolock(stream, stackbuf);
+                return;
+            }
+            std::string heapbuf(size_t(needed) + 1, '\0');
+            std::snprintf(&heapbuf[0], heapbuf.size(), fmt, args...);
+            sink_nolock(stream, heapbuf.c_str());
+        } else {
+            sink_nolock(stream, fmt);
+        }
+    }
+
+    static void flush_nolock(FILE* stream) {
+        Logger& logger = get();
+        if (logger.silent || logger.sink != nullptr) return;
+        std::fflush(stream);
+    }
+
     static void repch_nolock(const char& ch, size_t times, FILE* stream = stdout) {
-        while(times && times--) std::fputc(ch, stream);
+        Logger& logger = get();
+        if (logger.silent || !times) return;
+        if (logger.sink == nullptr) {
+            while (times && times--) std::fputc(ch, stream);
+            return;
+        }
+        const std::string text(times, ch);
+        sink_nolock(stream, text.c_str());
     }
 
 public:
@@ -46,40 +119,43 @@ public:
 
     static int min_verbosity() noexcept { return get().verbose; }
 
+    static void set_sink(LogSink fn, void* user = nullptr) noexcept {
+        Logger& logger = get();
+        std::lock_guard<std::mutex> lock(logger.mutex);
+        logger.sink = fn;
+        logger.sink_user = user;
+    }
+
+    static void set_silent(bool on) noexcept {
+        Logger& logger = get();
+        std::lock_guard<std::mutex> lock(logger.mutex);
+        logger.silent = on;
+    }
+
+    static bool is_silent() noexcept { return get().silent; }
+
     template<typename... Args>
     static void print(const char* fmt, FILE* stream, Args&&... args) {
         std::lock_guard<std::mutex> lock(get().mutex);
-        if constexpr (sizeof...(Args) > 0) {
-            std::fprintf(stream, fmt, std::forward<Args>(args)...);
-        } else {
-            std::fputs(fmt, stream);
-        }
+        emitf_nolock(stream, fmt, std::forward<Args>(args)...);
     }
 
     template<typename... Args>
     static void print(const char* fmt, Args&&... args) {
         std::lock_guard<std::mutex> lock(get().mutex);
-        if constexpr (sizeof...(Args) > 0) {
-            std::fprintf(stdout, fmt, std::forward<Args>(args)...);
-        } else {
-            std::fputs(fmt, stdout);
-        }
+        emitf_nolock(stdout, fmt, std::forward<Args>(args)...);
     }
 
     template<typename... Args>
     static void print(const charu8_t* fmt, Args&&... args) {
         std::lock_guard<std::mutex> lock(get().mutex);
         const char* c_fmt = reinterpret_cast<const char*>(fmt);
-        if constexpr (sizeof...(Args) > 0) {
-            std::fprintf(stdout, c_fmt, std::forward<Args>(args)...);
-        } else {
-            std::fputs(c_fmt, stdout);
-        }
+        emitf_nolock(stdout, c_fmt, std::forward<Args>(args)...);
     }
 
     static void putch(char ch) {
         std::lock_guard lock(get().mutex);
-        std::fputc(ch, stdout);
+        emitch_nolock(stdout, ch);
     }
 
     static void repch(char ch, const size_t& times, FILE* stream = stdout) {
@@ -91,26 +167,26 @@ public:
         if (min_verbosity() >= verbosity) {
             std::lock_guard lock(get().mutex);
             repch_nolock(ch, times);
-            std::fputc('\n', stdout);
+            emitch_nolock(stdout, '\n');
         }
     }
 
     // Header logging
     static void header(int verbosity, int maxverbosity, const char* head, bool colored = true) {
         if (min_verbosity() >= verbosity && min_verbosity() < maxverbosity) {
-            std::lock_guard lock(get().mutex);
             size_t len = std::strlen(head) + 4;  // brackets and spaces
             if (RULERLEN < len) {
                 error("ruler length is smaller than header line (%zu)", len);
             }
+            std::lock_guard lock(get().mutex);
             repch_nolock('-', STARTLEN);
             if (colored) {
-                std::fprintf(stdout, "[ %s%s%s ]", CHEADER, head, CNORMAL);
+                emitf_nolock(stdout, "[ %s%s%s ]", CHEADER, head, CNORMAL);
             } else {
-                std::fprintf(stdout, "[ %s ]", head);
+                emitf_nolock(stdout, "[ %s ]", head);
             }
             repch_nolock('-', RULERLEN - len - STARTLEN);
-            std::fputc('\n', stdout);
+            emitch_nolock(stdout, '\n');
         }
     }
 
@@ -123,26 +199,25 @@ public:
             std::snprintf(message, sizeof(message), fmt, std::forward<Args>(args)...);
         else
             std::snprintf(message, sizeof(message), "%s", fmt);
-        std::lock_guard<std::mutex> lock(get().mutex);
-        std::fflush(stdout);
-        std::fprintf(stderr, "%sERROR: ", CERROR);
-        std::fputs(message, stderr);
-        std::fprintf(stderr, "\n%s", CNORMAL);
-        std::fflush(stderr);
+        {
+            std::lock_guard<std::mutex> lock(get().mutex);
+            flush_nolock(stdout);
+            emitf_nolock(stderr, "%sERROR: ", CERROR);
+            emit_nolock(stderr, message);
+            emitf_nolock(stderr, "\n%s", CNORMAL);
+            flush_nolock(stderr);
+        }
         throw QuaSARQ::fatal_error();
     }
 
     template<typename... Args>
     static void errorN(const char* fmt, Args&&... args) {
         std::lock_guard<std::mutex> lock(get().mutex);
-        std::fflush(stdout);
-        std::fprintf(stderr, "%s", CERROR);
-        if constexpr (sizeof...(Args) > 0)
-            std::fprintf(stderr, fmt, std::forward<Args>(args)...);
-        else
-            std::fputs(fmt, stderr);
-        std::fprintf(stderr, "\n%s", CNORMAL);
-        std::fflush(stderr);
+        flush_nolock(stdout);
+        emitf_nolock(stderr, "%s", CERROR);
+        emitf_nolock(stderr, fmt, std::forward<Args>(args)...);
+        emitf_nolock(stderr, "\n%s", CNORMAL);
+        flush_nolock(stderr);
     }
 
     // Warning logging
@@ -150,37 +225,31 @@ public:
     static void warning(const char* fmt, Args&&... args) {
         if (min_verbosity() >= 0) {
             std::lock_guard<std::mutex> lock(get().mutex);
-            std::fflush(stdout);
-            std::fprintf(stderr, "%sWARNING: ", CWARNING);
-            if constexpr (sizeof...(Args) > 0)
-                std::fprintf(stderr, fmt, std::forward<Args>(args)...);
-            else
-                std::fputs(fmt, stderr);
-            std::fprintf(stderr, "\n%s", CNORMAL);
-            std::fflush(stderr);
+            flush_nolock(stdout);
+            emitf_nolock(stderr, "%sWARNING: ", CWARNING);
+            emitf_nolock(stderr, fmt, std::forward<Args>(args)...);
+            emitf_nolock(stderr, "\n%s", CNORMAL);
+            flush_nolock(stderr);
         }
     }
 
     // Simple logs
     static void log0(const char* msg) {
         std::lock_guard<std::mutex> lock(get().mutex);
-        std::fprintf(stdout, "%s\n", msg);
+        emitf_nolock(stdout, "%s\n", msg);
     }
 
     static void logN0(const char* msg) {
         std::lock_guard<std::mutex> lock(get().mutex);
-        std::fprintf(stdout, "%s", msg);
+        emitf_nolock(stdout, "%s", msg);
     }
 
     template<typename... Args>
     static void log1(const char* fmt, Args&&... args) {
         if (min_verbosity() >= 1) {
             std::lock_guard<std::mutex> lock(get().mutex);
-            if constexpr (sizeof...(Args) > 0)
-                std::fprintf(stdout, fmt, std::forward<Args>(args)...);
-            else
-                std::fputs(fmt, stdout);
-            std::fputc('\n', stdout);
+            emitf_nolock(stdout, fmt, std::forward<Args>(args)...);
+            emitch_nolock(stdout, '\n');
         }
     }
 
@@ -188,10 +257,7 @@ public:
     static void logN1(const char* fmt, Args&&... args) {
         if (min_verbosity() >= 1) {
             std::lock_guard<std::mutex> lock(get().mutex);
-            if constexpr (sizeof...(Args) > 0)
-                std::fprintf(stdout, fmt, std::forward<Args>(args)...);
-            else
-                std::fputs(fmt, stdout);
+            emitf_nolock(stdout, fmt, std::forward<Args>(args)...);
         }
     }
 
@@ -199,11 +265,8 @@ public:
     static void log2(int verbosity, const char* fmt, Args&&... args) {
         if (min_verbosity() >= verbosity) {
             std::lock_guard<std::mutex> lock(get().mutex);
-            if constexpr (sizeof...(Args) > 0)
-                std::fprintf(stdout, fmt, std::forward<Args>(args)...);
-            else
-                std::fputs(fmt, stdout);
-            std::fputc('\n', stdout);
+            emitf_nolock(stdout, fmt, std::forward<Args>(args)...);
+            emitch_nolock(stdout, '\n');
         }
     }
 
@@ -211,10 +274,7 @@ public:
     static void logN2(int verbosity, const char* fmt, Args&&... args) {
         if (min_verbosity() >= verbosity) {
             std::lock_guard<std::mutex> lock(get().mutex);
-            if constexpr (sizeof...(Args) > 0)
-                std::fprintf(stdout, fmt, std::forward<Args>(args)...);
-            else
-                std::fputs(fmt, stdout);
+            emitf_nolock(stdout, fmt, std::forward<Args>(args)...);
         }
     }
 
@@ -222,7 +282,7 @@ public:
     static void done(int verbosity, int maxverbosity) {
         if (min_verbosity() >= verbosity && min_verbosity() < maxverbosity) {
             std::lock_guard<std::mutex> lock(get().mutex);
-            std::fprintf(stdout, "done.\n");
+            emit_nolock(stdout, "done.\n");
         }
     }
 
@@ -230,17 +290,16 @@ public:
     static void ending(int verbosity, int maxverbosity, const char* fmt, Args&&... args) {
         if (min_verbosity() >= verbosity && min_verbosity() < maxverbosity) {
             std::lock_guard<std::mutex> lock(get().mutex);
-            if constexpr (sizeof...(Args) > 0)
-                std::fprintf(stdout, fmt, std::forward<Args>(args)...);
-            else
-                std::fputs(fmt, stdout);
-            std::fprintf(stdout, " done.\n");
+            emitf_nolock(stdout, fmt, std::forward<Args>(args)...);
+            emit_nolock(stdout, " done.\n");
         }
     }
 
 };
 
 #define SET_LOGGER_VERBOSITY(V)         Logger::set_level(V)
+#define SET_LOGGER_SINK(FN, USER)       Logger::set_sink(FN, USER)
+#define SET_LOGGER_SILENT(ON)           Logger::set_silent(ON)
 #define PRINT(FMT, ...)                 Logger::print(FMT, ##__VA_ARGS__)
 #define PRINTFILE(FMT, FILE, ...)       Logger::print(FMT, FILE, ##__VA_ARGS__)
 #define PUTCH(CH)                       Logger::putch(CH)

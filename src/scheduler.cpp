@@ -261,7 +261,23 @@ namespace QuaSARQ {
         timer.start();
         assert(!circuit_io.size);
         circuit_io.init();
-        char* str = circuit_io.read(path);
+        const size_t max_qubits = parse_stream(stats, circuit_io.read(path));
+        timer.stop();
+        stats.time.initial += timer.elapsed();
+        return max_qubits;
+    }
+
+    size_t Simulator::parse(Statistics& stats, char* data, const size_t& length) {
+        timer.start();
+        assert(!circuit_io.size);
+        circuit_io.init();
+        const size_t max_qubits = parse_stream(stats, circuit_io.read(data, length));
+        timer.stop();
+        stats.time.initial += timer.elapsed();
+        return max_qubits;
+    }
+
+    size_t Simulator::parse_stream(Statistics& stats, char* str) {
         size_t max_qubits = 0;
         while (str < circuit_io.eof) {
             eatWS(str);
@@ -294,8 +310,6 @@ namespace QuaSARQ {
         stats.circuit.gate_stats = circuit_io.gate_stats;
         stats.circuit.measure_stats.count = circuit_io.measures_count;
         measuring = circuit_io.measuring;
-        timer.stop();
-        stats.time.initial += timer.elapsed();
         return max_qubits;
     }
 
@@ -514,7 +528,9 @@ namespace QuaSARQ {
         }
         else {
             assert(circuit_mode == PARSED_CIRCUIT);
-            num_qubits = parse(stats, circuit_path.c_str());
+            num_qubits = circuit_data != nullptr ?
+                         parse(stats, circuit_data, circuit_data_size) :
+                         parse(stats, circuit_path.c_str());
             depth = schedule(stats, circuit, winfo);
         }
         write_measures_to_file = stats.circuit.measure_stats.count > options.min_measures_write;

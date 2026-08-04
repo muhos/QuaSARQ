@@ -27,6 +27,8 @@ namespace QuaSARQ {
         Circuit                         circuit;
         CircuitIO                       circuit_io;
         string                          circuit_path;
+        char*                           circuit_data = nullptr;
+        size_t                          circuit_data_size = 0;
         byte_t                          circuit_mode;
         Vec<M_OP, size_t>               measurements;
         Vec<qubit_t, size_t>            shuffled;
@@ -65,11 +67,16 @@ namespace QuaSARQ {
         void create_streams     (cudaStream_t*& streams);
         void cleanup            () noexcept;
 
+        size_t parse_stream     (Statistics& stats, char* str);
+
+        explicit Simulator      (const byte_t& mode);
+
     public:
 
         virtual ~Simulator      () noexcept;
                 Simulator       ();
                 Simulator       (const string& path);
+                Simulator       (char* data, const size_t& length);
 
         // File IO.
         bool    open_file       (FILE*& file, arg_t file_path, arg_t file_mode);
@@ -102,6 +109,7 @@ namespace QuaSARQ {
         void        simulate            ();
         void        rsample             ();
         size_t      parse               (Statistics& stats, const char* path);
+        size_t      parse               (Statistics& stats, char* data, const size_t& length);
         size_t      schedule            (Statistics& stats, Circuit& circuit, WindowInfo& target_winfo, const size_t& scheduled_num_qubits = 0);
         void        simulate            (const size_t& p, const bool& reversed);
 

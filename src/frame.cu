@@ -10,13 +10,17 @@ Framing::Framing(const string& path, const size_t& num_shots) :
     Simulator(path)
     , num_shots(num_shots)
     , total_shots(num_shots)
-    , chunk_start(0)
-    , chunk_index(0)
     , max_chunk_shots(num_shots)
-    , measurement_offset(0)
-    , rand_states(nullptr)
-    , rand_states_size(0)
-{ 
+{
+    write_measures_to_file |= (num_shots > options.min_shots_write);
+}
+
+Framing::Framing(char* data, const size_t& length, const size_t& num_shots) :
+    Simulator(data, length)
+    , num_shots(num_shots)
+    , total_shots(num_shots)
+    , max_chunk_shots(num_shots)
+{
     write_measures_to_file |= (num_shots > options.min_shots_write);
 }
 

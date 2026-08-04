@@ -100,6 +100,7 @@ namespace QuaSARQ {
         ObservableData observables;
         DetectorData detectors;
         bool measuring;
+        bool owns_buffer;
 
 #if defined(__linux__) || defined(__CYGWIN__)
         int file;
@@ -114,6 +115,7 @@ namespace QuaSARQ {
             , size(0)
             , max_qubits(0)
             , measuring(false)
+            , owns_buffer(true)
         {
             init();
         }
@@ -133,7 +135,7 @@ namespace QuaSARQ {
         void destroy() {
             circuit_queue.clear(true);
             gate_stats.destroy();
-            if (buffer != nullptr) {
+            if (buffer != nullptr && owns_buffer) {
 #if defined(__linux__) || defined(__CYGWIN__)
                 if (munmap(buffer, size) != 0)
                     LOGERROR("cannot clean file mapping.");
@@ -146,6 +148,7 @@ namespace QuaSARQ {
             size = 0;
             max_qubits = 0;
             measuring = false;
+            owns_buffer = true;
         }
 
         void write_circuit(string& stream, const int& format, const size_t& num_qubits_in_circuit, const Circuit& circuit);
@@ -153,6 +156,8 @@ namespace QuaSARQ {
         void write(const Circuit& circuit, const size_t& num_qubits_in_circuit, const int& format, const Statistics& stats);
 
         char* read(const char* circuit_path);
+
+        char* read(char* circuit_data, const size_t& circuit_size);
 
         int translate_gate(char* in, const int& gatelen);
 

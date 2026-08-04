@@ -312,4 +312,16 @@ namespace QuaSARQ {
         return stream;
     }
 
+    char* CircuitIO::read(char* circuit_data, const size_t& circuit_size) {
+        if (circuit_data == nullptr)
+            LOGERROR("circuit buffer is empty.");
+        size = circuit_size;
+        LOG2(1, "Parsing circuit buffer (size: %s%zd%s MB)..",
+             CREPORTVAL, ratio(size, MB), CNORMAL);
+        buffer = static_cast<void*>(circuit_data);
+        owns_buffer = false;
+        eof = circuit_data + size;
+        return circuit_data;
+    }
+
 }
