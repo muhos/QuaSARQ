@@ -55,6 +55,7 @@ namespace QuaSARQ {
         bool                            measuring;
         bool                            write_measures_to_file;
         bool                            reference_mode;
+        bool                            detectors_required = false;
         static bool                     timeout;
         
         enum { 
@@ -76,7 +77,7 @@ namespace QuaSARQ {
         virtual ~Simulator      () noexcept;
                 Simulator       ();
                 Simulator       (const string& path);
-                Simulator       (char* data, const size_t& length);
+                Simulator       (char* data, const size_t& length, const bool& require_detectors = false);
 
         // File IO.
         bool    open_file       (FILE*& file, arg_t file_path, arg_t file_mode);
@@ -90,6 +91,11 @@ namespace QuaSARQ {
         bool                    is_measuring        () const { return measuring; }
         ObservableData&         get_observables     () { return circuit_io.observables; }
         const ObservableData&   get_observables     () const { return circuit_io.observables; }
+        DetectorData&           get_detectors       () { return circuit_io.detectors; }
+        const DetectorData&     get_detectors       () const { return circuit_io.detectors; }
+        size_t                  count_detectors     () const { return circuit_io.detectors.pinned.num_instructions; }
+        size_t                  count_observables   () const { return circuit_io.observables.pinned.num_observables; }
+        bool                    needs_detectors     () const { return options.print_detector || detectors_required; }
         virtual
         size_t                  sample_device_bytes () const { return 0; }
         virtual 

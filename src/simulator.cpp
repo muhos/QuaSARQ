@@ -81,9 +81,10 @@ Simulator::Simulator(const string& path) : Simulator(PARSED_CIRCUIT) {
     }
 }
 
-Simulator::Simulator(char* data, const size_t& length) : Simulator(PARSED_CIRCUIT) {
+Simulator::Simulator(char* data, const size_t& length, const bool& require_detectors) : Simulator(PARSED_CIRCUIT) {
     circuit_data = data;
     circuit_data_size = length;
+    detectors_required = require_detectors;
     try {
         initialize();
     }

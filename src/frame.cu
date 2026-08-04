@@ -15,8 +15,8 @@ Framing::Framing(const string& path, const size_t& num_shots) :
     write_measures_to_file |= (num_shots > options.min_shots_write);
 }
 
-Framing::Framing(char* data, const size_t& length, const size_t& num_shots) :
-    Simulator(data, length)
+Framing::Framing(char* data, const size_t& length, const size_t& num_shots, const bool& require_detectors) :
+    Simulator(data, length, require_detectors)
     , num_shots(num_shots)
     , total_shots(num_shots)
     , max_chunk_shots(num_shots)
@@ -91,7 +91,7 @@ void Framing::sample() {
         tableau.reset_xtable();
         init_rand_states(sample_seed, tableau.num_words_per_table(), total_words_minor, chunk_word_offset, kernel_streams[1]);
         randomize(tableau.zdata(), tableau.num_words_per_table(), kernel_streams[1]);
-        samples_record.alloc(stats.circuit.measure_stats.count, tableau.num_words_minor(), gpu_allocator, kernel_streams[0]);
+        samples_record.alloc(stats.circuit.measure_stats.count, tableau.num_words_minor(), gpu_allocator, needs_sample_host(), kernel_streams[0]);
         stats.sampling.sample_device_bytes = MAX(stats.sampling.sample_device_bytes, samples_record.device_bytes());
         stats.sampling.sample_host_bytes = MAX(stats.sampling.sample_host_bytes, samples_record.host_bytes());
         gpu_circuit.reset_circuit_offset(0);

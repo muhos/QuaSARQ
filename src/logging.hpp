@@ -91,7 +91,8 @@ private:
             std::string heapbuf(size_t(needed) + 1, '\0');
             std::snprintf(&heapbuf[0], heapbuf.size(), fmt, args...);
             sink_nolock(stream, heapbuf.c_str());
-        } else {
+        }
+        else {
             sink_nolock(stream, fmt);
         }
     }
@@ -182,7 +183,8 @@ public:
             repch_nolock('-', STARTLEN);
             if (colored) {
                 emitf_nolock(stdout, "[ %s%s%s ]", CHEADER, head, CNORMAL);
-            } else {
+            }
+            else {
                 emitf_nolock(stdout, "[ %s ]", head);
             }
             repch_nolock('-', RULERLEN - len - STARTLEN);

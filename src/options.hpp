@@ -100,7 +100,7 @@ namespace QuaSARQ {
 
     class OptionsGuard {
 
-        alignas(Options) unsigned char snapshot[sizeof(Options)];
+        alignas(Options) unsigned char saved_options[sizeof(Options)];
         char saved_configpath[OPTION_PATH_LEN];
         char saved_statepath[OPTION_PATH_LEN];
 

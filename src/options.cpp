@@ -192,7 +192,7 @@ namespace QuaSARQ {
     Options options;
 
     OptionsGuard::OptionsGuard() {
-        std::memcpy(snapshot, &options, sizeof(Options));
+        std::memcpy(saved_options, &options, sizeof(Options));
         if (options.configpath != nullptr)
             std::memcpy(saved_configpath, options.configpath, OPTION_PATH_LEN);
         else
@@ -206,7 +206,7 @@ namespace QuaSARQ {
     OptionsGuard::~OptionsGuard() {
         char* configpath = options.configpath;
         char* statepath = options.statepath;
-        std::memcpy(&options, snapshot, sizeof(Options));
+        std::memcpy(&options, saved_options, sizeof(Options));
         options.configpath = configpath;
         options.statepath = statepath;
         if (configpath != nullptr)
