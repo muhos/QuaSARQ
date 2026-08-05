@@ -26,10 +26,11 @@ void Simulator::cleanup() noexcept {
 		LOGWARNING("failed to destroy GPU memory pool.");
 	}
     if (custreams != nullptr) {
-        for (int i = 0; i < options.streams; i++) 
+        for (int i = 0; i < num_streams; i++)
             cudaStreamDestroy(custreams[i]);
         delete[] custreams;
         custreams = nullptr;
+        num_streams = 0;
     }
 }
 
@@ -148,8 +149,9 @@ void Simulator::create_streams(cudaStream_t*& streams) {
     if (streams == nullptr) {
         assert(options.streams >= 4);
         LOGN2(1, "Allocating %d GPU streams..", options.streams);
-        streams = new cudaStream_t[options.streams];
-        for (int i = 0; i < options.streams; i++) 
+        num_streams = options.streams;
+        streams = new cudaStream_t[num_streams];
+        for (int i = 0; i < num_streams; i++)
             cudaStreamCreate(streams + i);
         for (int i = 0; i < NUM_COPY_STREAMS; i++) 
             copy_streams[i] = streams[i];
@@ -165,6 +167,7 @@ void Simulator::rsample() {
     // Disable checking during reference run as mchecker is not allocated here.
     const bool saved_check = options.check_measurement;
     options.check_measurement = false;
+    gpu_circuit.enable_noise(false);
     tableau.swap_tableaus(ref_tableau);
     num_partitions = tableau.alloc(num_qubits, 0, winfo.max_window_bytes, false, measuring, true, 0, "reference ");
     #if ROW_MAJOR
@@ -172,7 +175,7 @@ void Simulator::rsample() {
     #endif
     prefix.alloc(tableau, config_qubits);
     pivoting.alloc(num_qubits);
-    recorder.alloc(stats.circuit.measure_stats.count);
+    recorder.alloc(stats.circuit.measure_stats.count, kernel_streams[0]);
     const size_t num_qubits_per_partition = num_partitions > 1 ? tableau.num_words_major() * WORD_BITS : num_qubits;
     gpu_circuit.initiate(num_qubits, winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
     for (size_t p = 0; p < num_partitions && !timeout; p++) {
@@ -190,6 +193,7 @@ void Simulator::rsample() {
     prefix.destroy();
     pivoting.destroy();
     options.check_measurement = saved_check;
+    gpu_circuit.enable_noise(true);
     reference_mode = false;
 }
 
@@ -265,7 +269,7 @@ void Simulator::simulate() {
         pivoting.alloc(num_qubits);
         if (!stats.circuit.measure_stats.count)
             LOGERRORN("cannot run simulation with measurement gates but no measurements.");
-        recorder.alloc(stats.circuit.measure_stats.count);
+        recorder.alloc(stats.circuit.measure_stats.count, kernel_streams[0]);
         if (options.check_measurement)
             mchecker.alloc(num_qubits);
     }

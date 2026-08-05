@@ -171,21 +171,23 @@ namespace QuaSARQ {
         const uint32               n,
         const size_t               num_shots,
         const uint32               num_units,
-        const bool                 bit_packed)
+        const bool                 bit_packed,
+        const size_t               shot_offset)
     {
         for_parallel_y(s, num_shots) {
+            const size_t shot = shot_offset + s;
             for_parallel_x(u, num_units) {
                 uint8 value = 0;
                 if (bit_packed) {
                     const uint32 base = u * 8;
                     const uint32 lim = MIN(8u, n - base);
                     for (uint32 k = 0; k < lim; k++) {
-                        if (eval_ref_bit(refs, starts, counts, samples, num_words_minor, base + k, s))
+                        if (eval_ref_bit(refs, starts, counts, samples, num_words_minor, base + k, shot))
                             value |= uint8(1) << k;
                     }
                 }
                 else {
-                    value = uint8(eval_ref_bit(refs, starts, counts, samples, num_words_minor, u, s));
+                    value = uint8(eval_ref_bit(refs, starts, counts, samples, num_words_minor, u, shot));
                 }
                 out[s * num_units + u] = value;
             }
@@ -365,25 +367,32 @@ namespace QuaSARQ {
     {
         const bool bit_packed = results->bit_packed;
         const uint32 num_units = (uint32)FrameResults::stride_of(n, bit_packed);
-        uint8* d_out = gpu_allocator.allocate<uint8>((size_t)num_units * num_shots, Region::Dynamic);
-        dim3 block(32, 8), grid(1, 1);
-        OPTIMIZEBLOCKS2D(grid.x, num_units, block.x);
-        OPTIMIZEBLOCKS2D(grid.y, (uint32)num_shots, block.y);
-        collect_frame_refs_k<<<grid, block, 0, stream>>>(
-            d_out,
-            refs.device.refs,
-            refs.device.starts,
-            refs.device.counts,
-            samples_record.device,
-            tableau.num_words_minor(),
-            n, num_shots, num_units, bit_packed);
-        LASTERR(label);
-        CHECK(cudaMemcpy2DAsync(
-            dest + chunk_start * dest_stride, dest_stride,
-            d_out, num_units,
-            num_units, num_shots,
-            cudaMemcpyDeviceToHost, stream));
-        SYNC(stream);
+        if (!num_units) return;
+        size_t rows_per_batch = COLLECT_STAGING_BYTES / num_units;
+        if (!rows_per_batch) rows_per_batch = 1;
+        if (rows_per_batch > num_shots) rows_per_batch = num_shots;
+        uint8* d_out = gpu_allocator.allocate<uint8>(rows_per_batch * num_units, Region::Dynamic);
+        for (size_t start = 0; start < num_shots; start += rows_per_batch) {
+            const size_t batch = MIN(rows_per_batch, num_shots - start);
+            dim3 block(32, 8), grid(1, 1);
+            OPTIMIZEBLOCKS2D(grid.x, num_units, block.x);
+            OPTIMIZEBLOCKS2D(grid.y, (uint32)batch, block.y);
+            collect_frame_refs_k<<<grid, block, 0, stream>>>(
+                d_out,
+                refs.device.refs,
+                refs.device.starts,
+                refs.device.counts,
+                samples_record.device,
+                tableau.num_words_minor(),
+                n, batch, num_units, bit_packed, start);
+            LASTERR(label);
+            CHECK(cudaMemcpy2DAsync(
+                dest + (chunk_start + start) * dest_stride, dest_stride,
+                d_out, num_units,
+                num_units, batch,
+                cudaMemcpyDeviceToHost, stream));
+            SYNC(stream);
+        }
         gpu_allocator.deallocate<uint8>(d_out);
     }
 

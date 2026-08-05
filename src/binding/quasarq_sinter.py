@@ -1,0 +1,67 @@
+"""sinter.Sampler adapter that samples detection events on the GPU with QuaSARQ.
+
+    import sinter, quasarq_sinter
+
+    # The `__main__` guard is essential to prevent sinter from recursively starting workers
+    if __name__ == '__main__':
+        stats = sinter.collect(
+            # `num_workers` should stay at 1: QuaSARQ serialises sampling on one GPU, and each
+            # extra worker is a separate process competing for the same device memory.
+            num_workers=1,
+            tasks=[sinter.Task(circuit=circuit, json_metadata={"d": 5})],
+            max_shots=1_000_000,
+            max_errors=1000,
+            decoders=["quasarq"],
+            custom_decoders={"quasarq": quasarq_sinter.QuaSARQSampler(seed=1)},
+        )
+"""
+
+import numpy as np
+import sinter
+
+
+DEFAULT_MIN_BATCH_SHOTS = 8192
+
+
+class QuaSARQCompiledSampler(sinter.CompiledSampler):
+
+    def __init__(self, task, seed, decoder, min_batch_shots=DEFAULT_MIN_BATCH_SHOTS):
+        import pymatching
+        import quasarq
+
+        if decoder not in (None, "pymatching"):
+            raise ValueError(f"only pymatching is supported, got {decoder!r}")
+        dem = task.detector_error_model
+        if dem is None:
+            dem = task.circuit.detector_error_model(decompose_errors=True)
+        self.matcher = pymatching.Matching.from_detector_error_model(dem)
+        self.sampler = quasarq.compile_sampler(task.circuit, seed=seed)
+        self.num_observables = self.sampler.num_observables
+        self.min_batch_shots = max(int(min_batch_shots or 0), 1)
+
+    def sample(self, suggested_shots):
+        shots = max(int(suggested_shots), self.min_batch_shots)
+
+        dets, obs = self.sampler.sample(shots, separate_observables=True, bit_packed=True)
+
+        if self.num_observables == 0:
+            return sinter.AnonTaskStats(shots=shots, errors=0)
+        
+        predicted = self.matcher.decode_batch(dets, bit_packed_shots=True, bit_packed_predictions=True)
+
+        errors = int(np.count_nonzero(np.any(predicted != obs, axis=1)))
+        return sinter.AnonTaskStats(shots=shots, errors=errors)
+
+    def handles_throttling(self):
+        return True
+
+
+class QuaSARQSampler(sinter.Sampler):
+
+    def __init__(self, *, seed=None, decoder="pymatching", min_batch_shots=DEFAULT_MIN_BATCH_SHOTS):
+        self.seed = seed
+        self.decoder = decoder
+        self.min_batch_shots = min_batch_shots
+
+    def compiled_sampler_for_task(self, task):
+        return QuaSARQCompiledSampler(task, self.seed, self.decoder, self.min_batch_shots)

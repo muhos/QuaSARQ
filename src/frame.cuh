@@ -5,6 +5,8 @@
 
 namespace QuaSARQ {
 
+	constexpr size_t COLLECT_STAGING_BYTES = 32 * MB;
+
 	struct FrameResults {
 		uint8*  detectors;
 		uint8*  observables;
@@ -37,6 +39,7 @@ namespace QuaSARQ {
         size_t              rand_states_size = 0;
         FrameResults*       results = nullptr;
         bool                sample_host_required = false;
+        bool                reference_ready = false;
 
 	public:
 
@@ -45,32 +48,41 @@ namespace QuaSARQ {
             , num_shots(num_shots)
             , total_shots(num_shots)
             , max_chunk_shots(num_shots) {}
+
 		Framing(const string& path, const size_t& num_shots);
 		Framing(char* data, const size_t& length, const size_t& num_shots, const bool& require_detectors = false);
+
         size_t choose_chunk_shots() const;
-        void init_rand_states(const uint64& seed,
-                              const size_t& num_words_per_table,
-                              const size_t& total_words_minor,
-                              const size_t& chunk_word_offset,
-                              const cudaStream_t& stream);
         void randomize(word_std_t *data, const size_t& num_words, const cudaStream_t& stream);
         void shot(const depth_t& depth_level, const cudaStream_t& stream);
         void step(const depth_t& depth_level);
         void print_observables_sampled(FILE* out = stdout, const cudaStream_t& stream = 0);
         void print_detectors_sampled(FILE* out = stdout, const cudaStream_t& stream = 0);
-        void set_results(FrameResults* target) { results = target; }
-        void require_sample_host(const bool& on) { sample_host_required = on; }
         bool needs_sample_host() const;
+        size_t sample_device_bytes() const override;
+        size_t sample_host_bytes() const override;
+        void print(const cudaStream_t& stream = 0);
+        void sample();
         void collect_frame_refs(uint8* dest,
                                 const size_t& dest_stride,
                                 const uint32& n,
                                 const RecordRefs& refs,
                                 const cudaStream_t& stream,
                                 const char* label);
-        size_t sample_device_bytes() const override;
-        size_t sample_host_bytes() const override;
-        void print(const cudaStream_t& stream = 0);
-        void sample();
+        void init_rand_states(const uint64& seed,
+                                const size_t& num_words_per_table,
+                                const size_t& total_words_minor,
+                                const size_t& chunk_word_offset,
+                                const cudaStream_t& stream);
+
+        inline size_t shots() const { return total_shots; }
+        inline void require_sample_host(const bool& on) { sample_host_required = on; }
+        inline void set_results(FrameResults* target) { results = target; }
+        inline void set_shots(const size_t& shots) {
+            num_shots = shots;
+            total_shots = shots;
+            max_chunk_shots = shots;
+        }
 
 	};
 

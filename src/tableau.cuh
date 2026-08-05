@@ -158,6 +158,10 @@ namespace QuaSARQ {
                 assert(_ss != nullptr);
                 CHECK(cudaMemcpyAsync(_ss, _h_ss, sizeof(Signs), cudaMemcpyHostToDevice));
             }
+            // Without this, a tableau reused across sample() calls
+            // starts from the last call's residue and the reference 
+            // outcomes come out wrong.
+            reset();
         }
 
 

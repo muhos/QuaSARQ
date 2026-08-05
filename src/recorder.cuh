@@ -49,12 +49,17 @@ namespace QuaSARQ {
         inline size_t step_history() const { return step_gates; }
         inline size_t total_history()  const { return host.size(); }
 
-        inline void alloc(const size_t& measures_count) {
-            LOGN2(1, "Allocating %lld MB for %lld measurements recording.. ", 
+        inline void alloc(const size_t& measures_count, const cudaStream_t& stream = 0) {
+            LOGN2(1, "Allocating %lld MB for %lld measurements recording.. ",
                 (int64)ratio(int64(measures_count * sizeof(bool)), MB), int64(measures_count));
             device = allocator.allocate<bool>(measures_count, Region::Stable);
             assert(device != nullptr);
+            // A reused pool hands back the previous call's bytes. The reference run only
+            // writes the measurements it executes, so any old non-zero byte here would
+            // invert that measurement's reference bit for every shot.
+            CHECK(cudaMemsetAsync(device, 0, measures_count * sizeof(bool), stream));
             host.resize(measures_count);
+            host.reset();
             step_gates = 0;
             LOGDONE(1, 4);
         }

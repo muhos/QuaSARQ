@@ -16,6 +16,7 @@ tests/test_scheduler
 tests/test_simulator
 tests/test_sampling
 tests/test_equivalence
+src/binding/*.so
 *.o
 *.cuo
 *.cuda.o
@@ -23,6 +24,8 @@ tests/test_equivalence
 *.qstate
 *.01
 *.out
+*.pyc
+__pycache__
 /*.stim
 .DS_Store
 .vscode

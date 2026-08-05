@@ -49,6 +49,7 @@ namespace QuaSARQ {
         FILE*                           state_file;
         size_t                          config_qubits;
         cudaStream_t*                   custreams;
+        int                             num_streams = 0;
         cudaStream_t                    copy_streams[NUM_COPY_STREAMS];
         cudaStream_t                    kernel_streams[NUM_COMPUTE_STREAMS];
         WindowInfo                      winfo;

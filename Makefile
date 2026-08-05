@@ -6,7 +6,9 @@
 # advance progress
 
 ifndef PROGRESS
-T := $(shell $(MAKE) $(MAKECMDGOALS) $(MAKEOVERRIDES) --no-print-directory -nrRf $(firstword $(MAKEFILE_LIST)) PROGRESS="COUNTME" | grep -c "COUNTME")
+# MAKEFLAGS is cleared for this counting pass: inherited flags would make it try to join the
+# parent's jobserver, which it cannot reach from $(shell), and warn on every invocation.
+T := $(shell MAKEFLAGS= $(MAKE) $(MAKECMDGOALS) $(MAKEOVERRIDES) --no-print-directory -nrRf $(firstword $(MAKEFILE_LIST)) PROGRESS="COUNTME" | grep -c "COUNTME")
 N := x
 C = $(words $N)$(eval N := x $N)
 # guard the divisor: a zero count must not turn every recipe into a shell error
@@ -209,6 +211,19 @@ $(PTX_DIR)/%.$(PTXEXT): $(SRC_DIR)/%.cu | $(PTX_DIR)
 test: $(BUILD_DIR)/$(BIN)
 	@$(MAKE) -C tests run
 
+PYTHON       ?= python3
+BINDING_DIR  := $(SRC_DIR)/binding
+BINDING_ARGS := CUARENA_DIR=$(CUARENA_DIR) PYTHON=$(PYTHON) WORDSIZE=$(WORDSIZE)
+
+pic-archive:
+	@$(MAKE) pic=1 $(BUILD_DIR)/libquasarq_pic.a $(CUARENA_LIB) CUARENA_DIR=$(CUARENA_DIR) word=$(WORDSIZE)
+
+binding: pic-archive
+	@$(MAKE) -C $(BINDING_DIR) $(BINDING_ARGS)
+
+binding-test: pic-archive
+	@$(MAKE) -C $(BINDING_DIR) test $(BINDING_ARGS)
+
 clean:
 	rm -f $(SRC_DIR)/*.o
 	rm -rf $(BUILD_DIR) $(PTX_DIR)
@@ -216,4 +231,4 @@ clean:
 	@cmake --build $(CUARENA_DIR)/build --target clean -- --no-print-directory
 	@echo "done"
 
-.PHONY: all test clean
+.PHONY: all test clean binding binding-test pic-archive

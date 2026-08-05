@@ -60,7 +60,10 @@ size_t Framing::choose_chunk_shots() const {
 void Framing::sample() {
     Power power;
     timer.start();
-    rsample();
+    if (!reference_ready) {
+        rsample();
+        reference_ready = true;
+    }
     timer.stop();
     const double reference_sim_time = timer.elapsed();
     LOGRULER(1, '-', RULERLEN);
@@ -88,7 +91,6 @@ void Framing::sample() {
             mchecker.record.resize(stats.circuit.measure_stats.count);
             mchecker.samples.resize(stats.circuit.measure_stats.count * tableau.num_words_minor(), word_std_t(0));
         }
-        tableau.reset_xtable();
         init_rand_states(sample_seed, tableau.num_words_per_table(), total_words_minor, chunk_word_offset, kernel_streams[1]);
         randomize(tableau.zdata(), tableau.num_words_per_table(), kernel_streams[1]);
         samples_record.alloc(stats.circuit.measure_stats.count, tableau.num_words_minor(), gpu_allocator, needs_sample_host(), kernel_streams[0]);
@@ -112,7 +114,6 @@ void Framing::sample() {
         samples_record.destroy(gpu_allocator);
         tableau.destroy();
     }
-    recorder.destroy();
     gpu_allocator.deallocate<curand_algorithm_t>(rand_states);
     rand_states = nullptr;
     rand_states_size = 0;
