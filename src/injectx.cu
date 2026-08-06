@@ -4,15 +4,16 @@
 
 namespace QuaSARQ {
     
-    __global__ 
+    __global__
     void inject_x_k(
-                Table*              inv_xs, 
+                Table*              inv_xs,
                 Table*              inv_zs,
-                Signs*              inv_ss, 
+                Signs*              inv_ss,
                 const_pivots_t      pivots,
-        const   size_t              num_words_major, 
+        const   byte_t              gate_type,
+        const   size_t              num_words_major,
         const   size_t              num_words_minor,
-        const   size_t              num_qubits_padded) 
+        const   size_t              num_qubits_padded)
     {
         for_parallel_x(w, num_words_minor) {
             const pivot_t do_measurement = SIGN_FLAG;
@@ -24,14 +25,15 @@ namespace QuaSARQ {
                 const pivot_t pivot = pivots[0];
                 assert(pivot != INVALID_PIVOT);
                 const size_t c_destab = TABLEAU_INDEX(w, pivot);
-                inject_X(zs[c_destab], ss[w]);
-                inject_X(xs[c_destab], ss[w + num_words_minor]);
+                const word_std_t x_destab = xs[c_destab], z_destab = zs[c_destab];
+                inject_X(select_conjugate_word(x_destab, z_destab, gate_type), ss[w]);
+                inject_X(select_anticommuting_word(x_destab, z_destab, gate_type), ss[w + num_words_minor]);
             }
         }
 
     }
 
-    void Simulator::inject_x(const qubit_t& qubit, const sign_t& rbit, const cudaStream_t& stream) {
+    void Simulator::inject_x(const byte_t& gate_type, const sign_t& rbit, const cudaStream_t& stream) {
         const size_t num_words_minor = tableau.num_words_minor();
         const size_t num_words_major = tableau.num_words_major();
         const size_t num_qubits_padded = tableau.num_qubits_padded();
@@ -45,6 +47,7 @@ namespace QuaSARQ {
             XZ_TABLE(tableau),
             tableau.signs(),
             pivoting.pivots,
+            gate_type,
             num_words_major,
             num_words_minor,
             num_qubits_padded);
@@ -71,12 +74,13 @@ namespace QuaSARQ {
             LOGERROR("qubit not set");
         }
 
-        for (size_t w = 0; w < num_words_minor; w++) { 
+        for (size_t w = 0; w < num_words_minor; w++) {
             const size_t c_destab = TABLEAU_INDEX(w, pivot);
             assert(c_destab < h_zs.size());
             assert(c_destab < h_xs.size());
-            inject_X(h_zs[c_destab], h_ss[w]);
-            inject_X(h_xs[c_destab], h_ss[w + num_words_minor]);
+            const word_std_t x_destab = h_xs[c_destab], z_destab = h_zs[c_destab];
+            inject_X(select_conjugate_word(x_destab, z_destab, gate_type), h_ss[w]);
+            inject_X(select_anticommuting_word(x_destab, z_destab, gate_type), h_ss[w + num_words_minor]);
         }
     }
 

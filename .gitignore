@@ -25,7 +25,11 @@ src/binding/*.so
 *.01
 *.out
 *.pyc
+*.pdf
+*.zip
+*.json
+stim
+dev
 __pycache__
 /*.stim
 .DS_Store
-.vscode

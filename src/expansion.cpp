@@ -41,25 +41,45 @@ namespace QuaSARQ {
             pg.expanded_from = byte_t(orig);
             target.push(pg);
         };
-        auto batch = [&](const Gatetypes& t) {
-            for (size_t k = 0; k < qubits.size(); k++) 
-                push_op(qubits[k], t);
-        };
 
-        // Phase 1: pre-measurement basis change.
-        if (is_y) batch(S_DAG);
-        batch(H);
-        // Phase 2: measurement.
-        for (size_t k = 0; k < qubits.size(); k++) {
-            push_op(qubits[k], mtype);
-            if (pb == nullptr) gstats.types[orig]++;
-            if (&target == &circuit_queue) measures_count++;
-            else if (pb != nullptr)        pb->measures++;
+        // Repeated qubits like MRX 0 0.. should be treated as 
+        // (H MR H)(H MR H), as if they were separate qubits.
+        qubit_t line_max = 0;
+        for (size_t k = 0; k < qubits.size(); k++)
+            line_max = MAX(line_max, qubits[k]);
+        Vec<byte_t, size_t> in_run(size_t(line_max) + 1, 0);
+
+        size_t begin = 0;
+        while (begin < qubits.size()) {
+            size_t end = begin;
+            while (end < qubits.size() && !in_run[qubits[end]]) {
+                in_run[qubits[end]] = 1;
+                end++;
+            }
+            auto batch = [&](const Gatetypes& t) {
+                for (size_t k = begin; k < end; k++)
+                    push_op(qubits[k], t);
+            };
+            // Phase 1: pre-measurement basis change.
+            if (is_y) batch(S_DAG);
+            batch(H);
+            // Phase 2: measurement.
+            for (size_t k = begin; k < end; k++) {
+                push_op(qubits[k], mtype);
+                if (pb == nullptr) gstats.types[orig]++;
+                if (&target == &circuit_queue) measures_count++;
+                else if (pb != nullptr)        pb->measures++;
+            }
+            // Phase 3: post-measurement basis change.
+            batch(H);
+            if (is_y) batch(S);
+
+            for (size_t k = begin; k < end; k++)
+                in_run[qubits[k]] = 0;
+            begin = end;
         }
-        // Phase 3: post-measurement basis change.
-        batch(H);
-        if (is_y) batch(S);
 
+        in_run.clear(true);
         qubits.clear(true);
         return true;
     }

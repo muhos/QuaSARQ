@@ -79,8 +79,9 @@ namespace QuaSARQ {
                     break;
                 }
                 case RY: {
-                    (*xs)[q_word_idx] = 0;
-                    (*zs)[q_word_idx] = 0;
+                    const word_std_t r = curand_word(&rand_states[q_word_idx]);
+                    (*xs)[q_word_idx] = r;
+                    (*zs)[q_word_idx] = r;
                     break;
                 }
                 case M: {

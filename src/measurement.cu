@@ -102,6 +102,7 @@ namespace QuaSARQ {
                         XZ_TABLE(tableau),
                         tableau.signs(),
                         pivoting.pivots,
+                        byte_t(R),   // Z-basis default for tuning
                         qubit,
                         1,
                         num_words_major,
@@ -117,6 +118,7 @@ namespace QuaSARQ {
                         XZ_TABLE(tableau),
                         tableau.signs(),
                         pivoting.pivots,
+                        byte_t(R),   // Z-basis default for tuning
                         num_words_major,
                         num_words_minor,
                         num_qubits_padded);
@@ -158,8 +160,8 @@ namespace QuaSARQ {
                         inject_cx(active_pivots - 1, stream);
                     }
                     const sign_t rbit = reference_mode ? sign_t(0) : mrand.brand();
-                    inject_swap(qubit, rbit, stream);
-                    inject_x(qubit, rbit, stream);
+                    inject_swap(qubit, curr_gate.type, rbit, stream);
+                    inject_x(curr_gate.type, rbit, stream);
                     random_measures++;
                 }
                 max_random_measures++;

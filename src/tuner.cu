@@ -629,14 +629,15 @@ namespace QuaSARQ {
 
 	void tune_inject_swap(
 		void (*kernel)(
-				Table*, 
+				Table*,
 				Table*,
 				Signs*,
 				pivot_t*,
+		const   byte_t,
 		const   qubit_t,
         const   sign_t,
-		const 	size_t, 
-		const 	size_t, 
+		const 	size_t,
+		const 	size_t,
 		const 	size_t),
 				dim3& 			bestBlock,
 				dim3& 			bestGrid,
@@ -644,6 +645,7 @@ namespace QuaSARQ {
 				Table* 			zs,
 				Signs* 			ss,
 				pivot_t* 		pivots,
+		const   byte_t          gate_type,
 		const   qubit_t         qubit,
         const   sign_t          random_bit,
 		const 	size_t& 		num_words_major,
@@ -653,17 +655,18 @@ namespace QuaSARQ {
 		const char* opname = "injecting swap";
 		size_t shared_element_bytes = 0;
 		const size_t size = num_words_minor;
-		TUNE_1D(xs, zs, ss, pivots, qubit, random_bit, num_words_major, num_words_minor, num_qubits_padded);	
+		TUNE_1D(xs, zs, ss, pivots, gate_type, qubit, random_bit, num_words_major, num_words_minor, num_qubits_padded);
 	}
 
 	void tune_inject_x(
 		void (*kernel)(
-				Table*, 
+				Table*,
 				Table*,
 				Signs*,
 				const_pivots_t,
-		const 	size_t, 
-		const 	size_t, 
+		const   byte_t,
+		const 	size_t,
+		const 	size_t,
 		const 	size_t),
 				dim3& 			bestBlock,
 				dim3& 			bestGrid,
@@ -671,6 +674,7 @@ namespace QuaSARQ {
 				Table* 			zs,
 				Signs* 			ss,
 				const_pivots_t 	pivots,
+		const   byte_t          gate_type,
 		const 	size_t& 		num_words_major,
 		const 	size_t& 		num_words_minor,
 		const 	size_t& 		num_qubits_padded)
@@ -678,7 +682,7 @@ namespace QuaSARQ {
 		const char* opname = "injecting x";
 		size_t shared_element_bytes = 0;
 		const size_t size = num_words_minor;
-		TUNE_1D(xs, zs, ss, pivots, num_words_major, num_words_minor, num_qubits_padded);	
+		TUNE_1D(xs, zs, ss, pivots, gate_type, num_words_major, num_words_minor, num_qubits_padded);
 	}
 
 	void tune_outplace_transpose(

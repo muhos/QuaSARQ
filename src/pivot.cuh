@@ -22,6 +22,12 @@ namespace QuaSARQ {
         return (gate_type == byte_t(RX)) ? zw : (gate_type == byte_t(RY)) ? xw ^ zw : xw;
     }
 
+    INLINE_ALL
+    word_std_t select_conjugate_word(const word_std_t& xw, const word_std_t& zw, const byte_t& gate_type)
+    {
+        return (gate_type == byte_t(RX) || gate_type == byte_t(RY)) ? xw : zw;
+    }
+
     struct Pivoting {
 
         DeviceAllocator& allocator;

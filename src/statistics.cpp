@@ -105,7 +105,7 @@ void Simulator::report()
 			LOG1(" %sObservables                    : %s%-12u%s", CREPORT, CREPORTVAL, circuit_io.observables.pinned.num_observables, CNORMAL);
 			if (stats.logical.total_shots > 0) {
 				const double per = stats.logical.rate() * 100.0;
-				LOG1(" %sLogical error rate             : %s%s%-12.6f (%zu / %zu shots, %.3f%%)%s",
+				LOG1(" %sShots error rate               : %s%s%-12.6f (%zu / %zu shots, %.3f%%)%s",
 					CREPORT, CNORMAL, per > 0.0 ? CRED : CREPORTVAL,
 					stats.logical.rate(),
 					stats.logical.shots_with_error,
@@ -139,7 +139,7 @@ void Simulator::report()
 		PRINT("%-30s : %-12.3f  GB\n", "Memory", ratio((double)gpu_allocator.gpu_peak_used(), double(GB)));
 		PRINT("%-30s : %-12.3f  joules\n", "Energy", stats.power.joules);
 		if (stats.logical.total_shots > 0)
-			PRINT("%-30s : %-12.6f  (%zu / %zu)\n", "Logical error rate",
+			PRINT("%-30s : %-12.6f  (%zu / %zu)\n", "Shots error rate",
 				stats.logical.rate(), stats.logical.shots_with_error, stats.logical.total_shots);
 		LOGRULER(0, '-', RULERLEN);
 	}
