@@ -28,6 +28,34 @@ namespace QuaSARQ {
         return (gate_type == byte_t(RX) || gate_type == byte_t(RY)) ? xw : zw;
     }
 
+    INLINE_ALL
+    uint32 ctz_word(const word_std_t& w)
+    {
+        #if defined(__CUDA_ARCH__)
+        #if defined(WORD_SIZE_64)
+        return uint32(__ffsll((uint64)w) - 1);
+        #else
+        return uint32(__ffs((uint32)w) - 1);
+        #endif
+        #else
+        return uint32(__builtin_ctzll((uint64)w));
+        #endif
+    }
+
+    INLINE_ALL
+    uint32 popcount_word(const word_std_t& w)
+    {
+        #if defined(__CUDA_ARCH__)
+        #if defined(WORD_SIZE_64)
+        return __popcll((uint64)w);
+        #else
+        return __popc((uint32)w);
+        #endif
+        #else
+        return uint32(__builtin_popcountll((uint64)w));
+        #endif
+    }
+
     struct Pivoting {
 
         DeviceAllocator& allocator;

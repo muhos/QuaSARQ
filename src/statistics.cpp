@@ -18,6 +18,8 @@ void Simulator::report()
 		stats.profile.percentage.injectswap = percent(stats.profile.time.injectswap, total);
 		stats.profile.percentage.injectx = percent(stats.profile.time.injectx, total);
 		stats.profile.percentage.injectcx = percent(stats.profile.time.injectcx, total);
+		stats.profile.percentage.resetsigns = percent(stats.profile.time.resetsigns, total);
+		stats.profile.percentage.recordsigns = percent(stats.profile.time.recordsigns, total);
     }
 	if (options.report_en) {
 		LOGHEADER(1, 4, "Statistics");
@@ -34,6 +36,8 @@ void Simulator::report()
 			LOG1(" %s %-30s: %s%-12.3f  msec (%%%-3.0f)%s", CREPORT, "Inject CX", CREPORTVAL, stats.profile.time.injectcx, stats.profile.percentage.injectcx, CNORMAL);
 			LOG1(" %s %-30s: %s%-12.3f  msec (%%%-3.0f)%s", CREPORT, "Inject Swap", CREPORTVAL, stats.profile.time.injectswap, stats.profile.percentage.injectswap, CNORMAL);
 			LOG1(" %s %-30s: %s%-12.3f  msec (%%%-3.0f)%s", CREPORT, "Inject X", CREPORTVAL, stats.profile.time.injectx, stats.profile.percentage.injectx, CNORMAL);
+			LOG1(" %s %-30s: %s%-12.3f  msec (%%%-3.0f)%s", CREPORT, "Reset Signs", CREPORTVAL, stats.profile.time.resetsigns, stats.profile.percentage.resetsigns, CNORMAL);
+			LOG1(" %s %-30s: %s%-12.3f  msec (%%%-3.0f)%s", CREPORT, "Record Signs", CREPORTVAL, stats.profile.time.recordsigns, stats.profile.percentage.recordsigns, CNORMAL);
 		}
 		LOG1(" %sPower consumption              : %s%-12.3f  watt%s", CREPORT, CREPORTVAL, stats.power.wattage, CNORMAL);
 		LOG1(" %sEnergy consumption             : %s%-12.3f  joules%s", CREPORT, CREPORTVAL, stats.power.joules, CNORMAL);
@@ -135,6 +139,8 @@ void Simulator::report()
 			PRINT(" %-30s: %-12.3f  msec (%%%-3.0f)\n", "Inject CX", stats.profile.time.injectcx, stats.profile.percentage.injectcx);
 			PRINT(" %-30s: %-12.3f  msec (%%%-3.0f)\n", "Inject Swap", stats.profile.time.injectswap, stats.profile.percentage.injectswap);
 			PRINT(" %-30s: %-12.3f  msec (%%%-3.0f)\n", "Inject X", stats.profile.time.injectx, stats.profile.percentage.injectx);
+			PRINT(" %-30s: %-12.3f  msec (%%%-3.0f)\n", "Reset Signs", stats.profile.time.resetsigns, stats.profile.percentage.resetsigns);
+			PRINT(" %-30s: %-12.3f  msec (%%%-3.0f)\n", "Record Signs", stats.profile.time.recordsigns, stats.profile.percentage.recordsigns);
 		}
 		PRINT("%-30s : %-12.3f  GB\n", "Memory", ratio((double)gpu_allocator.gpu_peak_used(), double(GB)));
 		PRINT("%-30s : %-12.3f  joules\n", "Energy", stats.power.joules);

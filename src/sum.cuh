@@ -109,6 +109,27 @@ namespace QuaSARQ {
 		} \
 	}
 
+	#define reduce_warp(OP, val) \
+	{ \
+		const grid_t mask = __activemask(); \
+		for (unsigned off = 16; off; off >>= 1) { \
+			val = OP(val, __shfl_down_sync(mask, val, off)); \
+		} \
+	}
+
+	#define reduce_warps(OP, IDENTITY, val, warp_smem) \
+	{ \
+		const unsigned nwarps = blockDim.x >> 5; \
+		reduce_warp(OP, val); \
+		if (!(threadIdx.x & 31)) \
+			warp_smem[threadIdx.x >> 5] = val; \
+		__syncthreads(); \
+		if (threadIdx.x < 32) { \
+			val = (threadIdx.x < nwarps) ? warp_smem[threadIdx.x] : (IDENTITY); \
+			reduce_warp(OP, val); \
+		} \
+	}
+
 	#define sum_warp_single(smem, val, tid) \
 	{ \
 		if (threadIdx.x < 32) { \

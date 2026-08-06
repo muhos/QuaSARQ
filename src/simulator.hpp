@@ -41,6 +41,7 @@ namespace QuaSARQ {
         Tableau                         ref_tableau;
         Pivoting                        pivoting;
         MeasurementRecorder             recorder;
+        RecordSelector                  selector;
         MeasurementChecker              mchecker;
         Prefix                          prefix;
         Statistics                      stats;

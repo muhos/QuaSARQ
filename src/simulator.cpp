@@ -49,6 +49,7 @@ Simulator::Simulator(const byte_t& mode) :
     , ref_tableau(gpu_allocator)
     , pivoting(gpu_allocator)
     , recorder(gpu_allocator)
+    , selector(gpu_allocator)
     , prefix(gpu_allocator, mchecker)
 	, config_file(nullptr)
     , state_file(nullptr)
@@ -175,6 +176,7 @@ void Simulator::rsample() {
     #endif
     prefix.alloc(tableau, config_qubits);
     pivoting.alloc(num_qubits);
+    selector.alloc(num_qubits, tableau.num_words_minor());
     recorder.alloc(stats.circuit.measure_stats.count, kernel_streams[0]);
     const size_t num_qubits_per_partition = num_partitions > 1 ? tableau.num_words_major() * WORD_BITS : num_qubits;
     gpu_circuit.initiate(num_qubits, winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
@@ -192,6 +194,7 @@ void Simulator::rsample() {
     inv_tableau.destroy();
     prefix.destroy();
     pivoting.destroy();
+    selector.destroy();
     options.check_measurement = saved_check;
     gpu_circuit.enable_noise(true);
     reference_mode = false;
@@ -267,6 +270,7 @@ void Simulator::simulate() {
         #endif
         prefix.alloc(tableau, config_qubits);
         pivoting.alloc(num_qubits);
+        selector.alloc(num_qubits, tableau.num_words_minor());
         if (!stats.circuit.measure_stats.count)
             LOGERRORN("cannot run simulation with measurement gates but no measurements.");
         recorder.alloc(stats.circuit.measure_stats.count, kernel_streams[0]);
