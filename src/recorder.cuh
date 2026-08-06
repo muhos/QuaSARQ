@@ -9,7 +9,7 @@
 
 namespace QuaSARQ {
 
-    // Per-measurement capacity of the precomputed S(q) lists. |S(q)| is 4 at most and 1.81 on
+    // Per-measurement capacity of the precomputed S(q) lists. |S(q)| is 4 at most and 1.8 on
     // average on surface codes; a measurement that exceeds this falls back to scanning its own
     // column in record_signs_k, so the bound is a heuristic and never a correctness one.
     #define RECORD_MAX_SELECTED 8
@@ -21,6 +21,8 @@ namespace QuaSARQ {
         uint32*     counts;
         uint32*     lists;
         word_std_t* masks;
+        word_std_t* cmasks;
+        bool*       flags;
 
         size_t      num_qubits;
         size_t      num_words_minor;
@@ -32,6 +34,8 @@ namespace QuaSARQ {
             counts(nullptr),
             lists(nullptr),
             masks(nullptr),
+            cmasks(nullptr),
+            flags(nullptr),
             num_qubits(0),
             num_words_minor(0)
         {}
@@ -45,10 +49,14 @@ namespace QuaSARQ {
                 allocator.deallocate<uint32>(counts);
                 allocator.deallocate<uint32>(lists);
                 allocator.deallocate<word_std_t>(masks);
+                allocator.deallocate<word_std_t>(cmasks);
+                allocator.deallocate<bool>(flags);
             }
             counts = nullptr;
             lists = nullptr;
             masks = nullptr;
+            cmasks = nullptr;
+            flags = nullptr;
             num_qubits = 0;
             num_words_minor = 0;
         }
@@ -60,13 +68,19 @@ namespace QuaSARQ {
             counts = allocator.allocate<uint32>(num_qubits, Region::Stable);
             lists  = allocator.allocate<uint32>(num_qubits * RECORD_MAX_SELECTED, Region::Stable);
             masks  = allocator.allocate<word_std_t>(3 * num_words_minor, Region::Stable);
+            cmasks = allocator.allocate<word_std_t>(2 * num_words_minor, Region::Stable);
+            flags  = allocator.allocate<bool>(num_qubits, Region::Stable);
         }
 
         inline bool allocated() const { return counts != nullptr && lists != nullptr && masks != nullptr; }
         inline uint32* device_counts() { return counts; }
         inline uint32* device_lists() { return lists; }
         inline word_std_t* device_masks() { return masks; }
+        inline word_std_t* device_cmasks() { return cmasks; }
+        inline bool* device_flags() { return flags; }
+        inline size_t max_gates() const { return num_qubits; }
         inline size_t mask_bytes() const { return 3 * num_words_minor * sizeof(word_std_t); }
+        inline size_t cmask_bytes() const { return 2 * num_words_minor * sizeof(word_std_t); }
     };
 
     class MeasurementRecorder {

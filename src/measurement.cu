@@ -169,8 +169,14 @@ namespace QuaSARQ {
         }
 
         assert(!has_mr_gates || circuit.is_recording(depth_level));
+        // The reset correction needs the measured value of every reset gate. record_signs_k
+        // already computes it, so ask for the flags alongside the record.
+        bool* flags = may_reset_signs ? selector.device_flags() : nullptr;
         if (has_mr_gates || !may_reset_signs) {
-            record_measurements(num_gates_per_window, depth_level, stream);
+            record_measurements(num_gates_per_window, depth_level, stream, flags);
+        }
+        else {
+            launch_record_signs(num_gates_per_window, nullptr, flags, stream);
         }
         if (may_reset_signs) {
             reset_signs(num_gates_per_window, depth_level, stream);

@@ -77,6 +77,7 @@ namespace QuaSARQ {
     __global__
     void record_signs_k(
         bool*                       record,
+        bool*                       flags,
                 const_table_t       inv_xs,
                 const_table_t       inv_zs,
         const_signs_t               inv_ss,
@@ -155,14 +156,20 @@ namespace QuaSARQ {
 
             uint32 packed = RECORD_PACK(par, ycnt, acnt, sgn);
             reduce_warps(RECORD_COMBINE, 0u, packed, s_warp);
-            if (!threadIdx.x)
-                record[step_gates + i] = RECORD_OUTCOME(packed);
+            if (!threadIdx.x) {
+                const bool value = RECORD_OUTCOME(packed);
+                if (record != nullptr)
+                    record[step_gates + i] = value;
+                if (flags != nullptr)
+                    flags[i] = value;
+            }
             __syncthreads();
         }
     }
 
-    void Simulator::record_measurements(const size_t& num_gates, const depth_t& depth_level, const cudaStream_t& stream) {
-        assert(circuit.is_recording(depth_level));
+    void Simulator::launch_record_signs(const size_t& num_gates, bool* record_out, bool* flags_out, const cudaStream_t& stream) {
+        assert(record_out != nullptr || flags_out != nullptr);
+        assert(flags_out == nullptr || num_gates <= selector.max_gates());
         const size_t num_words_minor = tableau.num_words_minor();
         uint32 blocksize = 32;
         while (blocksize < num_words_minor && blocksize < 1024) blocksize <<= 1;
@@ -202,7 +209,8 @@ namespace QuaSARQ {
                 num_words_minor);
         }
         record_signs_k <<<currentgrid, currentblock, smem, stream>>> (
-            recorder.device_record(),
+            record_out,
+            flags_out,
             tableau.xtable(),
             tableau.ztable(),
             tableau.signs(),
@@ -215,15 +223,20 @@ namespace QuaSARQ {
             tableau.num_words_major(),
             num_words_minor,
             recorder.step_history());
-        recorder.reset_copied();
-        recorder.advance(num_gates);
         if (options.sync) {
-            LASTERR("failed to reset signs");
+            LASTERR("failed to record signs");
             cutimer.stop(stream);
             double elapsed = cutimer.elapsed();
             if (options.profile) stats.profile.time.recordsigns += elapsed;
             LOGENDING(2, 4, "(time %.3f ms)", elapsed);
         } else LOGDONE(2, 4);
+    }
+
+    void Simulator::record_measurements(const size_t& num_gates, const depth_t& depth_level, const cudaStream_t& stream, bool* flags) {
+        assert(circuit.is_recording(depth_level));
+        launch_record_signs(num_gates, recorder.device_record(), flags, stream);
+        recorder.reset_copied();
+        recorder.advance(num_gates);
         if (options.check_measurement) {
             recorder.copy();
             mchecker.check_record_measurements(recorder, circuit, depth_level);

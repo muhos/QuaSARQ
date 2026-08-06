@@ -233,6 +233,8 @@ namespace QuaSARQ {
 
 		void check_inject_x(const Tableau& other_input, const pivot_t* other_pivots, const size_t& num_pivots, const sign_t& random_bit);
 
+		bool measured_value(const Gate& m);
+
 		void check_record_measurements(const MeasurementRecorder& other_recorder, const Circuit& circuit, const depth_t& depth_level);
 
 		void check_record_samples(const Tableau& other_input, const Samples& other_samples, const Circuit& circuit, const depth_t& depth_level, const size_t& measurement_offset_before, const size_t& num_words_minor);

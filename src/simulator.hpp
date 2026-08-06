@@ -137,7 +137,8 @@ namespace QuaSARQ {
         void        transpose               (const bool& row_major, const cudaStream_t& stream);
         void        reset_pivots            (const size_t& num_pivots, const cudaStream_t& stream);
         void        reset_signs             (const size_t& num_gates, const depth_t& depth_level, const cudaStream_t& stream);
-        void        record_measurements     (const size_t& num_gates, const depth_t& depth_level, const cudaStream_t& stream);
+        void        launch_record_signs     (const size_t& num_gates, bool* record_out, bool* flags_out, const cudaStream_t& stream);
+        void        record_measurements     (const size_t& num_gates, const depth_t& depth_level, const cudaStream_t& stream, bool* flags = nullptr);
         void        find_random_measures    (const size_t& num_pivots, const cudaStream_t& stream);
         void        compact_targets         (const qubit_t& qubit, const byte_t& gate_type, const cudaStream_t& stream);
         void        inject_swap             (const qubit_t& qubit, const byte_t& gate_type, const sign_t& rbit, const cudaStream_t& stream);
