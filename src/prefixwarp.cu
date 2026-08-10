@@ -34,16 +34,11 @@ namespace QuaSARQ {
             t = __shfl_sync(mask, t, 0, blockDim.x);
             const size_t c_destab = TABLEAU_INDEX(w, pivot);
             const size_t t_destab = TABLEAU_INDEX(w, t);
-            const word_std_t zt_destab = zs[t_destab];
-            const word_std_t xt_destab = xs[t_destab];
-            const word_std_t prefix_zc = zs[c_destab];
-            const word_std_t prefix_xc = xs[c_destab];
-            zs[c_destab] ^= zt_destab;
-            xs[c_destab] ^= xt_destab;
-            const size_t t_stab = t_destab + TABLEAU_STAB_OFFSET;
             const size_t c_stab = c_destab + TABLEAU_STAB_OFFSET;
-            compute_local_sign_per_block(ss[w], zs[t_stab], prefix_zc, zs[c_stab], zt_destab);
-            compute_local_sign_per_block(ss[w + num_words_minor], xs[t_stab], prefix_xc, xs[c_stab], xt_destab);
+            const size_t t_stab = t_destab + TABLEAU_STAB_OFFSET;
+            const size_t signs_stab_idx = w + num_words_minor;
+            inject_cx_half(xs[c_destab], zs[c_destab], xs[t_destab], zs[t_destab], ss[w]);
+            inject_cx_half(xs[c_stab], zs[c_stab], xs[t_stab], zs[t_stab], ss[signs_stab_idx]);
         }
     }
 
@@ -71,28 +66,28 @@ namespace QuaSARQ {
             const size_t c_destab = TABLEAU_INDEX(w, pivot);
             const size_t c_stab   = c_destab + TABLEAU_STAB_OFFSET;
 
-            const word_std_t c_stab_z = zs[c_stab];
-            const word_std_t c_stab_x = xs[c_stab];
-            word_std_t prefix_z = zs[c_destab];
-            word_std_t prefix_x = xs[c_destab];
+            const word_std_t cx_destab = xs[c_destab];
+            const word_std_t cx_stab   = xs[c_stab];
+            word_std_t cz_destab = zs[c_destab];
+            word_std_t cz_stab   = zs[c_stab];
             sign_t s_destab = 0, s_stab = 0;
 
             #pragma unroll 4
             for (int i = 0; i < active_targets; i++) {
                 const size_t t_destab = TABLEAU_INDEX(w, pivots[i + 1]);
                 const size_t t_stab   = t_destab + TABLEAU_STAB_OFFSET;
-                const word_std_t zt   = zs[t_destab];
-                const word_std_t xt   = xs[t_destab];
-                s_destab   ^= c_stab_z & zt & ~(prefix_z ^ zs[t_stab]);
-                zs[t_stab] ^= c_stab_z;
-                prefix_z   ^= zt;
-                s_stab     ^= c_stab_x & xt & ~(prefix_x ^ xs[t_stab]);
-                xs[t_stab] ^= c_stab_x;
-                prefix_x   ^= xt;
+                const word_std_t tx_destab = xs[t_destab], tz_destab = zs[t_destab];
+                s_destab      ^= cx_destab & tz_destab & ~(tx_destab ^ cz_destab);
+                cz_destab     ^= tz_destab;
+                xs[t_destab]   = tx_destab ^ cx_destab;
+                const word_std_t tx_stab = xs[t_stab], tz_stab = zs[t_stab];
+                s_stab        ^= cx_stab & tz_stab & ~(tx_stab ^ cz_stab);
+                cz_stab       ^= tz_stab;
+                xs[t_stab]     = tx_stab ^ cx_stab;
             }
 
-            zs[c_destab]             = prefix_z;
-            xs[c_destab]             = prefix_x;
+            zs[c_destab]             = cz_destab;
+            zs[c_stab]               = cz_stab;
             ss[w]                   ^= s_destab;
             ss[w + num_words_minor] ^= s_stab;
         }

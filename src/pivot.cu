@@ -96,7 +96,7 @@ namespace QuaSARQ {
 
             for_parallel_x(g, num_qubits) {
                 const size_t word_idx = TABLEAU_INDEX(q_w, g) + TABLEAU_STAB_OFFSET;
-                const word_std_t qubit_word = select_anticommuting_word((*inv_xs)[word_idx], (*inv_zs)[word_idx], m.type);
+                const word_std_t qubit_word = (*inv_xs)[word_idx];
                 if (qubit_word & q_mask) {
                     local_min = MIN(pivot_t(g), local_min);
                 }
@@ -116,7 +116,6 @@ namespace QuaSARQ {
                 pivot_t*            scatter,
                 const_table_t       inv_xs,
                 const_table_t       inv_zs,
-        const   byte_t              gate_type,
         const   qubit_t             qubit,
         const   size_t              num_qubits,
         const   size_t              num_words_major,
@@ -126,7 +125,7 @@ namespace QuaSARQ {
         const word_std_t q_mask = BITMASK_GLOBAL(qubit);
         for_parallel_x(g, num_qubits) {
             const size_t word_idx = TABLEAU_INDEX(q_w, g) + TABLEAU_STAB_OFFSET;
-            const word_std_t qubit_word = select_anticommuting_word((*inv_xs)[word_idx], (*inv_zs)[word_idx], gate_type);
+            const word_std_t qubit_word = (*inv_xs)[word_idx];
             scatter[g] = (qubit_word & q_mask) ? pivot_t(g) : INVALID_PIVOT;
         }
     }
@@ -137,7 +136,6 @@ namespace QuaSARQ {
                 uint32*               num_compacted,
                 const_table_t         inv_xs,
                 const_table_t         inv_zs,
-        const   byte_t                gate_type,
         const   qubit_t               qubit,
         const   size_t                num_qubits,
         const   size_t                num_words_major,
@@ -148,7 +146,7 @@ namespace QuaSARQ {
         *num_compacted = 0;
         for (size_t g = 0; g < num_qubits; g++) {
             const size_t word_idx = TABLEAU_INDEX(q_w, g) + TABLEAU_STAB_OFFSET;
-            const word_std_t qubit_word = select_anticommuting_word((*inv_xs)[word_idx], (*inv_zs)[word_idx], gate_type);
+            const word_std_t qubit_word = (*inv_xs)[word_idx];
             if (qubit_word & q_mask)
                 pivots[(*num_compacted)++] = pivot_t(g);
         }
@@ -249,7 +247,7 @@ namespace QuaSARQ {
         } else LOGDONE(2, 4);
     }
 
-    void Simulator::compact_targets(const qubit_t& qubit, const byte_t& gate_type, const cudaStream_t& stream) {
+    void Simulator::compact_targets(const qubit_t& qubit, const cudaStream_t& stream) {
         const size_t num_words_major = tableau.num_words_major();
         const size_t num_words_minor = tableau.num_words_minor();
         const size_t num_qubits_padded = tableau.num_qubits_padded();
@@ -268,7 +266,6 @@ namespace QuaSARQ {
             pivoting.d_active_pivots,
             tableau.xtable(),
             tableau.ztable(),
-            gate_type,
             qubit,
             num_qubits,
             num_words_major,
@@ -282,7 +279,6 @@ namespace QuaSARQ {
             pivoting.pivots,
             tableau.xtable(),
             tableau.ztable(),
-            gate_type,
             qubit,
             num_qubits,
             num_words_major,

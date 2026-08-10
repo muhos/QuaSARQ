@@ -25,7 +25,7 @@ namespace QuaSARQ {
         LOAD_Z_WORDS(q2)
 
     __global__
-    void step_2D_atomic(
+    void step_append_atomic(
                 const_refs_t    refs,
                 const_buckets_t gates,
         const   uint32*         noise_paulis,
@@ -35,7 +35,7 @@ namespace QuaSARQ {
                 Table *         zs,
                 Signs *         ss);
 
-    void call_step_2D(
+    void call_step_append(
                 const_refs_t                refs,
                 const_buckets_t             gates,
                 Tableau &                   tableau,
@@ -60,5 +60,20 @@ namespace QuaSARQ {
                 const_refs_t                gate_refs,
                 const_buckets_t             gate_buckets,
                 Tableau &                   tableau);
+
+
+    void call_step(
+                const_refs_t        refs,
+                const_buckets_t     gates,
+                curand_algorithm_t* noise_states,
+                uint32*             noise_paulis,
+        const   size_t&             num_gates,
+        const   size_t&             num_words_major,
+        const   size_t&             num_words_minor,
+                Table*              xs,
+                Table*              zs,
+                Signs*              ss,
+        const   cudaStream_t&       stream);
+
 
 }

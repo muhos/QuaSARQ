@@ -130,6 +130,13 @@ namespace QuaSARQ {
 		} \
 	}
 
+	// Mod-4 sum across a full warp.
+	INLINE_DEVICE uint32 warp_reduce_mod4(uint32 val) {
+		for (int off = 16; off > 0; off >>= 1)
+			val = (val + __shfl_down_sync(0xffffffffu, val, off)) & 3u;
+		return __shfl_sync(0xffffffffu, val, 0);
+	}
+
 	#define sum_warp_single(smem, val, tid) \
 	{ \
 		if (threadIdx.x < 32) { \

@@ -173,6 +173,8 @@ namespace QuaSARQ {
 
         bool try_expand_m_variants(char*& str, const char* gatestr, const int& gatelen, CircuitQueue& target, Gate_stats& gstats, ParsedBlock* pb);
 
+        bool try_expand_r_variants(char*& str, const char* gatestr, const int& gatelen, CircuitQueue& target, Gate_stats& gstats);
+
         bool try_expand_clifford(char*& str, const char* gatestr, const int& gatelen, CircuitQueue& target, Gate_stats& gstats);
 
         void read_gate(char*& str) {
@@ -183,5 +185,33 @@ namespace QuaSARQ {
         }
 
     };
+
+    inline void skip_gate_args(char*& str, const char* eof) {
+        if (str < eof && *str == '(') {
+            str++;
+            while (str < eof && *str != ')' && *str != DELIM) str++;
+            if (str < eof && *str == ')') str++;
+        }
+    }
+
+    inline qubit_t next_qubit(char*& str, size_t& max_qubits) {
+        const qubit_t q = toInteger(str);
+        max_qubits = MAX(max_qubits, (size_t)(q) + 1);
+        return q;
+    }
+
+    inline bool next_qubit_or_eat_line(char*& str, size_t& max_qubits, qubit_t& q) {
+        char* peek = str;
+        eatWS(peek);
+        if (!isDigit(*peek)) { eatLine(str); return false; }
+        q = next_qubit(str, max_qubits);
+        return true;
+    }
+
+    inline bool match_gate_name(const char* name, const char* in, const int& gatelen) {
+        int c = 0;
+        while (name[c] && name[c] == in[c]) c++;
+        return c == gatelen && !name[c];
+    }
 
 }

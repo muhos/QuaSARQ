@@ -28,6 +28,7 @@ namespace QuaSARQ {
 		size_t max_references;
 		size_t max_buckets;
 		size_t num_gates;
+		size_t num_buckets;
 		size_t max_qubits;
 
 		gate_ref_t buckets_offset;
@@ -60,6 +61,7 @@ namespace QuaSARQ {
 		,	max_references(0)
 		,	max_buckets(0)
 		,	num_gates(0)
+		,	num_buckets(0)
 		,	max_qubits(0)
 		,	buckets_offset(0)
 		{ }
@@ -103,8 +105,10 @@ namespace QuaSARQ {
 		gate_ref_t*  		references			() { return _references; }
 		inline const
 		gate_ref_t*  		references			() const { return _references; }
-		inline 
+		inline
 		gate_ref_t 	 		get_buckets_offset	() const { return buckets_offset; }
+		inline
+		size_t		 		size_in_buckets		() const { return num_buckets; }
 		inline
 		void                enable_noise		(const bool& on) { _noise_enabled = on; }
 		curand_algorithm_t* noise_states		() { return _noise_enabled ? _noise_states : nullptr; }

@@ -7,7 +7,7 @@ namespace QuaSARQ {
 
     #define PRINT_HEX 0
 
-	NOINLINE_ALL 
+	NOINLINE_ALL
     void REPCH_GPU(
         const char*     ch, 
         const size_t&   size, 
@@ -152,7 +152,7 @@ namespace QuaSARQ {
         }
     }
 
-    NOINLINE_ALL 
+    NOINLINE_ALL
     void print_tables(
         const Table& xs, 
         const Table& zs, 
@@ -218,74 +218,53 @@ namespace QuaSARQ {
         }
     }
 
-	__global__ 
-    void print_tableau_k(
-        const_table_t   xs, 
-        const_table_t   zs, 
-        const_signs_t   ss, 
-        const depth_t   level) 
+    void print_paulis_host(
+        const Tableau&  tab,
+        const size_t&   num_qubits,
+        const bool&     extended,
+              FILE*     f = nullptr)
     {
-		if (!global_tx) {
-			print_tables(*xs, *zs, ss, level == MAX_DEPTH ? -1 : int64(level));
-		}
-	}
-
-	__global__ 
-    void print_paulis_k(
-        const_table_t   xs, 
-        const_table_t   zs, 
-        const_signs_t   ss, 
-        const size_t    num_words_major, 
-        const size_t    num_words_minor, 
-        const size_t    num_qubits, 
-        const bool      extended) 
-    {
-		if (!global_tx) {
-			print_state(*xs, *zs, *ss, num_qubits, num_words_major, 0);
-			if (extended) {
-				REPCH_GPU("-", num_qubits + 1);
-				LOGGPU("\n");
-				print_state(*xs, *zs, *ss, num_qubits, num_words_major, num_words_minor);
-			}
-		}
-	}
-
-	__global__ 
-    void print_gates_k(
-        const_refs_t        refs, 
-        const_buckets_t     gates, 
-        const gate_ref_t    num_gates) 
-    {
-		if (!global_tx) {
-			for (gate_ref_t i = 0; i < num_gates; i++) {
-				const gate_ref_t r = refs[i];
-				LOGGPU("  Gate(%3d , r:%3d):", i, r);
-				const Gate &gate = (Gate &)gates[r];
-				gate.print();
-			}
-		}
-	}
-
-    __global__ 
-    void print_signs_k(
-        const Signs* ss, 
-        const int64& level) 
-    {
-        LOGGPU(" ---[ Signs at (%-2lld)-step ]-----------------------\n", level);
-        const size_t unfolded_size = ss->is_unpacked() ? ss->size() : ss->size() * WORD_BITS;
-        if (ss->num_qubits_padded() == unfolded_size)
-            print_table_signs(*ss, 0, ss->num_qubits_padded());
-        else {
-            assert(2 * ss->num_qubits_padded() == unfolded_size);
-            LOGGPU("Destabilizers:\n");
-            print_table_signs(*ss, 0, ss->num_qubits_padded());
-            LOGGPU("Stabilizers:\n");
-            print_table_signs(*ss, ss->num_qubits_padded(), 2 * ss->num_qubits_padded());
+        Table h_xs, h_zs; Signs h_ss;
+        tab.copy_to_host(&h_xs, &h_zs, &h_ss);
+        print_state(h_xs, h_zs, h_ss, num_qubits, tab.num_words_major(), 0, f);
+        if (extended) {
+            if (f == nullptr)
+                REPCH_GPU("-", num_qubits + 1);
+            else
+                REPCH('-', num_qubits + 1, f);
+            LOGCHAR("\n", f);
+            print_state(h_xs, h_zs, h_ss, num_qubits, tab.num_words_major(), tab.num_words_minor(), f);
         }
-        LOGGPU("\n");
+        h_xs.destroy();
+        h_zs.destroy();
+        h_ss.destroy();
+        if (f == nullptr) fflush(stdout);
     }
 
-    inline string extract_circuit_name(const string& path) {
+    void print_gates_host(
+        const DeviceCircuit&    gpu_circuit,
+        const gate_ref_t&       num_gates)
+    {
+        const size_t num_buckets = gpu_circuit.size_in_buckets();
+        if (!num_gates || !num_buckets) return;
+        std::vector<gate_ref_t> refs(num_gates);
+        std::vector<bucket_t> buckets(num_buckets);
+        SYNCALL;
+        CHECK(cudaMemcpy(refs.data(), gpu_circuit.references(), sizeof(gate_ref_t) * num_gates, cudaMemcpyDeviceToHost));
+        CHECK(cudaMemcpy(buckets.data(), gpu_circuit.gates(), BUCKETSIZE * num_buckets, cudaMemcpyDeviceToHost));
+        for (gate_ref_t i = 0; i < num_gates; i++) {
+            const gate_ref_t r = refs[i];
+            assert(r < num_buckets);
+            PRINT("  Gate(%3d , r:%3d):", i, r);
+            const Gate& gate = (const Gate&) buckets[r];
+            gate.print_host();
+        }
+        fflush(stdout);
+    }
+
+
+    inline 
+    string extract_circuit_name(const string& path) {
         size_t start = 0, end = path.size();
         for (size_t i = 0; i < path.size(); ++i) {
             char c = path[i];
@@ -332,29 +311,42 @@ namespace QuaSARQ {
             if (!open_file(state_file, options.statepath, "wb")) {
                 LOGERROR("cannot open state file for writing.");
             }
-            Table h_xs, h_zs; Signs h_ss;
-            tab.copy_to_host(&h_xs, &h_zs, &h_ss);
-            print_state(h_xs, h_zs, h_ss, num_qubits, tab.num_words_major(), 0, state_file);
-			if (measuring) {
-				REPCH('-', num_qubits + 1, state_file);
-				LOGCHAR("\n", state_file);
-				print_state(h_xs, h_zs, h_ss, num_qubits, tab.num_words_major(), tab.num_words_minor(), state_file);
-			}
+            print_paulis_host(tab, num_qubits, measuring, state_file);
             close_file(state_file);
 		}
         else {
-            print_paulis_k << <1, 1 >> > (
-                XZ_TABLE(tab), 
-                tab.signs(), 
-                tab.num_words_major(), 
-                tab.num_words_minor(), 
-                num_qubits, 
-                measuring);
-            LASTERR("failed to launch print_paulis_k kernel");
-            SYNCALL;
-            fflush(stdout);
+            print_paulis_host(tab, num_qubits, measuring);
         }
 	}
+
+    void print_tableau_host(const Tableau& tab, const bool& prefix, const int64& level) {
+        Tableau& t = const_cast<Tableau&>(tab);
+        const size_t nqp    = t.num_qubits_padded();
+        const size_t nwmaj  = t.num_words_major();
+        const size_t nwmin  = t.num_words_minor();
+        const size_t nwords = t.num_words_per_table();
+
+        Table hx, hz;
+        hx.alloc_host(nqp, nwmaj, nwmin);
+        hz.alloc_host(nqp, nwmaj, nwmin);
+        SYNCALL;
+        CHECK(cudaMemcpy(hx.words(), t.xdata(), nwords * sizeof(word_std_t), cudaMemcpyDeviceToHost));
+        CHECK(cudaMemcpy(hz.words(), t.zdata(), nwords * sizeof(word_std_t), cudaMemcpyDeviceToHost));
+
+        if (prefix) {
+            print_tables(hx, hz, nullptr, level);
+        }
+        else {
+            Signs hs;
+            hs.alloc_host(nqp, nwmaj);
+            CHECK(cudaMemcpy(hs.data(), t.sdata(), hs.size() * sizeof(sign_t), cudaMemcpyDeviceToHost));
+            print_tables(hx, hz, &hs, level);
+            hs.destroy();
+        }
+        hx.destroy();
+        hz.destroy();
+        fflush(stdout);
+    }
 
 	void Simulator::print_tableau(const Tableau& tab, const depth_t& depth_level, const bool& reversed, const bool& prefix) {
 		if (!options.sync) SYNCALL;
@@ -365,37 +357,42 @@ namespace QuaSARQ {
 			LOG2(0, "Final tableau after %d %ssimulation steps", depth, reversed ? "reversed " : "");
 		else
 			LOG2(0, "Tableau after %d-step", depth_level);
-        print_tableau_k << <1, 1 >> > (
-            XZ_TABLE(tab), 
-            prefix ? nullptr : tab.signs(), 
-            depth_level);
-        LASTERR("failed to launch print_tableau_k kernel");
-        SYNCALL;
-        fflush(stdout);
+        // Print tableau on host to avoid device printf truncation on FIFO overflow.
+        print_tableau_host(tab, prefix, depth_level == MAX_DEPTH ? -1 : int64(depth_level));
 	}
 
 	void Simulator::print_gates(const DeviceCircuit& gpu_circuit, const gate_ref_t& num_gates, const depth_t& depth_level) {
 		if (!options.print_gates) return;
 		SYNCALL;
 		LOG2(0, " Gates on GPU for %d-time step:", depth_level);
-		print_gates_k << <1, 1 >> > (
-            gpu_circuit.references(), 
-            gpu_circuit.gates(), 
-            num_gates);
-		LASTERR("failed to launch print_gates_k kernel");
-		SYNCALL;
-		fflush(stdout);
+		print_gates_host(gpu_circuit, num_gates);
 	}
+
+    void print_signs_host(const Tableau& tab, const int64& level) {
+        Tableau& t = const_cast<Tableau&>(tab);
+        Signs hs;
+        hs.alloc_host(t.num_qubits_padded(), t.num_words_major());
+        SYNCALL;
+        CHECK(cudaMemcpy(hs.data(), t.sdata(), hs.size() * sizeof(sign_t), cudaMemcpyDeviceToHost));
+        LOGGPU(" ---[ Signs at (%-2lld)-step ]-----------------------\n", level);
+        const size_t unfolded = hs.is_unpacked() ? hs.size() : hs.size() * WORD_BITS;
+        if (hs.num_qubits_padded() == unfolded)
+            print_table_signs(hs, 0, hs.num_qubits_padded());
+        else {
+            LOGGPU("Destabilizers:\n");
+            print_table_signs(hs, 0, hs.num_qubits_padded());
+            LOGGPU("Stabilizers:\n");
+            print_table_signs(hs, hs.num_qubits_padded(), 2 * hs.num_qubits_padded());
+        }
+        hs.destroy();
+        fflush(stdout);
+    }
+
     void Simulator::print_signs(const Tableau& tab, const depth_t& depth_level) {
 		if (!options.print_signs) return;
 		SYNCALL;
 		LOG2(0, " Signs on GPU for %d-time step:", depth_level);
-		print_signs_k << <1, 1 >> > (
-            tab.signs(), 
-            depth_level);
-		LASTERR("failed to launch print_signs_k kernel");
-		SYNCALL;
-		fflush(stdout);
+		print_signs_host(tab, int64(depth_level));
 	}
 
     void Simulator::print_progress_header() {

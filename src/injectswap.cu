@@ -7,19 +7,18 @@ namespace QuaSARQ {
      __global__
     void check_x_destab(
                 pivot_t*        pivots,
-        const   Table*          inv_xs,
         const   Table*          inv_zs,
-        const   byte_t          gate_type,
         const   qubit_t         qubit,
         const   size_t          num_words_major,
+        const   size_t          num_words_minor,
         const   size_t          num_qubits_padded)
     {
         const pivot_t pivot = pivots[0];
         const size_t q_w = WORD_OFFSET(qubit);
         const word_std_t q_mask = BITMASK_GLOBAL(qubit);
-        const size_t word_idx = TABLEAU_INDEX(q_w, pivot);
-        const word_std_t qubit_word = select_anticommuting_word((*inv_xs)[word_idx], (*inv_zs)[word_idx], gate_type);
-        COMMUTING_FLAG = (qubit_word & q_mask) ? 1 : 0;
+        const size_t stab_idx = TABLEAU_INDEX(q_w, pivot) + TABLEAU_STAB_OFFSET;
+        const word_std_t z_stab = (*inv_zs)[stab_idx];
+        COMMUTING_FLAG = (z_stab & q_mask) ? 1 : 0;
     }
 
     __global__
@@ -28,20 +27,19 @@ namespace QuaSARQ {
                 Table*          inv_zs,
                 Signs*          inv_ss,
                 pivot_t*        pivots,
-        const   byte_t          gate_type,
         const   qubit_t         qubit,
         const   sign_t          random_bit,
         const   size_t          num_words_major,
         const   size_t          num_words_minor,
         const   size_t          num_qubits_padded)
     {
-        for_parallel_x(w, num_words_minor) { 
+        for_parallel_x(w, num_words_minor) {
             const pivot_t pivot = pivots[0];
             assert(pivot != INVALID_PIVOT);
             const pivot_t is_commuting = COMMUTING_FLAG;
             assert(is_commuting == 0 || is_commuting == 1);
-            word_t* xs = inv_xs->data();
-            word_t* zs = inv_zs->data();
+            word_std_t* xs = inv_xs->words();
+            word_std_t* zs = inv_zs->words();
             sign_t* ss = inv_ss->data();
             const size_t c_destab = TABLEAU_INDEX(w, pivot);
             const size_t c_stab = c_destab + TABLEAU_STAB_OFFSET;
@@ -50,21 +48,9 @@ namespace QuaSARQ {
             assert(c_destab < inv_xs->size());
             assert(c_stab < inv_xs->size());
             const size_t signs_stab_idx = w + num_words_minor;
-            const word_std_t x_stab = xs[c_stab], x_destab = xs[c_destab];
-            const word_std_t z_stab = zs[c_stab], z_destab = zs[c_destab];
-            const word_std_t c_x_stab   = select_anticommuting_word(x_stab, z_stab, gate_type);
-            const word_std_t c_x_destab = select_anticommuting_word(x_destab, z_destab, gate_type);
-            const word_std_t c_z_stab   = select_conjugate_word(x_stab, z_stab, gate_type);
-            const word_std_t c_z_destab = select_conjugate_word(x_destab, z_destab, gate_type);
-            if (is_commuting) {
-                do_Sdg_Swap(zs[c_stab], zs[c_destab], c_z_stab, c_z_destab, ss[w]);
-                do_Sdg_Swap(xs[c_stab], xs[c_destab], c_x_stab, c_x_destab, ss[signs_stab_idx]);
-            }
-            else {
-                do_H_Swap(zs[c_stab], zs[c_destab], c_z_stab, c_z_destab, ss[w]);
-                do_H_Swap(xs[c_stab], xs[c_destab], c_x_stab, c_x_destab, ss[signs_stab_idx]);
-            }
-            
+            collapse_swap_half(xs[c_destab], zs[c_destab], is_commuting, ss[w]);
+            collapse_swap_half(xs[c_stab], zs[c_stab], is_commuting, ss[signs_stab_idx]);
+
             // Wait for the thread that updated the q's word.
             const size_t q_w = WORD_OFFSET(qubit);
             if (w == q_w) {
@@ -76,7 +62,7 @@ namespace QuaSARQ {
         }
     }
 
-    void Simulator::inject_swap(const qubit_t& qubit, const byte_t& gate_type, const sign_t& rbit, const cudaStream_t& stream) {
+    void Simulator::inject_swap(const qubit_t& qubit, const sign_t& rbit, const cudaStream_t& stream) {
         if (rbit > 1)
             LOGERROR("random sign %lld cannot be greater than 1.", int64(rbit));
         const size_t num_words_minor = tableau.num_words_minor();
@@ -84,11 +70,10 @@ namespace QuaSARQ {
         const size_t num_qubits_padded = tableau.num_qubits_padded();
         check_x_destab<<<1, 1, 0, stream>>> (
             pivoting.pivots,
-            tableau.xtable(),
             tableau.ztable(),
-            gate_type,
             qubit,
             num_words_major,
+            num_words_minor,
             num_qubits_padded);
         TRIM_BLOCK_IN_DEBUG_MODE(bestblockinjectswap, bestgridinjectswap, num_words_minor, 0);
         dim3 currentblock = bestblockinjectswap, currentgrid = bestgridinjectswap;
@@ -100,7 +85,6 @@ namespace QuaSARQ {
             XZ_TABLE(tableau),
             tableau.signs(),
             pivoting.pivots,
-            gate_type,
             qubit,
             rbit,
             num_words_major,
@@ -119,11 +103,9 @@ namespace QuaSARQ {
     }
 
     bool is_commuting_cpu(
-		const 	Table&          h_xs,
 		const 	Table&          h_zs,
 		const   qubit_t         qubit,
 		const   pivot_t         pivot,
-		const   byte_t          gate_type,
 		const   size_t          num_words_major,
         const   size_t          num_words_minor,
         const   size_t          num_qubits_padded)
@@ -131,9 +113,8 @@ namespace QuaSARQ {
 		assert(pivot != INVALID_PIVOT);
         const size_t q_w = WORD_OFFSET(qubit);
         const word_std_t q_mask = BITMASK_GLOBAL(qubit);
-        const size_t word_idx = TABLEAU_INDEX(q_w, pivot);
-        const word_std_t qubit_word = select_anticommuting_word(h_xs[word_idx], h_zs[word_idx], gate_type);
-        return bool(qubit_word & q_mask);
+        const size_t word_idx = TABLEAU_INDEX(q_w, pivot) + TABLEAU_STAB_OFFSET;
+        return bool(h_zs.words()[word_idx] & q_mask);
 	}
 
 	void MeasurementChecker::inject_swap_cpu() {
@@ -149,11 +130,9 @@ namespace QuaSARQ {
 
 		const 
 		bool commuting = is_commuting_cpu(
-			h_xs,
 			h_zs,
 			qubit,
 			pivot,
-			gate_type,
 			num_words_major,
 			num_words_minor,
 			num_qubits_padded
@@ -166,20 +145,10 @@ namespace QuaSARQ {
             assert(c_stab < h_zs.size());
             assert(c_destab < h_xs.size());
             assert(c_stab < h_xs.size());
-            const word_std_t x_stab = h_xs[c_stab], x_destab = h_xs[c_destab];
-            const word_std_t z_stab = h_zs[c_stab], z_destab = h_zs[c_destab];
-            const word_std_t c_x_stab   = select_anticommuting_word(x_stab, z_stab, gate_type);
-            const word_std_t c_x_destab = select_anticommuting_word(x_destab, z_destab, gate_type);
-            const word_std_t c_z_stab   = select_conjugate_word(x_stab, z_stab, gate_type);
-            const word_std_t c_z_destab = select_conjugate_word(x_destab, z_destab, gate_type);
-            if (commuting) {
-                do_Sdg_Swap(h_zs[c_stab], h_zs[c_destab], c_z_stab, c_z_destab, h_ss[w]);
-                do_Sdg_Swap(h_xs[c_stab], h_xs[c_destab], c_x_stab, c_x_destab, h_ss[w + num_words_minor]);
-            }
-            else {
-                do_H_Swap(h_zs[c_stab], h_zs[c_destab], c_z_stab, c_z_destab, h_ss[w]);
-                do_H_Swap(h_xs[c_stab], h_xs[c_destab], c_x_stab, c_x_destab, h_ss[w + num_words_minor]);
-            }
+            word_std_t* h_xw = h_xs.words();
+            word_std_t* h_zw = h_zs.words();
+            collapse_swap_half(h_xw[c_destab], h_zw[c_destab], commuting, h_ss[w]);
+            collapse_swap_half(h_xw[c_stab], h_zw[c_stab], commuting, h_ss[w + num_words_minor]);
         }
     }
 
@@ -202,11 +171,9 @@ namespace QuaSARQ {
 
         const 
 		bool commuting = is_commuting_cpu(
-			h_xs,
 			h_zs,
 			qubit,
 			pivot,
-			gate_type,
 			num_words_major,
 			num_words_minor,
 			num_qubits_padded

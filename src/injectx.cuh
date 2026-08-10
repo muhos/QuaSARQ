@@ -20,7 +20,6 @@ namespace QuaSARQ {
                 Table*              inv_zs,
                 Signs*              inv_ss,
                 const_pivots_t      pivots,
-        const   byte_t              gate_type,
         const   size_t              num_words_major,
         const   size_t              num_words_minor,
         const   size_t              num_qubits_padded);
@@ -31,7 +30,6 @@ namespace QuaSARQ {
 				Table*,
 				Signs*,
 				const_pivots_t,
-		const   byte_t,
 		const 	size_t,
 		const 	size_t,
 		const 	size_t),
@@ -41,7 +39,6 @@ namespace QuaSARQ {
 				Table* 			zs,
 				Signs* 			ss,
 				const_pivots_t 	pivots,
-		const   byte_t          gate_type,
 		const 	size_t& 		num_words_major,
 		const 	size_t& 		num_words_minor,
 		const 	size_t& 		num_qubits_padded);

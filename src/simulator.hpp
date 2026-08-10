@@ -41,7 +41,6 @@ namespace QuaSARQ {
         Tableau                         ref_tableau;
         Pivoting                        pivoting;
         MeasurementRecorder             recorder;
-        RecordSelector                  selector;
         MeasurementChecker              mchecker;
         Prefix                          prefix;
         Statistics                      stats;
@@ -137,12 +136,11 @@ namespace QuaSARQ {
         void        transpose               (const bool& row_major, const cudaStream_t& stream);
         void        reset_pivots            (const size_t& num_pivots, const cudaStream_t& stream);
         void        reset_signs             (const size_t& num_gates, const depth_t& depth_level, const cudaStream_t& stream);
-        void        launch_record_signs     (const size_t& num_gates, bool* record_out, bool* flags_out, const cudaStream_t& stream);
-        void        record_measurements     (const size_t& num_gates, const depth_t& depth_level, const cudaStream_t& stream, bool* flags = nullptr);
+        void        record_measurements     (const size_t& num_gates, const depth_t& depth_level, const cudaStream_t& stream);
         void        find_random_measures    (const size_t& num_pivots, const cudaStream_t& stream);
-        void        compact_targets         (const qubit_t& qubit, const byte_t& gate_type, const cudaStream_t& stream);
-        void        inject_swap             (const qubit_t& qubit, const byte_t& gate_type, const sign_t& rbit, const cudaStream_t& stream);
-        void        inject_x                (const byte_t& gate_type, const sign_t& rbit, const cudaStream_t& stream);
+        void        compact_targets         (const qubit_t& qubit, const cudaStream_t& stream);
+        void        inject_swap             (const qubit_t& qubit, const sign_t& rbit, const cudaStream_t& stream);
+        void        inject_x                (const sign_t& rbit, const cudaStream_t& stream);
         void        inject_cx               (const uint32& active_targets, const cudaStream_t& stream);
         int64       measure_indeterminate   (const depth_t& depth_level, const cudaStream_t& stream = 0);
         void        measure                 (const size_t& p, const depth_t& depth_level, const bool& reversed = false);

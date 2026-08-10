@@ -41,6 +41,33 @@ namespace QuaSARQ {
         }
     };
 
+    // Since we sort within each depth level, we need to record the original order of the 
+    // measurements in order to check the record against the original circuit.
+    // Hence, rec[-1] = last measurement, rec[-2] = second to last measurement, etc.
+    void finalize_windows(Circuit& circuit, const size_t& num_qubits, const bool& sort) {
+        Vec<uint32, size_t>& ordinals = circuit.record_ordinals();
+        ordinals.clear();
+        Vec<uint32, size_t> slot_of_qubit(num_qubits, 0);
+        uint32 base = 0;
+        for (depth_t d = 0; d < circuit.depth(); d++) {
+            Window& window = circuit[d];
+            const size_t window_size = window.size();
+            const bool recording = circuit.is_recording(d);
+            if (recording) {
+                for (size_t i = 0; i < window_size; i++)
+                    slot_of_qubit[circuit.gate(window[i]).wires[0]] = base + uint32(i);
+            }
+            if (sort)
+                std::sort(window.data(), window.end(), WindowSorter(circuit));
+            if (recording) {
+                for (size_t i = 0; i < window_size; i++)
+                    ordinals.push(slot_of_qubit[circuit.gate(window[i]).wires[0]]);
+                base += uint32(window_size);
+            }
+        }
+        slot_of_qubit.clear(true);
+    }
+
     // Inside-out variant of Fisher-Yates algorithm.
     void Simulator::shuffle_qubits() {
         shuffled.resize(num_qubits);
@@ -153,10 +180,13 @@ namespace QuaSARQ {
         else {
             FOREACH_GATE(INIT_PROB);
         }
+        
         probabilities[MX]  = 0.0;
         probabilities[MY]  = 0.0;
         probabilities[MRX] = 0.0;
         probabilities[MRY] = 0.0;
+        probabilities[RX]  = 0.0;
+        probabilities[RY]  = 0.0;
         NORMALIZE_PROBS();
         size_t* types = stats.circuit.gate_stats.types;
         size_t parallel_gates_per_window = 0;
@@ -238,13 +268,9 @@ namespace QuaSARQ {
         locked.clear(true);
         measurements.clear(true);
         // Sort gates in each depth level.
-        // Must be disabled during checking 
+        // Must be disabled during checking
         // to avoid messing up the references.
-        if (!options.check_tableau) {
-            for (depth_t d = 0; d < circuit.depth(); d++) {
-                std::sort(circuit[d].data(), circuit[d].end(), WindowSorter(circuit));
-            }
-        }
+        finalize_windows(circuit, num_qubits, !options.check_tableau);
         timer.stop();
         stats.time.schedule = timer.elapsed();
         LOGDONE(1, 2);
@@ -334,7 +360,8 @@ namespace QuaSARQ {
 
             // Add measurements to circuit if exist.
             if (measurements.size()) {
-                measuring_count += measurements.size();
+                if (!isReset(measurements[0].type))
+                    measuring_count += measurements.size();
                 add_measurements(circuit, measurements, winfo, max_depth);
                 max_depth++;
                 measuring_depth++;
@@ -446,7 +473,8 @@ namespace QuaSARQ {
 
         // Add last measurements if exist.
         if (measurements.size()) {
-            measuring_count += measurements.size();
+            if (!isReset(measurements[0].type))
+                measuring_count += measurements.size();
             add_measurements(circuit, measurements, winfo, max_depth);
             max_depth++;
             measuring_depth++;
@@ -493,10 +521,7 @@ namespace QuaSARQ {
         stats.circuit.num_gates = MAX(stats.circuit.num_gates, circuit.num_gates());
         stats.circuit.bytes = stats.circuit.num_gates * sizeof(gate_ref_t) + circuit.num_buckets() * BUCKETSIZE;
 
-        if (sort) {
-            for (depth_t d = 0; d < circuit.depth(); d++)
-                std::sort(circuit[d].data(), circuit[d].end(), WindowSorter(circuit));
-        }
+        finalize_windows(circuit, num_qubits, sort);
 
         return result;
     }

@@ -66,6 +66,7 @@ namespace QuaSARQ {
         const auto curr_num_buckets = circuit.num_buckets(depth_level);
         assert(num_gates <= max_references);
         assert(curr_num_buckets <= max_buckets);
+        num_buckets = curr_num_buckets;
         const auto* window = circuit[depth_level].data();
         const auto* buckets = circuit.data(buckets_offset);
         double ttime = 0;

@@ -79,7 +79,7 @@ namespace QuaSARQ {
                         size_t t        = h_compact_pivots[tid_x + 1];
                         size_t t_destab = TABLEAU_INDEX(w, t);
                         t_prefix_z[tx] = word_std_t(h_zs[t_destab]);
-                        t_prefix_x[tx] = word_std_t(h_xs[t_destab]);
+                        t_prefix_x[tx] = word_std_t(h_zs[t_destab + TABLEAU_STAB_OFFSET]);
                     } 
                     else {
                         t_prefix_z[tx] = 0;
@@ -96,7 +96,7 @@ namespace QuaSARQ {
                         size_t t = h_compact_pivots[tid_x + 1];
                         size_t word_idx = PREFIX_TABLEAU_INDEX(w, tid_x);
                         h_prefix_zs[word_idx] = word_std_t(h_zs[c_destab]) ^ t_prefix_z[tx];
-                        h_prefix_xs[word_idx] = word_std_t(h_xs[c_destab]) ^ t_prefix_x[tx];
+                        h_prefix_xs[word_idx] = word_std_t(h_zs[c_destab + TABLEAU_STAB_OFFSET]) ^ t_prefix_x[tx];
                         if (!skip_checking_device && D_PREFIX_XS(word_idx) != word_std_t(h_prefix_xs[word_idx])) {
                             LOGERROR("Pass-1 FAILED at prefix-x[w: %lld, tid: %lld]", w, tid_x);
                         }
@@ -240,42 +240,38 @@ namespace QuaSARQ {
                     }
                 }
 
-                // Compute the CX expression for Z.
-                word_std_t c_stab_word = h_zs[c_stab];
-                word_std_t t_destab_word = h_zs[t_destab];
-                xc_and_zt = (c_stab_word & t_destab_word);
-                not_zc_xor_xt = ~(zc_xor_zt ^ word_std_t(h_zs[t_stab]));
-                h_ss[w] ^= (xc_and_zt & not_zc_xor_xt);
                 
-                // Update Z tableau.
-                h_zs[t_stab] ^= c_stab_word;
-                h_zs[c_destab] ^= t_destab_word;
+                word_std_t cx_word = h_xs[c_destab];
+                word_std_t tz_word = h_zs[t_destab];
+                xc_and_zt = (cx_word & tz_word);
+                not_zc_xor_xt = ~(zc_xor_zt ^ word_std_t(h_xs[t_destab]));
+                h_ss[w] ^= (xc_and_zt & not_zc_xor_xt);
+                h_xs[t_destab] ^= cx_word;
+                h_zs[c_destab] ^= tz_word;
 
-                // Compute the CX expression for X.
-                c_stab_word = h_xs[c_stab];
-                t_destab_word = h_xs[t_destab];
-                xc_and_zt = (c_stab_word & t_destab_word);
+                // Same, within the stabilizer half.
+                cx_word = h_xs[c_stab];
+                tz_word = h_zs[t_stab];
+                xc_and_zt = (cx_word & tz_word);
                 not_zc_xor_xt = ~(xc_xor_xt ^ word_std_t(h_xs[t_stab]));
                 h_ss[w + num_words_minor] ^= (xc_and_zt & not_zc_xor_xt);
+                h_xs[t_stab] ^= cx_word;
+                h_zs[c_stab] ^= tz_word;
 
-                // Update X tableau.
-                h_xs[t_stab] ^= c_stab_word;
-                h_xs[c_destab] ^= t_destab_word;
-
+                if (!skip_checking_device && h_xs[t_destab] != d_xs[t_destab]) {
+                    LOGERROR("Pass-2 FAILED at destab-x[w: %lld, tid: %lld]", w, tid_x);
+                }
                 if (!skip_checking_device && h_xs[t_stab] != d_xs[t_stab]) {
                     LOGERROR("Pass-2 FAILED at stab-x[w: %lld, tid: %lld]", w, tid_x);
-                }
-                if (!skip_checking_device && h_zs[t_stab] != d_zs[t_stab]) {
-                    LOGERROR("Pass-2 FAILED at stab-z[w: %lld, tid: %lld]", w, tid_x);
                 }
             }
 
             if (!skip_checking_device) {
-                if (h_xs[c_destab] != d_xs[c_destab]) {
-                    LOGERROR("Pass-2 FAILED at destab-x[w: %lld, pivot: %lld]", w, pivot);
-                }
                 if (h_zs[c_destab] != d_zs[c_destab]) {
                     LOGERROR("Pass-2 FAILED at destab-z[w: %lld, pivot: %lld]", w, pivot);
+                }
+                if (h_zs[c_stab] != d_zs[c_stab]) {
+                    LOGERROR("Pass-2 FAILED at   stab-z[w: %lld, pivot: %lld]", w, pivot);
                 }
 
                 if (h_ss[w] != d_ss[w]) {

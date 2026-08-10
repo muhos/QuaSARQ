@@ -49,7 +49,6 @@ Simulator::Simulator(const byte_t& mode) :
     , ref_tableau(gpu_allocator)
     , pivoting(gpu_allocator)
     , recorder(gpu_allocator)
-    , selector(gpu_allocator)
     , prefix(gpu_allocator, mchecker)
 	, config_file(nullptr)
     , state_file(nullptr)
@@ -165,9 +164,7 @@ void Simulator::create_streams(cudaStream_t*& streams) {
 void Simulator::rsample() {
     if (!measuring || !stats.circuit.measure_stats.count) return;
     reference_mode = true;
-    // Disable checking during reference run as mchecker is not allocated here.
     const bool saved_check = options.check_measurement;
-    options.check_measurement = false;
     gpu_circuit.enable_noise(false);
     tableau.swap_tableaus(ref_tableau);
     num_partitions = tableau.alloc(num_qubits, 0, winfo.max_window_bytes, false, measuring, true, 0, "reference ");
@@ -176,8 +173,10 @@ void Simulator::rsample() {
     #endif
     prefix.alloc(tableau, config_qubits);
     pivoting.alloc(num_qubits);
-    selector.alloc(num_qubits, tableau.num_words_minor());
     recorder.alloc(stats.circuit.measure_stats.count, kernel_streams[0]);
+    recorder.copy_ordinals(circuit.record_ordinals(), kernel_streams[0]);
+    if (options.check_measurement)
+        mchecker.alloc(num_qubits);
     const size_t num_qubits_per_partition = num_partitions > 1 ? tableau.num_words_major() * WORD_BITS : num_qubits;
     gpu_circuit.initiate(num_qubits, winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
     for (size_t p = 0; p < num_partitions && !timeout; p++) {
@@ -194,7 +193,6 @@ void Simulator::rsample() {
     inv_tableau.destroy();
     prefix.destroy();
     pivoting.destroy();
-    selector.destroy();
     options.check_measurement = saved_check;
     gpu_circuit.enable_noise(true);
     reference_mode = false;
@@ -221,6 +219,7 @@ void Simulator::simulate(const size_t& p, const bool& reversed) {
             step(p, d);
     }
     if (options.print_finaltableau) print_tableau(tableau, depth, reversed);
+    else if (options.print_signs) print_signs(tableau, depth);
     if (options.print_finalstate) print_paulis(tableau, depth, reversed);
 }
 
@@ -270,10 +269,10 @@ void Simulator::simulate() {
         #endif
         prefix.alloc(tableau, config_qubits);
         pivoting.alloc(num_qubits);
-        selector.alloc(num_qubits, tableau.num_words_minor());
-        if (!stats.circuit.measure_stats.count)
-            LOGERRORN("cannot run simulation with measurement gates but no measurements.");
-        recorder.alloc(stats.circuit.measure_stats.count, kernel_streams[0]);
+        if (stats.circuit.measure_stats.count) {
+            recorder.alloc(stats.circuit.measure_stats.count, kernel_streams[0]);
+            recorder.copy_ordinals(circuit.record_ordinals(), kernel_streams[0]);
+        }
         if (options.check_measurement)
             mchecker.alloc(num_qubits);
     }

@@ -58,28 +58,29 @@ namespace QuaSARQ {
 
                 pivot_t pivot = sh_pivot0;
 
-                word_std_t z = 0, x = 0;
+                word_std_t tz_destab = 0, tz_stab = 0;
                 if (active) {
                     const size_t t_destab = TABLEAU_INDEX(w, pivots[tid_x + 1]);
-                    z = zs[t_destab];
-                    x = xs[t_destab];
+                    tz_destab = zs[t_destab];
+                    tz_stab   = zs[t_destab + TABLEAU_STAB_OFFSET];
                 }
 
-                word_std_t blocksum_z, blocksum_x;
-                BlockScan(shared_prefix_zs[ty]).ExclusiveScan(z, z, 0, XOROP(), blocksum_z);
-                BlockScan(shared_prefix_xs[ty]).ExclusiveScan(x, x, 0, XOROP(), blocksum_x);
+                word_std_t blocksum_destab, blocksum_stab;
+                BlockScan(shared_prefix_zs[ty]).ExclusiveScan(tz_destab, tz_destab, 0, XOROP(), blocksum_destab);
+                BlockScan(shared_prefix_xs[ty]).ExclusiveScan(tz_stab,   tz_stab,   0, XOROP(), blocksum_stab);
 
                 if (active) {
                     const size_t c_destab = TABLEAU_INDEX(w, pivot);
+                    const size_t c_stab = c_destab + TABLEAU_STAB_OFFSET;
                     const size_t word_idx = PREFIX_TABLEAU_INDEX(w, tid_x);
                     assert(word_idx < num_qubits_padded * num_words_minor);
-                    WRITE_GLOBAL_PREFIX(word_idx, zs[c_destab] ^ z, xs[c_destab] ^ x);
+                    WRITE_GLOBAL_PREFIX(word_idx, zs[c_destab] ^ tz_destab, zs[c_stab] ^ tz_stab);
                 }
 
                 if (w < num_words_minor && tx == BLOCKX - 1) {
                     assert((blockIdx.x * num_words_minor + w) < gridDim.x * num_words_minor);
                     const size_t bid = PREFIX_INTERMEDIATE_INDEX(w, bx);
-                    WRITE_INTERMEDIATE_PREFIX(bid, blocksum_z, blocksum_x);
+                    WRITE_INTERMEDIATE_PREFIX(bid, blocksum_destab, blocksum_stab);
                 }
             }
         }
@@ -133,12 +134,13 @@ namespace QuaSARQ {
                 const size_t bid = PREFIX_INTERMEDIATE_INDEX(w, (tid_x >> pass_1_log2_blocksize));
                 XOR_FROM_INTERMEDIATE_PREFIX(bid, zc_xor_prefix, xc_xor_prefix);
 
-                compute_local_sign_per_block(local_destab_sign, zs[t_stab], zc_xor_prefix, zs[c_stab], zs[t_destab]);
-                compute_local_sign_per_block(local_stab_sign, xs[t_stab], xc_xor_prefix, xs[c_stab], xs[t_destab]);
-                if (zs[t_destab])
-                    atomicXOR(zs + c_destab, word_std_t(zs[t_destab]));
-                if (xs[t_destab])
-                    atomicXOR(xs + c_destab, word_std_t(xs[t_destab]));
+                const word_std_t tz_destab = zs[t_destab], tz_stab = zs[t_stab];
+                compute_local_sign_per_block(local_destab_sign, xs[t_destab], zc_xor_prefix, xs[c_destab], tz_destab);
+                compute_local_sign_per_block(local_stab_sign,   xs[t_stab],   xc_xor_prefix, xs[c_stab],   tz_stab);
+                if (tz_destab)
+                    atomicXOR(zs + c_destab, tz_destab);
+                if (tz_stab)
+                    atomicXOR(zs + c_stab, tz_stab);
             }
             if (local_destab_sign)
                 atomicXOR(ss + w, local_destab_sign);
@@ -208,12 +210,13 @@ namespace QuaSARQ {
                     const size_t bid = PREFIX_INTERMEDIATE_INDEX(w, (tid_x >> pass_1_log2_blocksize));
                     XOR_FROM_INTERMEDIATE_PREFIX(bid, zc_xor_prefix, xc_xor_prefix);
 
-                    compute_local_sign_per_block(local_destab_sign, zs[t_stab], zc_xor_prefix, zs[c_stab], zs[t_destab]);
-                    compute_local_sign_per_block(local_stab_sign, xs[t_stab], xc_xor_prefix, xs[c_stab], xs[t_destab]);
-                    if (zs[t_destab])
-                        atomicXOR(zs + c_destab, word_std_t(zs[t_destab]));
-                    if (xs[t_destab])
-                        atomicXOR(xs + c_destab, word_std_t(xs[t_destab]));
+                    const word_std_t tz_destab = zs[t_destab], tz_stab = zs[t_stab];
+                    compute_local_sign_per_block(local_destab_sign, xs[t_destab], zc_xor_prefix, xs[c_destab], tz_destab);
+                    compute_local_sign_per_block(local_stab_sign,   xs[t_stab],   xc_xor_prefix, xs[c_stab],   tz_stab);
+                    if (tz_destab)
+                        atomicXOR(zs + c_destab, tz_destab);
+                    if (tz_stab)
+                        atomicXOR(zs + c_stab, tz_stab);
                 }
             }
 

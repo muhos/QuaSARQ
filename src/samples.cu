@@ -51,6 +51,7 @@ namespace QuaSARQ {
         const   size_t              num_gates,
         const   size_t              num_words_minor,
         const   size_t              measurement_offset,
+        const uint32* __restrict__  ordinals,
                 curand_algorithm_t* rand_states,
                 Table *             xs,
                 Table *             zs,
@@ -65,7 +66,9 @@ namespace QuaSARQ {
                 const size_t q = gate.wires[0];
                 assert(q != INVALID_QUBIT);
                 const size_t q_word_idx = q * num_words_minor + w;
-                const size_t m_word_idx = (measurement_offset + i) * num_words_minor + w;
+                const bool records = (gate.type == M || gate.type == MR);
+                const size_t m_word_idx = records ?
+                    size_t(ordinals[measurement_offset + i]) * num_words_minor + w : 0;
 
                 switch (gate.type) {
                 case R: {
@@ -308,7 +311,8 @@ namespace QuaSARQ {
     }
 
     void Framing::shot(const depth_t& depth_level, const cudaStream_t& stream) {
-        if (options.check_measurement) {
+        const bool checking = options.check_measurement && !mchecker.record.empty();
+        if (checking) {
             mchecker.copy_input(tableau, false, false);
         }
         const size_t num_gates_per_window = circuit[depth_level].size();
@@ -328,6 +332,7 @@ namespace QuaSARQ {
             num_gates_per_window,
             tableau.num_words_minor(),
             measurement_offset,
+            recorder.device_ordinals(),
             rand_states,
             XZ_TABLE(tableau),
             samples_record.device
@@ -344,7 +349,7 @@ namespace QuaSARQ {
             elapsed = cutimer.elapsed();
             LOGENDING(2, 4, "(time %.3f ms)", elapsed);
         } else LOGDONE(2, 4);
-        if (options.check_measurement) {
+        if (checking) {
             samples_record.copy(stream);
             mchecker.check_record_samples(tableau, samples_record, circuit, depth_level, prev_measurement_offset, tableau.num_words_minor());
             mchecker.reset_state();

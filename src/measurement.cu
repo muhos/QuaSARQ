@@ -67,7 +67,6 @@ namespace QuaSARQ {
                 pivoting.pivots,
                 tableau.xtable(),
                 tableau.ztable(),
-                byte_t(R),   // Z-basis default for tuning
                 qubit,
                 num_qubits,
                 num_words_major,
@@ -102,7 +101,6 @@ namespace QuaSARQ {
                         XZ_TABLE(tableau),
                         tableau.signs(),
                         pivoting.pivots,
-                        byte_t(R),   // Z-basis default for tuning
                         qubit,
                         1,
                         num_words_major,
@@ -118,7 +116,6 @@ namespace QuaSARQ {
                         XZ_TABLE(tableau),
                         tableau.signs(),
                         pivoting.pivots,
-                        byte_t(R),   // Z-basis default for tuning
                         num_words_major,
                         num_words_minor,
                         num_qubits_padded);
@@ -150,18 +147,17 @@ namespace QuaSARQ {
                 has_mr_gates    = true;
             }
             if (curr_pivot != INVALID_PIVOT) {
-                compact_targets(qubit, curr_gate.type, stream);
+                compact_targets(qubit, stream);
                 SYNC(stream);
                 const uint32 active_pivots = pivoting.h_active_pivots[0];
                 if (options.check_measurement)
-                    mchecker.check_compact_pivots(qubit, curr_gate.type, pivoting.pivots, active_pivots);
+                    mchecker.check_compact_pivots(qubit, pivoting.pivots, active_pivots);
                 if (active_pivots) {
-                    if (active_pivots > 1) {
+                    if (active_pivots > 1)
                         inject_cx(active_pivots - 1, stream);
-                    }
                     const sign_t rbit = reference_mode ? sign_t(0) : mrand.brand();
-                    inject_swap(qubit, curr_gate.type, rbit, stream);
-                    inject_x(curr_gate.type, rbit, stream);
+                    inject_swap(qubit, rbit, stream);
+                    inject_x(rbit, stream);
                     random_measures++;
                 }
                 max_random_measures++;
@@ -170,13 +166,9 @@ namespace QuaSARQ {
 
         assert(!has_mr_gates || circuit.is_recording(depth_level));
         // The reset correction needs the measured value of every reset gate. record_signs_k
-        // already computes it, so ask for the flags alongside the record.
-        bool* flags = may_reset_signs ? selector.device_flags() : nullptr;
+        // already computes it, so ask for the product signs alongside the record.
         if (has_mr_gates || !may_reset_signs) {
-            record_measurements(num_gates_per_window, depth_level, stream, flags);
-        }
-        else {
-            launch_record_signs(num_gates_per_window, nullptr, flags, stream);
+            record_measurements(num_gates_per_window, depth_level, stream);
         }
         if (may_reset_signs) {
             reset_signs(num_gates_per_window, depth_level, stream);

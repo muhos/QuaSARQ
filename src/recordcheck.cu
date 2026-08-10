@@ -2,31 +2,10 @@
 
 namespace QuaSARQ {
 
+    // Mirrors record_signs_k: the record is the stabilizer sign bit of the measured qubit.
     bool MeasurementChecker::measured_value(const Gate& m) {
         const size_t q = m.wires[0];
-        const size_t q_w = WORD_OFFSET(q);
-        const word_std_t q_mask = BITMASK_GLOBAL(q);
-        Vec<word_std_t> acc_x(num_words_minor, 0), acc_z(num_words_minor, 0);
-        uint32 par = 0, ycnt = 0, acnt = 0, sgn = 0;
-        for (size_t g = 0; g < num_qubits; g++) {
-            const size_t d_idx = g * num_words_major + q_w;
-            const word_std_t sel = select_anticommuting_word(h_xs[d_idx], h_zs[d_idx], m.type);
-            if (!(sel & q_mask))
-                continue;
-            for (size_t w = 0; w < num_words_minor; w++) {
-                const size_t s_idx = g * num_words_major + w + num_words_minor;
-                const word_std_t xg = h_xs[s_idx], zg = h_zs[s_idx];
-                par  += uint32(__builtin_popcountll((uint64)(acc_z[w] & xg)));
-                ycnt += uint32(__builtin_popcountll((uint64)(xg & zg)));
-                acc_x[w] ^= xg;
-                acc_z[w] ^= zg;
-            }
-            sgn ^= uint32(bool(h_ss[WORD_OFFSET(g) + num_words_minor] & BITMASK_GLOBAL(g)));
-        }
-        for (size_t w = 0; w < num_words_minor; w++)
-            acnt += uint32(__builtin_popcountll((uint64)(acc_x[w] & acc_z[w])));
-        acc_x.clear(true), acc_z.clear(true);
-        return bool(sgn ^ (par & 1) ^ ((((ycnt - acnt) & 3) >> 1) & 1));
+        return bool(h_ss[num_words_minor + WORD_OFFSET(q)] & BITMASK_GLOBAL(q));
     }
 
     void MeasurementChecker::check_record_measurements(const MeasurementRecorder& other_recorder, const Circuit& circuit, const depth_t& depth_level) {
@@ -48,13 +27,19 @@ namespace QuaSARQ {
             LOGERROR("measurements count mismatch: expected %lld, got %lld", measures_count + num_gates, other_recorder.step_history());
         }
 
+        const Vec<uint32, size_t>& ordinals = circuit.record_ordinals();
+
         for (auto i = 0; i < num_gates; i++) {
             const Gate& m = circuit.gate(depth_level, i);
             if (!isMeasurement(m.type))
                 LOGERROR("host gate %d at depth level %d is not a measurement gate", i, depth_level);
-            record[measures_count + i] = measured_value(m);
-            if (record[measures_count + i] != other_record[measures_count + i]) {
-                LOGERROR("Measurement record mismatch at history %lld", measures_count + i);
+            if (measures_count + i >= ordinals.size())
+                LOGERROR("record ordinal %lld exceeds table size %lld at depth %d",
+                    measures_count + i, ordinals.size(), depth_level);
+            const size_t m_idx = ordinals[measures_count + i];
+            record[m_idx] = measured_value(m);
+            if (record[m_idx] != other_record[m_idx]) {
+                LOGERROR("Measurement record mismatch at history %lld", m_idx);
             }
         }
 

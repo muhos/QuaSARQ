@@ -73,7 +73,7 @@ namespace QuaSARQ {
 
             if (p < num_partitions && d < depth) {
                 LOG1(" Debugging circuit-1 at depth %2d:", d);
-                step_2D_atomic << < dim3(1, 1), dim3(1, 1) >> > (
+                step_append_atomic << < dim3(1, 1), dim3(1, 1) >> > (
                     gpu_circuit.references(), 
                     gpu_circuit.gates(), 
                     num_gates_per_window, 
@@ -87,7 +87,7 @@ namespace QuaSARQ {
 
             if (p < other_num_partitions && d < other_depth) {
                 LOG1(" Debugging circuit-2 at depth %2d:", d);
-                step_2D_atomic << < dim3(1, 1), dim3(1, 1) >> > (
+                step_append_atomic << < dim3(1, 1), dim3(1, 1) >> > (
                     other_gpu_circuit.references(), 
                     other_gpu_circuit.gates(), 
                     other_num_gates_per_window, 
@@ -115,7 +115,7 @@ namespace QuaSARQ {
             if (p < num_partitions && d < depth) {
                 SYNC(copy_stream1);
                 SYNC(copy_stream2);
-                call_step_2D(
+                call_step_append(
                     gpu_circuit.references(),
                     gpu_circuit.gates(),
                     tableau,
@@ -132,7 +132,7 @@ namespace QuaSARQ {
             if (p < other_num_partitions && d < other_depth) {
                 SYNC(other_copy_stream1);
                 SYNC(other_copy_stream2);
-                call_step_2D(
+                call_step_append(
                     other_gpu_circuit.references(),
                     other_gpu_circuit.gates(),
                     other_tableau,

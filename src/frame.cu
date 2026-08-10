@@ -59,6 +59,10 @@ size_t Framing::choose_chunk_shots() const {
 
 void Framing::sample() {
     Power power;
+    if (!stats.circuit.measure_stats.count) {
+        LOG1("Nothing to sample: circuit has no measurement records.");
+        return;
+    }
     timer.start();
     if (!reference_ready) {
         rsample();
@@ -86,7 +90,7 @@ void Framing::sample() {
         const size_t chunk_word_offset = WORD_OFFSET(chunk_start);
         const uint64 sample_seed = options.seed ^ 0x9e3779b97f4a7c15ULL;
         num_partitions = tableau.alloc(num_qubits, num_shots, winfo.max_window_bytes, false, false, false, 0, "frame ");
-        if (options.check_measurement) {
+        if (options.check_measurement && stats.circuit.measure_stats.count) {
             mchecker.alloc(num_qubits, tableau.num_words_minor());
             mchecker.record.resize(stats.circuit.measure_stats.count);
             mchecker.samples.resize(stats.circuit.measure_stats.count * tableau.num_words_minor(), word_std_t(0));
