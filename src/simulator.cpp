@@ -262,7 +262,7 @@ void check_simulate(Simulator& sim, const size_t& p, const size_t& prev_num_qubi
 void Simulator::simulate() {
     Power power;
     timer.start();
-    num_partitions = tableau.alloc(num_qubits, 0, winfo.max_window_bytes, false, measuring, true, 0, "simulation ");
+    num_partitions = tableau.alloc(num_qubits, 0, winfo.max_window_bytes, false, true, true, 0, "simulation ");
     if (measuring) {
         #if ROW_MAJOR
         inv_tableau.alloc(num_qubits, 0, 0, false, measuring, false, 0, "inverse simulation ");

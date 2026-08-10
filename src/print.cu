@@ -299,6 +299,7 @@ namespace QuaSARQ {
 			LOG2(0, "State after %d-step", depth_level);
 		else if (options.print_finalstate)
 			LOGHEADER(0, 3, "Final state");
+        const bool extended = tab.num_words_major() == 2 * tab.num_words_minor();
 		if (num_qubits > options.print_limit) {
             LOGWARNING("State is too large to print on screen.\n"
                 "The full state will be printed in options.statepath.\n"
@@ -311,11 +312,11 @@ namespace QuaSARQ {
             if (!open_file(state_file, options.statepath, "wb")) {
                 LOGERROR("cannot open state file for writing.");
             }
-            print_paulis_host(tab, num_qubits, measuring, state_file);
+            print_paulis_host(tab, num_qubits, extended, state_file);
             close_file(state_file);
 		}
         else {
-            print_paulis_host(tab, num_qubits, measuring);
+            print_paulis_host(tab, num_qubits, extended);
         }
 	}
 
