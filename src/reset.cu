@@ -1,4 +1,5 @@
 #include "simulator.hpp"
+#include "step.cuh"
 #include "print.cuh"
 #include "access.cuh"
 #include "pivot.cuh"
@@ -7,15 +8,17 @@ namespace QuaSARQ {
 
     __global__
     void reset_signs_k(
-        Signs*                      inv_ss, 
+                Signs*              inv_ss,
         const_refs_t                refs,
         const_buckets_t             gates,
         const   size_t              num_gates,
-        const   size_t              num_words_minor) 
+        const   size_t              num_words_minor)
     {
         sign_t* ss = inv_ss->data();
         for_parallel_x(i, num_gates) {
             const Gate& gate = (Gate&) gates[refs[i]];
+            if (!isReset(int(gate.type)) && gate.type != byte_t(MR))
+                continue;
             const size_t q = gate.wires[0];
             const size_t w = WORD_OFFSET(q);
             const word_std_t mask = ~BITMASK_GLOBAL(q);
@@ -25,19 +28,17 @@ namespace QuaSARQ {
     }
 
     void Simulator::reset_signs(const size_t& num_gates, const depth_t& depth_level, const cudaStream_t& stream) {
-        dim3 currentblock, currentgrid;
-        currentblock = bestblockreset, currentgrid = bestgridreset;
-        TRIM_BLOCK_IN_DEBUG_MODE(currentblock, currentgrid, num_gates, 0);
-        TRIM_GRID_IN_1D(num_gates, x);
-        OPTIMIZESHARED(smem_size, (currentblock.x + 1), sizeof(word_std_t));
-        LOGN2(2, "Resetting signs after collapsing with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
+        const size_t num_words_minor = tableau.num_words_minor();
+        dim3 currentblock(256, 1), currentgrid;
+        OPTIMIZEBLOCKS(currentgrid.x, num_gates, currentblock.x);
+        LOGN2(2, "Resetting signs after collapsing over %lld gates.. ", int64(num_gates));
         if (options.sync) cutimer.start(stream);
-        reset_signs_k <<<currentgrid, currentblock, smem_size, stream>>> (
+        reset_signs_k <<<currentgrid, currentblock, 0, stream>>> (
             tableau.signs(),
-            gpu_circuit.references(), 
-            gpu_circuit.gates(), 
+            gpu_circuit.references(),
+            gpu_circuit.gates(),
             num_gates,
-            tableau.num_words_minor());
+            num_words_minor);
         if (options.sync) {
             LASTERR("failed to reset signs");
             cutimer.stop(stream);
@@ -62,15 +63,18 @@ namespace QuaSARQ {
         copy_input(other_input, true);
 
         const auto num_gates = circuit[depth_level].size();
+
         for (auto i = 0; i < num_gates; i++) {
             const Gate& m = circuit.gate(depth_level, i);
             if (!isMeasurement(m.type))
                 LOGERROR("host gate %d at depth level %d is not a measurement gate", i, depth_level);
+            if (!isReset(int(m.type)) && m.type != MR)
+                continue;
             const size_t q = m.wires[0];
             const size_t q_w = WORD_OFFSET(q);
-            const word_std_t q_mask = BITMASK_GLOBAL(q);
-            h_ss[q_w] &= ~q_mask;
-            h_ss[q_w + num_words_minor] &= ~q_mask;
+            const word_std_t q_mask = ~BITMASK_GLOBAL(q);
+            h_ss[q_w] &= q_mask;
+            h_ss[q_w + num_words_minor] &= q_mask;
         }
 
         for (size_t w = 0; w < num_words_minor; w++) { 

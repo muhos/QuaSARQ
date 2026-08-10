@@ -11,22 +11,19 @@ namespace QuaSARQ {
         word_t *device_data;
         Table  host;
         size_t num_words;
+        bool   host_required;
 
-        Samples() : device(nullptr), device_data(nullptr), num_words(0) {}
-        
+        Samples() : device(nullptr), device_data(nullptr), num_words(0), host_required(false) {}
+
         inline
-        bool needs_host() const {
-            return options.print_sample        ||
-                   options.print_sample_qubits ||
-                   options.check_measurement;
-        }
+        bool needs_host() const { return host_required; }
 
         ~Samples() {
             device = nullptr;
             device_data = nullptr;
             num_words = 0;
-            if (needs_host())
-                host.destroy();
+            host.destroy();
+            host_required = false;
         }
 
         void destroy(DeviceAllocator& gpu_allocator) noexcept {
@@ -43,10 +40,12 @@ namespace QuaSARQ {
             device_data = nullptr;
             num_words = 0;
             host.destroy();
+            host_required = false;
         }
 
-        void alloc(const size_t& num_measurements, const size_t& num_words_minor, DeviceAllocator& gpu_allocator, const cudaStream_t& stream = 0) {
+        void alloc(const size_t& num_measurements, const size_t& num_words_minor, DeviceAllocator& gpu_allocator, const bool& require_host, const cudaStream_t& stream = 0) {
             destroy(gpu_allocator);
+            host_required = require_host;
             const size_t num_words_major = get_num_words(num_measurements);
             const size_t num_measures_padded = num_words_major * WORD_BITS;
             num_words = num_words_major * (num_words_minor * WORD_BITS);

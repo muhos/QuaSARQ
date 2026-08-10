@@ -37,13 +37,20 @@ namespace QuaSARQ {
                 measures_per_window++;
         }
 
-        for (size_t i = 0, mi = 0; i < num_gates; i++) {
+        const Vec<uint32, size_t>& ordinals = circuit.record_ordinals();
+
+        for (size_t i = 0; i < num_gates; i++) {
             const Gate& gate = circuit.gate(depth_level, i);
             const size_t q = gate.wires[0];
             assert(q != INVALID_QUBIT);
+            const bool records = (gate.type == M || gate.type == MR);
+            if (records && measurement_offset_before + i >= ordinals.size())
+                LOGERROR("record ordinal %lld exceeds table size %lld at depth %d",
+                    measurement_offset_before + i, ordinals.size(), depth_level);
+            const size_t m_idx = records ? size_t(ordinals[measurement_offset_before + i]) : 0;
             for (size_t w = 0; w < num_words_minor; w++) {
                 const size_t q_word_idx = q * num_words_minor + w;
-                const size_t m_word_idx = (measurement_offset_before + mi) * num_words_minor + w;
+                const size_t m_word_idx = m_idx * num_words_minor + w;
                 switch (gate.type) {
                 case R:
                     h_xs[q_word_idx] = 0;
@@ -58,12 +65,13 @@ namespace QuaSARQ {
                 default: break;
                 }
             }
-            if (!isReset(gate.type))
-                mi++;
         }
 
-        for (size_t mi = 0; mi < measures_per_window; mi++) {
-            const size_t m_idx = measurement_offset_before + mi;
+        for (size_t i = 0; i < num_gates; i++) {
+            const Gate& gate = circuit.gate(depth_level, i);
+            if (isReset(gate.type))
+                continue;
+            const size_t m_idx = ordinals[measurement_offset_before + i];
             if (m_idx >= record.size())
                 LOGERROR("measurement index %lld exceeds record size %lld at depth %d",
                     m_idx, record.size(), depth_level);

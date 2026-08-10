@@ -10,13 +10,17 @@ Framing::Framing(const string& path, const size_t& num_shots) :
     Simulator(path)
     , num_shots(num_shots)
     , total_shots(num_shots)
-    , chunk_start(0)
-    , chunk_index(0)
     , max_chunk_shots(num_shots)
-    , measurement_offset(0)
-    , rand_states(nullptr)
-    , rand_states_size(0)
-{ 
+{
+    write_measures_to_file |= (num_shots > options.min_shots_write);
+}
+
+Framing::Framing(char* data, const size_t& length, const size_t& num_shots, const bool& require_detectors) :
+    Simulator(data, length, require_detectors)
+    , num_shots(num_shots)
+    , total_shots(num_shots)
+    , max_chunk_shots(num_shots)
+{
     write_measures_to_file |= (num_shots > options.min_shots_write);
 }
 
@@ -55,8 +59,15 @@ size_t Framing::choose_chunk_shots() const {
 
 void Framing::sample() {
     Power power;
+    if (!stats.circuit.measure_stats.count) {
+        LOG1("Nothing to sample: circuit has no measurement records.");
+        return;
+    }
     timer.start();
-    rsample();
+    if (!reference_ready) {
+        rsample();
+        reference_ready = true;
+    }
     timer.stop();
     const double reference_sim_time = timer.elapsed();
     LOGRULER(1, '-', RULERLEN);
@@ -79,15 +90,14 @@ void Framing::sample() {
         const size_t chunk_word_offset = WORD_OFFSET(chunk_start);
         const uint64 sample_seed = options.seed ^ 0x9e3779b97f4a7c15ULL;
         num_partitions = tableau.alloc(num_qubits, num_shots, winfo.max_window_bytes, false, false, false, 0, "frame ");
-        if (options.check_measurement) {
+        if (options.check_measurement && stats.circuit.measure_stats.count) {
             mchecker.alloc(num_qubits, tableau.num_words_minor());
             mchecker.record.resize(stats.circuit.measure_stats.count);
             mchecker.samples.resize(stats.circuit.measure_stats.count * tableau.num_words_minor(), word_std_t(0));
         }
-        tableau.reset_xtable();
         init_rand_states(sample_seed, tableau.num_words_per_table(), total_words_minor, chunk_word_offset, kernel_streams[1]);
         randomize(tableau.zdata(), tableau.num_words_per_table(), kernel_streams[1]);
-        samples_record.alloc(stats.circuit.measure_stats.count, tableau.num_words_minor(), gpu_allocator, kernel_streams[0]);
+        samples_record.alloc(stats.circuit.measure_stats.count, tableau.num_words_minor(), gpu_allocator, needs_sample_host(), kernel_streams[0]);
         stats.sampling.sample_device_bytes = MAX(stats.sampling.sample_device_bytes, samples_record.device_bytes());
         stats.sampling.sample_host_bytes = MAX(stats.sampling.sample_host_bytes, samples_record.host_bytes());
         gpu_circuit.reset_circuit_offset(0);
@@ -108,7 +118,6 @@ void Framing::sample() {
         samples_record.destroy(gpu_allocator);
         tableau.destroy();
     }
-    recorder.destroy();
     gpu_allocator.deallocate<curand_algorithm_t>(rand_states);
     rand_states = nullptr;
     rand_states_size = 0;

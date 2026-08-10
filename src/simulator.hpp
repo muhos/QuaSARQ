@@ -27,6 +27,8 @@ namespace QuaSARQ {
         Circuit                         circuit;
         CircuitIO                       circuit_io;
         string                          circuit_path;
+        char*                           circuit_data = nullptr;
+        size_t                          circuit_data_size = 0;
         byte_t                          circuit_mode;
         Vec<M_OP, size_t>               measurements;
         Vec<qubit_t, size_t>            shuffled;
@@ -47,12 +49,14 @@ namespace QuaSARQ {
         FILE*                           state_file;
         size_t                          config_qubits;
         cudaStream_t*                   custreams;
+        int                             num_streams = 0;
         cudaStream_t                    copy_streams[NUM_COPY_STREAMS];
         cudaStream_t                    kernel_streams[NUM_COMPUTE_STREAMS];
         WindowInfo                      winfo;
         bool                            measuring;
         bool                            write_measures_to_file;
         bool                            reference_mode;
+        bool                            detectors_required = false;
         static bool                     timeout;
         
         enum { 
@@ -65,11 +69,16 @@ namespace QuaSARQ {
         void create_streams     (cudaStream_t*& streams);
         void cleanup            () noexcept;
 
+        size_t parse_stream     (Statistics& stats, char* str);
+
+        explicit Simulator      (const byte_t& mode);
+
     public:
 
         virtual ~Simulator      () noexcept;
                 Simulator       ();
                 Simulator       (const string& path);
+                Simulator       (char* data, const size_t& length, const bool& require_detectors = false);
 
         // File IO.
         bool    open_file       (FILE*& file, arg_t file_path, arg_t file_mode);
@@ -83,6 +92,11 @@ namespace QuaSARQ {
         bool                    is_measuring        () const { return measuring; }
         ObservableData&         get_observables     () { return circuit_io.observables; }
         const ObservableData&   get_observables     () const { return circuit_io.observables; }
+        DetectorData&           get_detectors       () { return circuit_io.detectors; }
+        const DetectorData&     get_detectors       () const { return circuit_io.detectors; }
+        size_t                  count_detectors     () const { return circuit_io.detectors.pinned.num_instructions; }
+        size_t                  count_observables   () const { return circuit_io.observables.pinned.num_observables; }
+        bool                    needs_detectors     () const { return options.print_detector || detectors_required; }
         virtual
         size_t                  sample_device_bytes () const { return 0; }
         virtual 
@@ -102,6 +116,7 @@ namespace QuaSARQ {
         void        simulate            ();
         void        rsample             ();
         size_t      parse               (Statistics& stats, const char* path);
+        size_t      parse               (Statistics& stats, char* data, const size_t& length);
         size_t      schedule            (Statistics& stats, Circuit& circuit, WindowInfo& target_winfo, const size_t& scheduled_num_qubits = 0);
         void        simulate            (const size_t& p, const bool& reversed);
 
@@ -123,9 +138,9 @@ namespace QuaSARQ {
         void        reset_signs             (const size_t& num_gates, const depth_t& depth_level, const cudaStream_t& stream);
         void        record_measurements     (const size_t& num_gates, const depth_t& depth_level, const cudaStream_t& stream);
         void        find_random_measures    (const size_t& num_pivots, const cudaStream_t& stream);
-        void        compact_targets         (const qubit_t& qubit, const byte_t& gate_type, const cudaStream_t& stream);
+        void        compact_targets         (const qubit_t& qubit, const cudaStream_t& stream);
         void        inject_swap             (const qubit_t& qubit, const sign_t& rbit, const cudaStream_t& stream);
-        void        inject_x                (const qubit_t& qubit, const sign_t& rbit, const cudaStream_t& stream);
+        void        inject_x                (const sign_t& rbit, const cudaStream_t& stream);
         void        inject_cx               (const uint32& active_targets, const cudaStream_t& stream);
         int64       measure_indeterminate   (const depth_t& depth_level, const cudaStream_t& stream = 0);
         void        measure                 (const size_t& p, const depth_t& depth_level, const bool& reversed = false);

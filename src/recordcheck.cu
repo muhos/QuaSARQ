@@ -2,6 +2,12 @@
 
 namespace QuaSARQ {
 
+    // Mirrors record_signs_k: the record is the stabilizer sign bit of the measured qubit.
+    bool MeasurementChecker::measured_value(const Gate& m) {
+        const size_t q = m.wires[0];
+        return bool(h_ss[num_words_minor + WORD_OFFSET(q)] & BITMASK_GLOBAL(q));
+    }
+
     void MeasurementChecker::check_record_measurements(const MeasurementRecorder& other_recorder, const Circuit& circuit, const depth_t& depth_level) {
         SYNCALL;
 
@@ -21,16 +27,19 @@ namespace QuaSARQ {
             LOGERROR("measurements count mismatch: expected %lld, got %lld", measures_count + num_gates, other_recorder.step_history());
         }
 
+        const Vec<uint32, size_t>& ordinals = circuit.record_ordinals();
+
         for (auto i = 0; i < num_gates; i++) {
             const Gate& m = circuit.gate(depth_level, i);
             if (!isMeasurement(m.type))
                 LOGERROR("host gate %d at depth level %d is not a measurement gate", i, depth_level);
-            const size_t q = m.wires[0];
-            const size_t q_w = WORD_OFFSET(q);
-            const word_std_t q_mask = BITMASK_GLOBAL(q);
-            record[measures_count + i] = bool(h_ss[q_w + num_words_minor] & q_mask);
-            if (record[measures_count + i] != other_record[measures_count + i]) {
-                LOGERROR("Measurement record mismatch at history %lld", measures_count + i);
+            if (measures_count + i >= ordinals.size())
+                LOGERROR("record ordinal %lld exceeds table size %lld at depth %d",
+                    measures_count + i, ordinals.size(), depth_level);
+            const size_t m_idx = ordinals[measures_count + i];
+            record[m_idx] = measured_value(m);
+            if (record[m_idx] != other_record[m_idx]) {
+                LOGERROR("Measurement record mismatch at history %lld", m_idx);
             }
         }
 

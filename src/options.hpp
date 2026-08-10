@@ -41,8 +41,10 @@ namespace QuaSARQ {
     #define GATE2OPTION(GATE) \
         double GATE ## _p;
     
+    constexpr size_t OPTION_PATH_LEN = 256;
+
     struct Options {
-        
+
         int verbose;
         int streams;
         int write_rc;
@@ -95,5 +97,20 @@ namespace QuaSARQ {
     };
 
     extern Options options;
+
+    class OptionsGuard {
+
+        alignas(Options) unsigned char saved_options[sizeof(Options)];
+        char saved_configpath[OPTION_PATH_LEN];
+        char saved_statepath[OPTION_PATH_LEN];
+
+    public:
+
+        OptionsGuard();
+        ~OptionsGuard();
+
+        OptionsGuard            (const OptionsGuard&) = delete;
+        OptionsGuard& operator= (const OptionsGuard&) = delete;
+    };
 
 }

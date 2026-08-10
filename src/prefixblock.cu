@@ -31,8 +31,8 @@ namespace QuaSARQ {
         __shared__ typename ReduceType::TempStorage destab_ss[BLOCKY];
         __shared__ typename ReduceType::TempStorage   stab_ss[BLOCKY];
 
-        __shared__ word_std_t sh_zs_destab[BLOCKY];
-        __shared__ word_std_t sh_xs_destab[BLOCKY];
+        __shared__ word_std_t sh_cz_destab[BLOCKY];
+        __shared__ word_std_t sh_cz_stab[BLOCKY];
 
         int tx = threadIdx.x, ty = threadIdx.y;
 
@@ -44,24 +44,24 @@ namespace QuaSARQ {
 
             bool active = (w < num_words_minor && tx < active_targets);
 
-            word_std_t z = 0, x = 0;
+            word_std_t tz_destab = 0, tz_stab = 0;
             pivot_t t = 0;
             if (active) {
                 t = pivots[tx + 1];
                 const size_t t_destab = TABLEAU_INDEX(w, t);
-                z = zs[t_destab];
-                x = xs[t_destab];
+                tz_destab = zs[t_destab];
+                tz_stab   = zs[t_destab + TABLEAU_STAB_OFFSET];
                 if (!tx) {
                     const size_t c_destab = TABLEAU_INDEX(w, pivot);
-                    sh_zs_destab[ty] = zs[c_destab];
-                    sh_xs_destab[ty] = xs[c_destab];
+                    sh_cz_destab[ty] = zs[c_destab];
+                    sh_cz_stab[ty]   = zs[c_destab + TABLEAU_STAB_OFFSET];
                 }
             }
 
-            word_std_t prefix_zc, prefix_xc;
-            word_std_t blocksum_z, blocksum_x;
-            ScanType(prefix_zs[ty]).ExclusiveScan(z, prefix_zc, 0, XOROP(), blocksum_z);
-            ScanType(prefix_xs[ty]).ExclusiveScan(x, prefix_xc, 0, XOROP(), blocksum_x);
+            word_std_t prefix_destab, prefix_stab;
+            word_std_t blocksum_destab, blocksum_stab;
+            ScanType(prefix_zs[ty]).ExclusiveScan(tz_destab, prefix_destab, 0, XOROP(), blocksum_destab);
+            ScanType(prefix_xs[ty]).ExclusiveScan(tz_stab,   prefix_stab,   0, XOROP(), blocksum_stab);
 
             sign_t local_destab_s = 0;
             sign_t local_stab_s   = 0;
@@ -70,15 +70,15 @@ namespace QuaSARQ {
                 const size_t t_stab = t_destab + TABLEAU_STAB_OFFSET;
                 const size_t c_destab = TABLEAU_INDEX(w, pivot);
                 const size_t c_stab = c_destab + TABLEAU_STAB_OFFSET;
-                const word_std_t init_z = sh_zs_destab[ty];
-                const word_std_t init_x = sh_xs_destab[ty];
-                prefix_zc ^= init_z;
-                prefix_xc ^= init_x;
-                compute_local_sign_per_block(local_destab_s, zs[t_stab], prefix_zc, zs[c_stab], z);
-                compute_local_sign_per_block(local_stab_s  , xs[t_stab], prefix_xc, xs[c_stab], x);
+                const word_std_t init_destab = sh_cz_destab[ty];
+                const word_std_t init_stab   = sh_cz_stab[ty];
+                prefix_destab ^= init_destab;
+                prefix_stab   ^= init_stab;
+                compute_local_sign_per_block(local_destab_s, xs[t_destab], prefix_destab, xs[c_destab], tz_destab);
+                compute_local_sign_per_block(local_stab_s  , xs[t_stab],   prefix_stab,   xs[c_stab],   tz_stab);
                 if (tx == active_targets - 1) {
-                    zs[c_destab] = init_z ^ blocksum_z;
-                    xs[c_destab] = init_x ^ blocksum_x;
+                    zs[c_destab] = init_destab ^ blocksum_destab;
+                    zs[c_stab]   = init_stab   ^ blocksum_stab;
                 }
             }
 

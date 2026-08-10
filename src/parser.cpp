@@ -30,10 +30,7 @@ namespace QuaSARQ {
 
     void CircuitIO::parse_detector(char*& str, ParsedBlock* pb) {
         // Skip optional coordinate arguments.
-        if (str < eof && *str == '(') {
-            while (str < eof && *str != ')' && *str != DELIM) str++;
-            if (str < eof && *str == ')') str++;
-        }
+        skip_gate_args(str, eof);
         const uint32 mc = measures_count + (pb ? pb->measures : 0);
         RecordRefs& dest = pb ? pb->det : detectors;
         if (pb) pb->det_mc.push(pb->measures);
@@ -86,7 +83,7 @@ namespace QuaSARQ {
                 else if (g.expanded_from == 0) {
                     gstats.types[g.type]++;
                 } 
-                else if (g.type == M || g.type == MR) {
+                else if (g.type == M || g.type == MR || g.type == R) {
                     gstats.types[g.expanded_from]++;
                 }
                 if ((g.type == M || g.type == MR) && &target == &circuit_queue)
@@ -149,6 +146,7 @@ namespace QuaSARQ {
         if (strcmp(gatestr, "DETECTOR")           == 0) { parse_detector(str, pb);           return; }
         if (strcmp(gatestr, "OBSERVABLE_INCLUDE") == 0) { parse_observable(str, pb);         return; }
         if (try_expand_m_variants(str, gatestr, gatelen, target, gstats, pb))                return;
+        if (try_expand_r_variants(str, gatestr, gatelen, target, gstats))                    return;
         if (try_expand_clifford  (str, gatestr, gatelen, target, gstats))                    return;
 
         // Parse optional probability argument(s).
@@ -175,16 +173,10 @@ namespace QuaSARQ {
         const bool is_2qubit = isGate2(int(type));
         while (str < eof && *str != DELIM) {
             if (*str == UNIX_DELIM) { str++; continue; }
-            char* peek = str;
-            eatWS(peek);
-            if (!isDigit(*peek)) { eatLine(str); return; }
-            const qubit_t c = toInteger(str);
-            max_qubits = MAX(max_qubits, (size_t)(c) + 1);
+            qubit_t c;
+            if (!next_qubit_or_eat_line(str, max_qubits, c)) return;
             qubit_t t = c;
-            if (is_2qubit) {
-                t = toInteger(str);
-                max_qubits = MAX(max_qubits, (size_t)(t) + 1);
-            }
+            if (is_2qubit) t = next_qubit(str, max_qubits);
             ParsedGate pg(c, t, type);
             memcpy(pg.probs, gate_probs, gate_nprobs * sizeof(float));
             target.push(pg);
@@ -212,9 +204,7 @@ namespace QuaSARQ {
             { "RZ",         R     },
         };
         for (const auto& a : aliases) {
-            int c = 0;
-            while (a.name[c] && a.name[c] == in[c]) c++;
-            if (c == gatelen && !a.name[c]) return int(a.type);
+            if (match_gate_name(a.name, in, gatelen)) return int(a.type);
         }
         // Canonical names.
         for (int i = 0; i < NR_GATETYPES; i++) {
@@ -310,6 +300,18 @@ namespace QuaSARQ {
 #endif
         eof = stream + size;
         return stream;
+    }
+
+    char* CircuitIO::read(char* circuit_data, const size_t& circuit_size) {
+        if (circuit_data == nullptr)
+            LOGERROR("circuit buffer is empty.");
+        size = circuit_size;
+        LOG2(1, "Parsing circuit buffer (size: %s%zd%s MB)..",
+             CREPORTVAL, ratio(size, MB), CNORMAL);
+        buffer = static_cast<void*>(circuit_data);
+        owns_buffer = false;
+        eof = circuit_data + size;
+        return circuit_data;
     }
 
 }

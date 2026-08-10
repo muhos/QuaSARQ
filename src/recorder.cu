@@ -1,10 +1,15 @@
 #include "simulator.hpp"
+#include "step.cuh"
+#include "pivot.cuh"
+#include "atomic.cuh"
+#include "sum.cuh"
 
 namespace QuaSARQ {
 
     __global__
     void record_signs_k(
-        bool*                       record,
+                bool*               record,
+        const   uint32*             ordinals,
         const_signs_t               inv_ss,
         const_refs_t                refs,
         const_buckets_t             gates,
@@ -16,7 +21,8 @@ namespace QuaSARQ {
         for_parallel_x(i, num_gates) {
             const Gate& gate = (Gate&) gates[refs[i]];
             const size_t q = gate.wires[0];
-            record[step_gates + i] = bool(ss_stab[WORD_OFFSET(q)] & BITMASK_GLOBAL(q));
+            record[ordinals[step_gates + i]] =
+                bool(ss_stab[WORD_OFFSET(q)] & BITMASK_GLOBAL(q));
         }
     }
 
@@ -26,21 +32,22 @@ namespace QuaSARQ {
         currentblock = bestblockreset, currentgrid = bestgridreset;
         TRIM_BLOCK_IN_DEBUG_MODE(currentblock, currentgrid, num_gates, 0);
         TRIM_GRID_IN_1D(num_gates, x);
-        LOGN2(2, "Recording measurements with block(x:%u, y:%u) and grid(x:%u, y:%u).. ", 
+        LOGN2(2, "Recording measurements with block(x:%u, y:%u) and grid(x:%u, y:%u).. ",
             currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
         if (options.sync) cutimer.start(stream);
         record_signs_k <<<currentgrid, currentblock, 0, stream>>> (
             recorder.device_record(),
+            recorder.device_ordinals(),
             tableau.signs(),
-            gpu_circuit.references(), 
-            gpu_circuit.gates(), 
+            gpu_circuit.references(),
+            gpu_circuit.gates(),
             num_gates,
             tableau.num_words_minor(),
             recorder.step_history());
         recorder.reset_copied();
         recorder.advance(num_gates);
         if (options.sync) {
-            LASTERR("failed to reset signs");
+            LASTERR("failed to record measurements");
             cutimer.stop(stream);
             double elapsed = cutimer.elapsed();
             if (options.profile) stats.profile.time.recordsigns += elapsed;
@@ -71,7 +78,8 @@ namespace QuaSARQ {
         }
     }
 
-    inline void launch_eval_record_refs(
+    inline 
+    void launch_eval_record_refs(
               char*        d_bitstring,
               char*        h_bitstring,
         const uint32*      d_refs,

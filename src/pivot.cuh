@@ -16,10 +16,55 @@ namespace QuaSARQ {
 
     constexpr pivot_t INVALID_PIVOT = UINT32_MAX;
 
+    // The collapse always runs in the z-basis: the parser expands RX/RY (and the
+    // MX/MY/MRX/MRY variants) into a z-basis reset or measurement.
+    // One half of one qubit column, swapped so the pivot's generator stops anticommuting
+    // with the measured Pauli.
     INLINE_ALL
-    word_std_t select_anticommuting_word(const word_std_t& xw, const word_std_t& zw, const byte_t& gate_type)
+    void collapse_swap_half(
+                word_std_t&     x,
+                word_std_t&     z,
+        const   bool            is_commuting,
+                sign_t&         local_sign)
     {
-        return (gate_type == byte_t(RX)) ? zw : (gate_type == byte_t(RY)) ? xw ^ zw : xw;
+        const word_std_t a = x, c = z;
+        if (is_commuting) {
+            local_sign ^= word_std_t(c & ~a);
+            x = a ^ c;
+        }
+        else {
+            local_sign ^= word_std_t(a & c);
+            x = c;
+            z = a;
+        }
+    }
+
+    INLINE_ALL
+    uint32 ctz_word(const word_std_t& w)
+    {
+        #if defined(__CUDA_ARCH__)
+        #if defined(WORD_SIZE_64)
+        return uint32(__ffsll((uint64)w) - 1);
+        #else
+        return uint32(__ffs((uint32)w) - 1);
+        #endif
+        #else
+        return uint32(__builtin_ctzll((uint64)w));
+        #endif
+    }
+
+    INLINE_ALL
+    uint32 popcount_word(const word_std_t& w)
+    {
+        #if defined(__CUDA_ARCH__)
+        #if defined(WORD_SIZE_64)
+        return __popcll((uint64)w);
+        #else
+        return __popc((uint32)w);
+        #endif
+        #else
+        return uint32(__builtin_popcountll((uint64)w));
+        #endif
     }
 
     struct Pivoting {
@@ -106,7 +151,6 @@ namespace QuaSARQ {
                 pivot_t*            scatter,
                 const_table_t       inv_xs,
                 const_table_t       inv_zs,
-        const   byte_t              gate_type,
         const   qubit_t             qubit,
         const   size_t              num_qubits,
         const   size_t              num_words_major,
@@ -127,7 +171,6 @@ namespace QuaSARQ {
 				pivot_t*,
 				const_table_t,
 				const_table_t,
-		const   byte_t,
 		const 	qubit_t,
 		const 	size_t,
 		const 	size_t,
@@ -138,7 +181,6 @@ namespace QuaSARQ {
 				pivot_t* 			pivots,
 				const_table_t 	    inv_xs,
 				const_table_t 	    inv_zs,
-		const   byte_t              gate_type,
 		const 	qubit_t& 			qubit,
 		const 	size_t& 			size,
 		const 	size_t 				num_words_major,

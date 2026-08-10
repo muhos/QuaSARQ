@@ -15,6 +15,8 @@ namespace QuaSARQ {
 
     ScheduleResult schedule_circuit(CircuitIO& circuit_io, Circuit& circuit, WindowInfo& winfo, const size_t& num_qubits);
 
+    void finalize_windows(Circuit& circuit, const size_t& num_qubits, const bool& sort);
+
     ScheduleResult schedule_gates(
         CircuitIO&      circuit_io,
         Circuit&        circuit,

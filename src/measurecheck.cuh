@@ -29,7 +29,6 @@ namespace QuaSARQ {
 		const 	Table&          h_zs,
 		const   qubit_t         qubit,
 		const   pivot_t         pivot,
-		const   byte_t          gate_type,
 		const   size_t          num_words_major, 
         const   size_t          num_words_minor,
         const   size_t          num_qubits_padded);
@@ -66,7 +65,6 @@ namespace QuaSARQ {
 
 		pivot_t pivot;
 		qubit_t qubit;
-		byte_t gate_type;
 
 		bool input_copied;
 
@@ -78,7 +76,6 @@ namespace QuaSARQ {
 			, measures_count(0)
 			, pivot(INVALID_PIVOT)
 			, qubit(INVALID_QUBIT)
-			, gate_type(byte_t(M))
 			, input_copied(false)
 			{}
 
@@ -87,7 +84,6 @@ namespace QuaSARQ {
 		void reset_state() {
 			qubit = INVALID_QUBIT;
 			pivot = INVALID_PIVOT;
-			gate_type = byte_t(M);
 			input_copied = false;
 		}
 
@@ -125,7 +121,6 @@ namespace QuaSARQ {
 			measures_count = 0;
 			pivot = INVALID_PIVOT;
 			qubit = INVALID_QUBIT;
-			gate_type = byte_t(M);
 		}
 
 		void alloc(const size_t& num_qubits, const size_t& minor_words = 0) {
@@ -197,9 +192,9 @@ namespace QuaSARQ {
 		}
 		#endif
 
-		void find_min_pivot(const qubit_t& qubit, const byte_t& gate_type, const bool& store_pivots = false);
+		void find_min_pivot(const qubit_t& qubit, const bool& store_pivots = false);
 
-		void check_compact_pivots(const qubit_t& qubit, const byte_t& gate_type, const pivot_t* other_pivots, const size_t& other_num_pivots);
+		void check_compact_pivots(const qubit_t& qubit, const pivot_t* other_pivots, const size_t& other_num_pivots);
 
 		void check_initial_pivots(const Circuit& circuit, const depth_t& depth_level, const pivot_t* other_pivots, const size_t& other_num_pivots);
 
@@ -232,6 +227,8 @@ namespace QuaSARQ {
 		void check_inject_swap(const Tableau& other_input, const pivot_t* other_pivots, const size_t& num_pivots);
 
 		void check_inject_x(const Tableau& other_input, const pivot_t* other_pivots, const size_t& num_pivots, const sign_t& random_bit);
+
+		bool measured_value(const Gate& m);
 
 		void check_record_measurements(const MeasurementRecorder& other_recorder, const Circuit& circuit, const depth_t& depth_level);
 

@@ -30,7 +30,7 @@ namespace QuaSARQ {
 
         copy_input(other_input, true);
 
-        find_min_pivot(qubit, gate_type);
+        find_min_pivot(qubit);
 
         if (pivot == INVALID_PIVOT) 
             return;
@@ -44,7 +44,6 @@ namespace QuaSARQ {
                 h_zs,
                 qubit,
                 t,
-                gate_type,
                 num_words_major,
                 num_words_minor,
                 num_qubits_padded
@@ -62,12 +61,14 @@ namespace QuaSARQ {
                     assert(t_destab < h_zs.size());
                     assert(c_stab < h_zs.size());
                     assert(t_stab < h_zs.size());
-                    do_CX_sharing_control(h_zs[c_stab], h_zs[c_destab], h_zs[t_stab], h_zs[t_destab], h_ss[w]);
                     assert(c_destab < h_xs.size());
                     assert(t_destab < h_xs.size());
                     assert(c_stab < h_xs.size());
                     assert(t_stab < h_xs.size());
-                    do_CX_sharing_control(h_xs[c_stab], h_xs[c_destab], h_xs[t_stab], h_xs[t_destab], h_ss[w + num_words_minor]);
+                    word_std_t* h_xw = h_xs.words();
+                    word_std_t* h_zw = h_zs.words();
+                    inject_cx_half(h_xw[c_destab], h_zw[c_destab], h_xw[t_destab], h_zw[t_destab], h_ss[w]);
+                    inject_cx_half(h_xw[c_stab], h_zw[c_stab], h_xw[t_stab], h_zw[t_stab], h_ss[w + num_words_minor]);
                     if (h_xs[t_stab] != d_xs[t_stab]) {
                         LOGERROR("injecting CX FAILED at stab-x[w: %lld, t: %lld]", w, t);
                     }

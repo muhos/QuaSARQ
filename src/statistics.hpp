@@ -99,7 +99,8 @@ namespace QuaSARQ {
             double total() {
                 return time.gaterules +
                     time.transpose + time.compactpivots +
-                    time.injectswap + time.injectx + time.injectcx;
+                    time.injectswap + time.injectx + time.injectcx +
+                    time.resetsigns + time.recordsigns;
             }
         } profile;
         

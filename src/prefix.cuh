@@ -28,8 +28,22 @@ namespace QuaSARQ {
         }
     };
 
-	INLINE_DEVICE 
-    void compute_local_sign_per_block(                
+    INLINE_ALL
+    void inject_cx_half(
+        const   word_std_t& c_x,
+                word_std_t& c_z,
+                word_std_t& t_x,
+        const   word_std_t& t_z,
+                sign_t&     local_sign)
+    {
+        const word_std_t cx = c_x, cz = c_z, tx = t_x, tz = t_z;
+        local_sign ^= word_std_t(cx & tz & ~(tx ^ cz));
+        c_z = cz ^ tz;
+        t_x = tx ^ cx;
+    }
+
+	INLINE_DEVICE
+    void compute_local_sign_per_block(
                 sign_t&     local_sign, 
                 word_std_t& t_stab_word_ref,
 		const   word_std_t& zc_xor_prefix,

@@ -53,9 +53,10 @@ namespace QuaSARQ {
 
         #define GATE_PTR(REF) ((Gate*) buckets_container::data(REF))
 
-        Vec<Window, depth_t> windows; 
+        Vec<Window, depth_t> windows;
         Vec<size_t, depth_t> nbuckets;
         WindowFlags          window_flags;
+        Vec<uint32, size_t>  record_map;
         size_t ngates;
 
     public:
@@ -133,6 +134,12 @@ namespace QuaSARQ {
                 return window_flags[depth_level].recording; 
             return false;
         }
+
+        inline
+        Vec<uint32, size_t>& record_ordinals () { return record_map; }
+
+        inline const
+        Vec<uint32, size_t>& record_ordinals () const { return record_map; }
 
         inline
         size_t     capacity     () const {
@@ -304,14 +311,16 @@ namespace QuaSARQ {
             for (depth_t d = 0; d < windows.size(); d++) {
                 new_circuit.windows[d].copyFrom(windows[d]);             
             }
+            new_circuit.record_map.copyFrom(record_map);
             new_circuit.ngates = ngates;
         }
 
         inline
-        void        destroy     () { 
+        void        destroy     () {
             clear(true);
             windows.clear(true);
             nbuckets.clear(true);
+            record_map.clear(true);
             ngates = 0;
         }
 

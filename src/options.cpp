@@ -81,8 +81,8 @@ namespace QuaSARQ {
 
     Options::Options() {
         RESETSTRUCT(this);
-        configpath = calloc<char>(256);
-        statepath = calloc<char>(256);
+        configpath = calloc<char>(OPTION_PATH_LEN);
+        statepath = calloc<char>(OPTION_PATH_LEN);
     }
 
     Options::~Options() {
@@ -190,5 +190,29 @@ namespace QuaSARQ {
     }
 
     Options options;
+
+    OptionsGuard::OptionsGuard() {
+        std::memcpy(saved_options, &options, sizeof(Options));
+        if (options.configpath != nullptr)
+            std::memcpy(saved_configpath, options.configpath, OPTION_PATH_LEN);
+        else
+            std::memset(saved_configpath, 0, OPTION_PATH_LEN);
+        if (options.statepath != nullptr)
+            std::memcpy(saved_statepath, options.statepath, OPTION_PATH_LEN);
+        else
+            std::memset(saved_statepath, 0, OPTION_PATH_LEN);
+    }
+
+    OptionsGuard::~OptionsGuard() {
+        char* configpath = options.configpath;
+        char* statepath = options.statepath;
+        std::memcpy(&options, saved_options, sizeof(Options));
+        options.configpath = configpath;
+        options.statepath = statepath;
+        if (configpath != nullptr)
+            std::memcpy(configpath, saved_configpath, OPTION_PATH_LEN);
+        if (statepath != nullptr)
+            std::memcpy(statepath, saved_statepath, OPTION_PATH_LEN);
+    }
 
 }

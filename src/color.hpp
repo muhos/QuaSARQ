@@ -21,6 +21,7 @@ namespace QuaSARQ {
 #define CLBLUE      ""
 #define CLMAGENTA   ""
 #define CLCYAN      ""
+#define CBCYAN      ""
 #define CGREEN0		""
 #define CGREEN1		""
 #define CGREEN2		""

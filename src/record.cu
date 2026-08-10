@@ -88,7 +88,7 @@ namespace QuaSARQ {
     }
 
     void Simulator::alloc_detectors() {
-        if (!options.print_detector) return;
+        if (!needs_detectors() || circuit_io.detectors.empty()) return;
         circuit_io.detectors.alloc_pinned(gpu_allocator);
         circuit_io.detectors.alloc_device(gpu_allocator);
         circuit_io.detectors.move_to_pinned();
@@ -102,7 +102,7 @@ namespace QuaSARQ {
     }
 
     void Simulator::copy_detectors(const cudaStream_t& stream) {
-        if (!options.print_detector) return;
+        if (!needs_detectors() || circuit_io.detectors.empty()) return;
         circuit_io.detectors.copy_to_device(stream);
     }
 
