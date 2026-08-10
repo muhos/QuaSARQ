@@ -200,15 +200,16 @@ namespace QuaSARQ {
         FILE*         f = nullptr
     )
     {
-        for (size_t w = 0; w < num_qubits; ++w) {
-            const word_t pow2 = BITMASK_GLOBAL(w);
-            if (ss[offset + WORD_OFFSET(w)] & sign_t(pow2)) 
+        for (size_t g = 0; g < num_qubits; ++g) {
+            if (ss[offset + WORD_OFFSET(g)] & sign_t(BITMASK_GLOBAL(g)))
                 LOGCHAR("-", f);
-            else 
+            else
                 LOGCHAR("+", f);
 
+            const size_t row = g * num_words_major + offset;
             for (size_t q = 0; q < num_qubits; ++q) {
-                size_t idx = q * num_words_major + WORD_OFFSET(w) + offset;
+                const size_t idx = row + WORD_OFFSET(q);
+                const word_t pow2 = BITMASK_GLOBAL(q);
                 if (!(xs[idx] & pow2) && !(zs[idx] & pow2)) LOGCHAR("I", f);
                 if  ( xs[idx] & pow2  && !(zs[idx] & pow2)) LOGCHAR("X", f);
                 if (!(xs[idx] & pow2) &&  (zs[idx] & pow2)) LOGCHAR("Z", f);
@@ -299,6 +300,7 @@ namespace QuaSARQ {
 			LOG2(0, "State after %d-step", depth_level);
 		else if (options.print_finalstate)
 			LOGHEADER(0, 3, "Final state");
+        const bool extended = tab.num_words_major() == 2 * tab.num_words_minor();
 		if (num_qubits > options.print_limit) {
             LOGWARNING("State is too large to print on screen.\n"
                 "The full state will be printed in options.statepath.\n"
@@ -311,11 +313,11 @@ namespace QuaSARQ {
             if (!open_file(state_file, options.statepath, "wb")) {
                 LOGERROR("cannot open state file for writing.");
             }
-            print_paulis_host(tab, num_qubits, measuring, state_file);
+            print_paulis_host(tab, num_qubits, extended, state_file);
             close_file(state_file);
 		}
         else {
-            print_paulis_host(tab, num_qubits, measuring);
+            print_paulis_host(tab, num_qubits, extended);
         }
 	}
 
