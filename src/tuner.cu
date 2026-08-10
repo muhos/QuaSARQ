@@ -51,7 +51,7 @@ namespace QuaSARQ {
 		stats.reset();
 		// Resize tableaux.
 		if (num_qubits < tableau.num_qubits()) {
-			tableau.resize(num_qubits, winfo.max_window_bytes, false, measuring, true, 0, "tuning ");
+			tableau.resize(num_qubits, winfo.max_window_bytes, false, true, true, 0, "tuning ");
 			if (measuring) {
 				#if ROW_MAJOR
 				inv_tableau.resize(num_qubits, 0, false, measuring, false, 0, "inverse tuning ");
@@ -71,7 +71,7 @@ namespace QuaSARQ {
 		// Create a tableau in GPU memory for the maximum qubits.
 		const size_t max_num_qubits = num_qubits;
 		num_partitions = 1;
-		tableau.alloc(max_num_qubits, 0, winfo.max_window_bytes, false, measuring, true, 0, "tuning ");
+		tableau.alloc(max_num_qubits, 0, winfo.max_window_bytes, false, true, true, 0, "tuning ");
 		if (measuring) {
 			#if ROW_MAJOR
 			inv_tableau.alloc(num_qubits, 0, 0, false, measuring, false, 0, "inverse tuning ");

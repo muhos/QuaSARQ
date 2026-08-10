@@ -300,7 +300,7 @@ namespace QuaSARQ {
 			LOG2(0, "State after %d-step", depth_level);
 		else if (options.print_finalstate)
 			LOGHEADER(0, 3, "Final state");
-        const bool extended = tab.num_words_major() == 2 * tab.num_words_minor();
+        const bool extended = tab.is_extended();
 		if (num_qubits > options.print_limit) {
             LOGWARNING("State is too large to print on screen.\n"
                 "The full state will be printed in options.statepath.\n"

@@ -385,6 +385,8 @@ namespace QuaSARQ {
 
         inline size_t num_words_minor() const { return _num_words_minor; }
 
+        inline bool is_extended() const { return _num_words_major == 2 * _num_words_minor; }
+
         inline size_t num_partitions() const { return _num_partitions; }
 
         inline Signs* signs() const { assert(_ss != nullptr); return _ss; }

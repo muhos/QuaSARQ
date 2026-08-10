@@ -61,9 +61,10 @@ namespace QuaSARQ {
         const   bool&           quiet)
     {
         const cudaStream_t& stream = streams[KERNEL_STREAM];
+        const bool extended = tab.is_extended();
         if (options.tune_identity) {
             tune_identity(
-                measuring ? identity_Z_extended_1D : identity_Z_1D, 
+                extended ? identity_Z_extended_1D : identity_Z_1D,
                 bestblockidentity, 
                 bestgrididentity, 
                 offset_per_partition, 
@@ -80,7 +81,7 @@ namespace QuaSARQ {
                 state, num_qubits_per_partition, offset_per_partition, bestgrididentity.x, bestblockidentity.x);
         if (options.sync) cutimer.start();
         if (offset_per_partition) tab.reset();
-        if (measuring) { 
+        if (extended) {
             if (istate == Zero)
                 identity_Z_extended_1D <<< bestgrididentity, bestblockidentity, 0, stream >>> 
                     (offset_per_partition, num_qubits_per_partition, XZ_TABLE(tab));
@@ -113,7 +114,7 @@ namespace QuaSARQ {
         else if (!quiet) LOGDONE(1, 4);
         if (options.check_identity && !quiet) {
             LOGN2(1, " Checking identity.. ");
-            if (!check_identity(tableau, offset_per_partition, num_qubits_per_partition, measuring)) {
+            if (!check_identity(tab, offset_per_partition, num_qubits_per_partition, extended)) {
                 LOGERROR("creating identity failed.");
             }
             LOGPASSED(1);
