@@ -75,10 +75,16 @@ namespace QuaSARQ {
             if (m_idx >= record.size())
                 LOGERROR("measurement index %lld exceeds record size %lld at depth %d",
                     m_idx, record.size(), depth_level);
+            
+            const bool noisy = gate.get_prob(0) > 0.0f;
             for (size_t w = 0; w < num_words_minor; w++) {
                 const size_t m_word_idx = m_idx * num_words_minor + w;
-                const word_std_t ref_word = samples[m_word_idx];
                 const word_std_t gpu_word = word_std_t(other_samples.host[m_word_idx]);
+                if (noisy) {
+                    samples[m_word_idx] = gpu_word;
+                    continue;
+                }
+                const word_std_t ref_word = samples[m_word_idx];
                 if (ref_word != gpu_word)
                     LOGERROR("sample mismatch at index %lld, word %lld (depth %d): ref 0x%llx, gpu 0x%llx",
                         m_idx, w, depth_level, uint64(ref_word), uint64(gpu_word));

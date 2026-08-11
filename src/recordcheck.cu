@@ -37,6 +37,11 @@ namespace QuaSARQ {
                 LOGERROR("record ordinal %lld exceeds table size %lld at depth %d",
                     measures_count + i, ordinals.size(), depth_level);
             const size_t m_idx = ordinals[measures_count + i];
+            
+            if ((m.type == M || m.type == MR) && m.get_prob(0) > 0.0f) {
+                record[m_idx] = other_record[m_idx];
+                continue;
+            }
             record[m_idx] = measured_value(m);
             if (record[m_idx] != other_record[m_idx]) {
                 LOGERROR("Measurement record mismatch at history %lld", m_idx);

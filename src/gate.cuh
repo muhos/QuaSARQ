@@ -57,6 +57,7 @@ namespace QuaSARQ {
     uint32 noiseProbs(const int& type) {
         if (type == int(PAULI_CHANNEL_1)) return 3u;
         if (type == int(PAULI_CHANNEL_2)) return 15u;
+        if (type == int(M) || type == int(MR)) return 1u;
         return isNoise(type) ? 1u : 0u;
     }
 
@@ -167,14 +168,15 @@ namespace QuaSARQ {
     // Special structure for measurement operator.
     struct M_OP {
         qubit_t qubit;
+        float flip_prob;
         byte_t type;
 
         INLINE_ALL
-        M_OP() : qubit(0), type(0) { }
+        M_OP() : qubit(0), flip_prob(0.0f), type(0) { }
 
         INLINE_ALL
-        M_OP(const qubit_t& qubit, const byte_t& type) : 
-            qubit(qubit), type(type) { }
+        M_OP(const qubit_t& qubit, const byte_t& type, const float& flip_prob = 0.0f) :
+            qubit(qubit), flip_prob(flip_prob), type(type) { }
 
         inline
         void print_host(const bool& nonl = false) const {

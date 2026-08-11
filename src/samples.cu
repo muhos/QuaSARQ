@@ -89,11 +89,17 @@ namespace QuaSARQ {
                 }
                 case M: {
                     (*samples)[m_word_idx] ^= (*xs)[q_word_idx];
+                    const float flip = gate.get_prob(0);
+                    if (flip > 0.0f)
+                        (*samples)[m_word_idx] ^= sample_frame_error_mask(rand_states[q_word_idx], flip);
                     (*zs)[q_word_idx] = curand_word(&rand_states[q_word_idx]);
                     break;
                 }
                 case MR: {
                     (*samples)[m_word_idx] ^= (*xs)[q_word_idx];
+                    const float flip = gate.get_prob(0);
+                    if (flip > 0.0f)
+                        (*samples)[m_word_idx] ^= sample_frame_error_mask(rand_states[q_word_idx], flip);
                     (*xs)[q_word_idx] = 0;
                     (*zs)[q_word_idx] = curand_word(&rand_states[q_word_idx]);
                     break;
