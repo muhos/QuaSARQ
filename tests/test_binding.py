@@ -268,11 +268,43 @@ def test_gil_released(c, shots):
     thread.join(timeout=1)
     check(ticks["n"] > 10, "python thread ran during sampling", f"{ticks['n']} ticks")
 
+DETERMINISTIC_ONE = """
+    X 0
+    X_ERROR({p}) 0
+    M 0
+    DETECTOR rec[-1]
+    OBSERVABLE_INCLUDE(0) rec[-1]
+"""
+
+
+def test_reference_frame(c, shots):
+    dets, obs = sampler(circuit(3, 3, p=0)).sample(8192, separate_observables=True)
+    check(not dets.any(), "noiseless surface code fires no detectors",
+          f"{int(dets.sum())} events")
+    check(not obs.any(), "noiseless surface code flips no observables",
+          f"{int(obs.sum())} flips")
+
+    quiet = stim.Circuit(DETERMINISTIC_ONE.format(p=0))
+    dets, obs = sampler(quiet).sample(1024, separate_observables=True)
+    check(not dets.any(), "detector over a deterministic 1 stays silent",
+          f"{int(dets.sum())} events")
+    check(not obs.any(), "observable over a deterministic 1 stays unflipped",
+          f"{int(obs.sum())} flips")
+
+    n = 200000
+    (qd, qo), (sd, so) = both_samplers(stim.Circuit(DETERMINISTIC_ONE.format(p=0.25)), n, seed=7)
+    check(sigmas(qd.mean(), sd.mean(), n) < 5.0, "noisy detector rate follows the reference",
+          f"quasarq={qd.mean():.4f} stim={sd.mean():.4f} "
+          f"(raw parity would be {1 - sd.mean():.4f})")
+    check(sigmas(qo.mean(), so.mean(), n) < 5.0, "noisy observable rate follows the reference",
+          f"quasarq={qo.mean():.4f} stim={so.mean():.4f}")
+
 
 TESTS = (
     ("interface matches stim.CompiledDetectorSampler", test_interface),
     ("bit packing matches numpy.packbits(bitorder='little')", test_bit_packing),
     ("seeding semantics match stim", test_seeding),
+    ("detection events are relative to the reference sample", test_reference_frame),
     ("detector and observable rates agree with stim", test_rates_match_stim),
     ("decoded logical error rate falls with distance (pymatching)", test_decoding),
     ("chunked sampling gives the same statistics", test_chunked_sampling),

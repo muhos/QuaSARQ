@@ -20,6 +20,18 @@ namespace QuaSARQ {
         #endif
     }
 
+    // Generate one word_std_t with each bit set independently with 'probability'.
+    INLINE_DEVICE
+    word_std_t sample_frame_error_mask(curand_algorithm_t& state, const float& probability) {
+        word_std_t mask = 0;
+        #pragma unroll
+        for (uint32 b = 0; b < WORD_BITS; b++) {
+            if (curand_uniform(&state) < probability)
+                mask |= (word_std_t(1) << b);
+        }
+        return mask;
+    }
+
     __global__
     void setup_rand_k(
         curand_algorithm_t*       states,

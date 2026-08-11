@@ -89,11 +89,17 @@ namespace QuaSARQ {
                 }
                 case M: {
                     (*samples)[m_word_idx] ^= (*xs)[q_word_idx];
+                    const float flip = gate.get_prob(0);
+                    if (flip > 0.0f)
+                        (*samples)[m_word_idx] ^= sample_frame_error_mask(rand_states[q_word_idx], flip);
                     (*zs)[q_word_idx] = curand_word(&rand_states[q_word_idx]);
                     break;
                 }
                 case MR: {
                     (*samples)[m_word_idx] ^= (*xs)[q_word_idx];
+                    const float flip = gate.get_prob(0);
+                    if (flip > 0.0f)
+                        (*samples)[m_word_idx] ^= sample_frame_error_mask(rand_states[q_word_idx], flip);
                     (*xs)[q_word_idx] = 0;
                     (*zs)[q_word_idx] = curand_word(&rand_states[q_word_idx]);
                     break;
@@ -525,23 +531,39 @@ namespace QuaSARQ {
                              || any_results;
         if (!any_print) return;
         if (!options.sync) SYNCALL;
-        // XOR reference sample into all shots.
-        if (recorder.step_history() > 0) {
-            const size_t num_measurements = stats.circuit.measure_stats.count;
-            const size_t num_words_minor  = tableau.num_words_minor();
-            dim3 block(32, 8), grid(1, 1);
-            OPTIMIZEBLOCKS2D(grid.x, (uint32)num_words_minor, block.x);
-            OPTIMIZEBLOCKS2D(grid.y, (uint32)num_measurements, block.y);
-            apply_reference_sample_k<<<grid, block, 0, stream>>>(
-                samples_record.device,
-                recorder.device_record(),
-                num_measurements,
-                num_words_minor);
-            LASTERR("apply_reference_sample failed");
-            SYNC(stream);
-        }
         if (options.print_detector || options.print_observable) LOGHEADER(1, 4, "Results");
-        if (samples_record.needs_host()) {
+
+        if (options.check_measurement) samples_record.copy(stream);
+        const bool want_detectors = options.print_detector || (results != nullptr && results->detectors != nullptr);
+        if (want_detectors) {
+            const bool to_file = options.print_detector && write_measures_to_file;
+            FILE* out = to_file ? open_output_file("_dets.01", chunk_index > 0) : stdout;
+            print_detectors_sampled(out, stream);
+            if (to_file) fclose(out);
+        }
+        if (!circuit_io.observables.empty()) {
+            FILE* out = (options.print_observable && write_measures_to_file) ? open_output_file("_obs.01", chunk_index > 0) : stdout;
+            print_observables_sampled(out, stream);
+            if (options.print_observable && write_measures_to_file) fclose(out);
+        }
+
+        // Raw measurement outcomes only needs the absolute values (XORing reference sample with record).
+        const bool want_samples = options.print_sample || options.print_sample_qubits || sample_host_required;
+        if (want_samples) {
+            if (recorder.step_history() > 0) {
+                const size_t num_measurements = stats.circuit.measure_stats.count;
+                const size_t num_words_minor  = tableau.num_words_minor();
+                dim3 block(32, 8), grid(1, 1);
+                OPTIMIZEBLOCKS2D(grid.x, (uint32)num_words_minor, block.x);
+                OPTIMIZEBLOCKS2D(grid.y, (uint32)num_measurements, block.y);
+                apply_reference_sample_k<<<grid, block, 0, stream>>>(
+                    samples_record.device,
+                    recorder.device_record(),
+                    num_measurements,
+                    num_words_minor);
+                LASTERR("apply_reference_sample failed");
+                SYNC(stream);
+            }
             samples_record.copy(stream);
             if (options.print_sample) {
                 FILE* out = write_measures_to_file ? open_output_file("_samples.01", chunk_index > 0) : stdout;
@@ -555,19 +577,6 @@ namespace QuaSARQ {
                 print_samples_measures(samples_record.host, stats.circuit.measure_stats.count, num_shots, out);
                 if (write_measures_to_file) fclose(out);
             }
-        }
-        const bool want_detectors = options.print_detector ||
-                                    (results != nullptr && results->detectors != nullptr);
-        if (want_detectors) {
-            const bool to_file = options.print_detector && write_measures_to_file;
-            FILE* out = to_file ? open_output_file("_dets.01", chunk_index > 0) : stdout;
-            print_detectors_sampled(out, stream);
-            if (to_file) fclose(out);
-        }
-        if (!circuit_io.observables.empty()) {
-            FILE* out = (options.print_observable && write_measures_to_file) ? open_output_file("_obs.01", chunk_index > 0) : stdout;
-            print_observables_sampled(out, stream);
-            if (options.print_observable && write_measures_to_file) fclose(out);
         }
         fflush(stdout);
     }

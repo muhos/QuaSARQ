@@ -45,6 +45,7 @@ namespace QuaSARQ {
             }
             io.read_gate(str);
         }
+        io.observables.merge_by_id();
         num_detectors = io.detectors.pinned.num_instructions;
         num_observables = io.observables.pinned.num_observables;
     }

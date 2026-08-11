@@ -194,6 +194,18 @@ namespace QuaSARQ {
         }
     }
 
+    inline float parse_flip_prob(char*& str, const char* eof) {
+        float prob = 0.0f;
+        if (str < eof && *str == '(') {
+            str++;
+            eatWS(str);
+            prob = toFloat(str);
+            while (str < eof && *str != ')' && *str != DELIM) str++;
+            if (str < eof && *str == ')') str++;
+        }
+        return prob;
+    }
+
     inline qubit_t next_qubit(char*& str, size_t& max_qubits) {
         const qubit_t q = toInteger(str);
         max_qubits = MAX(max_qubits, (size_t)(q) + 1);

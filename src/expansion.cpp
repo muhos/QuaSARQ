@@ -37,9 +37,11 @@ namespace QuaSARQ {
             in_run[qubits[k]] = 0;
     }
 
-    inline void push_expanded_op(CircuitQueue& target, const qubit_t& c, const Gatetypes& t, const Gatetypes& orig) {
+    inline void push_expanded_op(CircuitQueue& target, const qubit_t& c, const Gatetypes& t, const Gatetypes& orig,
+                                       const float& flip_prob = 0.0f) {
         ParsedGate pg(c, c, byte_t(t));
         pg.expanded_from = byte_t(orig);
+        pg.probs[0] = flip_prob;
         target.push(pg);
     }
 
@@ -78,7 +80,7 @@ namespace QuaSARQ {
         const bool is_y = (is_MY || is_MRY);
         measuring = true;
 
-        skip_gate_args(str, eof);
+        const float flip_prob = parse_flip_prob(str, eof);
 
         // Collect all qubits on this line.
         Vec<qubit_t, size_t> qubits;
@@ -99,7 +101,7 @@ namespace QuaSARQ {
             push_expanded_batch(target, qubits, begin, end, H, orig);
             // Phase 2: measurement.
             for (size_t k = begin; k < end; k++) {
-                push_expanded_op(target, qubits[k], mtype, orig);
+                push_expanded_op(target, qubits[k], mtype, orig, flip_prob);
                 if (pb == nullptr) gstats.types[orig]++;
                 if (&target == &circuit_queue) measures_count++;
                 else if (pb != nullptr)        pb->measures++;

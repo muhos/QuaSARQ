@@ -7,17 +7,6 @@
 namespace QuaSARQ {
 
     INLINE_DEVICE
-    word_std_t sample_frame_error_mask(curand_algorithm_t& state, const float& probability) {
-        word_std_t mask = 0;
-        #pragma unroll
-        for (uint32 b = 0; b < WORD_BITS; b++) {
-            if (curand_uniform(&state) < probability)
-                mask |= (word_std_t(1) << b);
-        }
-        return mask;
-    }
-
-    INLINE_DEVICE
     void apply_frame_pauli(
                 word_t&       x_q1,
                 word_t&       z_q1,

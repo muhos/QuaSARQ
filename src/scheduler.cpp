@@ -115,7 +115,8 @@ namespace QuaSARQ {
         for (size_t i = 0; i < measurements.size(); i++) {
             const M_OP& m = measurements[i];
             if (isReset(m.type)) is_recording = false;
-            circuit.addGate(depth_level, m.type, 1, m.qubit);
+            Gate* g = circuit.addGate(depth_level, m.type, 1, m.qubit);
+            if (noiseProbs(int(m.type))) g->set_prob(0, m.flip_prob);
         }
         measurements.clear();
         circuit.markMeasure(depth_level);
@@ -390,7 +391,7 @@ namespace QuaSARQ {
                     if (!is_c_unlocked)
                         break;
                     circuit_io.circuit_queue.pop_front();
-                    measurements.push(M_OP(c, gate.type));
+                    measurements.push(M_OP(c, gate.type, gate.probs[0]));
                     measuring = true;
                     locked_qubits.push(c);
                     locked[c] = 1;
@@ -556,6 +557,7 @@ namespace QuaSARQ {
             num_qubits = circuit_data != nullptr ?
                          parse(stats, circuit_data, circuit_data_size) :
                          parse(stats, circuit_path.c_str());
+            circuit_io.observables.merge_by_id();
             depth = schedule(stats, circuit, winfo);
         }
         write_measures_to_file = stats.circuit.measure_stats.count > options.min_measures_write;

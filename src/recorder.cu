@@ -3,6 +3,7 @@
 #include "pivot.cuh"
 #include "atomic.cuh"
 #include "sum.cuh"
+#include "noise.cuh"
 
 namespace QuaSARQ {
 
@@ -13,6 +14,7 @@ namespace QuaSARQ {
         const_signs_t               inv_ss,
         const_refs_t                refs,
         const_buckets_t             gates,
+        const   uint32*             noise_paulis,
         const   size_t              num_gates,
         const   size_t              num_words_minor,
         const   size_t              step_gates)
@@ -21,8 +23,9 @@ namespace QuaSARQ {
         for_parallel_x(i, num_gates) {
             const Gate& gate = (Gate&) gates[refs[i]];
             const size_t q = gate.wires[0];
+            const bool flipped = (noise_paulis != nullptr) && bool(noise_paulis[i] & 1u);
             record[ordinals[step_gates + i]] =
-                bool(ss_stab[WORD_OFFSET(q)] & BITMASK_GLOBAL(q));
+                bool(ss_stab[WORD_OFFSET(q)] & BITMASK_GLOBAL(q)) ^ flipped;
         }
     }
 
@@ -35,12 +38,23 @@ namespace QuaSARQ {
         LOGN2(2, "Recording measurements with block(x:%u, y:%u) and grid(x:%u, y:%u).. ",
             currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
         if (options.sync) cutimer.start(stream);
+        if (gpu_circuit.noise_states() != nullptr && gpu_circuit.noise_paulis() != nullptr) {
+            dim3 sblock(256), sgrid;
+            OPTIMIZEBLOCKS(sgrid.x, num_gates, sblock.x);
+            sample_noise_k<<<sgrid, sblock, 0, stream>>>(
+                gpu_circuit.noise_states(),
+                gpu_circuit.noise_paulis(),
+                gpu_circuit.references(),
+                gpu_circuit.gates(),
+                num_gates);
+        }
         record_signs_k <<<currentgrid, currentblock, 0, stream>>> (
             recorder.device_record(),
             recorder.device_ordinals(),
             tableau.signs(),
             gpu_circuit.references(),
             gpu_circuit.gates(),
+            gpu_circuit.noise_paulis(),
             num_gates,
             tableau.num_words_minor(),
             recorder.step_history());

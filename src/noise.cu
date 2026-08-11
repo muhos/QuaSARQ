@@ -28,6 +28,10 @@ namespace QuaSARQ {
             const gate_ref_t ref  = refs[i];
             const Gate&      gate = (const Gate&) gates[ref];
             uint32 pauli = 0;
+            if (!noiseProbs(int(gate.type))) {
+                noise_paulis[i] = pauli;
+                continue;
+            }
             curand_algorithm_t local = noise_states[i];
             const float prob = curand_uniform(&local);
             if (gate.type == PAULI_CHANNEL_1) {
@@ -46,7 +50,9 @@ namespace QuaSARQ {
                         gate.type == DEPOLARIZE2 ? 1u + (curand(&local) % 15u) :
                         gate.type == X_ERROR     ? 1u :
                         gate.type == Z_ERROR     ? 2u :
-                        gate.type == Y_ERROR     ? 3u : 0u;
+                        gate.type == Y_ERROR     ? 3u :
+                        gate.type == M           ? 1u :
+                        gate.type == MR          ? 1u : 0u;
             }
             noise_states[i] = local; // advance sequence
             noise_paulis[i] = pauli;
