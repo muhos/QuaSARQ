@@ -20,9 +20,10 @@ INSTALL  = printf " installing       ( %-15s )..."
 DONE     = printf "%-30s\n" " done."
 endif
 
-# Build in parallel by default.
+ifeq ($(MAKELEVEL),0)
 ifeq ($(filter -j%,$(MAKEFLAGS)),)
 MAKEFLAGS += -j8
+endif
 endif
 
 # version
@@ -186,7 +187,7 @@ $(CUARENA_LIB):
 	    -DCUARENA_BUILD_EXAMPLES=OFF \
 	    -DCUARENA_BUILD_TESTS=OFF \
 	    > /dev/null
-	@cmake --build $(CUARENA_DIR)/build --target cuArena > /dev/null
+	@MAKEFLAGS= cmake --build $(CUARENA_DIR)/build --target cuArena --parallel 8 > /dev/null
 
 $(BUILD_DIR)/$(LIB): $(cuobj) $(cppobj)
 	@$(ARCHIVE) "done" $@
@@ -241,7 +242,7 @@ clean:
 	rm -f $(SRC_DIR)/*.o
 	rm -rf $(BUILD_DIR) $(PTX_DIR)
 	@echo -n "cleaning up cuarena... "
-	@cmake --build $(CUARENA_DIR)/build --target clean -- --no-print-directory
+	@MAKEFLAGS= cmake --build $(CUARENA_DIR)/build --target clean -- --no-print-directory
 	@echo "done"
 
 .PHONY: all test clean binding binding-test pic-archive

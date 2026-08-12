@@ -87,13 +87,53 @@ namespace QuaSARQ {
 
     inline int binding_get_chunk_shots() { return options.chunk_shots; }
 
+    // Sizing the pool from the circuit is the default.
+    inline bool auto_device_memory = true;
+    inline int  last_auto_device_memory = 0;
+
     inline void binding_set_max_device_memory(const int& megabytes) {
         if (megabytes < 0)
             throw std::invalid_argument("device memory cap cannot be negative");
+        auto_device_memory = false;
         options.max_gpu_memory = megabytes;
     }
 
-    inline int binding_get_max_device_memory() { return options.max_gpu_memory; }
+    inline void binding_set_auto_device_memory() {
+        auto_device_memory = true;
+        options.max_gpu_memory = 0;
+    }
+
+    inline int binding_get_max_device_memory() {
+        return auto_device_memory ? last_auto_device_memory : options.max_gpu_memory;
+    }
+
+    // How much a single process can take of the device's total memory before it chunks shots.
+    constexpr double AUTO_MAX_DEVICE_SHARE = 0.4;
+
+    inline int binding_auto_device_memory(
+        const size_t& num_qubits,
+        const size_t& num_measurements,
+        const size_t& num_shots)
+    {
+        const size_t word_bytes = sizeof(word_std_t);
+        const size_t qubit_words = get_num_words(num_qubits);
+        const size_t measure_words = get_num_words(num_measurements);
+        const size_t reference_pass = 6 * WORD_BITS * word_bytes * qubit_words * qubit_words;
+        const size_t frame_pass = num_shots * word_bytes * (2 * qubit_words + measure_words);
+        const size_t peak = MAX(reference_pass, frame_pass);
+        size_t bytes = 2 * peak + 64 * MB;
+        size_t free_bytes = 0, total_bytes = 0;
+        if (cudaMemGetInfo(&free_bytes, &total_bytes) == cudaSuccess && total_bytes) {
+            const size_t share = size_t(double(total_bytes) * AUTO_MAX_DEVICE_SHARE);
+            if (bytes > share) bytes = share;
+        }
+        cudaGetLastError();
+        const size_t reference_floor = reference_pass + (reference_pass / 4);
+        if (bytes < reference_floor) bytes = reference_floor;
+        const size_t megabytes = bytes / MB + 128;
+        last_auto_device_memory = int(MIN(megabytes, size_t(INT32_MAX)));
+        return last_auto_device_memory;
+    }
 
     inline std::string binding_version() { return std::string(version()); }
 
@@ -167,6 +207,8 @@ namespace QuaSARQ {
         size_t                   num_detectors;
         size_t                   num_observables;
         size_t                   num_measurements;
+        size_t                   num_qubits;
+        int                      built_cap;
         std::unique_ptr<Framing> framing;
 
     public:
@@ -174,16 +216,17 @@ namespace QuaSARQ {
         Sampling(const std::string& circuit, const uint64_t& seed);
         ~Sampling();
 
-        Sampling            (const Sampling&) = delete;
-        Sampling& operator= (const Sampling&) = delete;
+        Sampling                (const Sampling&) = delete;
+        Sampling& operator=     (const Sampling&) = delete;
 
-        size_t detectors() const { return num_detectors; }
-        size_t observables() const { return num_observables; }
-        size_t measurements() const { return num_measurements; }
+        size_t detectors        () const { return num_detectors; }
+        size_t observables      () const { return num_observables; }
+        size_t measurements     () const { return num_measurements; }
+        size_t qubits           () const { return num_qubits; }
         bool holds_device_memory() const { return framing != nullptr; }
 
-        void run(const SampleRequest& request);
-        void release();
+        void run                (const SampleRequest& request);
+        void release            ();
     };
 
 }

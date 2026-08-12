@@ -7,7 +7,9 @@
 namespace QuaSARQ {
 
     __managed__ uint64 checksum;
-    __managed__ sign_t sign_checksum;
+    // Only ever tested for non-zero, so it is widened past the word type: an 8-bit word
+    // has no native atomic, and a 32-bit accumulator would drop half of a 64-bit sign word.
+    __managed__ uint64 sign_checksum;
 
     #define COLUMN_MAJOR_IDX(WORD_IDX, QUBIT_IDX) (QUBIT_IDX) * num_words_major + (WORD_IDX)
     #define XBLOCKSIZE 32
@@ -188,7 +190,7 @@ namespace QuaSARQ {
     __global__
     void check_signs_zero(const Signs* ss, const size_t num_words) {
         for_parallel_x(w, num_words) {
-            if ((*ss)[w]) atomicOr(&sign_checksum, (*ss)[w]);
+            if ((*ss)[w]) atomicOr(&sign_checksum, uint64((*ss)[w]));
         }
     }
 

@@ -35,7 +35,9 @@ class QuaSARQCompiledSampler(sinter.CompiledSampler):
         import quasarq
 
         if max_device_memory:
-            quasarq.set_max_device_memory(int(max_device_memory))
+            quasarq.set_max_device_memory(
+                max_device_memory if isinstance(max_device_memory, str) else int(max_device_memory)
+            )
 
         if decoder not in (None, "pymatching"):
             raise ValueError(f"only pymatching is supported, got {decoder!r}")

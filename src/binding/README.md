@@ -54,6 +54,21 @@ QUASARQ_CUDA_ARCH=all pip wheel .
 
 That takes considerably longer, since every kernel is compiled for every architecture.
 
+## GPU memory
+
+The pool is sized per run from the circuit and the shot count, which keeps a run from locking
+the whole device against other processes. Override it if you need to:
+
+```python
+quasarq.set_max_device_memory("auto")   # default: size it from the circuit
+quasarq.set_max_device_memory(512)      # fixed cap in MB
+quasarq.set_max_device_memory(0)        # take whatever is free
+```
+
+Results never depend on the cap: a smaller pool only changes how many shots are simulated per
+chunk. `auto` sizes for the whole request so it does not split shots, growing the pool if a later
+request needs more.
+
 ## Contents
 
 - `quasarq.compile_detector_sampler(circuit, *, seed=None)` → `CompiledDetectorSampler`

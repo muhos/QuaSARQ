@@ -152,9 +152,21 @@ NB_MODULE(_quasarq, m) {
 
     m.def("get_chunk_shots", &binding_get_chunk_shots);
 
-    m.def("set_max_device_memory", &binding_set_max_device_memory, nb::arg("megabytes"),
-          "Cap the GPU pool in MB, so several processes can share one device. "
-          "0 takes whatever is free. Must be set before the first sample().");
+    m.def("set_max_device_memory",
+          [](nb::handle limit) {
+              if (nb::isinstance<nb::str>(limit)) {
+                  const std::string choice = nb::cast<std::string>(limit);
+                  if (choice != "auto")
+                      throw std::invalid_argument("the only accepted string is 'auto', got '" + choice + "'");
+                  binding_set_auto_device_memory();
+                  return;
+              }
+              binding_set_max_device_memory(nb::cast<int>(limit));
+          },
+          nb::arg("megabytes"),
+          "Cap the GPU pool so several processes can share one device. Takes a size in MB, or "
+          "'auto' to size it per run from the circuit and the shot count. 0 takes whatever is "
+          "free. Must be set before the first sample().");
 
     m.def("get_max_device_memory", &binding_get_max_device_memory);
 

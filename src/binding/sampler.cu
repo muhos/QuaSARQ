@@ -31,6 +31,8 @@ namespace QuaSARQ {
         , num_detectors(0)
         , num_observables(0)
         , num_measurements(0)
+        , num_qubits(0)
+        , built_cap(0)
     {
         if (circuit_text.empty())
             LOGERROR("circuit is empty.");
@@ -50,6 +52,7 @@ namespace QuaSARQ {
         num_detectors = io.detectors.pinned.num_instructions;
         num_observables = io.observables.pinned.num_observables;
         num_measurements = io.measures_count;
+        num_qubits = io.max_qubits;
     }
 
     Sampling::~Sampling() {
@@ -77,6 +80,14 @@ namespace QuaSARQ {
         results.detectors_stride = request.detectors_stride;
         results.observables_stride = request.observables_stride;
         results.measurements_stride = request.measurements_stride;
+
+        if (auto_device_memory) {
+            const int cap = binding_auto_device_memory(num_qubits, num_measurements, request.num_shots);
+            if (framing != nullptr && cap > built_cap)
+                release();
+            options.max_gpu_memory = cap;
+            built_cap = cap;
+        }
         if (pool_owner != nullptr && pool_owner != this)
             pool_owner->release();
 

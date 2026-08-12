@@ -81,11 +81,8 @@ void Framing::sample() {
     gpu_circuit.initiate(num_qubits, winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
     copy_detectors(copy_streams[2]);
     copy_observables(copy_streams[3]);
-    const size_t total_words_minor = get_num_words(total_shots);
     for (chunk_start = 0, chunk_index = 0; chunk_start < total_shots && !timeout; chunk_start += num_shots, chunk_index++) {
         num_shots = MIN(max_chunk_shots, total_shots - chunk_start);
-        const size_t chunk_word_offset = WORD_OFFSET(chunk_start);
-        const uint64 sample_seed = options.seed ^ 0x9e3779b97f4a7c15ULL;
         num_partitions = tableau.alloc(num_qubits, num_shots, winfo.max_window_bytes, false, false, false, 0, "frame ");
         if (options.check_measurement && stats.circuit.measure_stats.count) {
             mchecker.alloc(num_qubits, tableau.num_words_minor());
