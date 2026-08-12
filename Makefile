@@ -20,6 +20,19 @@ INSTALL  = printf " installing       ( %-15s )..."
 DONE     = printf "%-30s\n" " done."
 endif
 
+# Build in parallel by default.
+ifeq ($(filter -j%,$(MAKEFLAGS)),)
+MAKEFLAGS += -j8
+endif
+
+# version
+# The VERSION file is the single source: pyproject.toml reads it too.
+
+VERSION := $(strip $(shell cat $(dir $(firstword $(MAKEFILE_LIST)))VERSION 2>/dev/null))
+ifeq ($(VERSION),)
+$(error cannot read the VERSION file)
+endif
+
 # CUDA path
 
 CUDA_PATH ?= /usr/local/cuda
@@ -98,7 +111,7 @@ else  ifeq ($(word),64)
       WORDSIZE := 64
 endif
 
-NVCCFLAGS += -DWORD_SIZE_$(WORDSIZE)
+NVCCFLAGS += -DWORD_SIZE_$(WORDSIZE) -DVERSION=\"$(VERSION)\"
 
 # position-independent build, required to link the archive into a shared
 # object such as the Python extension module. Objects and archive get their
@@ -120,8 +133,8 @@ ALL_LDFLAGS += $(ALL_CCFLAGS)
 ALL_LDFLAGS += $(addprefix -Xlinker ,$(LDFLAGS))
 
 # gencode arguments
-
-GENCODE_FLAGS := -arch=native
+GPU_ARCH ?= native
+GENCODE_FLAGS := -arch=$(GPU_ARCH)
 
 # target rules
 
@@ -213,10 +226,10 @@ test: $(BUILD_DIR)/$(BIN)
 
 PYTHON       ?= python3
 BINDING_DIR  := $(SRC_DIR)/binding
-BINDING_ARGS := CUARENA_DIR=$(CUARENA_DIR) PYTHON=$(PYTHON) WORDSIZE=$(WORDSIZE)
+BINDING_ARGS := CUARENA_DIR=$(CUARENA_DIR) PYTHON=$(PYTHON) WORDSIZE=$(WORDSIZE) GPU_ARCH=$(GPU_ARCH)
 
 pic-archive:
-	@$(MAKE) pic=1 $(BUILD_DIR)/libquasarq_pic.a $(CUARENA_LIB) CUARENA_DIR=$(CUARENA_DIR) word=$(WORDSIZE)
+	@$(MAKE) pic=1 $(BUILD_DIR)/libquasarq_pic.a $(CUARENA_LIB) CUARENA_DIR=$(CUARENA_DIR) word=$(WORDSIZE) GPU_ARCH=$(GPU_ARCH)
 
 binding: pic-archive
 	@$(MAKE) -C $(BINDING_DIR) $(BINDING_ARGS)

@@ -23,8 +23,10 @@ INCLUDES  := -I. -I$(QUASARQ_DIR)/src -I$(CUARENA_DIR)/include -I$(CUDA_PATH)/in
 LIBS      := -L$(QUASARQ_DIR)/build -lquasarq_pic -L$(CUARENA_DIR)/build -lcuarena \
              -L$(CUDA_PATH)/lib64 -lcudart -lcurand -lnvidia-ml -ldl
 
+GPU_ARCH  ?= native
+
 CCFLAGS   := -std=c++20 -fPIC -fvisibility=hidden -fno-strict-aliasing -fdiagnostics-show-option
-NVCCFLAGS := -m64 -std=c++20 -arch=native
+NVCCFLAGS := -m64 -std=c++20 -arch=$(GPU_ARCH)
 
 ifeq ($(debug),1)
       NVCCFLAGS += -g -G -DDEBUG
@@ -50,13 +52,19 @@ NVCCFLAGS += -DWORD_SIZE_$(WORDSIZE) -Xcompiler -fPIC -Xcompiler -fvisibility=hi
 CCFLAGS   += -DWORD_SIZE_$(WORDSIZE)
 CUDA_FLAGS := $(NVCCFLAGS)
 
-MODULE    := quasarq$(EXT_SUFFIX)
+PKG_DIR   := quasarq
+MODULE    := $(PKG_DIR)/_quasarq$(EXT_SUFFIX)
+# The core locates kernel.config next to the shared object, so the package carries its own copy.
+PKG_CONFIG := $(PKG_DIR)/kernel.config
 CUDA_OBJS := sampler.pic.cuda.o
 HOST_OBJS := module.pic.o nb_combined.pic.o
 OBJS      := $(CUDA_OBJS) $(HOST_OBJS)
 HEADERS   := sampler.hpp module.hpp $(wildcard $(QUASARQ_DIR)/src/*.hpp) $(wildcard $(QUASARQ_DIR)/src/*.cuh)
 
-all: $(MODULE)
+all: $(MODULE) $(PKG_CONFIG)
+
+$(PKG_CONFIG): $(QUASARQ_DIR)/src/kernel.config
+	@cp $< $@
 
 sampler.pic.cuda.o: sampler.cu $(HEADERS)
 	@echo -n "compiling $<..."
@@ -84,10 +92,10 @@ $(QUASARQ_LIB):
 $(CUARENA_LIB):
 	@$(MAKE) -C $(QUASARQ_DIR) $(CUARENA_LIB) CUARENA_DIR=$(CUARENA_DIR)
 
-test: $(MODULE)
+test: $(MODULE) $(PKG_CONFIG)
 	@PYTHONPATH=$(CURDIR) $(PYTHON) $(QUASARQ_DIR)/tests/test_binding.py
 
 clean:
-	rm -f $(OBJS) $(MODULE)
+	rm -f $(OBJS) $(MODULE) $(PKG_CONFIG)
 
 .PHONY: all test clean

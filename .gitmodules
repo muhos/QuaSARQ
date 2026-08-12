@@ -1,0 +1,3 @@
+[submodule "extern/cuarena"]
+	path = extern/cuarena
+	url = https://github.com/muhos/cuarena.git

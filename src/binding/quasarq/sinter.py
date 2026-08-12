@@ -1,6 +1,7 @@
 """sinter.Sampler adapter that samples detection events on the GPU with QuaSARQ.
 
-    import sinter, quasarq_sinter
+    import sinter
+    from quasarq import sinter as quasarq_sinter
 
     # The `__main__` guard is essential to prevent sinter from recursively starting workers
     if __name__ == '__main__':

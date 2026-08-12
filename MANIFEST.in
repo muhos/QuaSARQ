@@ -1,0 +1,18 @@
+# The sdist has to carry everything the Makefiles compile, since pip builds from source.
+include Makefile LICENSE VERSION
+include setup.py pyproject.toml
+include src/kernel.config
+include src/binding/Makefile
+include src/binding/README.md
+recursive-include src *.cu *.cuh *.cpp *.cc *.hpp *.h
+recursive-include src/binding/quasarq *.py *.pyi py.typed
+recursive-include extern *.cu *.cuh *.cpp *.hpp *.h *.txt *.cmake CMakeLists.txt LICENSE
+
+# Build products don't belong in an sdist; the wheel gets them through package-data instead.
+global-exclude *.o *.a *.so *.pyc *.nsys-rep *.sqlite
+prune extern/cuarena/build
+prune extern/cuarena/tests
+prune extern/cuarena/examples
+prune build
+prune dev
+prune tests/circuits

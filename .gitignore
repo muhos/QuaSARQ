@@ -17,10 +17,17 @@ tests/test_simulator
 tests/test_sampling
 tests/test_equivalence
 src/binding/*.so
+src/binding/quasarq/*.so
+src/binding/quasarq/kernel.config
+src/binding/*.egg-info
+*.egg-info
+extern/cuarena/build
+dist
 *.o
 *.cuo
 *.cuda.o
 *.txt
+!CMakeLists.txt
 *.qstate
 *.01
 *.out

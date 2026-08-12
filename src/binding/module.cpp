@@ -89,7 +89,7 @@ nb::object Module::MeasurementSampler::sample(const size_t& shots, const bool& b
     return to_numpy(measurements, bit_packed);
 }
 
-NB_MODULE(quasarq, m) {
+NB_MODULE(_quasarq, m) {
 
     m.doc() = "QuaSARQ GPU simulator, compatible with Stim format.";
 
@@ -128,7 +128,7 @@ NB_MODULE(quasarq, m) {
           nb::arg("circuit"),
           nb::kw_only(),
           nb::arg("seed") = nb::none(),
-          "Compile a detection-event sampler for a stim.Circuit or circuit text."
+          "Compile a detection-event sampler for a stim.Circuit or circuit text. "
           "seed=None samples non-deterministically.");
 
     m.def("compile_sampler",
@@ -139,7 +139,7 @@ NB_MODULE(quasarq, m) {
           nb::arg("circuit"),
           nb::kw_only(),
           nb::arg("seed") = nb::none(),
-          "Compile a measurement sampler for a stim.Circuit or circuit text."
+          "Compile a measurement sampler for a stim.Circuit or circuit text. "
           "seed=None samples non-deterministically.");
 
     m.def("set_verbosity", &binding_set_verbosity, nb::arg("level"),
