@@ -163,11 +163,14 @@ namespace QuaSARQ {
         cudaGetLastError();
         if (queried != cudaSuccess || !total_bytes)
             return " [GPU memory: unavailable (" + std::string(cudaGetErrorString(queried)) + "); another process is likely holding the device]";
+
+        if (free_bytes * 4 >= total_bytes)
+            return std::string();
+            
         const size_t free_mb = free_bytes >> 20, total_mb = total_bytes >> 20;
-        std::string note = " [GPU memory: " + std::to_string(free_mb) + " MB free of " + std::to_string(total_mb) + " MB";
-        if (free_bytes * 4 < total_bytes)
-            note += "; another process is holding the device, so no pool could be reserved";
-        return note + "]";
+        return " [GPU memory: " + std::to_string(free_mb) + " MB free of "
+             + std::to_string(total_mb) + " MB; another process is holding the device, so no pool "
+             "could be reserved]";
     }
 
     inline std::string binding_last_error() {

@@ -8,8 +8,7 @@ namespace QuaSARQ {
     bool check_equivalence(std::string& circuit, std::string& other) {
         binding_clear_error();
         // The check compares the Clifford operation each circuit realises. A measurement is not
-        // part of that operation, so a circuit containing one would be compared as though the
-        // measurement were absent -- a wrong answer rather than a limitation.
+        // part of that operation.
         const size_t measured = scan_circuit(circuit).measurements;
         const size_t other_measured = scan_circuit(other).measurements;
         if (measured || other_measured) {
@@ -68,8 +67,7 @@ namespace QuaSARQ {
         OptionsGuard guard;
         apply_library_defaults();
         options.num_shots = 0;
-        // A split tableau holds one partition at a time and the next overwrites it, so the state
-        // could not be returned whole. Sizing the pool for the whole tableau keeps it in one.
+
         if (auto_device_memory)
             options.max_gpu_memory = binding_auto_device_memory(num_qubits, num_measurements, 0);
         binding_clear_error();
