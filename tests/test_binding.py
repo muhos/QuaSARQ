@@ -40,7 +40,7 @@ def circuit(distance, rounds, p=0.002):
 
 
 def sampler(c, seed=1):
-    return quasarq.compile_sampler(c, seed=seed)
+    return quasarq.compile_detector_sampler(c, seed=seed)
 
 
 def packbits(a):
@@ -126,8 +126,8 @@ def test_seeding(c, shots):
           "consecutive calls keep the same statistics",
           f"{r1.mean():.5f} vs {r2.mean():.5f}")
 
-    check(not np.array_equal(quasarq.compile_sampler(c).sample(2000),
-                             quasarq.compile_sampler(c).sample(2000)),
+    check(not np.array_equal(quasarq.compile_detector_sampler(c).sample(2000),
+                             quasarq.compile_detector_sampler(c).sample(2000)),
           "seed=None is nondeterministic (as stim does)")
 
     chain = sampler(c, 99)

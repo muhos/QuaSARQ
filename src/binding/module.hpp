@@ -130,13 +130,13 @@ namespace Module{
             reinterpret_cast<bool*>(data), { buffer.rows, buffer.cols }, owner));
     }
 
-    class Sampler {
+    class DetectorSampler {
 
         std::unique_ptr<QuaSARQ::Sampling> engine;
 
     public:
 
-        Sampler(nb::handle circuit, const uint64_t& seed) {
+        DetectorSampler(nb::handle circuit, const uint64_t& seed) {
             const std::string text = circuit_to_text(circuit);
             QuaSARQ::binding_clear_error();
             try {

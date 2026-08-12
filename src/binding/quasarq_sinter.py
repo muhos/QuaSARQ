@@ -35,7 +35,7 @@ class QuaSARQCompiledSampler(sinter.CompiledSampler):
         if dem is None:
             dem = task.circuit.detector_error_model(decompose_errors=True)
         self.matcher = pymatching.Matching.from_detector_error_model(dem)
-        self.sampler = quasarq.compile_sampler(task.circuit, seed=seed)
+        self.sampler = quasarq.compile_detector_sampler(task.circuit, seed=seed)
         self.num_observables = self.sampler.num_observables
         self.min_batch_shots = max(int(min_batch_shots or 0), 1)
 

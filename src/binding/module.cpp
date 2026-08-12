@@ -30,7 +30,7 @@ std::string Module::locate_kernel_config() {
     return std::string();
 }
 
-nb::object Module::Sampler::sample(
+nb::object Module::DetectorSampler::sample(
                     const size_t& shots,
                     const bool& separate_observables,
                     const bool& bit_packed,
@@ -92,12 +92,12 @@ NB_MODULE(quasarq, m) {
 
     binding_initialize(Module::locate_kernel_config());
 
-    nb::class_<Module::Sampler>(m, "CompiledSampler")
-        .def_prop_ro("num_detectors", &Module::Sampler::num_detectors)
-        .def_prop_ro("num_observables", &Module::Sampler::num_observables)
-        .def_prop_ro("holds_device_memory", &Module::Sampler::holds_device_memory)
-        .def("release", &Module::Sampler::release, "Free the GPU pool this sampler is holding. The next sample() rebuilds it.")
-        .def("sample", &Module::Sampler::sample,
+    nb::class_<Module::DetectorSampler>(m, "CompiledDetectorSampler")
+        .def_prop_ro("num_detectors", &Module::DetectorSampler::num_detectors)
+        .def_prop_ro("num_observables", &Module::DetectorSampler::num_observables)
+        .def_prop_ro("holds_device_memory", &Module::DetectorSampler::holds_device_memory)
+        .def("release", &Module::DetectorSampler::release, "Free the GPU pool this sampler is holding. The next sample() rebuilds it.")
+        .def("sample", &Module::DetectorSampler::sample,
              nb::arg("shots"),
              nb::kw_only(),
              nb::arg("separate_observables") = false,
@@ -107,16 +107,17 @@ NB_MODULE(quasarq, m) {
              "Sample detection events. Returns dets, or (dets, obs) when "
              "separate_observables=True.");
 
-    m.def("compile_sampler",
+    m.def("compile_detector_sampler",
           [](nb::handle circuit, nb::handle seed) {
               const uint64_t resolved = seed.is_none() ? binding_random_seed() : nb::cast<uint64_t>(seed);
-              return new Module::Sampler(circuit, resolved);
+              return new Module::DetectorSampler(circuit, resolved);
           },
           nb::arg("circuit"),
           nb::kw_only(),
           nb::arg("seed") = nb::none(),
-          "Compile a sampler for a stim.Circuit or circuit text. "
-          "seed=None samples non-deterministically, as in stim.");
+          "Compile a detection-event sampler for a stim.Circuit or circuit text, "
+          "matching stim.Circuit.compile_detector_sampler(). "
+          "seed=None samples non-deterministically.");
 
     m.def("set_verbosity", &binding_set_verbosity, nb::arg("level"),
           "0 silences the sampling engine; 1-3 print progress to stdout.");
