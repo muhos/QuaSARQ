@@ -58,23 +58,7 @@ nb::object Module::DetectorSampler::sample(
         request.observables = separate_observables ? obs.data : nullptr;
         request.detectors_stride = dets_stride;
         request.observables_stride = obs_stride;
-        binding_clear_error();
-        std::lock_guard<std::mutex> lock(sampling_mutex);
-        bool failed = false;
-        {
-            nb::gil_scoped_release release;
-            try {
-                engine->run(request);
-            }
-            catch (...) {
-                failed = true;
-            }
-        }
-        if (failed) {
-            discard(dets);
-            discard(obs);
-            raise_from_core("sampling failed");
-        }
+        execute(request, { &dets, &obs });
     }
 
     nb::object dets_array = to_numpy(dets, bit_packed);
@@ -84,6 +68,25 @@ nb::object Module::DetectorSampler::sample(
     }
     nb::object obs_array = to_numpy(obs, bit_packed);
     return nb::make_tuple(dets_array, obs_array);
+}
+
+nb::object Module::MeasurementSampler::sample(const size_t& shots, const bool& bit_packed)
+{
+    const size_t num_measurements = engine->measurements();
+    const size_t stride = binding_stride_of(num_measurements, bit_packed);
+
+    HostBuffer measurements(shots, stride);
+
+    if (shots) {
+        SampleRequest request;
+        request.num_shots = shots;
+        request.bit_packed = bit_packed;
+        request.measurements = measurements.data;
+        request.measurements_stride = stride;
+        execute(request, { &measurements });
+    }
+
+    return to_numpy(measurements, bit_packed);
 }
 
 NB_MODULE(quasarq, m) {
@@ -107,6 +110,16 @@ NB_MODULE(quasarq, m) {
              "Sample detection events. Returns dets, or (dets, obs) when "
              "separate_observables=True.");
 
+    nb::class_<Module::MeasurementSampler>(m, "CompiledMeasurementSampler")
+        .def_prop_ro("num_measurements", &Module::MeasurementSampler::num_measurements)
+        .def_prop_ro("holds_device_memory", &Module::MeasurementSampler::holds_device_memory)
+        .def("release", &Module::MeasurementSampler::release, "Free the GPU pool this sampler is holding. The next sample() rebuilds it.")
+        .def("sample", &Module::MeasurementSampler::sample,
+             nb::arg("shots"),
+             nb::kw_only(),
+             nb::arg("bit_packed") = false,
+             "Sample raw measurement outcomes, one column per measurement in circuit order.");
+
     m.def("compile_detector_sampler",
           [](nb::handle circuit, nb::handle seed) {
               const uint64_t resolved = seed.is_none() ? binding_random_seed() : nb::cast<uint64_t>(seed);
@@ -115,14 +128,29 @@ NB_MODULE(quasarq, m) {
           nb::arg("circuit"),
           nb::kw_only(),
           nb::arg("seed") = nb::none(),
-          "Compile a detection-event sampler for a stim.Circuit or circuit text, "
-          "matching stim.Circuit.compile_detector_sampler(). "
+          "Compile a detection-event sampler for a stim.Circuit or circuit text."
+          "seed=None samples non-deterministically.");
+
+    m.def("compile_sampler",
+          [](nb::handle circuit, nb::handle seed) {
+              const uint64_t resolved = seed.is_none() ? binding_random_seed() : nb::cast<uint64_t>(seed);
+              return new Module::MeasurementSampler(circuit, resolved);
+          },
+          nb::arg("circuit"),
+          nb::kw_only(),
+          nb::arg("seed") = nb::none(),
+          "Compile a measurement sampler for a stim.Circuit or circuit text."
           "seed=None samples non-deterministically.");
 
     m.def("set_verbosity", &binding_set_verbosity, nb::arg("level"),
           "0 silences the sampling engine; 1-3 print progress to stdout.");
 
     m.def("get_verbosity", &binding_get_verbosity);
+
+    m.def("set_chunk_shots", &binding_set_chunk_shots, nb::arg("shots"),
+          "Cap how many shots are simulated per GPU chunk. 0 sizes the chunk to fit device memory.");
+
+    m.def("get_chunk_shots", &binding_get_chunk_shots);
 
     m.def("set_kernel_config", [](const std::string& path) { binding_initialize(path); },
           nb::arg("path"), "Point the sampling engine at a kernel.config file.");

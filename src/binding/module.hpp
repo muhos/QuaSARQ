@@ -130,13 +130,35 @@ namespace Module{
             reinterpret_cast<bool*>(data), { buffer.rows, buffer.cols }, owner));
     }
 
-    class DetectorSampler {
+    class Engine {
+
+    protected:
 
         std::unique_ptr<QuaSARQ::Sampling> engine;
 
+        void execute(const QuaSARQ::SampleRequest& request, std::initializer_list<HostBuffer*> outputs) {
+            QuaSARQ::binding_clear_error();
+            std::lock_guard<std::mutex> lock(sampling_mutex);
+            bool failed = false;
+            {
+                nb::gil_scoped_release release;
+                try {
+                    engine->run(request);
+                }
+                catch (...) {
+                    failed = true;
+                }
+            }
+            if (failed) {
+                for (HostBuffer* buffer : outputs)
+                    discard(*buffer);
+                raise_from_core("sampling failed");
+            }
+        }
+
     public:
 
-        DetectorSampler(nb::handle circuit, const uint64_t& seed) {
+        Engine(nb::handle circuit, const uint64_t& seed) {
             const std::string text = circuit_to_text(circuit);
             QuaSARQ::binding_clear_error();
             try {
@@ -150,16 +172,35 @@ namespace Module{
             }
         }
 
-        size_t num_detectors() const { return engine->detectors(); }
-        size_t num_observables() const { return engine->observables(); }
         bool holds_device_memory() const { return engine->holds_device_memory(); }
         void release() { engine->release(); }
+    };
+
+    class DetectorSampler : public Engine {
+
+    public:
+
+        using Engine::Engine;
+
+        size_t num_detectors() const { return engine->detectors(); }
+        size_t num_observables() const { return engine->observables(); }
 
         nb::object sample(const size_t& shots,
                           const bool& separate_observables,
                           const bool& bit_packed,
                           const bool& append_observables,
                           const bool& prepend_observables);
+    };
+
+    class MeasurementSampler : public Engine {
+
+    public:
+
+        using Engine::Engine;
+
+        size_t num_measurements() const { return engine->measurements(); }
+
+        nb::object sample(const size_t& shots, const bool& bit_packed);
     };
 
     std::string locate_kernel_config();

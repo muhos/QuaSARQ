@@ -10,15 +10,19 @@ namespace QuaSARQ {
 	struct FrameResults {
 		uint8*  detectors;
 		uint8*  observables;
+		uint8*  measurements;
 		size_t  detectors_stride;
 		size_t  observables_stride;
+		size_t  measurements_stride;
 		bool    bit_packed;
 
 		FrameResults() :
 			detectors(nullptr)
 			, observables(nullptr)
+			, measurements(nullptr)
 			, detectors_stride(0)
 			, observables_stride(0)
+			, measurements_stride(0)
 			, bit_packed(false) {}
 
 		static size_t stride_of(const size_t& num_units, const bool& bit_packed) {
@@ -69,6 +73,10 @@ namespace QuaSARQ {
                                 const RecordRefs& refs,
                                 const cudaStream_t& stream,
                                 const char* label);
+        void collect_samples(uint8* dest,
+                             const size_t& dest_stride,
+                             const uint32& n,
+                             const cudaStream_t& stream);
         void init_rand_states(const uint64& seed,
                                 const size_t& num_words_per_table,
                                 const size_t& total_words_minor,

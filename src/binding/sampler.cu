@@ -30,6 +30,7 @@ namespace QuaSARQ {
         , call_index(0)
         , num_detectors(0)
         , num_observables(0)
+        , num_measurements(0)
     {
         if (circuit_text.empty())
             LOGERROR("circuit is empty.");
@@ -48,6 +49,7 @@ namespace QuaSARQ {
         io.observables.merge_by_id();
         num_detectors = io.detectors.pinned.num_instructions;
         num_observables = io.observables.pinned.num_observables;
+        num_measurements = io.measures_count;
     }
 
     Sampling::~Sampling() {
@@ -71,13 +73,13 @@ namespace QuaSARQ {
         results.bit_packed = request.bit_packed;
         results.detectors = num_detectors ? request.detectors : nullptr;
         results.observables = num_observables ? request.observables : nullptr;
+        results.measurements = num_measurements ? request.measurements : nullptr;
         results.detectors_stride = request.detectors_stride;
         results.observables_stride = request.observables_stride;
+        results.measurements_stride = request.measurements_stride;
         if (pool_owner != nullptr && pool_owner != this)
             pool_owner->release();
-        // Shot count does not size the pool -- reserve() takes nearly all free device memory
-        // and choose_chunk_shots() re-derives chunking per call -- so one Framing serves any
-        // count. Rebuilding when the request grows would pay the whole pool cost every call.
+
         if (framing == nullptr) {
             framing.reset(new Framing(circuit_text.data(), circuit_text.size(),
                                       request.num_shots, num_detectors > 0));

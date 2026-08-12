@@ -131,6 +131,17 @@ namespace QuaSARQ {
     }
 
     INLINE_DEVICE
+    bool sample_bit(
+        const Table*               samples,
+        const size_t&              num_words_minor,
+        const size_t&              m,
+        const size_t&              s)
+    {
+        const word_std_t word = (*samples)[m * num_words_minor + WORD_OFFSET(s)];
+        return bool((word >> (s & WORD_MASK)) & 1);
+    }
+
+    INLINE_DEVICE
     bool eval_ref_bit(
         const uint32* __restrict__ refs,
         const uint32* __restrict__ starts,
@@ -144,9 +155,7 @@ namespace QuaSARQ {
         const uint32 start = starts[i];
         const uint32 count = counts[i];
         for (uint32 j = start; j < start + count; j++) {
-            const size_t m_idx = refs[j];
-            const word_std_t word = (*samples)[m_idx * num_words_minor + WORD_OFFSET(s)];
-            result ^= bool((word >> (s & WORD_MASK)) & 1);
+            result ^= sample_bit(samples, num_words_minor, refs[j], s);
         }
         return result;
     }
@@ -198,6 +207,37 @@ namespace QuaSARQ {
                 }
                 else {
                     value = uint8(eval_ref_bit(refs, starts, counts, samples, num_words_minor, u, shot));
+                }
+                out[s * num_units + u] = value;
+            }
+        }
+    }
+
+    __global__
+    void collect_samples_k(
+              uint8*               out,
+        const Table*               samples,
+        const size_t               num_words_minor,
+        const uint32               n,
+        const size_t               num_shots,
+        const uint32               num_units,
+        const bool                 bit_packed,
+        const size_t               shot_offset)
+    {
+        for_parallel_y(s, num_shots) {
+            const size_t shot = shot_offset + s;
+            for_parallel_x(u, num_units) {
+                uint8 value = 0;
+                if (bit_packed) {
+                    const uint32 base = u * 8;
+                    const uint32 lim = MIN(8u, n - base);
+                    for (uint32 k = 0; k < lim; k++) {
+                        if (sample_bit(samples, num_words_minor, base + k, shot))
+                            value |= uint8(1) << k;
+                    }
+                }
+                else {
+                    value = uint8(sample_bit(samples, num_words_minor, u, shot));
                 }
                 out[s * num_units + u] = value;
             }
@@ -369,6 +409,37 @@ namespace QuaSARQ {
                sample_host_required;
     }
 
+    template <class LAUNCHER>
+    inline void collect_into_host(
+              uint8*            dest,
+        const size_t&           dest_stride,
+        const uint32&           num_units,
+        const size_t&           num_shots,
+        const size_t&           row_offset,
+              DeviceAllocator&  gpu_allocator,
+        const cudaStream_t&     stream,
+              LAUNCHER          launch)
+    {
+        size_t rows_per_batch = COLLECT_STAGING_BYTES / num_units;
+        if (!rows_per_batch) rows_per_batch = 1;
+        if (rows_per_batch > num_shots) rows_per_batch = num_shots;
+        uint8* d_out = gpu_allocator.allocate<uint8>(rows_per_batch * num_units, Region::Dynamic);
+        for (size_t start = 0; start < num_shots; start += rows_per_batch) {
+            const size_t batch = MIN(rows_per_batch, num_shots - start);
+            dim3 block(32, 8), grid(1, 1);
+            OPTIMIZEBLOCKS2D(grid.x, num_units, block.x);
+            OPTIMIZEBLOCKS2D(grid.y, (uint32)batch, block.y);
+            launch(d_out, grid, block, batch, start);
+            CHECK(cudaMemcpy2DAsync(
+                dest + (row_offset + start) * dest_stride, dest_stride,
+                d_out, num_units,
+                num_units, batch,
+                cudaMemcpyDeviceToHost, stream));
+            SYNC(stream);
+        }
+        gpu_allocator.deallocate<uint8>(d_out);
+    }
+
     void Framing::collect_frame_refs(
               uint8*        dest,
         const size_t&       dest_stride,
@@ -380,32 +451,42 @@ namespace QuaSARQ {
         const bool bit_packed = results->bit_packed;
         const uint32 num_units = (uint32)FrameResults::stride_of(n, bit_packed);
         if (!num_units) return;
-        size_t rows_per_batch = COLLECT_STAGING_BYTES / num_units;
-        if (!rows_per_batch) rows_per_batch = 1;
-        if (rows_per_batch > num_shots) rows_per_batch = num_shots;
-        uint8* d_out = gpu_allocator.allocate<uint8>(rows_per_batch * num_units, Region::Dynamic);
-        for (size_t start = 0; start < num_shots; start += rows_per_batch) {
-            const size_t batch = MIN(rows_per_batch, num_shots - start);
-            dim3 block(32, 8), grid(1, 1);
-            OPTIMIZEBLOCKS2D(grid.x, num_units, block.x);
-            OPTIMIZEBLOCKS2D(grid.y, (uint32)batch, block.y);
-            collect_frame_refs_k<<<grid, block, 0, stream>>>(
-                d_out,
-                refs.device.refs,
-                refs.device.starts,
-                refs.device.counts,
-                samples_record.device,
-                tableau.num_words_minor(),
-                n, batch, num_units, bit_packed, start);
-            LASTERR(label);
-            CHECK(cudaMemcpy2DAsync(
-                dest + (chunk_start + start) * dest_stride, dest_stride,
-                d_out, num_units,
-                num_units, batch,
-                cudaMemcpyDeviceToHost, stream));
-            SYNC(stream);
-        }
-        gpu_allocator.deallocate<uint8>(d_out);
+        collect_into_host(dest, dest_stride, num_units, num_shots, chunk_start, gpu_allocator, stream,
+            [&](uint8* d_out, const dim3& grid, const dim3& block, const size_t& batch, const size_t& start) {
+                collect_frame_refs_k<<<grid, block, 0, stream>>>(
+                    d_out,
+                    refs.device.refs,
+                    refs.device.starts,
+                    refs.device.counts,
+                    samples_record.device,
+                    tableau.num_words_minor(),
+                    n, batch, num_units, bit_packed, start);
+                LASTERR(label);
+            });
+    }
+
+    // Raw measurement outcomes. The sample table is measurement-major and holds absolute
+    // values by the time this runs, so a row is a straight read of column 'shot'.
+    void Framing::collect_samples(
+              uint8*        dest,
+        const size_t&       dest_stride,
+        const uint32&       n,
+        const cudaStream_t& stream)
+    {
+        const bool bit_packed = results->bit_packed;
+        const uint32 num_units = (uint32)FrameResults::stride_of(n, bit_packed);
+        if (!num_units) return;
+        if (dest_stride != num_units)
+            LOGERROR("measurement buffer is strided for %zd units but the circuit records %u.", dest_stride, num_units);
+        collect_into_host(dest, dest_stride, num_units, num_shots, chunk_start, gpu_allocator, stream,
+            [&](uint8* d_out, const dim3& grid, const dim3& block, const size_t& batch, const size_t& start) {
+                collect_samples_k<<<grid, block, 0, stream>>>(
+                    d_out,
+                    samples_record.device,
+                    tableau.num_words_minor(),
+                    n, batch, num_units, bit_packed, start);
+                LASTERR("collect_samples failed");
+            });
     }
 
     void Framing::print_detectors_sampled(FILE* out, const cudaStream_t& stream) {
@@ -524,11 +605,11 @@ namespace QuaSARQ {
     }
 
     void Framing::print(const cudaStream_t& stream) {
+        const bool want_measurements = results != nullptr && results->measurements != nullptr;
         const bool any_results = results != nullptr &&
-                                 (results->detectors != nullptr || results->observables != nullptr);
+                                 (results->detectors != nullptr || results->observables != nullptr || want_measurements);
         const bool any_print = samples_record.needs_host() || options.print_detector
-                             || options.print_observable || !circuit_io.observables.empty()
-                             || any_results;
+                             || options.print_observable || !circuit_io.observables.empty() || any_results;
         if (!any_print) return;
         if (!options.sync) SYNCALL;
         if (options.print_detector || options.print_observable) LOGHEADER(1, 4, "Results");
@@ -548,10 +629,10 @@ namespace QuaSARQ {
         }
 
         // Raw measurement outcomes only needs the absolute values (XORing reference sample with record).
-        const bool want_samples = options.print_sample || options.print_sample_qubits || sample_host_required;
+        const bool want_samples = options.print_sample || options.print_sample_qubits || sample_host_required || want_measurements;
         if (want_samples) {
+            const size_t num_measurements = stats.circuit.measure_stats.count;
             if (recorder.step_history() > 0) {
-                const size_t num_measurements = stats.circuit.measure_stats.count;
                 const size_t num_words_minor  = tableau.num_words_minor();
                 dim3 block(32, 8), grid(1, 1);
                 OPTIMIZEBLOCKS2D(grid.x, (uint32)num_words_minor, block.x);
@@ -564,17 +645,19 @@ namespace QuaSARQ {
                 LASTERR("apply_reference_sample failed");
                 SYNC(stream);
             }
-            samples_record.copy(stream);
+            if (want_measurements)
+                collect_samples(results->measurements, results->measurements_stride, (uint32)num_measurements, stream);
+            if (samples_record.needs_host()) samples_record.copy(stream);
             if (options.print_sample) {
                 FILE* out = write_measures_to_file ? open_output_file("_samples.01", chunk_index > 0) : stdout;
                 if (!write_measures_to_file) LOG2(0, "%sSampling (shot per line):%s", CHEADER, CNORMAL);
-                print_samples(samples_record.host, stats.circuit.measure_stats.count, num_shots, out);
+                print_samples(samples_record.host, num_measurements, num_shots, out);
                 if (write_measures_to_file) fclose(out);
             }
             if (options.print_sample_qubits) {
                 FILE* out = write_measures_to_file ? open_output_file("_samples_qubits.01", chunk_index > 0) : stdout;
                 if (!write_measures_to_file) LOG2(0, "%sSampling (measurement per line):%s", CHEADER, CNORMAL);
-                print_samples_measures(samples_record.host, stats.circuit.measure_stats.count, num_shots, out);
+                print_samples_measures(samples_record.host, num_measurements, num_shots, out);
                 if (write_measures_to_file) fclose(out);
             }
         }

@@ -79,6 +79,14 @@ namespace QuaSARQ {
 
     inline int binding_get_verbosity() { return options.verbose; }
 
+    inline void binding_set_chunk_shots(const int& shots) {
+        if (shots < 0)
+            throw std::invalid_argument("chunk shots cannot be negative");
+        options.chunk_shots = shots;
+    }
+
+    inline int binding_get_chunk_shots() { return options.chunk_shots; }
+
     inline std::string binding_version() { return std::string(version()); }
 
     inline size_t binding_stride_of(const size_t& units, const bool& bit_packed) { return FrameResults::stride_of(units, bit_packed); }
@@ -114,16 +122,20 @@ namespace QuaSARQ {
         bool        bit_packed;
         uint8_t*    detectors;
         uint8_t*    observables;
+        uint8_t*    measurements;
         size_t      detectors_stride;
         size_t      observables_stride;
+        size_t      measurements_stride;
 
         SampleRequest() :
             num_shots(0)
             , bit_packed(false)
             , detectors(nullptr)
             , observables(nullptr)
+            , measurements(nullptr)
             , detectors_stride(0)
-            , observables_stride(0) {}
+            , observables_stride(0)
+            , measurements_stride(0) {}
     };
 
     class Sampling {
@@ -133,6 +145,7 @@ namespace QuaSARQ {
         uint64_t                 call_index;
         size_t                   num_detectors;
         size_t                   num_observables;
+        size_t                   num_measurements;
         std::unique_ptr<Framing> framing;
 
     public:
@@ -145,6 +158,7 @@ namespace QuaSARQ {
 
         size_t detectors() const { return num_detectors; }
         size_t observables() const { return num_observables; }
+        size_t measurements() const { return num_measurements; }
         bool holds_device_memory() const { return framing != nullptr; }
 
         void run(const SampleRequest& request);

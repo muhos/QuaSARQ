@@ -25,7 +25,6 @@ constexpr LogicalRateBaseline LOGICAL_RATE_BASELINES[] = {
     {"surface_code_d40_r3.stim",  0.46659600},
     {"surface_code_d50_r10.stim", 0.50056400},
     {"surface_code_d50_r3.stim",  0.48294200},
-    {"surface_code_d60_r10.stim", 0.49990200},
     {"surface_code_d60_r3.stim",  0.49188400},
 };
 

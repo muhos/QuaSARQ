@@ -43,6 +43,10 @@ def sampler(c, seed=1):
     return quasarq.compile_detector_sampler(c, seed=seed)
 
 
+def msampler(c, seed=1):
+    return quasarq.compile_sampler(c, seed=seed)
+
+
 def packbits(a):
     return np.packbits(a, axis=1, bitorder="little")
 
@@ -381,6 +385,104 @@ def test_observable_merging(c, shots):
           f"quasarq={np.round(qo.mean(0), 4)} stim={np.round(so.mean(0), 4)}")
 
 
+DETERMINISTIC_RECORDS = """
+    R 0 1 2
+    X 0
+    H 2
+    M 0 1
+    MX 2
+"""
+
+def test_measurement_interface(c, shots):
+    qs, ss = msampler(c), c.compile_sampler(seed=1)
+    check(qs.num_measurements == c.num_measurements, "num_measurements agrees with stim",
+          f"{qs.num_measurements}")
+    for kwargs in (dict(), dict(bit_packed=True)):
+        q, s = qs.sample(shots, **kwargs), ss.sample(shots, **kwargs)
+        check(q.shape == s.shape and q.dtype == s.dtype, f"sample({kwargs}) shape+dtype",
+              f"{q.shape}/{q.dtype}")
+
+    check(qs.sample(0).shape == (0, c.num_measurements), "zero shots returns empty array")
+    exact = [qs.sample(n).shape == (n, c.num_measurements)
+             for n in (1, 2, 3, 7, 13, 63, 64, 65, 500, 999)]
+    check(all(exact), "exact shot counts honoured from 1 upward", f"{len(exact)} counts checked")
+
+    quiet = msampler(stim.Circuit("H 0"))
+    check(quiet.num_measurements == 0, "circuit with no measurements reports zero")
+    check(quiet.sample(100).shape == (100, 0), "no-measurement circuit returns empty columns")
+
+    det = msampler(stim.Circuit(DETERMINISTIC_RECORDS))
+    outcomes = det.sample(1024)
+    check(bool(outcomes[:, 0].all()), "X 0 then M 0 reads 1 every shot",
+          f"{outcomes[:, 0].mean():.4f}")
+    check(not outcomes[:, 1:].any(), "R 1/H 2 then M 1/MX 2 read 0 every shot",
+          f"{int(outcomes[:, 1:].sum())} ones")
+
+    d_un = msampler(c, 42).sample(4000)
+    d_pk = msampler(c, 42).sample(4000, bit_packed=True)
+    check(np.array_equal(packbits(d_un), d_pk), "packbits(unpacked) == packed measurements")
+
+    a, b = msampler(c, 7).sample(2000), msampler(c, 7).sample(2000)
+    check(np.array_equal(a, b), "same seed gives identical measurements")
+    check(not np.array_equal(a, msampler(c, 8).sample(2000)),
+          "different seed gives different measurements")
+    try:
+        qs.sample(10, separate_observables=True)
+        check(False, "separate_observables rejected")
+    except Exception as e:
+        check(isinstance(e, TypeError), "separate_observables rejected", type(e).__name__)
+
+
+def test_measurement_rates_match_stim(c, shots):
+    n = 100000
+    q = msampler(c, 13).sample(n)
+    s = c.compile_sampler(seed=13).sample(n)
+    z = sigmas(q.mean(axis=0), s.mean(axis=0), n)
+    worst = int(np.argmax(z))
+    check(float(np.max(z)) < 5.0, "all measurements within 5 sigma of stim",
+          f"max z={np.max(z):.2f} at measurement {worst}")
+
+    noisy = stim.Circuit(MIXED_BASIS_OBSERVABLES)
+    q = msampler(noisy, 17).sample(n)
+    s = noisy.compile_sampler(seed=17).sample(n)
+    z = sigmas(q.mean(axis=0), s.mean(axis=0), n)
+    check(float(np.max(z)) < 5.0, "mixed-basis M(p) outcomes within 5 sigma of stim",
+          f"quasarq={np.round(q.mean(axis=0), 4)} stim={np.round(s.mean(axis=0), 4)}")
+
+
+def test_m2d_round_trip(c, shots):
+    n = 50000
+    converter = c.compile_m2d_converter()
+    dets, obs = converter.convert(measurements=msampler(c, 21).sample(n),
+                                  separate_observables=True)
+    q_dets, q_obs = sampler(c, 23).sample(n, separate_observables=True)
+    z = sigmas(dets.mean(axis=0), q_dets.mean(axis=0), n)
+    check(float(np.max(z)) < 5.0, "m2d(measurements) detector rates match the detector sampler",
+          f"max z={np.max(z):.2f}")
+    z = sigmas(obs.mean(axis=0), q_obs.mean(axis=0), n)
+    check(float(np.max(z)) < 5.0, "m2d(measurements) observable rates match the detector sampler",
+          f"max z={np.max(z):.2f}")
+
+
+# Splitting a request across GPU chunks must not change a single bit of the result, for either
+# sampler: the seed stream and the destination row offsets both have to survive the split.
+def test_chunk_invariance(c, shots):
+    n = 20000
+    whole_m = msampler(c, 31).sample(n)
+    whole_d, whole_o = sampler(c, 31).sample(n, separate_observables=True)
+    for chunk in (64, 1000, 4096):
+        quasarq.set_chunk_shots(chunk)
+        try:
+            m = msampler(c, 31).sample(n)
+            d, o = sampler(c, 31).sample(n, separate_observables=True)
+        finally:
+            quasarq.set_chunk_shots(0)
+        check(np.array_equal(m, whole_m), f"chunk={chunk} measurements match unchunked")
+        check(np.array_equal(d, whole_d) and np.array_equal(o, whole_o),
+              f"chunk={chunk} detection events match unchunked")
+    check(quasarq.get_chunk_shots() == 0, "chunk size restored to automatic")
+
+
 TESTS = (
     ("interface matches stim.CompiledDetectorSampler", test_interface),
     ("bit packing matches numpy.packbits(bitorder='little')", test_bit_packing),
@@ -389,8 +491,12 @@ TESTS = (
     ("measurement flip probability M(p)/MX(p) is applied", test_measurement_flip_noise),
     ("observables merge by id, not by line", test_observable_merging),
     ("detector and observable rates agree with stim", test_rates_match_stim),
+    ("interface matches stim.CompiledMeasurementSampler", test_measurement_interface),
+    ("raw measurement outcomes agree with stim", test_measurement_rates_match_stim),
+    ("measurements convert to the same detection events", test_m2d_round_trip),
     ("decoded logical error rate falls with distance (pymatching)", test_decoding),
     ("chunked sampling gives the same statistics", test_chunked_sampling),
+    ("chunking does not change a single bit", test_chunk_invariance),
     ("edge cases", test_edge_cases),
     ("accepts circuit text as well as stim.Circuit", test_circuit_text),
     ("GIL is released during sampling", test_gil_released),
