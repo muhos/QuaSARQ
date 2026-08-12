@@ -101,9 +101,11 @@ namespace Module{
         buffer.data = nullptr;
     }
 
-    inline void raise_from_core(const char* fallback) {
-        const std::string message = QuaSARQ::binding_last_error();
-        throw std::runtime_error(message.empty() ? std::string(fallback) : message);
+    inline void raise_from_core(const char* fallback, const std::string& thrown = std::string()) {
+        std::string message = QuaSARQ::binding_last_error();
+        if (message.empty()) message = thrown;
+        if (message.empty()) message = fallback;
+        throw std::runtime_error(message + QuaSARQ::binding_device_memory_note());
     }
 
     inline std::string circuit_to_text(nb::handle circuit) {
@@ -140,10 +142,15 @@ namespace Module{
             QuaSARQ::binding_clear_error();
             std::lock_guard<std::mutex> lock(sampling_mutex);
             bool failed = false;
+            std::string thrown;
             {
                 nb::gil_scoped_release release;
                 try {
                     engine->run(request);
+                }
+                catch (const std::exception& e) {
+                    failed = true;
+                    thrown = e.what();
                 }
                 catch (...) {
                     failed = true;
@@ -152,7 +159,7 @@ namespace Module{
             if (failed) {
                 for (HostBuffer* buffer : outputs)
                     discard(*buffer);
-                raise_from_core("sampling failed");
+                raise_from_core("sampling failed", thrown);
             }
         }
 

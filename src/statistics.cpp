@@ -53,7 +53,7 @@ void Simulator::report()
 			LOG1(" %sSampling chunks                : %s%-12zd%s", CREPORT, CREPORTVAL, stats.sampling.chunks, CNORMAL);
 		}
 		const double tableau_gb   = stats.tableau.count * stats.tableau.gigabytes;
-		const size_t noise_bytes  = gpu_circuit.max_noise_gates() * (sizeof(curand_algorithm_t) + sizeof(uint32));
+		const size_t noise_bytes  = gpu_circuit.max_noise_gates() * sizeof(uint32);
 		const size_t win_gpu_bytes = winfo.max_window_bytes;
 		const size_t win_cpu_bytes = winfo.max_window_bytes;
 		const size_t rec_bytes    = stats.circuit.measure_stats.count * sizeof(bool);

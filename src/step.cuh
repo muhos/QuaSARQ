@@ -41,8 +41,9 @@ namespace QuaSARQ {
                 Tableau &                   tableau,
         const   size_t &                    num_gates_per_window,
         const   size_t &                    num_words_major,
-                curand_algorithm_t*         noise_states,
                 uint32*                     noise_paulis,
+        const   uint64 &                    seed,
+        const   uint32 &                    step_id,
         const   dim3 &                      currentblock,
         const   dim3 &                      currentgrid,
         const   size_t &                    shared_size,
@@ -55,7 +56,6 @@ namespace QuaSARQ {
         const   bool &                      shared_size_yextend,
         const   size_t &                    data_size_in_x,
         const   size_t &                    data_size_in_y,
-                curand_algorithm_t*         noise_states,
                 uint32*                     noise_paulis,
                 const_refs_t                gate_refs,
                 const_buckets_t             gate_buckets,
@@ -65,7 +65,6 @@ namespace QuaSARQ {
     void call_step(
                 const_refs_t        refs,
                 const_buckets_t     gates,
-                curand_algorithm_t* noise_states,
                 uint32*             noise_paulis,
         const   size_t&             num_gates,
         const   size_t&             num_words_major,
@@ -73,6 +72,8 @@ namespace QuaSARQ {
                 Table*              xs,
                 Table*              zs,
                 Signs*              ss,
+        const   uint64&             seed,
+        const   uint32&             step_id,
         const   cudaStream_t&       stream);
 
 

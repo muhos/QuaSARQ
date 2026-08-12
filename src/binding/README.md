@@ -7,9 +7,9 @@ import quasarq, stim
 
 circuit = stim.Circuit.generated("surface_code:rotated_memory_z", distance=5, rounds=5, after_clifford_depolarization=0.001)
 
-dets, obs = quasarq.compile_detector_sampler(circuit, seed=1).sample(100000, separate_observables=True)
+dets, obs = quasarq.compile_detector_sampler(circuit, seed=1).sample(100_000, separate_observables=True)
 
-measurements = quasarq.compile_sampler(circuit, seed=1).sample(100000)
+measurements = quasarq.compile_sampler(circuit, seed=1).sample(100_000)
 ```
 
 ## Installing

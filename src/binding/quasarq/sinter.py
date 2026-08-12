@@ -6,14 +6,17 @@
     # The `__main__` guard is essential to prevent sinter from recursively starting workers
     if __name__ == '__main__':
         stats = sinter.collect(
-            # `num_workers` should stay at 1: QuaSARQ serialises sampling on one GPU, and each
-            # extra worker is a separate process competing for the same device memory.
-            num_workers=1,
+            # Without `max_device_memory` the first worker reserves the whole device and the
+            # rest fail, so `num_workers` must stay at 1. With a cap, small circuits fit
+            # several workers on one GPU, which is worth having: decoding costs about twice
+            # what sampling does and pymatching holds the GIL, so only separate processes
+            # decode in parallel.
+            num_workers=8,
             tasks=[sinter.Task(circuit=circuit, json_metadata={"d": 5})],
             max_shots=1_000_000,
             max_errors=1000,
             decoders=["quasarq"],
-            custom_decoders={"quasarq": quasarq_sinter.QuaSARQSampler(seed=1)},
+            custom_decoders={"quasarq": quasarq_sinter.QuaSARQSampler(seed=1, max_device_memory=2048)},
         )
 """
 
@@ -26,9 +29,13 @@ DEFAULT_MIN_BATCH_SHOTS = 8192
 
 class QuaSARQCompiledSampler(sinter.CompiledSampler):
 
-    def __init__(self, task, seed, decoder, min_batch_shots=DEFAULT_MIN_BATCH_SHOTS):
+    def __init__(self, task, seed, decoder, min_batch_shots=DEFAULT_MIN_BATCH_SHOTS, max_device_memory=0):
+
         import pymatching
         import quasarq
+
+        if max_device_memory:
+            quasarq.set_max_device_memory(int(max_device_memory))
 
         if decoder not in (None, "pymatching"):
             raise ValueError(f"only pymatching is supported, got {decoder!r}")
@@ -59,10 +66,11 @@ class QuaSARQCompiledSampler(sinter.CompiledSampler):
 
 class QuaSARQSampler(sinter.Sampler):
 
-    def __init__(self, *, seed=None, decoder="pymatching", min_batch_shots=DEFAULT_MIN_BATCH_SHOTS):
+    def __init__(self, *, seed=None, decoder="pymatching", min_batch_shots=DEFAULT_MIN_BATCH_SHOTS, max_device_memory=0):
         self.seed = seed
         self.decoder = decoder
         self.min_batch_shots = min_batch_shots
+        self.max_device_memory = max_device_memory
 
     def compiled_sampler_for_task(self, task):
-        return QuaSARQCompiledSampler(task, self.seed, self.decoder, self.min_batch_shots)
+        return QuaSARQCompiledSampler(task, self.seed, self.decoder, self.min_batch_shots, self.max_device_memory)

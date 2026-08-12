@@ -152,6 +152,12 @@ NB_MODULE(_quasarq, m) {
 
     m.def("get_chunk_shots", &binding_get_chunk_shots);
 
+    m.def("set_max_device_memory", &binding_set_max_device_memory, nb::arg("megabytes"),
+          "Cap the GPU pool in MB, so several processes can share one device. "
+          "0 takes whatever is free. Must be set before the first sample().");
+
+    m.def("get_max_device_memory", &binding_get_max_device_memory);
+
     m.def("set_kernel_config", [](const std::string& path) { binding_initialize(path); },
           nb::arg("path"), "Point the sampling engine at a kernel.config file.");
 

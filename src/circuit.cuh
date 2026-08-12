@@ -20,7 +20,6 @@ namespace QuaSARQ {
 		bucket_t* _pinned_buckets;
 		gate_ref_t* _pinned_references;
 
-		curand_algorithm_t* _noise_states;
 		uint32* _noise_paulis;
 		size_t  _max_noise_gates;
 		bool    _noise_enabled;
@@ -54,7 +53,6 @@ namespace QuaSARQ {
 		,	_references(nullptr)
 		,	_pinned_buckets(nullptr)
 		,	_pinned_references(nullptr)
-		,	_noise_states(nullptr)
 		,	_noise_paulis(nullptr)
 		,	_max_noise_gates(0)
 		,	_noise_enabled(true)
@@ -80,10 +78,7 @@ namespace QuaSARQ {
 											const size_t& 		max_qubits, 
 											const size_t& 		max_references, 
 											const size_t& 		max_buckets);
-		void init_noise_states			(
-											const uint64& 		seed, 
-											const size_t& 		max_gates, 
-											const cudaStream_t& stream);
+		void init_noise_paulis			(const size_t& 		max_gates);
 		void copyto 					(
 											Circuit& 			circuit, 
 											const depth_t& 		depth_level);
@@ -111,7 +106,8 @@ namespace QuaSARQ {
 		size_t		 		size_in_buckets		() const { return num_buckets; }
 		inline
 		void                enable_noise		(const bool& on) { _noise_enabled = on; }
-		curand_algorithm_t* noise_states		() { return _noise_enabled ? _noise_states : nullptr; }
+		
+		bool                noise_enabled		() const { return _noise_enabled; }
 		inline
 		uint32*             noise_paulis		() { return _noise_enabled ? _noise_paulis : nullptr; }
 		inline

@@ -46,16 +46,18 @@ namespace QuaSARQ {
 
     __global__
     void record_sample(
-                const_refs_t        refs,
-                const_buckets_t     gates,
-        const   size_t              num_gates,
-        const   size_t              num_words_minor,
-        const   size_t              measurement_offset,
-        const uint32* __restrict__  ordinals,
-                curand_algorithm_t* rand_states,
-                Table *             xs,
-                Table *             zs,
-                Table *             samples)
+                const_refs_t            refs,
+                const_buckets_t         gates,
+        const   size_t                  num_gates,
+        const   size_t                  num_words_minor,
+        const   size_t                  measurement_offset,
+        const   uint32* __restrict__    ordinals,
+        const   uint64                  seed,
+        const   uint32                  depth_level,
+        const   uint32                  chunk_word_offset,
+                Table *                 xs,
+                Table *                 zs,
+                Table *                 samples)
     {
         for_parallel_y(i, num_gates) {
             for_parallel_x(w, num_words_minor) {
@@ -66,6 +68,7 @@ namespace QuaSARQ {
                 const size_t q = gate.wires[0];
                 assert(q != INVALID_QUBIT);
                 const size_t q_word_idx = q * num_words_minor + w;
+                const uint32 shot_word = chunk_word_offset + uint32(w);
                 const bool records = (gate.type == M || gate.type == MR);
                 const size_t m_word_idx = records ?
                     size_t(ordinals[measurement_offset + i]) * num_words_minor + w : 0;
@@ -73,16 +76,16 @@ namespace QuaSARQ {
                 switch (gate.type) {
                 case R: {
                     (*xs)[q_word_idx] = 0;
-                    (*zs)[q_word_idx] = curand_word(&rand_states[q_word_idx]);
+                    (*zs)[q_word_idx] = counter_word(seed, RAND_TAG_RESET, shot_word, uint32(q), depth_level);
                     break;
                 }
                 case RX: {
                     (*zs)[q_word_idx] = 0;
-                    (*xs)[q_word_idx] = curand_word(&rand_states[q_word_idx]);
+                    (*xs)[q_word_idx] = counter_word(seed, RAND_TAG_RESET, shot_word, uint32(q), depth_level);
                     break;
                 }
                 case RY: {
-                    const word_std_t r = curand_word(&rand_states[q_word_idx]);
+                    const word_std_t r = counter_word(seed, RAND_TAG_RESET, shot_word, uint32(q), depth_level);
                     (*xs)[q_word_idx] = r;
                     (*zs)[q_word_idx] = r;
                     break;
@@ -91,17 +94,17 @@ namespace QuaSARQ {
                     (*samples)[m_word_idx] ^= (*xs)[q_word_idx];
                     const float flip = gate.get_prob(0);
                     if (flip > 0.0f)
-                        (*samples)[m_word_idx] ^= sample_frame_error_mask(rand_states[q_word_idx], flip);
-                    (*zs)[q_word_idx] = curand_word(&rand_states[q_word_idx]);
+                        (*samples)[m_word_idx] ^= counter_error_mask(seed, RAND_TAG_FLIP, shot_word, uint32(q), depth_level, flip);
+                    (*zs)[q_word_idx] = counter_word(seed, RAND_TAG_RESET, shot_word, uint32(q), depth_level);
                     break;
                 }
                 case MR: {
                     (*samples)[m_word_idx] ^= (*xs)[q_word_idx];
                     const float flip = gate.get_prob(0);
                     if (flip > 0.0f)
-                        (*samples)[m_word_idx] ^= sample_frame_error_mask(rand_states[q_word_idx], flip);
+                        (*samples)[m_word_idx] ^= counter_error_mask(seed, RAND_TAG_FLIP, shot_word, uint32(q), depth_level, flip);
                     (*xs)[q_word_idx] = 0;
-                    (*zs)[q_word_idx] = curand_word(&rand_states[q_word_idx]);
+                    (*zs)[q_word_idx] = counter_word(seed, RAND_TAG_RESET, shot_word, uint32(q), depth_level);
                     break;
                 }
                 default: break;
@@ -379,7 +382,9 @@ namespace QuaSARQ {
             tableau.num_words_minor(),
             measurement_offset,
             recorder.device_ordinals(),
-            rand_states,
+            options.seed,
+            uint32(depth_level),
+            uint32(WORD_OFFSET(chunk_start)),
             XZ_TABLE(tableau),
             samples_record.device
         );

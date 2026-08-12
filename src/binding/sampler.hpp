@@ -87,6 +87,14 @@ namespace QuaSARQ {
 
     inline int binding_get_chunk_shots() { return options.chunk_shots; }
 
+    inline void binding_set_max_device_memory(const int& megabytes) {
+        if (megabytes < 0)
+            throw std::invalid_argument("device memory cap cannot be negative");
+        options.max_gpu_memory = megabytes;
+    }
+
+    inline int binding_get_max_device_memory() { return options.max_gpu_memory; }
+
     inline std::string binding_version() { return std::string(version()); }
 
     inline size_t binding_stride_of(const size_t& units, const bool& bit_packed) { return FrameResults::stride_of(units, bit_packed); }
@@ -107,6 +115,19 @@ namespace QuaSARQ {
         const uint64_t clock = uint64_t(
             std::chrono::steady_clock::now().time_since_epoch().count());
         return splitmix64(entropy ^ clock);
+    }
+
+    inline std::string binding_device_memory_note() {
+        size_t free_bytes = 0, total_bytes = 0;
+        const cudaError_t queried = cudaMemGetInfo(&free_bytes, &total_bytes);
+        cudaGetLastError();
+        if (queried != cudaSuccess || !total_bytes)
+            return " [GPU memory: unavailable (" + std::string(cudaGetErrorString(queried)) + "); another process is likely holding the device]";
+        const size_t free_mb = free_bytes >> 20, total_mb = total_bytes >> 20;
+        std::string note = " [GPU memory: " + std::to_string(free_mb) + " MB free of " + std::to_string(total_mb) + " MB";
+        if (free_bytes * 4 < total_bytes)
+            note += "; another process is holding the device, so no pool could be reserved";
+        return note + "]";
     }
 
     inline std::string binding_last_error() {

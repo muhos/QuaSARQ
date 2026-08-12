@@ -30,20 +30,23 @@ namespace QuaSARQ {
                 word_t*                 x_q2,
                 word_t*                 z_q2,
         const   Gate&                   gate,
-                curand_algorithm_t&     state)
+        const   uint64&                 seed,
+        const   uint32&                 shot_word,
+        const   uint32&                 row,
+        const   uint32&                 step)
     {
         if (gate.type == X_ERROR) {
-            const word_std_t mask = sample_frame_error_mask(state, gate.get_prob(0));
+            const word_std_t mask = counter_error_mask(seed, RAND_TAG_NOISE, shot_word, row, step, gate.get_prob(0));
             x_q1 ^= mask;
             return;
         }
         if (gate.type == Z_ERROR) {
-            const word_std_t mask = sample_frame_error_mask(state, gate.get_prob(0));
+            const word_std_t mask = counter_error_mask(seed, RAND_TAG_NOISE, shot_word, row, step, gate.get_prob(0));
             z_q1 ^= mask;
             return;
         }
         if (gate.type == Y_ERROR) {
-            const word_std_t mask = sample_frame_error_mask(state, gate.get_prob(0));
+            const word_std_t mask = counter_error_mask(seed, RAND_TAG_NOISE, shot_word, row, step, gate.get_prob(0));
             x_q1 ^= mask;
             z_q1 ^= mask;
             return;
@@ -52,7 +55,8 @@ namespace QuaSARQ {
         #pragma unroll
         for (uint32 b = 0; b < WORD_BITS; b++) {
             uint32 pauli = 0;
-            const float prob = curand_uniform(&state);
+            const uint4 r = counter_bits(seed, (RAND_TAG_PAULI << 16) | b, shot_word, row, step);
+            const float prob = float(r.x) * 2.3283064365386963e-10f;
             if (gate.type == PAULI_CHANNEL_1) {
                 const float px = gate.get_prob(0), py = gate.get_prob(1), pz = gate.get_prob(2);
                 pauli = prob < px ? 1u : prob < px + py ? 3u : prob < px + py + pz ? 2u : 0u;
@@ -66,8 +70,8 @@ namespace QuaSARQ {
                 }
             }
             else if (prob < gate.get_prob(0)) {
-                pauli = gate.type == DEPOLARIZE1 ? 1u + (curand(&state) % 3u) :
-                        gate.type == DEPOLARIZE2 ? 1u + (curand(&state) % 15u) : 0u;
+                pauli = gate.type == DEPOLARIZE1 ? 1u + (r.y % 3u) :
+                        gate.type == DEPOLARIZE2 ? 1u + (r.y % 15u) : 0u;
             }
             if (pauli)
                 apply_frame_pauli(x_q1, z_q1, x_q2, z_q2, word_std_t(1) << b, pauli);
@@ -82,7 +86,9 @@ namespace QuaSARQ {
                 const_buckets_t     gates,
         const   size_t&             num_gates,
         const   size_t&             num_words_minor,
-                curand_algorithm_t* rand_states,
+        const   uint64              seed,
+        const   uint32              depth_level,
+        const   uint32              chunk_word_offset,
         const   size_t              w_offset
     )
     {
@@ -116,17 +122,15 @@ namespace QuaSARQ {
             case Z_ERROR:
             case PAULI_CHANNEL_1: {
                 LOAD_Q1_WORDS;
-                curand_algorithm_t local = rand_states[q1_word_idx + w_offset];
-                apply_frame_noise(x_words_q1, z_words_q1, nullptr, nullptr, gate, local);
-                rand_states[q1_word_idx + w_offset] = local;
+                apply_frame_noise(x_words_q1, z_words_q1, nullptr, nullptr, gate,
+                                  seed, chunk_word_offset + uint32(w_offset), uint32(i), depth_level);
                 break;
             }
             case DEPOLARIZE2:
             case PAULI_CHANNEL_2: {
                 LOAD_Q2_WORDS(num_words_minor);
-                curand_algorithm_t local = rand_states[q1_word_idx + w_offset];
-                apply_frame_noise(x_words_q1, z_words_q1, &x_words_q2, &z_words_q2, gate, local);
-                rand_states[q1_word_idx + w_offset] = local;
+                apply_frame_noise(x_words_q1, z_words_q1, &x_words_q2, &z_words_q2, gate,
+                                  seed, chunk_word_offset + uint32(w_offset), uint32(i), depth_level);
                 break;
             }
             case H: { 
@@ -189,7 +193,9 @@ namespace QuaSARQ {
         const   size_t              num_words_minor,
                 Table *             xs,
                 Table *             zs,
-                curand_algorithm_t* rand_states)
+        const   uint64              seed,
+        const   uint32              depth_level,
+        const   uint32              chunk_word_offset)
     {
         for_parallel_y(w, num_words_minor) {
             update_forall_gate(
@@ -199,7 +205,9 @@ namespace QuaSARQ {
                 gates,
                 num_gates,
                 num_words_minor,
-                rand_states,
+                seed,
+                depth_level,
+                chunk_word_offset,
                 w
             );
         }
@@ -241,7 +249,9 @@ namespace QuaSARQ {
                 num_gates_per_window,
                 num_words_major,
                 XZ_TABLE(tableau),
-                rand_states);
+                options.seed,
+                uint32(depth_level),
+                uint32(WORD_OFFSET(chunk_start)));
             LASTERR("failed to launch step kernel");
             SYNCALL;
             #else
@@ -264,7 +274,9 @@ namespace QuaSARQ {
                 num_gates_per_window,
                 num_words_minor,
                 XZ_TABLE(tableau),
-                rand_states);
+                options.seed,
+                uint32(depth_level),
+                uint32(WORD_OFFSET(chunk_start)));
 
             if (options.sync) { 
                 LASTERR("failed to launch step kernel");

@@ -52,6 +52,7 @@ namespace QuaSARQ {
         int print_limit;
         int num_shots;
         int chunk_shots;
+        int max_gpu_memory;
         int min_shots_write;
         int min_measures_write;
 

@@ -103,9 +103,14 @@ void Simulator::reserve() {
     cudaMemGetInfo(&gfree, &gtot);
     static constexpr size_t CUARENA_GPU_PENALTY = 256 * MB;
     static constexpr size_t MIN_DYNAMIC = 128 * MB;
-    const size_t pool_est = (gfree > CUARENA_GPU_PENALTY) ? gfree - CUARENA_GPU_PENALTY : 0;
+    size_t pool_est = (gfree > CUARENA_GPU_PENALTY) ? gfree - CUARENA_GPU_PENALTY : 0;
+    if (options.max_gpu_memory > 0) {
+        const size_t capped = size_t(options.max_gpu_memory) * MB;
+        if (capped < pool_est) pool_est = capped;
+    }
     const size_t stable_bytes = (pool_est > MIN_DYNAMIC) ? pool_est - MIN_DYNAMIC : 0;
-    gpu_allocator.create_gpu_pool(0, cuArena::GPUMemoryType::Device, 0, stable_bytes);
+    const size_t pool_limit = (options.max_gpu_memory > 0) ? pool_est : 0;
+    gpu_allocator.create_gpu_pool(pool_limit, cuArena::GPUMemoryType::Device, 0, stable_bytes);
     // Creating CPU pool (pinned memory)
     const size_t sample_host_bytes = options.print_sample || options.print_sample_qubits || options.check_measurement ?
         get_num_words(stats.circuit.measure_stats.count) * WORD_BITS * get_num_words(options.num_shots) * sizeof(word_t) : 0;
@@ -279,7 +284,7 @@ void Simulator::simulate() {
     const size_t num_qubits_per_partition = num_partitions > 1 ? tableau.num_words_major() * WORD_BITS : num_qubits;
     gpu_circuit.initiate(num_qubits, winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
     if (!reference_mode)
-        gpu_circuit.init_noise_states(options.seed, winfo.max_parallel_gates, kernel_streams[0]);
+        gpu_circuit.init_noise_paulis(winfo.max_parallel_gates);
     timer.stop();
     stats.time.initial += timer.elapsed();
     timer.start();

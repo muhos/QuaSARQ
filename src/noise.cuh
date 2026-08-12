@@ -6,22 +6,18 @@
 #include "word.cuh"
 #include "grid.cuh"
 #include "gate.cuh"
+#include "random.cuh"
 
 namespace QuaSARQ {
 
     __global__
-    void setup_noise_k(
-        curand_algorithm_t*         noise_states,
-        const uint64                seed,
-        const size_t                max_gates);
-
-    __global__
    void sample_noise_k(
-        curand_algorithm_t*         noise_states,
         uint32*                     noise_paulis,
         const_refs_t                refs,
         const_buckets_t             gates,
-        const size_t                num_gates);
+        const size_t                num_gates,
+        const uint64                seed,
+        const uint32                step);
 
     #define do_depolarize1(signs_word, x_words_q1, z_words_q1, pauli) \
     { \

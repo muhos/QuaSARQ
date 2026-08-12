@@ -80,7 +80,7 @@ namespace QuaSARQ {
 			pivoting.alloc(num_qubits);
 		}
 		gpu_circuit.initiate(num_qubits, winfo.max_parallel_gates, winfo.max_parallel_gates_buckets);
-		gpu_circuit.init_noise_states(options.seed, winfo.max_parallel_gates, kernel_streams[0]);
+		gpu_circuit.init_noise_paulis(winfo.max_parallel_gates);
 		// Start tuning simulation with max qubits.
 		do {
 			LOG2(1, "Tuning all kernels for %s%zd qubits%s, %zd partition..", CREPORTVAL, num_qubits, CNORMAL, num_partitions);
@@ -511,7 +511,6 @@ namespace QuaSARQ {
 		const 	bool& 						shared_size_yextend,
 		const 	size_t& 					data_size_in_x,
 		const 	size_t& 					data_size_in_y,
-				curand_algorithm_t* 		noise_states,
 				uint32* 					noise_paulis,
 				const_refs_t 				gate_refs,
 				const_buckets_t 			gate_buckets,
@@ -528,8 +527,9 @@ namespace QuaSARQ {
 			tableau,
 			data_size_in_x,
 			data_size_in_y,
-			noise_states,
-			noise_paulis);
+			noise_paulis,
+			options.seed,
+			0u);
 		initThreadsPerBlockX = _initThreadsPerBlockX;
 	}
 	

@@ -271,23 +271,25 @@ namespace QuaSARQ {
                 Tableau &                   tableau,
         const   size_t &                    num_gates_per_window,
         const   size_t &                    num_words_major,
-                curand_algorithm_t*         noise_states,
                 uint32*                     noise_paulis,
+        const   uint64 &                    seed,
+        const   uint32 &                    step_id,
         const   dim3 &                      currentblock,
         const   dim3 &                      currentgrid,
         const   size_t &                    shared_size,
         const   cudaStream_t &              stream)
     {
         // Sample noise.
-        if (noise_states != nullptr && noise_paulis != nullptr) {
+        if (noise_paulis != nullptr) {
             dim3 sblock(256), sgrid;
             OPTIMIZEBLOCKS(sgrid.x, num_gates_per_window, sblock.x);
             sample_noise_k<<<sgrid, sblock, 0, stream>>>(
-                noise_states, 
                 noise_paulis, 
                 refs, 
                 gates, 
-                num_gates_per_window);
+                num_gates_per_window,
+                seed,
+                step_id);
         }
         // Apply gates.
         if (currentblock.x == 1) {
@@ -534,7 +536,6 @@ namespace QuaSARQ {
     void call_step(
                 const_refs_t        refs,
                 const_buckets_t     gates,
-                curand_algorithm_t* noise_states,
                 uint32*             noise_paulis,
         const   size_t&             num_gates,
         const   size_t&             num_words_major,
@@ -542,14 +543,15 @@ namespace QuaSARQ {
                 Table*              xs,
                 Table*              zs,
                 Signs*              ss,
+        const   uint64&             seed,
+        const   uint32&             step_id,
         const   cudaStream_t&       stream)
     {
         if (!num_gates) return;
-        if (noise_states != nullptr && noise_paulis != nullptr) {
+        if (noise_paulis != nullptr) {
             dim3 sblock(256), sgrid;
             OPTIMIZEBLOCKS(sgrid.x, num_gates, sblock.x);
-            sample_noise_k<<<sgrid, sblock, 0, stream>>>(
-                noise_states, noise_paulis, refs, gates, num_gates);
+            sample_noise_k<<<sgrid, sblock, 0, stream>>>(noise_paulis, refs, gates, num_gates, seed, step_id);
         }
         const dim3 block(32, 1, 1);
         dim3 grid;
@@ -588,15 +590,16 @@ namespace QuaSARQ {
             LOG1(" Debugging at %sdepth %2d:", reversed ? "reversed " : "", depth_level);
             OPTIMIZESHARED(reduce_smem_size, 1, shared_element_bytes);
             {
-                if (gpu_circuit.noise_states() != nullptr) {
+                if (gpu_circuit.noise_enabled()) {
                     dim3 sblock(256), sgrid;
                     OPTIMIZEBLOCKS(sgrid.x, num_gates_per_window, sblock.x);
                     sample_noise_k<<<sgrid, sblock>>>(
-                        gpu_circuit.noise_states(), 
                         gpu_circuit.noise_paulis(),
                         gpu_circuit.references(), 
                         gpu_circuit.gates(), 
-                        num_gates_per_window);
+                        num_gates_per_window,
+                        options.seed,
+                        uint32(depth_level));
                 }
                 step_append_atomic<<<dim3(1, 1), dim3(1, 1)>>>(
                     gpu_circuit.references(),
@@ -620,7 +623,7 @@ namespace QuaSARQ {
                     // data length.
                     , num_gates_per_window, num_words_major
                     // noise state buffers.
-                    , gpu_circuit.noise_states(), gpu_circuit.noise_paulis()
+                    , gpu_circuit.noise_paulis()
                     // kernel arguments.
                     , gpu_circuit.references(), gpu_circuit.gates(), tableau
                 );
@@ -641,13 +644,14 @@ namespace QuaSARQ {
             call_step(
                 gpu_circuit.references(),
                 gpu_circuit.gates(),
-                gpu_circuit.noise_states(),
                 gpu_circuit.noise_paulis(),
                 num_gates_per_window,
                 num_words_major,
                 tableau.num_words_minor(),
                 XZ_TABLE(tableau),
                 tableau.signs(),
+                options.seed,
+                uint32(depth_level),
                 kernel_stream);
 
             if (options.sync) {

@@ -38,15 +38,16 @@ namespace QuaSARQ {
         LOGN2(2, "Recording measurements with block(x:%u, y:%u) and grid(x:%u, y:%u).. ",
             currentblock.x, currentblock.y, currentgrid.x, currentgrid.y);
         if (options.sync) cutimer.start(stream);
-        if (gpu_circuit.noise_states() != nullptr && gpu_circuit.noise_paulis() != nullptr) {
+        if (gpu_circuit.noise_enabled() && gpu_circuit.noise_paulis() != nullptr) {
             dim3 sblock(256), sgrid;
             OPTIMIZEBLOCKS(sgrid.x, num_gates, sblock.x);
             sample_noise_k<<<sgrid, sblock, 0, stream>>>(
-                gpu_circuit.noise_states(),
                 gpu_circuit.noise_paulis(),
                 gpu_circuit.references(),
                 gpu_circuit.gates(),
-                num_gates);
+                num_gates,
+                options.seed,
+                uint32(depth_level));
         }
         record_signs_k <<<currentgrid, currentblock, 0, stream>>> (
             recorder.device_record(),

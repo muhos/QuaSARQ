@@ -31,17 +31,13 @@ namespace QuaSARQ {
         }
     }
 
-    void DeviceCircuit::init_noise_states(const uint64& seed, const size_t& max_gates, const cudaStream_t& stream) {
+    void DeviceCircuit::init_noise_paulis(const size_t& max_gates) {
         if (_max_noise_gates < max_gates) {
             _max_noise_gates = max_gates;
-            _noise_states = allocator.allocate<curand_algorithm_t>(max_gates, Region::Stable);
             _noise_paulis = allocator.allocate<uint32>(max_gates, Region::Stable);
         }
-        if (_noise_states == nullptr || _noise_paulis == nullptr)
-            LOGERROR("failed to allocate noise state buffers.");
-        dim3 block(256), grid;
-        OPTIMIZEBLOCKS(grid.x, max_gates, block.x);
-        setup_noise_k<<<grid, block, 0, stream>>>(_noise_states, seed, max_gates);
+        if (_noise_paulis == nullptr)
+            LOGERROR("failed to allocate the noise pauli buffer.");
     }
 
     void DeviceCircuit::copyfrom(	

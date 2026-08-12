@@ -65,6 +65,7 @@ namespace QuaSARQ {
     INT_OPT opt_print_limit("print-limit", "set the limit to print quantum state to <circuit>_paulis.qstate file", 1000, INT32R(0, INT32_MAX));
     INT_OPT opt_num_shots("shots", "set the number of shots when sampling the circuit", 0, INT32R(0, INT32_MAX));
     INT_OPT opt_chunk_shots("chunk-shots", "set sampling shots per chunk (0: automatic)", 0, INT32R(0, INT32_MAX));
+    INT_OPT opt_max_gpu_memory("max-gpu-memory", "cap the GPU pool in MB (0: take what is free)", 0, INT32R(0, INT32_MAX));
     INT_OPT opt_min_shots_write("min-shots-write", "minimum number of shots for writing obs/dets/samples to file", 100, INT32R(0, INT32_MAX));
     INT_OPT opt_min_measures_write("min-measures-write", "minimum number of measures for writing obs/dets/samples to file", 100, INT32R(0, INT32_MAX));
 
@@ -133,6 +134,7 @@ namespace QuaSARQ {
         num_qubits = opt_num_qubits;
         num_shots = opt_num_shots;
         chunk_shots = opt_chunk_shots;
+        max_gpu_memory = opt_max_gpu_memory;
         min_shots_write = opt_min_shots_write;
         min_measures_write = opt_min_measures_write;
         depth = opt_depth;
