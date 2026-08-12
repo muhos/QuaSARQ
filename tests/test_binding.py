@@ -483,6 +483,170 @@ def test_chunk_invariance(c, shots):
     check(quasarq.get_chunk_shots() == 0, "chunk size restored to automatic")
 
 
+# Circuits whose measurement outcomes are forced, so a single deterministic run must reproduce
+# them exactly rather than statistically.
+FORCED_MEASUREMENTS = (
+    ("R 0 1\nX 0\nM 0 1", [True, False]),
+    ("R 0 1\nX 0 1\nM 0 1", [True, True]),
+    ("R 0\nH 0\nH 0\nM 0", [False]),
+    ("R 0\nX 0\nMR 0\nM 0", [True, False]),
+    ("RX 0\nMX 0", [False]),
+)
+
+# Measurement-free Clifford circuits, so the state is deterministic and can be compared against
+# stim without the two disagreeing merely because a random outcome differed.
+CLIFFORD_STATES = (
+    ("H 0", 1),
+    ("S 0", 1),
+    ("H 0\nCX 0 1", 2),
+    ("X 0\nH 1\nCX 1 2\nS 2", 3),
+    ("H 0\nH 1\nCZ 0 1\nS 1\nH 0", 2),
+    ("H 0\nCX 0 1\nCX 1 2\nS 2\nH 1\nCZ 0 2", 3),
+)
+
+
+def stim_inverse_rows(text, n):
+    # stim writes identity as '_' where quasarq writes 'I'.
+    sim = stim.TableauSimulator()
+    sim.set_num_qubits(n)
+    sim.do_circuit(stim.Circuit(text))
+    inverse = sim.current_inverse_tableau()
+    rows = [str(inverse.x_output(q)) for q in range(n)]
+    rows += [str(inverse.z_output(q)) for q in range(n)]
+    return [row.replace("_", "I") for row in rows]
+
+
+# The simulation path runs a circuit once on the tableau, with no sampling, and reports what it
+# measured and the state it ended in.
+def test_simulation(c, shots):
+    sim = quasarq.simulate("R 0 1 2\nX 0\nM 0 1 2")
+    check(sim.num_qubits == 3, "num_qubits agrees with the circuit", f"{sim.num_qubits}")
+    check(sim.num_measurements == 3, "num_measurements agrees with the circuit",
+          f"{sim.num_measurements}")
+    record = sim.measurements()
+    check(record.shape == (3,) and record.dtype == np.bool_, "measurements shape+dtype",
+          f"{record.shape}/{record.dtype}")
+
+    exact = []
+    for text, expected in FORCED_MEASUREMENTS:
+        got = quasarq.simulate(text).measurements().tolist()
+        exact.append(got == expected)
+        if got != expected:
+            check(False, f"forced outcome {text!r}", f"got {got}, want {expected}")
+    check(all(exact), "forced measurement outcomes are exact", f"{len(exact)} circuits checked")
+
+    quiet = quasarq.simulate("H 0\nCX 0 1")
+    check(quiet.num_measurements == 0, "circuit with no measurements reports zero")
+    check(quiet.measurements().shape == (0,), "no-measurement circuit returns an empty record",
+          f"{quiet.measurements().shape}")
+
+    # The rows are the inverse tableau: x_output for every qubit, then z_output.
+    agreed = []
+    for text, n in CLIFFORD_STATES:
+        rows = quasarq.simulate(text).paulis()
+        want = stim_inverse_rows(text, n)
+        agreed.append(rows == want)
+        if rows != want:
+            check(False, f"pauli rows {text!r}", f"got {rows}, want {want}")
+    check(all(agreed), "pauli rows match stim's inverse tableau",
+          f"{len(agreed)} circuits, {sum(len(stim_inverse_rows(t, n)) for t, n in CLIFFORD_STATES)} rows")
+
+    rows = quasarq.simulate("X 0\nH 1\nM 0 1").paulis()
+    check(len(rows) == 4 and all(len(r) == 3 for r in rows),
+          "an extended tableau lists destabilizers then stabilizers", f"{rows}")
+    check(all(r[0] in "+-" and set(r[1:]) <= set("IXYZ") for r in rows),
+          "every pauli row is a sign followed by IXYZ")
+
+    try:
+        quasarq.simulate(stim.Circuit())
+        check(False, "empty circuit raises")
+    except Exception as e:
+        check(True, "empty circuit raises", type(e).__name__)
+
+
+# Clifford identities, so the verdict is known independently of any simulator.
+EQUIVALENT_PAIRS = (
+    ("H 0\nH 0", "I 0"),
+    ("S 0\nS 0", "Z 0"),
+    ("X 0\nX 0", "I 0"),
+    ("H 0\nS 0\nH 0\nS 0\nH 0\nS 0", "I 0"),
+    ("CX 0 1", "H 1\nCZ 0 1\nH 1"),
+    ("H 0\nH 1\nCX 0 1\nH 0\nH 1", "CX 1 0"),
+    ("S 0\nS 0\nS 0\nS 0", "I 0"),
+)
+
+INEQUIVALENT_PAIRS = (
+    ("X 0", "Z 0"),
+    ("CX 0 1", "CX 1 0"),
+    ("S 0", "Z 0"),
+    ("H 0", "I 0"),
+    ("CX 0 1", "CZ 0 1"),
+)
+
+# Random Clifford circuits, checked against stim's own tableau comparison so the oracle is
+# independent of QuaSARQ rather than another QuaSARQ run.
+def random_clifford_text(rng, qubits, gates):
+    ops = []
+    for _ in range(gates):
+        pick = rng.integers(0, 5)
+        if pick < 3:
+            ops.append(f"{['H', 'S', 'X'][pick]} {rng.integers(0, qubits)}")
+        else:
+            a = int(rng.integers(0, qubits))
+            b = int((a + 1 + rng.integers(0, qubits - 1)) % qubits)
+            ops.append(f"{'CX' if pick == 3 else 'CZ'} {a} {b}")
+    return "\n".join(ops)
+
+
+# Equivalence checking answers whether two circuits realise the same Clifford operation.
+def test_equivalence(c, shots):
+    same = [quasarq.equivalent(a, b) for a, b in EQUIVALENT_PAIRS]
+    check(all(same), "known-equivalent circuits are equivalent",
+          f"{sum(same)}/{len(same)} pairs")
+    differ = [quasarq.equivalent(a, b) for a, b in INEQUIVALENT_PAIRS]
+    check(not any(differ), "known-different circuits are not equivalent",
+          f"{len(differ) - sum(differ)}/{len(differ)} pairs rejected")
+
+    rng = np.random.default_rng(7)
+    agreed, compared = True, 0
+    for _ in range(12):
+        qubits = int(rng.integers(2, 6))
+        a = random_clifford_text(rng, qubits, int(rng.integers(4, 14)))
+        # Half the time compare against a genuinely different circuit, half against a rewrite
+        # that must stay equivalent.
+        b = a + "\nH 0\nH 0" if rng.integers(0, 2) else random_clifford_text(rng, qubits, 6)
+        pad = f"\nI {qubits - 1}"
+        want = stim.Tableau.from_circuit(stim.Circuit(a + pad)) == \
+               stim.Tableau.from_circuit(stim.Circuit(b + pad))
+        got = quasarq.equivalent(a + pad, b + pad)
+        compared += 1
+        if got != want:
+            check(False, "random circuit verdict matches stim",
+                  f"quasarq={got} stim={want} for {a!r} vs {b!r}")
+            agreed = False
+    check(agreed, "random circuit verdicts match stim's tableau comparison",
+          f"{compared} pairs")
+
+    # Every form a circuit can take is accepted, since they all reach the same text.
+    forms = (quasarq.Circuit("CX 0 1"), "CX 0 1", stim.Circuit("CX 0 1"))
+    accepted = [quasarq.equivalent(f, "H 1\nCZ 0 1\nH 1") for f in forms]
+    check(all(accepted), "accepts Circuit, text and stim.Circuit", f"{len(accepted)} forms")
+
+    # A tableau comparison cannot see measurements, so a circuit containing one has to be
+    # refused rather than silently compared as though it were absent.
+    for a, b, what in (("H 0\nM 0", "H 0", "first"), ("H 0", "H 0\nM 0", "second")):
+        try:
+            quasarq.equivalent(a, b)
+            check(False, f"measurements in the {what} circuit are refused", "no error raised")
+        except Exception as e:
+            check("measurement" in str(e), f"measurements in the {what} circuit are refused",
+                  type(e).__name__)
+
+    same_text = quasarq.Circuit("H 0\nH 0")
+    check(not (same_text == quasarq.Circuit("H 0\nH 0")),
+          "== is identity, not equivalence", "equivalence lives in quasarq.equivalent")
+
+
 TESTS = (
     ("interface matches stim.CompiledDetectorSampler", test_interface),
     ("bit packing matches numpy.packbits(bitorder='little')", test_bit_packing),
@@ -500,6 +664,8 @@ TESTS = (
     ("edge cases", test_edge_cases),
     ("accepts circuit text as well as stim.Circuit", test_circuit_text),
     ("GIL is released during sampling", test_gil_released),
+    ("simulation path reports measurements and final state", test_simulation),
+    ("equivalence checking agrees with stim", test_equivalence),
 )
 
 

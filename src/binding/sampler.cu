@@ -20,20 +20,7 @@ namespace QuaSARQ {
         SET_LOGGER_SINK(library_sink, nullptr);
     }
 
-    // reserve() sizes the GPU pool to almost all free device memory, so at most one
-    // Sampling may hold a live Framing. A second one would find nothing left.
-    static Sampling* pool_owner = nullptr;
-
-    Sampling::Sampling(const std::string& circuit, const uint64_t& seed) :
-        circuit_text(circuit)
-        , base_seed(seed)
-        , call_index(0)
-        , num_detectors(0)
-        , num_observables(0)
-        , num_measurements(0)
-        , num_qubits(0)
-        , built_cap(0)
-    {
+    CircuitScan scan_circuit(std::string& circuit_text) {
         if (circuit_text.empty())
             LOGERROR("circuit is empty.");
         OptionsGuard guard;
@@ -49,10 +36,33 @@ namespace QuaSARQ {
             io.read_gate(str);
         }
         io.observables.merge_by_id();
-        num_detectors = io.detectors.pinned.num_instructions;
-        num_observables = io.observables.pinned.num_observables;
-        num_measurements = io.measures_count;
-        num_qubits = io.max_qubits;
+        CircuitScan scan;
+        scan.qubits = io.max_qubits;
+        scan.measurements = io.measures_count;
+        scan.detectors = io.detectors.pinned.num_instructions;
+        scan.observables = io.observables.pinned.num_observables;
+        return scan;
+    }
+
+    // reserve() sizes the GPU pool to almost all free device memory, so at most one
+    // Sampling may hold a live Framing. A second one would find nothing left.
+    static Sampling* pool_owner = nullptr;
+
+    Sampling::Sampling(const std::string& circuit, const uint64_t& seed) :
+        circuit_text(circuit)
+        , base_seed(seed)
+        , call_index(0)
+        , num_detectors(0)
+        , num_observables(0)
+        , num_measurements(0)
+        , num_qubits(0)
+        , built_cap(0)
+    {
+        const CircuitScan scan = scan_circuit(circuit_text);
+        num_detectors = scan.detectors;
+        num_observables = scan.observables;
+        num_measurements = scan.measurements;
+        num_qubits = scan.qubits;
     }
 
     Sampling::~Sampling() {

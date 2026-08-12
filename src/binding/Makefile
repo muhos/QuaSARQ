@@ -56,10 +56,10 @@ PKG_DIR   := quasarq
 MODULE    := $(PKG_DIR)/_quasarq$(EXT_SUFFIX)
 # The core locates kernel.config next to the shared object, so the package carries its own copy.
 PKG_CONFIG := $(PKG_DIR)/kernel.config
-CUDA_OBJS := sampler.pic.cuda.o
+CUDA_OBJS := sampler.pic.cuda.o simulate.pic.cuda.o
 HOST_OBJS := module.pic.o nb_combined.pic.o
 OBJS      := $(CUDA_OBJS) $(HOST_OBJS)
-HEADERS   := sampler.hpp module.hpp $(wildcard $(QUASARQ_DIR)/src/*.hpp) $(wildcard $(QUASARQ_DIR)/src/*.cuh)
+HEADERS   := sampler.hpp module.hpp simulate.hpp $(wildcard $(QUASARQ_DIR)/src/*.hpp) $(wildcard $(QUASARQ_DIR)/src/*.cuh)
 
 all: $(MODULE) $(PKG_CONFIG)
 
@@ -67,6 +67,11 @@ $(PKG_CONFIG): $(QUASARQ_DIR)/src/kernel.config
 	@cp $< $@
 
 sampler.pic.cuda.o: sampler.cu $(HEADERS)
+	@echo -n "compiling $<..."
+	@$(NVCC) $(CUDA_FLAGS) $(INCLUDES) -o $@ -c $<
+	@echo "done."
+
+simulate.pic.cuda.o: simulate.cu simulate.hpp $(HEADERS)
 	@echo -n "compiling $<..."
 	@$(NVCC) $(CUDA_FLAGS) $(INCLUDES) -o $@ -c $<
 	@echo "done."

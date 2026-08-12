@@ -108,6 +108,23 @@ namespace Module{
         throw std::runtime_error(message + QuaSARQ::binding_device_memory_note());
     }
 
+    // The core reports failures by logging to the error sink and throwing, so anything that
+    // calls into it has to translate that into a python exception carrying the logged text.
+    template <class BODY>
+    inline auto guarded(const char* fallback, BODY&& body) -> decltype(body()) {
+        QuaSARQ::binding_clear_error();
+        try {
+            return body();
+        }
+        catch (const std::exception& e) {
+            raise_from_core(fallback, e.what());
+        }
+        catch (...) {
+            raise_from_core(fallback);
+        }
+        throw std::runtime_error(fallback);
+    }
+
     inline std::string circuit_to_text(nb::handle circuit) {
         if (nb::isinstance<nb::str>(circuit))
             return nb::cast<std::string>(circuit);
@@ -132,6 +149,35 @@ namespace Module{
             reinterpret_cast<bool*>(data), { buffer.rows, buffer.cols }, owner));
     }
 
+    // A circuit QuaSARQ owns. It accepts a stim.Circuit or plain text, since those convert through str().
+    class Circuit {
+
+        std::string             text;
+        QuaSARQ::CircuitScan    scan;
+
+    public:
+
+        Circuit(nb::handle source) : text(circuit_to_text(source)) {
+            QuaSARQ::binding_clear_error();
+            try {
+                scan = QuaSARQ::scan_circuit(text);
+            }
+            catch (const std::exception& e) {
+                raise_from_core("failed to parse the circuit", e.what());
+            }
+            catch (...) {
+                raise_from_core("failed to parse the circuit");
+            }
+        }
+
+        const std::string& circuit_text() const { return text; }
+        size_t num_qubits() const { return scan.qubits; }
+        size_t num_measurements() const { return scan.measurements; }
+        size_t num_detectors() const { return scan.detectors; }
+        size_t num_observables() const { return scan.observables; }
+    };
+
+    // A sampling engine that runs on the GPU.
     class Engine {
 
     protected:

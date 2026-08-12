@@ -8,53 +8,53 @@ using namespace QuaSARQ;
 			CREPORT, #GATE, ":", CREPORTVAL, other_stats.circuit.gate_stats.types[GATE], \
 			percent((double)other_stats.circuit.gate_stats.types[GATE], other_stats.circuit.num_gates), CNORMAL);	\
 
-Equivalence::Equivalence() :
-    other_num_qubits(options.num_qubits)
-    , other_num_partitions(1)
-    , other_depth(options.depth)
-    , other_circuit(MB)
-    , other_tableau(gpu_allocator)
-    , other_gpu_circuit(gpu_allocator)
-    , other_custreams(nullptr)
-    , failed_state('?')
-    , last_equivalent(false)
-    , Simulator()
-    {
-        assert(!circuit.empty());
-        create_streams(other_custreams);
-        inject_faulty();
-        circuit_io.observables.destroy();
-        circuit_io.detectors.destroy();
-        gpu_allocator.resize_cpu_pool(winfo.max_window_bytes + other_winfo.max_window_bytes + KB * gpu_allocator.alignment());
-    }
+void Equivalence::open_other() {
+    create_streams(other_custreams);
+}
 
+// Takes the second circuit as parsed and gets it ready to run beside the first.
+void Equivalence::adopt_other(const size_t& qubits) {
+    other_num_qubits = qubits;
+    other_depth = schedule(other_stats, other_circuit, other_winfo, other_num_qubits);
+    stats.time.initial += other_stats.time.initial;
+    stats.time.schedule += other_stats.time.schedule;
+}
+
+void Equivalence::finish_other() {
+    circuit_io.observables.destroy();
+    circuit_io.detectors.destroy();
+    gpu_allocator.resize_cpu_pool(winfo.max_window_bytes + other_winfo.max_window_bytes
+                                  + KB * gpu_allocator.alignment());
+}
+
+// A random circuit, checked against a faulty copy of itself.
+Equivalence::Equivalence() : Simulator() {
+    assert(!circuit.empty());
+    open_other();
+    inject_faulty();
+    finish_other();
+}
+
+// Two circuits from files. Without a second path, the first is checked against a faulty copy.
 Equivalence::Equivalence(const string& path_to_circuit, const string& path_to_other) :
-    other_num_qubits(options.num_qubits)
-    , other_num_partitions(1)
-    , other_depth(options.depth)
-    , other_circuit(MB)
-    , other_tableau(gpu_allocator)
-    , other_gpu_circuit(gpu_allocator)
-    , other_custreams(nullptr)
-    , failed_state('?')
-    , last_equivalent(false)
-    , Simulator(path_to_circuit)
-    {
-        create_streams(other_custreams);
-        if (path_to_other.empty()) {
-            inject_faulty();
-        }
-        else {
-            assert(!circuit_io.size);
-            other_num_qubits = parse(other_stats, path_to_other.c_str());
-            other_depth = schedule(other_stats, other_circuit, other_winfo, other_num_qubits);
-            stats.time.initial += other_stats.time.initial;
-            stats.time.schedule += other_stats.time.schedule;
-        }
-        circuit_io.observables.destroy();
-        circuit_io.detectors.destroy();
-        gpu_allocator.resize_cpu_pool(winfo.max_window_bytes + other_winfo.max_window_bytes + KB * gpu_allocator.alignment());
-    }
+    Simulator(path_to_circuit)
+{
+    open_other();
+    if (path_to_other.empty())
+        inject_faulty();
+    else
+        adopt_other(parse(other_stats, path_to_other.c_str()));
+    finish_other();
+}
+
+// Two circuits already in memory, for callers that never touch the filesystem.
+Equivalence::Equivalence(char* circuit_data, const size_t& length, char* other_data, const size_t& other_length) :
+    Simulator(circuit_data, length, false)
+{
+    open_other();
+    adopt_other(parse(other_stats, other_data, other_length));
+    finish_other();
+}
 
 void Equivalence::inject_faulty() {
     circuit.copyTo(other_circuit);

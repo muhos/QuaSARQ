@@ -5,6 +5,8 @@
 
 #include "sampler.hpp"
 #include "module.hpp"
+#include "simulate.hpp"
+#include <nanobind/stl/vector.h>
 
 using namespace QuaSARQ;
 
@@ -119,6 +121,67 @@ NB_MODULE(_quasarq, m) {
              nb::kw_only(),
              nb::arg("bit_packed") = false,
              "Sample raw measurement outcomes, one column per measurement in circuit order.");
+
+    nb::class_<Module::Circuit>(m, "Circuit")
+        .def(nb::init<nb::handle>(), nb::arg("circuit"),
+             "Build a circuit from stim-format text, a stim.Circuit, or another Circuit.")
+        .def_prop_ro("num_qubits", &Module::Circuit::num_qubits)
+        .def_prop_ro("num_measurements", &Module::Circuit::num_measurements)
+        .def_prop_ro("num_detectors", &Module::Circuit::num_detectors)
+        .def_prop_ro("num_observables", &Module::Circuit::num_observables)
+        .def("__str__", &Module::Circuit::circuit_text)
+        .def("__repr__", [](const Module::Circuit& self) {
+            return "quasarq.Circuit(" + std::to_string(self.num_qubits()) + " qubits, "
+                 + std::to_string(self.num_measurements()) + " measurements, "
+                 + std::to_string(self.num_detectors()) + " detectors, "
+                 + std::to_string(self.num_observables()) + " observables)";
+        });
+
+    nb::class_<Simulation>(m, "Simulation")
+        .def_prop_ro("num_qubits", &Simulation::qubits)
+        .def_prop_ro("num_measurements", &Simulation::measurements)
+        .def("measurements",
+             [](Simulation& self) {
+                 const std::vector<bool>& record = Module::guarded(
+                     "simulation failed", [&]() -> const std::vector<bool>& {
+                         return self.measurement_record();
+                     });
+                 Module::HostBuffer bits(record.size(), record.empty() ? 0 : 1);
+                 for (size_t i = 0; i < record.size(); i++)
+                     bits.data[i] = uint8_t(record[i]);
+                 nb::object array = Module::to_numpy(bits, false);
+                 return array.attr("reshape")(record.size());
+             },
+             "Outcome of every measurement in circuit order, as a bool array.")
+        .def("paulis",
+             [](Simulation& self) {
+                 return Module::guarded("simulation failed", [&]() -> const std::vector<std::string>& {
+                     return self.pauli_strings();
+                 });
+             },
+             "The state the circuit ends in, one Pauli string per generator: a sign followed by "
+             "one letter per qubit. An extended tableau lists the destabilizers first, then the "
+             "stabilizers. These are rows of the inverse tableau, which is what this path holds.");
+
+    m.def("equivalent",
+          [](nb::handle circuit, nb::handle other) {
+              std::string a = Module::circuit_to_text(circuit);
+              std::string b = Module::circuit_to_text(other);
+              return Module::guarded("equivalence check failed",
+                                     [&] { return QuaSARQ::check_equivalence(a, b); });
+          },
+          nb::arg("circuit"), nb::arg("other"),
+          "True when two circuits realize the same Clifford operation.");
+
+    m.def("simulate",
+          [](nb::handle circuit) {
+              std::string text = Module::circuit_to_text(circuit);
+              return Module::guarded("failed to parse the circuit",
+                                     [&] { return new Simulation(text); });
+          },
+          nb::arg("circuit"),
+          "Run a circuit once, deterministically, and report what it measured and the state it "
+          "ended in. This is the single-shot simulation.");
 
     m.def("compile_detector_sampler",
           [](nb::handle circuit, nb::handle seed) {

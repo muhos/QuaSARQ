@@ -10,11 +10,14 @@ The sinter adapter lives in `quasarq.sinter` and is imported separately, as it n
 """
 
 from ._quasarq import (
+    Circuit,
     CompiledDetectorSampler,
+    Simulation,
     CompiledMeasurementSampler,
     compile_detector_sampler,
     compile_sampler,
     device_name,
+    equivalent,
     get_chunk_shots,
     get_max_device_memory,
     get_verbosity,
@@ -22,15 +25,19 @@ from ._quasarq import (
     set_kernel_config,
     set_max_device_memory,
     set_verbosity,
+    simulate,
     version,
 )
 
 __all__ = [
+    "Circuit",
     "CompiledDetectorSampler",
+    "Simulation",
     "CompiledMeasurementSampler",
     "compile_detector_sampler",
     "compile_sampler",
     "device_name",
+    "equivalent",
     "get_chunk_shots",
     "get_max_device_memory",
     "get_verbosity",
@@ -38,5 +45,6 @@ __all__ = [
     "set_kernel_config",
     "set_max_device_memory",
     "set_verbosity",
+    "simulate",
     "version",
 ]

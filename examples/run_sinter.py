@@ -1,4 +1,9 @@
-"""Collects surface code logical error rates with sinter, sampling on the GPU with QuaSARQ."""
+"""Collects surface code logical error rates with sinter, sampling on the GPU with QuaSARQ.
+
+Decoding costs roughly twice what sampling does, and pymatching holds the GIL while it runs, so
+several worker processes are worth having: only separate processes decode in parallel. They can
+share one GPU because the pool is sized per run from the circuit and the shot count.
+"""
 
 import time
 
@@ -7,6 +12,7 @@ import stim
 
 from quasarq import sinter as quasarq_sinter
 
+DISTANCES = (3, 5, 7, 9, 11, 13)
 
 def tasks():
     return [
@@ -23,19 +29,18 @@ def tasks():
             json_metadata={"d": d},
         )
 
-        for d in (3, 5)
+        for d in DISTANCES
     ]
 
+def run(n_workers=4, shots=400_000):
+    print(f"Running {n_workers} workers, {shots} shots per distance, on distances {DISTANCES}\n")
 
-if __name__ == "__main__":
     start = time.perf_counter()
 
     stats = sinter.collect(
-        # `num_workers` should stay at 1: QuaSARQ serialises sampling on one GPU, and each
-        # extra worker is a separate process competing for the same device memory.
-        num_workers=1,
+        num_workers=n_workers,
         tasks=tasks(),
-        max_shots=400_000,
+        max_shots=shots,
         max_errors=1_000_000,
         decoders=["quasarq"],
         custom_decoders={"quasarq": quasarq_sinter.QuaSARQSampler(seed=1)},
@@ -46,8 +51,18 @@ if __name__ == "__main__":
     rates = [s.errors / s.shots for s in stats]
 
     for s, rate in zip(stats, rates):
-        print(f"d={s.json_metadata['d']}  {s.errors}/{s.shots} = {rate:.5f}")
-    print(f"\n{elapsed:.2f}s  ({sum(s.shots for s in stats) / elapsed / 1000:.0f}k shots/s)")
+        print(f"d={s.json_metadata['d']:<3} {s.errors:>7}/{s.shots} = {rate:.5f}")
 
-    assert rates[0] > rates[1], "error rate must fall with distance"
-    print("All tests passed.")
+    shots = sum(s.shots for s in stats)
+
+    print(f"\n{elapsed:.2f}s over {n_workers} workers  ({shots / elapsed / 1000:.0f}k shots/s)")
+
+    assert all(a > b for a, b in zip(rates, rates[1:])), "the logical error rate must fall as the distance grows"
+
+    print("")
+    
+
+if __name__ == "__main__":
+    run(2)
+    run(4)
+    print("\nAll tests passed.")

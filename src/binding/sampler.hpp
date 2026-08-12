@@ -178,6 +178,19 @@ namespace QuaSARQ {
 
     void binding_initialize(const std::string& config_path);
 
+    // What a single scan of a circuit tells us, before anything is put on the device. Shared so
+    // the samplers, the simulation path and the Circuit type all parse it the same way.
+    struct CircuitScan {
+        size_t qubits;
+        size_t measurements;
+        size_t detectors;
+        size_t observables;
+
+        CircuitScan() : qubits(0), measurements(0), detectors(0), observables(0) {}
+    };
+
+    CircuitScan scan_circuit(std::string& circuit_text);
+
     struct SampleRequest {
         size_t      num_shots;
         bool        bit_packed;
