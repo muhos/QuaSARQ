@@ -300,11 +300,94 @@ def test_reference_frame(c, shots):
           f"quasarq={qo.mean():.4f} stim={so.mean():.4f}")
 
 
+MEASURE_FLIP = """
+    {reset} 0
+    {gate}({p}) 0
+    DETECTOR rec[-1]
+    OBSERVABLE_INCLUDE(0) rec[-1]
+"""
+
+RESET_FOR_BASIS = {"M": "R", "MR": "R", "MX": "RX", "MRX": "RX", "MY": "RY", "MRY": "RY"}
+
+SPLIT_OBSERVABLE = """
+    R 0 1
+    X_ERROR(0.3) 0
+    X_ERROR(0.1) 1
+    M 0
+    OBSERVABLE_INCLUDE(0) rec[-1]
+    M 1
+    OBSERVABLE_INCLUDE(0) rec[-1]
+"""
+
+MIXED_BASIS_OBSERVABLES = """
+    RX 0 1
+    R 2
+    Z_ERROR(0.2) 0
+    Z_ERROR(0.05) 1
+    X_ERROR(0.1) 2
+    MX(0.02) 0 1
+    M(0.02) 2
+    DETECTOR rec[-3]
+    DETECTOR rec[-2]
+    DETECTOR rec[-1]
+    OBSERVABLE_INCLUDE(0) rec[-3]
+    OBSERVABLE_INCLUDE(1) rec[-1]
+    OBSERVABLE_INCLUDE(0) rec[-2]
+"""
+
+def test_measurement_flip_noise(c, shots):
+    n = 200000
+    for gate, reset in RESET_FOR_BASIS.items():
+        text = MEASURE_FLIP.format(reset=reset, gate=gate, p=0.25)
+        (qd, _), (sd, _) = both_samplers(stim.Circuit(text), n, seed=3)
+        q, s = qd.mean(), sd.mean()
+        # Absolute bounds as well as agreement: a dropped argument gives 0.0 and a
+        # wrong-basis reset gives 0.5, and both must fail here.
+        check(sigmas(q, s, n) < 5.0 and 0.2 < q < 0.3,
+              f"{gate}(p) flip rate agrees with stim and is ~p",
+              f"quasarq={q:.4f} stim={s:.4f}")
+
+    for gate, reset in (("MX", "RX"), ("M", "R")):
+        zero = sampler(stim.Circuit(MEASURE_FLIP.format(reset=reset, gate=gate, p=0))).sample(20000)
+        check(not zero.any(), f"{gate}(0) flips nothing", f"{int(zero.sum())} events")
+
+
+def test_observable_merging(c, shots):
+    n = 200000
+    text = stim.Circuit(SPLIT_OBSERVABLE)
+    qs = sampler(text)
+    check(qs.num_observables == text.num_observables,
+          "two lines sharing an id count as one observable",
+          f"quasarq={qs.num_observables} stim={text.num_observables}")
+    (_, qo), (_, so) = both_samplers(text, n, seed=5)
+    check(sigmas(qo[:, 0].mean(), so[:, 0].mean(), n) < 5.0,
+          "merged observable rate agrees with stim",
+          f"quasarq={qo[:, 0].mean():.4f} stim={so[:, 0].mean():.4f}")
+
+    check(abs(qo[:, 0].mean() - 0.5) > 0.05, "merged observable is not a coin flip",
+          f"rate={qo[:, 0].mean():.4f}")
+
+    mixed = stim.Circuit(MIXED_BASIS_OBSERVABLES)
+    qs = sampler(mixed)
+    check(qs.num_observables == mixed.num_observables,
+          "interleaved ids across bases count correctly",
+          f"quasarq={qs.num_observables} stim={mixed.num_observables}")
+    (qd, qo), (sd, so) = both_samplers(mixed, n, seed=5)
+    check(bool(np.all(sigmas(qd.mean(0), sd.mean(0), n) < 5.0)),
+          "mixed-basis detector rates agree with stim",
+          f"quasarq={np.round(qd.mean(0), 4)} stim={np.round(sd.mean(0), 4)}")
+    check(bool(np.all(sigmas(qo.mean(0), so.mean(0), n) < 5.0)),
+          "mixed-basis observable rates agree with stim",
+          f"quasarq={np.round(qo.mean(0), 4)} stim={np.round(so.mean(0), 4)}")
+
+
 TESTS = (
     ("interface matches stim.CompiledDetectorSampler", test_interface),
     ("bit packing matches numpy.packbits(bitorder='little')", test_bit_packing),
     ("seeding semantics match stim", test_seeding),
     ("detection events are relative to the reference sample", test_reference_frame),
+    ("measurement flip probability M(p)/MX(p) is applied", test_measurement_flip_noise),
+    ("observables merge by id, not by line", test_observable_merging),
     ("detector and observable rates agree with stim", test_rates_match_stim),
     ("decoded logical error rate falls with distance (pymatching)", test_decoding),
     ("chunked sampling gives the same statistics", test_chunked_sampling),

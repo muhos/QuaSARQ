@@ -93,6 +93,26 @@ struct SchedulerHarness {
         return circuit.gate(ref).wires[0];
     }
 
+    float flip_prob_at(const depth_t& d, const uint32& g) const {
+        TCHECK(d < circuit.depth());
+        TCHECK(g < circuit[d].size());
+        gate_ref_t ref = circuit[d][g];
+        const Gate& gate = circuit.gate(ref);
+        TCHECK(noiseProbs(int(gate.type)) > 0);
+        return gate.get_prob(0);
+    }
+
+    float flip_prob_of_qubit(const depth_t& d, const qubit_t& q) const {
+        TCHECK(d < circuit.depth());
+        for (uint32 g = 0; g < circuit[d].size(); g++) {
+            gate_ref_t ref = circuit[d][g];
+            const Gate& gate = circuit.gate(ref);
+            if (gate.wires[0] == q)
+                return gate.get_prob(0);
+        }
+        return -1.0f;
+    }
+
     bool all_gates_have_type(const depth_t& d, const Gatetypes& type) const {
         TCHECK(d < circuit.depth());
         for (uint32 g = 0; g < circuit[d].size(); g++) {
@@ -513,6 +533,67 @@ void test_edge_cases() {
         h.feed("I 0\nH 0\n");
         h.schedule(1);
         TCHECK(h.depth() == 2);
+    });
+
+    run_test("M(p): flip probability survives scheduling", [] {
+        SchedulerHarness h;
+        h.feed("M(0.25) 0\n");
+        h.schedule(1);
+        TCHECK(h.depth() == 1);
+        TCHECK(h.gate_type_at(0, 0) == M);
+        const float p = h.flip_prob_at(0, 0);
+        TCHECK(p > 0.249f && p < 0.251f);
+    });
+
+    run_test("MR(p): flip probability survives scheduling", [] {
+        SchedulerHarness h;
+        h.feed("MR(0.125) 0\n");
+        h.schedule(1);
+        TCHECK(h.gate_type_at(0, 0) == MR);
+        const float p = h.flip_prob_at(0, 0);
+        TCHECK(p > 0.124f && p < 0.126f);
+    });
+
+    run_test("MX(p): expanded measurement keeps p after scheduling", [] {
+        SchedulerHarness h;
+        h.feed("MX(0.25) 0\n");
+        h.schedule(1);
+        bool checked = false;
+        for (depth_t d = 0; d < h.depth(); d++) {
+            if (h.gate_type_at(d, 0) != M) continue;
+            const float p = h.flip_prob_at(d, 0);
+            TCHECK(p > 0.249f && p < 0.251f);
+            checked = true;
+        }
+        TCHECK(checked);
+    });
+
+    run_test("M without p: flip probability is zero, not garbage", [] {
+        SchedulerHarness h;
+        h.feed("H 0\nM 0\n");
+        h.schedule(1);
+        TCHECK(h.gate_type_at(1, 0) == M);
+        TCHECK(h.flip_prob_at(1, 0) == 0.0f);
+    });
+
+    run_test("distinct probabilities stay with their qubits in one window after sorting", [] {
+        SchedulerHarness h;
+        h.feed("M(0.25) 2\nM(0.125) 0\n");
+        h.schedule(3);
+        TCHECK(h.depth() == 1);
+        TCHECK(h.gates_in_window(0) == 2);
+        const float p2 = h.flip_prob_of_qubit(0, 2);
+        const float p0 = h.flip_prob_of_qubit(0, 0);
+        TCHECK(p2 > 0.249f && p2 < 0.251f);
+        TCHECK(p0 > 0.124f && p0 < 0.126f);
+    });
+
+    run_test("R gates reserve no probability slot", [] {
+        SchedulerHarness h;
+        h.feed("R 0\n");
+        h.schedule(1);
+        TCHECK(h.gate_type_at(0, 0) == R);
+        TCHECK(noiseProbs(int(R)) == 0u);
     });
 }
 

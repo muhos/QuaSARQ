@@ -145,6 +145,68 @@ void test_m_variants() {
         TCHECK(h.io.detectors.refs[1] == 1);
     });
 
+    run_test("MX(p): flip probability reaches the expanded M", [] {
+        ParserHarness h;
+        h.feed("MX(0.25) 0\n");
+        TCHECK(h.queue_size() == 3);
+        TCHECK(h.gate(1).type == byte_t(M));
+        TCHECK(h.gate(1).probs[0] > 0.249f && h.gate(1).probs[0] < 0.251f);
+    });
+
+    run_test("MX(p): the basis rotations carry no probability", [] {
+        ParserHarness h;
+        h.feed("MX(0.25) 0\n");
+        TCHECK(h.gate(0).type == byte_t(H));
+        TCHECK(h.gate(0).probs[0] == 0.0f);
+        TCHECK(h.gate(2).probs[0] == 0.0f);
+    });
+
+    run_test("MRY(p): flip probability reaches the expanded MR", [] {
+        ParserHarness h;
+        h.feed("MRY(0.125) 0\n");
+        bool found = false;
+        for (size_t i = 0; i < h.queue_size(); i++) {
+            if (h.gate(i).type == byte_t(MR)) {
+                found = true;
+                TCHECK(h.gate(i).probs[0] > 0.124f && h.gate(i).probs[0] < 0.126f);
+            }
+        }
+        TCHECK(found);
+    });
+
+    run_test("MX(p) over several qubits: every measurement keeps p", [] {
+        ParserHarness h;
+        h.feed("MX(0.5) 0 1 2\n");
+        size_t measures = 0;
+        for (size_t i = 0; i < h.queue_size(); i++) {
+            if (h.gate(i).type == byte_t(M)) {
+                measures++;
+                TCHECK(h.gate(i).probs[0] > 0.49f && h.gate(i).probs[0] < 0.51f);
+            }
+        }
+        TCHECK(measures == 3);
+    });
+
+    run_test("MX without argument: no flip probability", [] {
+        ParserHarness h;
+        h.feed("MX 0\n");
+        TCHECK(h.gate(1).type == byte_t(M));
+        TCHECK(h.gate(1).probs[0] == 0.0f);
+    });
+
+    run_test("M(p) / MR(p): probability stored, and memory reserved for it", [] {
+        ParserHarness h;
+        h.feed("M(0.25) 0\nMR(0.125) 1\n");
+        TCHECK(h.gate(0).type == byte_t(M));
+        TCHECK(h.gate(0).probs[0] > 0.249f && h.gate(0).probs[0] < 0.251f);
+        TCHECK(h.gate(1).type == byte_t(MR));
+        TCHECK(h.gate(1).probs[0] > 0.124f && h.gate(1).probs[0] < 0.126f);
+        TCHECK(noiseProbs(int(M)) == 1u);
+        TCHECK(noiseProbs(int(MR)) == 1u);
+        TCHECK(noiseProbs(int(R)) == 0u);
+        TCHECK(noiseProbs(int(H)) == 0u);
+    });
+
     run_test("MX 0 1 2: phase-batched H H H M M M H H H", [] {
         ParserHarness h;
         h.feed("MX 0 1 2\n");
@@ -479,6 +541,68 @@ void test_detector_observable() {
         TCHECK(h.io.detectors.counts[1] == 1);
         TCHECK(h.io.detectors.refs[0] == 1);
         TCHECK(h.io.detectors.refs[1] == 0);
+    });
+
+    run_test("merge_by_id: two lines sharing id 0 become one observable", [] {
+        ParserHarness h;
+        h.feed("M 0 1\nOBSERVABLE_INCLUDE(0) rec[-2]\nOBSERVABLE_INCLUDE(0) rec[-1]\n");
+        TCHECK(h.io.observables.ids.size() == 2);
+        h.io.observables.merge_by_id();
+        TCHECK(h.io.observables.ids.size() == 1);
+        TCHECK(h.io.observables.pinned.num_observables == 1);
+        TCHECK(h.io.observables.records.counts[0] == 2);
+        TCHECK(h.io.observables.records.starts[0] == 0);
+        // Both measurements end up under that id, whatever order they were named in.
+        const bool has0 = h.io.observables.records.refs[0] == 0 || h.io.observables.records.refs[1] == 0;
+        const bool has1 = h.io.observables.records.refs[0] == 1 || h.io.observables.records.refs[1] == 1;
+        TCHECK(has0 && has1);
+    });
+
+    run_test("merge_by_id: distinct ids stay distinct", [] {
+        ParserHarness h;
+        h.feed("M 0 1\nOBSERVABLE_INCLUDE(0) rec[-2]\nOBSERVABLE_INCLUDE(1) rec[-1]\n");
+        h.io.observables.merge_by_id();
+        TCHECK(h.io.observables.ids.size() == 2);
+        TCHECK(h.io.observables.ids[0] == 0);
+        TCHECK(h.io.observables.ids[1] == 1);
+        TCHECK(h.io.observables.records.counts[0] == 1);
+        TCHECK(h.io.observables.records.counts[1] == 1);
+        TCHECK(h.io.observables.records.refs[0] == 0);
+        TCHECK(h.io.observables.records.refs[1] == 1);
+    });
+
+    run_test("merge_by_id: a gap in the ids yields an empty observable", [] {
+        ParserHarness h;
+        h.feed("M 0\nOBSERVABLE_INCLUDE(2) rec[-1]\n");
+        h.io.observables.merge_by_id();
+        TCHECK(h.io.observables.ids.size() == 3);
+        TCHECK(h.io.observables.records.counts[0] == 0);
+        TCHECK(h.io.observables.records.counts[1] == 0);
+        TCHECK(h.io.observables.records.counts[2] == 1);
+        TCHECK(h.io.observables.records.refs[0] == 0);
+    });
+
+    run_test("merge_by_id: three lines, two ids, interleaved", [] {
+        ParserHarness h;
+        h.feed("M 0 1 2\n"
+               "OBSERVABLE_INCLUDE(1) rec[-3]\n"
+               "OBSERVABLE_INCLUDE(0) rec[-2]\n"
+               "OBSERVABLE_INCLUDE(1) rec[-1]\n");
+        h.io.observables.merge_by_id();
+        TCHECK(h.io.observables.ids.size() == 2);
+        TCHECK(h.io.observables.records.counts[0] == 1);
+        TCHECK(h.io.observables.records.counts[1] == 2);
+        TCHECK(h.io.observables.records.refs[h.io.observables.records.starts[0]] == 1);
+    });
+
+    run_test("merge_by_id: already one line per id is left alone", [] {
+        ParserHarness h;
+        h.feed("M 0 1\nOBSERVABLE_INCLUDE(0) rec[-2]\nOBSERVABLE_INCLUDE(1) rec[-1]\n");
+        const uint32 refs_before = h.io.observables.records.refs.size();
+        h.io.observables.merge_by_id();
+        h.io.observables.merge_by_id();
+        TCHECK(h.io.observables.records.refs.size() == refs_before);
+        TCHECK(h.io.observables.ids.size() == 2);
     });
 }
 
