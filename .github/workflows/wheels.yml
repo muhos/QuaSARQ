@@ -60,7 +60,7 @@ jobs:
         with:
           submodules: recursive
 
-      # The CUDA toolkit is large, and the wheels carry six architectures each.
+      # The CUDA toolkit is large, and the wheels carry seven architectures each.
       - name: Free runner disk space
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
@@ -73,10 +73,16 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install cibuildwheel==4.2.0
-      # A pull request only needs to prove the pipeline still works; tags build the full matrix.
-      - run: python -m cibuildwheel --platform linux --output-dir wheelhouse
+      # A pull request only needs to prove the pipeline still works.
+      - name: Build one wheel
+        if: github.event_name == 'pull_request'
+        run: python -m cibuildwheel --platform linux --output-dir wheelhouse
         env:
-          CIBW_BUILD: ${{ github.event_name == 'pull_request' && 'cp312-manylinux_x86_64' || '' }}
+          CIBW_BUILD: cp312-manylinux_x86_64
+
+      - name: Build all wheels
+        if: github.event_name != 'pull_request'
+        run: python -m cibuildwheel --platform linux --output-dir wheelhouse
 
       - uses: actions/upload-artifact@v4
         with:
