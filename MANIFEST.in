@@ -1,5 +1,5 @@
 # The sdist has to carry everything the Makefiles compile, since pip builds from source.
-include Makefile LICENSE VERSION
+include Makefile arch.mk LICENSE VERSION
 include setup.py pyproject.toml
 include src/kernel.config
 include src/binding/Makefile

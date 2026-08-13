@@ -4,6 +4,7 @@
 import os
 import subprocess
 import sys
+import sysconfig
 from pathlib import Path
 from shutil import which
 
@@ -12,6 +13,7 @@ from setuptools.command.build_py import build_py
 from setuptools.dist import Distribution
 
 ROOT = Path(__file__).parent.resolve()
+EXTENSION = f"_quasarq{sysconfig.get_config_var('EXT_SUFFIX')}"
 
 CUARENA_HINT = (
     "cuarena sources were not found. Either set CUARENA_DIR=/path/to/cuarena, or vendor them "
@@ -64,4 +66,8 @@ class BinaryDistribution(Distribution):
         return True
 
 
-setup(cmdclass={"build_py": BuildThroughMake}, distclass=BinaryDistribution)
+setup(
+    cmdclass={"build_py": BuildThroughMake},
+    distclass=BinaryDistribution,
+    package_data={"quasarq": [EXTENSION, "kernel.config", "py.typed", "*.pyi"]},
+)

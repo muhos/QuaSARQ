@@ -134,8 +134,14 @@ ALL_LDFLAGS += $(ALL_CCFLAGS)
 ALL_LDFLAGS += $(addprefix -Xlinker ,$(LDFLAGS))
 
 # gencode arguments
-GPU_ARCH ?= native
-GENCODE_FLAGS := -arch=$(GPU_ARCH)
+include $(dir $(firstword $(MAKEFILE_LIST)))arch.mk
+
+CUARENA_ARCH_STAMP := $(CUARENA_DIR)/build/.quasarq-arch
+
+ifneq ($(MAKECMDGOALS),clean)
+cuarena_cleaning := $(shell [ -f $(CUARENA_LIB) ] && \
+    [ "$$(cat $(CUARENA_ARCH_STAMP) 2>/dev/null)" != "$(CUARENA_ARCH)" ] && rm -f $(CUARENA_LIB))
+endif
 
 # target rules
 
@@ -145,6 +151,16 @@ CPPOBJEXT := $(OBJINFIX)o
 CUOBJEXT  := $(OBJINFIX)cuda.o
 PTX_DIR   := ptx
 PTXEXT    := ptx
+ARCH_STAMP := $(BUILD_DIR)/.gpu-arch
+
+ifneq ($(MAKECMDGOALS),clean)
+RECORDED_ARCH := $(strip $(shell cat $(ARCH_STAMP) 2>/dev/null))
+ifneq ($(RECORDED_ARCH),)
+ifneq ($(RECORDED_ARCH),$(GPU_ARCH))
+$(error $(BUILD_DIR) holds objects compiled for GPU_ARCH=$(RECORDED_ARCH). Run 'make clean' before building for $(GPU_ARCH))
+endif
+endif
+endif
 
 mainsrc  := main
 cusrc    := $(sort $(wildcard $(SRC_DIR)/*.cu))
@@ -180,26 +196,29 @@ endif
 
 
 $(CUARENA_LIB):
-	@[ -f $(CUARENA_DIR)/build/CMakeCache.txt ] || \
+	@[ -f $(CUARENA_DIR)/build/CMakeCache.txt ] && \
+	    [ "$$(cat $(CUARENA_ARCH_STAMP) 2>/dev/null)" = "$(CUARENA_ARCH)" ] || \
 	    cmake -B $(CUARENA_DIR)/build -S $(CUARENA_DIR) \
 	    -DCMAKE_BUILD_TYPE=$(CUARENA_BUILD_TYPE) \
-	    -DCMAKE_CUDA_ARCHITECTURES=native \
+	    -DCMAKE_CUDA_ARCHITECTURES="$(CUARENA_ARCH)" \
 	    -DCUARENA_BUILD_EXAMPLES=OFF \
 	    -DCUARENA_BUILD_TESTS=OFF \
 	    > /dev/null
 	@MAKEFLAGS= cmake --build $(CUARENA_DIR)/build --target cuArena --parallel 8 > /dev/null
+	@echo "$(CUARENA_ARCH)" > $(CUARENA_ARCH_STAMP)
 
 $(BUILD_DIR)/$(LIB): $(cuobj) $(cppobj)
 	@$(ARCHIVE) "done" $@
 	@mkdir -p $(BUILD_DIR)
 	@ar rc $@ $+
 	@ranlib $@
+	@echo "$(GPU_ARCH)" > $(ARCH_STAMP)
 	@$(DONE)
 
 $(BUILD_DIR)/$(BIN): $(mainobj) $(BUILD_DIR)/$(LIB) $(CUARENA_LIB)
 	@$(ENDING) $@
 	@$(NVCC) $(ALL_LDFLAGS) $(GENCODE_FLAGS) -o $@ $(mainobj) \
-	    -L$(CUDA_PATH)/lib64 -lcudart -lnvidia-ml \
+	    -L$(CUDA_PATH)/lib64 -lcudart -ldl \
 	    -L$(BUILD_DIR) -l$(LIBNAME) $(EXTRALIB)
 	@$(DONE)
 

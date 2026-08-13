@@ -1,5 +1,6 @@
 #pragma once
 
+#include <dlfcn.h>
 #include <nvml.h>
 #include "datatypes.hpp"
 
@@ -13,16 +14,30 @@ namespace QuaSARQ {
 
         uint32 power;
 
-        // Process-wide NVML device handle, lazily opened on first use. 
-        // Return 0 if NVML fails to initialize or the device can't be opened.
-        static nvmlDevice_t handle() {
-            static nvmlDevice_t device = []() {
+        // NVML ships with the driver, not with the toolkit, so it is loaded at run time rather
+        // than linked during the build.
+        struct NVML {
+            nvmlReturn_t (*get_power)(nvmlDevice_t, uint32*);
+            nvmlDevice_t device;
+        };
+
+        static const NVML& nvml() {
+            static NVML loaded = []() {
+                NVML api = {};
+                void* library = dlopen("libnvidia-ml.so.1", RTLD_LAZY | RTLD_LOCAL);
+                if (library == nullptr) return api;
+                auto init = (nvmlReturn_t (*)()) dlsym(library, "nvmlInit_v2");
+                auto by_index = (nvmlReturn_t (*)(uint32, nvmlDevice_t*)) dlsym(library, "nvmlDeviceGetHandleByIndex_v2");
+                auto power_usage = (nvmlReturn_t (*)(nvmlDevice_t, uint32*)) dlsym(library, "nvmlDeviceGetPowerUsage");
+                if (init == nullptr || by_index == nullptr || power_usage == nullptr) return api;
                 nvmlDevice_t opened = 0;
-                if (nvmlInit() != NVML_SUCCESS) return nvmlDevice_t(0);
-                if (nvmlDeviceGetHandleByIndex(0, &opened) != NVML_SUCCESS) return nvmlDevice_t(0);
-                return opened;
+                if (init() != NVML_SUCCESS) return api;
+                if (by_index(0, &opened) != NVML_SUCCESS) return api;
+                api.get_power = power_usage;
+                api.device = opened;
+                return api;
             }();
-            return device;
+            return loaded;
         }
 
         public:
@@ -31,9 +46,9 @@ namespace QuaSARQ {
 
         // Measure power in wattage.
         double measure() {
-            nvmlDevice_t device = handle();
-            if (device == nvmlDevice_t(0)) return 0.0;
-            if (nvmlDeviceGetPowerUsage(device, &power) != NVML_SUCCESS) return 0.0;
+            const NVML& api = nvml();
+            if (api.device == nvmlDevice_t(0)) return 0.0;
+            if (api.get_power(api.device, &power) != NVML_SUCCESS) return 0.0;
             if (power >= INITPWR) power -= INITPWR;
             return double(power) / 1000.0;
         }

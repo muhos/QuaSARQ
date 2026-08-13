@@ -7,15 +7,20 @@ name = "quasarq"
 dynamic = ["version"]
 description = "GPU stabilizer sampling"
 readme = "src/binding/README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Muhammad Osama Mahmoud", email = "muh.osama25@gmail.com" }]
 keywords = ["quantum", "stabilizer", "clifford", "stim", "cuda", "gpu"]
 classifiers = [
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Programming Language :: C++",
     "Environment :: GPU :: NVIDIA CUDA",
+    "Operating System :: POSIX :: Linux",
     "Topic :: Scientific/Engineering :: Physics",
 ]
 dependencies = ["numpy"]
@@ -39,5 +44,24 @@ version = { file = "VERSION" }
 where = ["src/binding"]
 include = ["quasarq"]
 
-[tool.setuptools.package-data]
-quasarq = ["*.so", "kernel.config", "py.typed", "*.pyi"]
+
+# Redistributable wheels. The image pairs a manylinux base with a CUDA toolkit; build it first —
+# see the header of .github/docker/manylinux-cuda.Dockerfile for the exact command.
+[tool.cibuildwheel]
+build = "cp310-manylinux_x86_64 cp311-manylinux_x86_64 cp312-manylinux_x86_64 cp313-manylinux_x86_64"
+skip = "*-musllinux_* pp*"
+archs = ["x86_64"]
+manylinux-x86_64-image = "quasarq-manylinux-cuda:12.9"
+
+# NVML ships with the driver, never with the wheel, so it stays an external dependency.
+repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel} --exclude libnvidia-ml.so.1"
+
+# No GPU on a build runner, so this only proves the extension loads and finds kernel.config.
+test-command = "python -c \"import quasarq; print(quasarq.version())\""
+
+[tool.cibuildwheel.environment]
+# Every major architecture from Pascal to Blackwell, lowest to highest; the last one also gets
+# PTX so newer GPUs still run. Minor versions are covered by binary compatibility.
+QUASARQ_CUDA_ARCH = "sm_60,sm_70,sm_75,sm_80,sm_90,sm_100,sm_120"
+QUASARQ_BUILD_JOBS = "$(nproc)"
+CUDA_PATH = "/usr/local/cuda"

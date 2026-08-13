@@ -22,7 +22,33 @@ QuaSARQ is designed for circuits where CPU stabilizer simulators become bottlene
 - Random Clifford circuit generation for benchmarking.
 - Built-in diagnostics for scheduler, tableau, measurement records, detectors, and observables.
 
+## Python
+
+The Python package carries its own CUDA runtime and device code, so it needs no toolkit, no
+cuArena and no compiler; only an NVIDIA driver:
+
+```bash
+pip install quasarq
+```
+
+```python
+import quasarq, stim
+
+circuit = stim.Circuit.generated("surface_code:rotated_memory_z", distance=5, rounds=5,
+                                 after_clifford_depolarization=0.001)
+
+dets, obs = quasarq.compile_detector_sampler(circuit, seed=1).sample(100_000, separate_observables=True)
+```
+
+Stim-format circuits go straight in, detection events or raw measurements come back as numpy
+arrays, and `quasarq.sinter` plugs the GPU sampler into `sinter` for decoding. See
+[src/binding/README.md](src/binding/README.md) for the full API, what a wheel requires of the
+machine, and how to build it from source.
+
 ## Requirements
+
+These apply to the command-line tool and the static library. The Python package above needs none
+of them.
 
 - NVIDIA GPU with a recent driver.
 - CUDA Toolkit 12 or later.

@@ -1,0 +1,101 @@
+name: Wheels
+
+# Builds the sdist and one manylinux wheel per supported Python, and publishes them when a
+# version tag is pushed. Runners have no GPU, so the wheels are only import-tested here; run
+# 'make binding-test' on a GPU machine before tagging.
+#
+# Uploading uses trusted publishing, so no API token is stored here. It needs a one-time entry
+# under the project's Publishing settings on PyPI:
+#
+#   owner / repository   muhos / QuaSARQ
+#   workflow             wheels.yml
+#   environment          pypi          (and a second entry with 'testpypi')
+#
+# Run this workflow manually with publish: testpypi to rehearse an upload before tagging.
+#
+# The architecture list, build image and repair step live in [tool.cibuildwheel] in
+# pyproject.toml. The sdist carries its own copy of that file and it is the one cibuildwheel
+# obeys, so a local run must regenerate the sdist after editing it.
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Where to upload the artefacts"
+        type: choice
+        default: nowhere
+        options: [nowhere, testpypi]
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - .github/docker/**
+      - .github/workflows/wheels.yml
+      - pyproject.toml
+      - setup.py
+      - MANIFEST.in
+      - arch.mk
+
+jobs:
+  sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install build
+      - run: python -m build --sdist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  wheels:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # The CUDA toolkit is large, and the wheels carry six architectures each.
+      - name: Free runner disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          df -h /
+
+      - name: Build the manylinux CUDA image
+        run: docker build -t quasarq-manylinux-cuda:12.9 -f .github/docker/manylinux-cuda.Dockerfile .
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install cibuildwheel==4.2.0
+      # A pull request only needs to prove the pipeline still works; tags build the full matrix.
+      - run: python -m cibuildwheel --platform linux --output-dir wheelhouse
+        env:
+          CIBW_BUILD: ${{ github.event_name == 'pull_request' && 'cp312-manylinux_x86_64' || '' }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels
+          path: wheelhouse/*.whl
+
+  publish:
+    needs: [sdist, wheels]
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.publish == 'testpypi'
+    runs-on: ubuntu-latest
+    environment: ${{ startsWith(github.ref, 'refs/tags/v') && 'pypi' || 'testpypi' }}
+    permissions:
+      # PyPI verifies this workflow's identity, so no API token is stored.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: ${{ startsWith(github.ref, 'refs/tags/v') && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/' }}

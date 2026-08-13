@@ -10,6 +10,7 @@ QUASARQ_LIB := $(QUASARQ_DIR)/build/libquasarq_pic.a
 
 PY_INCLUDE := $(shell $(PYTHON) -c "import sysconfig; print(sysconfig.get_paths()['include'])")
 EXT_SUFFIX := $(shell $(PYTHON) -c "import sysconfig; print(sysconfig.get_config_var('EXT_SUFFIX'))")
+PY_TAG     := $(shell $(PYTHON) -c "import sys; print(sys.implementation.cache_tag)")
 NB_DIR     := $(shell $(PYTHON) -c "import nanobind, os; print(os.path.dirname(nanobind.__file__))" 2>/dev/null)
 
 ifeq ($(filter clean,$(MAKECMDGOALS)),)
@@ -20,13 +21,14 @@ endif
 
 INCLUDES  := -I. -I$(QUASARQ_DIR)/src -I$(CUARENA_DIR)/include -I$(CUDA_PATH)/include \
              -I$(PY_INCLUDE) -I$(NB_DIR)/include -I$(NB_DIR)/ext/robin_map/include
+# Replaced -lcurand with only its device-side header API -ldl.
 LIBS      := -L$(QUASARQ_DIR)/build -lquasarq_pic -L$(CUARENA_DIR)/build -lcuarena \
-             -L$(CUDA_PATH)/lib64 -lcudart -lcurand -lnvidia-ml -ldl
+             -L$(CUDA_PATH)/lib64 -ldl
 
-GPU_ARCH  ?= native
+include $(QUASARQ_DIR)/arch.mk
 
 CCFLAGS   := -std=c++20 -fPIC -fvisibility=hidden -fno-strict-aliasing -fdiagnostics-show-option
-NVCCFLAGS := -m64 -std=c++20 -arch=$(GPU_ARCH)
+NVCCFLAGS := -m64 -std=c++20 $(GENCODE_FLAGS)
 
 ifeq ($(debug),1)
       NVCCFLAGS += -g -G -DDEBUG
@@ -56,8 +58,9 @@ PKG_DIR   := quasarq
 MODULE    := $(PKG_DIR)/_quasarq$(EXT_SUFFIX)
 # The core locates kernel.config next to the shared object, so the package carries its own copy.
 PKG_CONFIG := $(PKG_DIR)/kernel.config
+# Assign tag for every python version, so that the wheel can be installed in multiple python versions without rebuilding.
 CUDA_OBJS := sampler.pic.cuda.o simulate.pic.cuda.o
-HOST_OBJS := module.pic.o nb_combined.pic.o
+HOST_OBJS := module.$(PY_TAG).pic.o nb_combined.$(PY_TAG).pic.o
 OBJS      := $(CUDA_OBJS) $(HOST_OBJS)
 HEADERS   := sampler.hpp module.hpp simulate.hpp $(wildcard $(QUASARQ_DIR)/src/*.hpp) $(wildcard $(QUASARQ_DIR)/src/*.cuh)
 
@@ -76,31 +79,34 @@ simulate.pic.cuda.o: simulate.cu simulate.hpp $(HEADERS)
 	@$(NVCC) $(CUDA_FLAGS) $(INCLUDES) -o $@ -c $<
 	@echo "done."
 
-module.pic.o: module.cpp module.hpp sampler.hpp
+module.$(PY_TAG).pic.o: module.cpp module.hpp sampler.hpp
 	@echo -n "compiling $<..."
 	@$(CXX) $(CCFLAGS) $(INCLUDES) -o $@ -c $<
 	@echo "done."
 
-nb_combined.pic.o: $(NB_DIR)/src/nb_combined.cpp
+nb_combined.$(PY_TAG).pic.o: $(NB_DIR)/src/nb_combined.cpp
 	@echo -n "compiling nanobind..."
 	@$(CXX) $(CCFLAGS) $(INCLUDES) -o $@ -c $<
 	@echo "done."
 
+# We need a static runtime for a redistributable wheel to work with no CUDA toolkit installed.
+CUDART ?= static
+
 $(MODULE): $(OBJS) $(QUASARQ_LIB) $(CUARENA_LIB)
 	@echo -n "linking $@..."
-	@$(NVCC) $(CUDA_FLAGS) -shared -cudart=shared -o $@ $(OBJS) $(LIBS)
+	@$(NVCC) $(CUDA_FLAGS) -shared -cudart=$(CUDART) -o $@ $(OBJS) $(LIBS)
 	@echo "done."
 
 $(QUASARQ_LIB):
-	@$(MAKE) -C $(QUASARQ_DIR) pic=1 CUARENA_DIR=$(CUARENA_DIR) word=$(WORDSIZE)
+	@$(MAKE) -C $(QUASARQ_DIR) pic=1 CUARENA_DIR=$(CUARENA_DIR) word=$(WORDSIZE) GPU_ARCH=$(GPU_ARCH)
 
 $(CUARENA_LIB):
-	@$(MAKE) -C $(QUASARQ_DIR) $(CUARENA_LIB) CUARENA_DIR=$(CUARENA_DIR)
+	@$(MAKE) -C $(QUASARQ_DIR) $(CUARENA_LIB) CUARENA_DIR=$(CUARENA_DIR) GPU_ARCH=$(GPU_ARCH)
 
 test: $(MODULE) $(PKG_CONFIG)
 	@PYTHONPATH=$(CURDIR) $(PYTHON) $(QUASARQ_DIR)/tests/test_binding.py
 
 clean:
-	rm -f $(OBJS) $(MODULE) $(PKG_CONFIG)
+	rm -f *.pic.o *.pic.cuda.o $(PKG_DIR)/_quasarq*.so $(PKG_CONFIG)
 
 .PHONY: all test clean
