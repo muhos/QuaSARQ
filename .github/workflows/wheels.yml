@@ -1,21 +1,8 @@
 name: Wheels
 
 # Builds the sdist and one manylinux wheel per supported Python, and publishes them when a
-# version tag is pushed. Runners have no GPU, so the wheels are only import-tested here; run
-# 'make binding-test' on a GPU machine before tagging.
-#
-# Uploading uses trusted publishing, so no API token is stored here. It needs a one-time entry
-# under the project's Publishing settings on PyPI:
-#
-#   owner / repository   muhos / QuaSARQ
-#   workflow             wheels.yml
-#   environment          pypi          (and a second entry with 'testpypi')
-#
-# Run this workflow manually with publish: testpypi to rehearse an upload before tagging.
-#
-# The architecture list, build image and repair step live in [tool.cibuildwheel] in
-# pyproject.toml. The sdist carries its own copy of that file and it is the one cibuildwheel
-# obeys, so a local run must regenerate the sdist after editing it.
+# version tag is pushed. Runners have no GPU, so the wheels are only import-tested here; we
+# need to run run 'make binding-test' on a GPU machine before tagging.
 
 on:
   workflow_dispatch:
