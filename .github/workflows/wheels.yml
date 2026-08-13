@@ -13,7 +13,7 @@ on:
         default: nowhere
         options: [nowhere, testpypi]
   push:
-    tags: ["v*"]
+    tags: ["v*", "quasarq-*"]
   pull_request:
     paths:
       - .github/docker/**
@@ -78,9 +78,9 @@ jobs:
 
   publish:
     needs: [sdist, wheels]
-    if: startsWith(github.ref, 'refs/tags/v') || inputs.publish == 'testpypi'
+    if: startsWith(github.ref, 'refs/tags/') || inputs.publish == 'testpypi'
     runs-on: ubuntu-latest
-    environment: ${{ startsWith(github.ref, 'refs/tags/v') && 'pypi' || 'testpypi' }}
+    environment: ${{ startsWith(github.ref, 'refs/tags/') && 'pypi' || 'testpypi' }}
     permissions:
       # PyPI verifies this workflow's identity, so no API token is stored.
       id-token: write
@@ -91,4 +91,4 @@ jobs:
           path: dist
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          repository-url: ${{ startsWith(github.ref, 'refs/tags/v') && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/' }}
+          repository-url: ${{ startsWith(github.ref, 'refs/tags/') && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/' }}
