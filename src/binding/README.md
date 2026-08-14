@@ -18,7 +18,7 @@ measurements = quasarq.compile_sampler(circuit, seed=1).sample(100_000)
 pip install quasarq
 ```
 
-The budled wheels are for CPython 3.10 through 3.13. The wheel contains the CUDA
+The bundled wheels are for CPython 3.10 through 3.13. The wheel contains the CUDA
 runtime and device code for every major architecture from Pascal onwards, so it asks for nothing
 but a driver (CUDA toolkit is not needed):
 
@@ -92,10 +92,19 @@ request needs more.
 
 ## Contents
 
-- `quasarq.compile_detector_sampler(circuit, *, seed=None)` → `CompiledDetectorSampler`
-- `quasarq.compile_sampler(circuit, *, seed=None)` → `CompiledMeasurementSampler`
-- `quasarq.sinter` — a `sinter.Sampler` adapter that decodes with pymatching
-- `set_verbosity`, `set_chunk_shots`, `set_kernel_config`, `device_name`, `version`
+- `quasarq.compile_detector_sampler(circuit, *, seed=None)` returns a `CompiledDetectorSampler`.
+- `quasarq.compile_sampler(circuit, *, seed=None)` returns a `CompiledMeasurementSampler`.
+- `quasarq.simulate(circuit)` returns a `Simulation`, one deterministic run with no sampling. It
+  carries `num_qubits`, `num_measurements`, `measurements()` in circuit order, and `paulis()`,
+  one Pauli string per generator of the inverse tableau.
+- `quasarq.equivalent(circuit, other)` reports whether two circuits realise the same Clifford
+  operation. Measurements are not part of that operation, so a circuit containing one is refused.
+- `quasarq.Circuit(circuit)` is a circuit QuaSARQ owns, built from circuit text, a `stim.Circuit`,
+  or another `Circuit`. It reports `num_qubits`, `num_measurements`, `num_detectors` and
+  `num_observables`.
+- `quasarq.sinter` is a `sinter.Sampler` adapter that decodes with pymatching.
+- `set_verbosity`, `set_chunk_shots` and `set_max_device_memory`, each with a `get_` counterpart,
+  plus `set_kernel_config`, `device_name` and `version`.
 
 `kernel.config` holds per-size kernel launch geometry and is copied next to the extension at
 build time; the core locates it relative to the shared object.
