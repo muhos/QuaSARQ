@@ -96,7 +96,7 @@ collapse across shots by propagating Pauli frames on the GPU.
 Internal checkers for the scheduler, tableau, measurement records, detectors, and observables can
 be switched on from the command line; see [docs/cli.md](docs/cli.md).
 
-## Supported instructions (Same as Stim)
+## Supported Stim-format instructions
 
 | Group | Instructions |
 | --- | --- |
