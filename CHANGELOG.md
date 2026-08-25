@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.7.2 [2026-08-25]
+
+- The atomic word updates that every gate kernel relies on were compiled as out-of-line device calls, each one giving its caller a stack frame in local memory. They are inlined into the kernels now. Applying gate rules on a distance-33 surface-code memory experiment is 6.0x faster now.
+
+## 1.7.1 [2026-08-14]
+
+- Rewritten README and PyPI project page.
+
 ## 1.7.0 [2026-08-13]
 
 **QuaSARQ is now on PyPI.**
