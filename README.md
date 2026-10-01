@@ -6,7 +6,7 @@
 ![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?logo=cplusplus&logoColor=white)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20WSL2-lightgrey)
 [![arXiv](https://img.shields.io/badge/arXiv-2603.14641-b31b1b.svg)](https://arxiv.org/abs/2603.14641)
-[![DOI](https://img.shields.io/badge/DOI-10.1007%2F978--3--031--90660--2__6-blue)](https://doi.org/10.1007/978-3-031-90660-2_6)
+[![DOI](https://img.shields.io/badge/DOI-10.22331%2Fq--2026--10--01--2225-blue)](https://doi.org/10.22331/q-2026-10-01-2225)
 
 # QuaSARQ
 
