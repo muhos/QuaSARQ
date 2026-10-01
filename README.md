@@ -208,7 +208,3 @@ If you use QuaSARQ, please cite the relevant papers:
   url       = {https://doi.org/10.1007/978-3-031-90660-2_6}
 }
 ```
-
-## License
-
-QuaSARQ is distributed under the GNU General Public License v3.0. See [LICENSE](LICENSE).
