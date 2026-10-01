@@ -181,15 +181,18 @@ measurements.
 If you use QuaSARQ, please cite the relevant papers:
 
 ```bibtex
-@misc{osama2026gpuacceleratedstabilizer,
-  title         = {GPU-Accelerated Quantum Simulation of Stabilizer Circuits},
-  author        = {Osama, Muhammad and Thanos, Dimitrios and Laarman, Alfons},
-  year          = {2026},
-  eprint        = {2603.14641},
-  archivePrefix = {arXiv},
-  primaryClass  = {quant-ph},
-  doi           = {10.48550/arXiv.2603.14641},
-  url           = {https://arxiv.org/abs/2603.14641}
+@article{Osama2026gpuaccelerated,
+  doi = {10.22331/q-2026-10-01-2225},
+  url = {https://doi.org/10.22331/q-2026-10-01-2225},
+  title = {{GPU}-{A}ccelerated {Q}uantum {S}imulation of {S}tabilizer {C}ircuits},
+  author = {Osama, Muhammad and Thanos, Dimitrios and Laarman, Alfons},
+  journal = {{Quantum}},
+  issn = {2521-327X},
+  publisher = {{Verein zur F{\"{o}}rderung des Open Access Publizierens in den Quantenwissenschaften}},
+  volume = {10},
+  pages = {2225},
+  month = oct,
+  year = {2026}
 }
 
 @inproceedings{osama2025parallelstabilizerequivalence,
